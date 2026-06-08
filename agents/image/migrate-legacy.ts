@@ -22,7 +22,7 @@ function asArray(value: unknown): unknown[] {
 
 function normalizePrompts(
   value: unknown,
-  seed: string,
+  collectionName: string,
   subject: string,
 ): NormalizedImageAsset["prompt"] {
   const obj = asRecord(value);
@@ -35,7 +35,7 @@ function normalizePrompts(
         flux: single,
       };
     }
-    return buildArtDirectionPrompt({ subject, seed });
+    return buildArtDirectionPrompt({ subject, collectionName });
   }
   return {
     midjourney: asString(obj.midjourney) || asString(obj.midjourneyPrompt),
@@ -81,7 +81,7 @@ export function isV2ImageSections(
 
 export function migrateLegacyImageSections(
   raw: BrainImageSections,
-  seed = raw.projectName,
+  collectionName = raw.projectName,
 ): BrainImageSections {
   if (isV2ImageSections(raw)) {
     return {
@@ -137,7 +137,7 @@ export function migrateLegacyImageSections(
           purpose: asString(obj.description),
           prompt: normalizePrompts(
             obj.prompts,
-            seed,
+            collectionName,
             asString(obj.name) || "product mockup",
           ),
           status: "ready",
@@ -171,7 +171,7 @@ export function migrateLegacyImageSections(
             purpose: asString(obj.description),
             prompt: normalizePrompts(
               obj.prompts,
-              seed,
+              collectionName,
               "campaign key visual",
             ),
             status: "ready",
@@ -200,7 +200,7 @@ export function migrateLegacyImageSections(
             dimensions: asString(obj.dimensions) || "1080x1350",
             platform: "instagram",
             purpose: asString(obj.description),
-            prompt: normalizePrompts(obj.prompts ?? obj, seed, "instagram carousel"),
+            prompt: normalizePrompts(obj.prompts ?? obj, collectionName, "instagram carousel"),
             status: "ready",
           },
           generated,
@@ -223,7 +223,7 @@ export function migrateLegacyImageSections(
             dimensions: "1080x1920",
             platform: "instagram_reels",
             purpose: asString(obj.description),
-            prompt: normalizePrompts(obj.prompts, seed, "reels concept"),
+            prompt: normalizePrompts(obj.prompts, collectionName, "reels concept"),
             status: "ready",
           },
           generated,
@@ -246,7 +246,7 @@ export function migrateLegacyImageSections(
             dimensions: "1080x1920",
             platform: "tiktok",
             purpose: asString(obj.description),
-            prompt: normalizePrompts(obj.prompts, seed, "tiktok concept"),
+            prompt: normalizePrompts(obj.prompts, collectionName, "tiktok concept"),
             status: "ready",
           },
           generated,
@@ -269,7 +269,7 @@ export function migrateLegacyImageSections(
       purpose: asString(obj.purpose),
       prompt: buildArtDirectionPrompt({
         subject: asString(obj.visualDirection) || asString(obj.sectionTitle),
-        seed,
+        collectionName,
       }),
       status: "ready",
     });
@@ -288,7 +288,7 @@ export function migrateLegacyImageSections(
       dimensions: asString(obj.dimensions) || "1920x1080",
       platform: "website",
       purpose: asString(obj.description),
-      prompt: normalizePrompts(obj.prompts, seed, asString(obj.name)),
+      prompt: normalizePrompts(obj.prompts, collectionName, asString(obj.name)),
       status: "ready",
     });
   }
@@ -305,7 +305,7 @@ export function migrateLegacyImageSections(
       dimensions: "1080x1080",
       platform: "instagram",
       purpose: asString(obj.description),
-      prompt: normalizePrompts(obj.prompts, seed, asString(obj.name)),
+      prompt: normalizePrompts(obj.prompts, collectionName, asString(obj.name)),
       status: "ready",
     });
   }
@@ -329,7 +329,7 @@ export function migrateLegacyImageSections(
       dimensions: asString(obj.dimensions) || "1200x628",
       platform: asString(obj.platform) || "paid_social",
       purpose: asString(obj.description),
-      prompt: normalizePrompts(obj.prompts, seed, asString(obj.name)),
+      prompt: normalizePrompts(obj.prompts, collectionName, asString(obj.name)),
       status: "ready",
     });
   }
@@ -347,7 +347,7 @@ export function migrateLegacyImageSections(
       dimensions: "1080x1920",
       platform: "instagram_reels",
       purpose: asString(obj.description),
-      prompt: normalizePrompts(obj.prompts, seed, asString(obj.name)),
+      prompt: normalizePrompts(obj.prompts, collectionName, asString(obj.name)),
       status: "ready",
     });
   }
@@ -365,7 +365,7 @@ export function migrateLegacyImageSections(
       dimensions: "1080x1920",
       platform: "tiktok",
       purpose: asString(obj.description),
-      prompt: normalizePrompts(obj.prompts, seed, asString(obj.name)),
+      prompt: normalizePrompts(obj.prompts, collectionName, asString(obj.name)),
       status: "ready",
     });
   }

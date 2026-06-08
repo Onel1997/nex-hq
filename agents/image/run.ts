@@ -13,6 +13,9 @@ function buildImageSystemPrompt(
   workspaceName: string,
   availableReportTitles: string[],
   loadedTags: string[],
+  collectionName: string,
+  campaignName: string,
+  projectName: string,
 ): string {
   const reportList =
     availableReportTitles.length > 0
@@ -47,24 +50,58 @@ ${loadedTags.map((t) => `  - ${t}`).join("\n") || "  (keine)"}
 ## Verfügbare Berichte
 ${reportList}
 
+## Kollektions-Identität (EINZIGE Quelle — aus CEO/Design-Berichten)
+- collectionName: "${collectionName}" (NIEMALS ändern, keine zweite Kampagne erfinden)
+- campaignName: "${campaignName}"
+- projectName: "${projectName}"
+- Jeder Asset-Titel: "${collectionName} — {Asset Type}" (z. B. "${collectionName} — Hero Banner")
+- VERBOTEN als Namen: Drop, Summer Collection, Collection, Project, Milaene Creative Production
+
 ## Ausgabeformat (STRIKT JSON, schemaVersion "2.0")
 - reportType: "image-project"
 - KEIN Markdown, KEINE Code-Fences
 
-### CORE PACKAGE (Pflicht — genau diese Asset-Typen, keine Duplikate)
+### CORE PACKAGE (Pflicht — genau 8 Assets, keine Duplikate)
 corePackage[] mit package: "core":
-1. hero_banner — 1x Hero Banner (website, 1920x1080)
-2. product_mockup — 4x mit variant: hero_product | flat_lay | studio | lifestyle
-3. campaign_key_visual — 1x Campaign Key Visual
-4. instagram_carousel — 1x Instagram Carousel
-5. reels_concept — 1x Reels Concept
-6. tiktok_concept — 1x TikTok Concept
+1. hero_banner — Hero Banner (id: core-hero-banner)
+2. product_mockup — Product Mockup (variant: hero_product, id: core-mockup-hero_product)
+3. product_mockup — Flat Lay (variant: flat_lay, id: core-mockup-flat_lay)
+4. product_mockup — Lifestyle Mockup (variant: lifestyle, id: core-mockup-lifestyle)
+5. campaign_key_visual — Campaign Key Visual (id: core-campaign-key-visual)
+6. instagram_carousel — Instagram Carousel (id: core-instagram-carousel)
+7. reels_concept — Reels Concept (id: core-reels-concept)
+8. tiktok_concept — TikTok Concept (id: core-tiktok-concept)
 
-### ADVANCED PACKAGE (Sekundär — package: "advanced")
-advancedPackage[] — Landing Sections, Instagram Grid Variations, Additional Campaign Visuals, Extra Social Concepts, Extra Mockups, Community, Launch Teaser, Email Assets. Max 13 Assets, keine Wiederholung von Core-Typen.
+### ADVANCED PACKAGE (Sekundär — genau 5 Assets, gleiche collectionName)
+advancedPackage[] mit package: "advanced" — erweitert dieselbe Kollektion, keine zweite Kampagne:
+1. landing_section — Landing Hero (id: advanced-landing-hero, variant: hero)
+2. landing_section — Landing Product Grid (id: advanced-landing-product-grid, variant: product_grid)
+3. instagram_grid — Instagram Grid (id: advanced-instagram-grid)
+4. campaign_visual — Paid Social Visual (id: advanced-campaign-social)
+5. launch_teaser — Launch Teaser (id: advanced-launch-teaser)
 
 ### Weitere Pflichtfelder
-- moodboard, palette (Name + HEX), campaignShots[] (min 12), confidence, sourceReportTitles[], fullProject (Markdown)
+- moodboard (OBJEKT — niemals String):
+  {
+    "visualDirection": "string min 80 Zeichen",
+    "aestheticKeywords": ["string", ...], // 3–12
+    "colorSystem": ["Name #HEX", ...], // 2–8
+    "materialReferences": ["string", ...], // 2–8
+    "photographyStyle": "string min 40 Zeichen"
+  }
+- palette (OBJEKT — niemals Array):
+  {
+    "primary": "Name #HEX",
+    "secondary": "Name #HEX",
+    "accent": "Name #HEX",
+    "background": "Name #HEX",
+    "text": "Name #HEX"
+  }
+- campaignShots[] (min 12, max 24), confidence (0–1), sourceReportTitles[] (min 1), fullProject (Markdown min 600 Zeichen)
+
+### VERBOTEN (Legacy V1 — nicht ausgeben)
+- heroBanner, productMockups, campaignVisuals, landingAssets, instagramGrid, reelsConcepts, tiktokConcepts
+- moodboard als String, palette als Array
 
 ### Asset-Objekt
 {
@@ -89,6 +126,7 @@ export async function runImage(
   const knowledge = await retrieveImageKnowledge({
     workspaceId: input.workspaceId,
     brief: input.brief,
+    workspaceName: input.workspaceName,
     locale: DEFAULT_LOCALE,
   });
 
@@ -107,6 +145,9 @@ export async function runImage(
             input.workspaceName,
             knowledge.reportTitles,
             knowledge.loadedTags,
+            knowledge.collectionIdentity.collectionName,
+            knowledge.collectionIdentity.campaignName,
+            knowledge.collectionIdentity.projectName,
           ) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
@@ -126,7 +167,9 @@ export async function runImage(
 
   let output;
   try {
-    output = parseImageOutput(raw);
+    output = parseImageOutput(raw, {
+      collectionIdentity: knowledge.collectionIdentity,
+    });
   } catch (error) {
     if (error instanceof ImageParseError) {
       console.error("[Image Run] Parse/validation failed", error.toLogPayload());

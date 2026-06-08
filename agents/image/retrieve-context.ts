@@ -10,6 +10,10 @@ import {
 import { buildPromptContext } from "@/brain/context/prompt-builder";
 import type { BrainReportContent } from "@/brain/domains/reports";
 import type { BrainRecord } from "@/brain/types";
+import {
+  type ImageCollectionIdentity,
+  extractCollectionIdentity,
+} from "./collection-identity";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 
@@ -99,6 +103,7 @@ export interface ImageKnowledgeContext {
   primaryReportCounts: Record<(typeof IMAGE_PRIMARY_TAGS)[number], number>;
   reportTitles: string[];
   loadedTags: string[];
+  collectionIdentity: ImageCollectionIdentity;
 }
 
 function mergeRecordsIntoSlice(
@@ -285,6 +290,7 @@ async function searchReportsWithFallback(
 export async function retrieveImageKnowledge(input: {
   workspaceId: string;
   brief: string;
+  workspaceName?: string;
   locale?: Locale;
 }): Promise<ImageKnowledgeContext> {
   const locale = input.locale ?? DEFAULT_LOCALE;
@@ -404,6 +410,11 @@ export async function retrieveImageKnowledge(input: {
 
   const promptContext = buildPromptContext(slices, locale);
   const reportTitles = extractReportTitles(slices);
+  const collectionIdentity = extractCollectionIdentity({
+    slices,
+    brief: input.brief,
+    workspaceName: input.workspaceName,
+  });
 
   const brainContext: BrainAgentContext = {
     ...baseContext,
@@ -422,6 +433,9 @@ export async function retrieveImageKnowledge(input: {
     primaryReportCounts,
     loadedTags,
     reportTitles,
+    collectionName: collectionIdentity.collectionName,
+    campaignName: collectionIdentity.campaignName,
+    projectName: collectionIdentity.projectName,
     domains: slices.map((s) => ({
       domain: s.domain,
       count: s.records.length,
@@ -435,5 +449,6 @@ export async function retrieveImageKnowledge(input: {
     primaryReportCounts,
     reportTitles,
     loadedTags,
+    collectionIdentity,
   };
 }

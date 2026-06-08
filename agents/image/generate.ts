@@ -6,8 +6,27 @@ import { normalizeImageSections } from "./migrate-legacy";
 import { findImageAsset } from "./normalized";
 import { generateWithProvider, isImageProviderConfigured } from "./providers/registry";
 import { uploadImageAsset } from "./storage";
+import type { ImageGenerationResult } from "./providers/image-provider";
 import type { ImageGenerateRequest, ImageGenerateResult } from "./types-generation";
 import type { NormalizedImageAsset } from "./types";
+
+async function resolveProviderImageBytes(
+  result: ImageGenerationResult & { imageBytes?: Buffer },
+): Promise<Buffer> {
+  if (result.imageBytes) {
+    return result.imageBytes;
+  }
+
+  if (result.url) {
+    const res = await fetch(result.url);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch provider image URL: ${res.status}`);
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  throw new Error("Image provider returned no image data");
+}
 
 export class ImageProviderNotConfiguredError extends Error {
   readonly provider: ImageGenerateRequest["provider"];
@@ -92,15 +111,13 @@ export async function generateImageAsset(input: {
       assetType: asset.type,
     });
 
-    if (!result.imageBytes) {
-      throw new Error("Image provider returned no image data");
-    }
+    const imageBytes = await resolveProviderImageBytes(result);
 
     const uploaded = await uploadImageAsset({
       workspaceId: input.workspaceId,
       reportId: request.reportId,
       assetKey: `${asset.id}:${request.provider}`,
-      imageBytes: result.imageBytes,
+      imageBytes,
     });
 
     const completedPatch: Partial<NormalizedImageAsset> = {

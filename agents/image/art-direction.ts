@@ -12,7 +12,8 @@ function padPrompt(text: string, suffix: string): string {
 
 export function buildArtDirectionPrompt(params: {
   subject: string;
-  seed: string;
+  collectionName: string;
+  campaignName?: string;
   camera?: string;
   lens?: string;
   composition?: string;
@@ -25,7 +26,8 @@ export function buildArtDirectionPrompt(params: {
 }): ImageAiPrompts {
   const {
     subject,
-    seed,
+    collectionName,
+    campaignName = collectionName,
     camera = "35mm full-frame digital camera",
     lens = "50mm f/1.4 prime lens",
     composition = "three-quarter editorial composition with intentional negative space",
@@ -38,7 +40,7 @@ export function buildArtDirectionPrompt(params: {
   } = params;
 
   const base = [
-    `Creative direction for ${seed}: ${subject}.`,
+    `Creative direction for ${collectionName} (${campaignName}): ${subject}.`,
     `Camera: ${camera}. Lens: ${lens}.`,
     `Composition: ${composition}.`,
     `Lighting: ${lighting}.`,
@@ -60,7 +62,7 @@ export function buildArtDirectionPrompt(params: {
       "OpenAI image art direction from design and marketing reports.",
     ),
     flux: padPrompt(
-      `${subject}, ${seed} collection, ${camera}, ${lighting}, ${colorGrade}, ${environment}, 8k editorial detail`,
+      `${subject}, ${collectionName} collection, ${camera}, ${lighting}, ${colorGrade}, ${environment}, 8k editorial detail`,
       "Flux art direction from creative director brief.",
     ),
   };

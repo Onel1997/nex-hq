@@ -1,6 +1,8 @@
 import { z } from "zod";
-import { enrichImagePayload } from "./enrich-packages";
+import { buildV2ImageOutput, type EnrichImageOptions } from "./enrich-packages";
 import { imageOutputSchema, type ImageOutput } from "./types";
+
+export interface ParseImageOutputOptions extends EnrichImageOptions {}
 
 export const EXPECTED_IMAGE_SCHEMA = {
   title: "string (required)",
@@ -223,24 +225,20 @@ function normalizeImagePayload(
 function validateImagePayload(
   parsed: Record<string, unknown>,
   context: { rawResponse: string; strippedJson: string },
+  options?: ParseImageOutputOptions,
 ): ImageOutput {
-  let result = imageOutputSchema.safeParse(parsed);
+  const v2Payload = buildV2ImageOutput(parsed, options);
+  const result = imageOutputSchema.safeParse(v2Payload);
 
   if (result.success) {
     return result.data;
   }
 
-  const enrichAdjustments = enrichImagePayload(parsed);
-  if (enrichAdjustments.length > 0) {
-    result = imageOutputSchema.safeParse(parsed);
-    if (result.success) {
-      return result.data;
-    }
-  }
+  console.error("IMAGE PROJECT VALIDATION ERRORS", result.error.flatten());
 
-  const missingFields = findMissingRequiredFields(parsed);
+  const missingFields = findMissingRequiredFields(v2Payload);
   const validationIssues = result.error.issues.map((issue) =>
-    zodIssueToDetail(issue, parsed),
+    zodIssueToDetail(issue, v2Payload),
   );
 
   throw new ImageParseError({
@@ -248,13 +246,16 @@ function validateImagePayload(
     stage: "validation",
     rawResponse: context.rawResponse,
     strippedJson: context.strippedJson,
-    parsed,
+    parsed: v2Payload,
     missingFields,
     validationIssues,
   });
 }
 
-export function parseImageOutput(raw: string): ImageOutput {
+export function parseImageOutput(
+  raw: string,
+  options?: ParseImageOutputOptions,
+): ImageOutput {
   const strippedJson = stripJsonFences(raw);
 
   let parsed: unknown;
@@ -281,13 +282,12 @@ export function parseImageOutput(raw: string): ImageOutput {
 
   const { normalized, adjustments: normalizeAdjustments } =
     normalizeImagePayload(parsed as Record<string, unknown>);
-  const enrichAdjustments = enrichImagePayload(normalized);
 
-  if ([...normalizeAdjustments, ...enrichAdjustments].length > 0) {
-    console.info("[Image Parse] Normalized model output", {
-      adjustments: [...normalizeAdjustments, ...enrichAdjustments],
+  if (normalizeAdjustments.length > 0) {
+    console.info("[Image Parse] Normalized model output aliases", {
+      adjustments: normalizeAdjustments,
     });
   }
 
-  return validateImagePayload(normalized, { rawResponse: raw, strippedJson });
+  return validateImagePayload(normalized, { rawResponse: raw, strippedJson }, options);
 }

@@ -1,5 +1,18 @@
+import type { BrainImageSections } from "@/brain/domains/reports";
 import { IMAGE_PROJECT_TYPE } from "@/brain/domains/reports";
+import {
+  ADVANCED_ASSET_SPECS,
+  CORE_ASSET_SPECS,
+  findAssetSpec,
+} from "./asset-specs";
 import { buildArtDirectionPrompt } from "./art-direction";
+import {
+  type ImageCollectionIdentity,
+  formatAssetTitle,
+  resolveIdentityFromPayload,
+} from "./collection-identity";
+import { dedupeImageAssets, matchAssetToSpec } from "./dedupe-assets";
+import { migrateLegacyImageSections } from "./migrate-legacy";
 import {
   type ImageCampaignShot,
   type ImageMoodboardSection,
@@ -8,89 +21,42 @@ import {
   IMAGE_SCHEMA_VERSION,
 } from "./normalized";
 
-const MIN_FULL_PROJECT = 600;
-const PRODUCT_VARIANTS = [
-  "hero_product",
-  "flat_lay",
-  "studio",
-  "lifestyle",
+const LEGACY_IMAGE_PAYLOAD_KEYS = [
+  "heroBanner",
+  "hero_banner",
+  "productMockups",
+  "product_mockups",
+  "campaignVisuals",
+  "campaign_visuals",
+  "landingPageAssets",
+  "landing_page_assets",
+  "landingAssets",
+  "landing_assets",
+  "instagramGrid",
+  "instagram_grid",
+  "reelsConcepts",
+  "reels_concepts",
+  "tiktokConcepts",
+  "tiktok_concepts",
+  "generatedAssets",
+  "generated_assets",
+  "productionChecklist",
+  "production_checklist",
 ] as const;
 
-const CORE_SPECS: Array<{
-  id: string;
-  type: NormalizedImageAsset["type"];
-  title: string;
-  dimensions: string;
-  platform: string;
-  variant?: string;
-}> = [
-  {
-    id: "core-hero-banner",
-    type: "hero_banner",
-    title: "Hero Banner",
-    dimensions: "1920x1080",
-    platform: "website",
-  },
-  ...PRODUCT_VARIANTS.map((variant) => ({
-    id: `core-mockup-${variant}`,
-    type: "product_mockup" as const,
-    title: `Product Mockup — ${variant.replace(/_/g, " ")}`,
-    dimensions: variant === "flat_lay" ? "2048x2048" : "1536x2048",
-    platform: "product",
-    variant,
-  })),
-  {
-    id: "core-campaign-key-visual",
-    type: "campaign_key_visual",
-    title: "Campaign Key Visual",
-    dimensions: "1920x1080",
-    platform: "campaign",
-  },
-  {
-    id: "core-instagram-carousel",
-    type: "instagram_carousel",
-    title: "Instagram Carousel",
-    dimensions: "1080x1350",
-    platform: "instagram",
-  },
-  {
-    id: "core-reels-concept",
-    type: "reels_concept",
-    title: "Reels Concept",
-    dimensions: "1080x1920",
-    platform: "instagram_reels",
-  },
-  {
-    id: "core-tiktok-concept",
-    type: "tiktok_concept",
-    title: "TikTok Concept",
-    dimensions: "1080x1920",
-    platform: "tiktok",
-  },
-];
+const PALETTE_SLOTS = [
+  "primary",
+  "secondary",
+  "accent",
+  "background",
+  "text",
+] as const satisfies ReadonlyArray<keyof ImagePalette>;
 
-const ADVANCED_SPECS: Array<{
-  id: string;
-  type: NormalizedImageAsset["type"];
-  title: string;
-  dimensions: string;
-  platform: string;
-  variant?: string;
-}> = [
-  { id: "advanced-landing-hero", type: "landing_section", title: "Landing — Hero", dimensions: "1920x1080", platform: "website", variant: "hero" },
-  { id: "advanced-landing-collection", type: "landing_section", title: "Landing — Collection Showcase", dimensions: "1920x900", platform: "website", variant: "collection_showcase" },
-  { id: "advanced-landing-product-grid", type: "landing_section", title: "Landing — Product Grid", dimensions: "1600x900", platform: "website", variant: "product_grid" },
-  { id: "advanced-instagram-grid-1", type: "instagram_grid", title: "Instagram Grid — Lifestyle", dimensions: "1080x1080", platform: "instagram", variant: "lifestyle_scene" },
-  { id: "advanced-instagram-grid-2", type: "instagram_grid", title: "Instagram Grid — Detail", dimensions: "1080x1080", platform: "instagram", variant: "detail_closeup" },
-  { id: "advanced-campaign-social", type: "campaign_visual", title: "Social Campaign Visual", dimensions: "1080x1080", platform: "paid_social", variant: "social_creative" },
-  { id: "advanced-campaign-ad", type: "campaign_visual", title: "Paid Ad Concept", dimensions: "1200x628", platform: "paid_social", variant: "ad_concept" },
-  { id: "advanced-social-reel-alt", type: "social_concept", title: "Additional Reels Concept", dimensions: "1080x1920", platform: "instagram_reels", variant: "behind_the_scenes" },
-  { id: "advanced-social-tiktok-alt", type: "social_concept", title: "Additional TikTok Concept", dimensions: "1080x1920", platform: "tiktok", variant: "street_culture" },
-  { id: "advanced-mockup-extra", type: "extra_mockup", title: "Extra Product Mockup", dimensions: "1536x2048", platform: "product", variant: "studio_alt" },
-  { id: "advanced-community", type: "community_concept", title: "Community Style Post", dimensions: "1080x1080", platform: "instagram", variant: "community_style" },
-  { id: "advanced-launch-teaser", type: "launch_teaser", title: "Launch Teaser Visual", dimensions: "1080x1350", platform: "instagram", variant: "launch_teaser" },
-  { id: "advanced-email-asset", type: "email_asset", title: "Email Campaign Asset", dimensions: "1200x800", platform: "email", variant: "launch_email" },
-];
+const MIN_FULL_PROJECT = 600;
+
+export interface EnrichImageOptions {
+  collectionIdentity?: ImageCollectionIdentity;
+}
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -125,10 +91,165 @@ function defaultPalette(): ImagePalette {
   };
 }
 
-function defaultMoodboard(seed: string): ImageMoodboardSection {
+function hasLegacyImageFields(payload: Record<string, unknown>): boolean {
+  return LEGACY_IMAGE_PAYLOAD_KEYS.some((key) => payload[key] !== undefined);
+}
+
+export function stripLegacyImageFields(
+  payload: Record<string, unknown>,
+): string[] {
+  const removed: string[] = [];
+  for (const key of LEGACY_IMAGE_PAYLOAD_KEYS) {
+    if (payload[key] !== undefined) {
+      delete payload[key];
+      removed.push(key);
+    }
+  }
+  return removed;
+}
+
+function normalizeMoodboard(
+  value: unknown,
+  identity: ImageCollectionIdentity,
+): ImageMoodboardSection {
+  const defaults = defaultMoodboard(identity);
+
+  if (typeof value === "string") {
+    const label = value.trim();
+    return {
+      visualDirection: ensureMinLength(
+        label
+          ? `Creative direction — ${label}: urban luxury streetwear with editorial confidence, derived from CEO, design, content and marketing intelligence.`
+          : defaults.visualDirection,
+        80,
+        defaults.visualDirection,
+      ),
+      aestheticKeywords: defaults.aestheticKeywords,
+      colorSystem: defaults.colorSystem,
+      materialReferences: defaults.materialReferences,
+      photographyStyle: defaults.photographyStyle,
+    };
+  }
+
+  const obj = asRecord(value);
+  if (!obj) return defaults;
+
   return {
     visualDirection: ensureMinLength(
-      `Creative direction for ${seed}: urban luxury streetwear with editorial confidence, derived from CEO, design, content and marketing intelligence.`,
+      asString(obj.visualDirection) || asString(obj.title) || asString(obj.name),
+      80,
+      defaults.visualDirection,
+    ),
+    aestheticKeywords:
+      asStringArray(obj.aestheticKeywords).length >= 3
+        ? asStringArray(obj.aestheticKeywords).slice(0, 12)
+        : defaults.aestheticKeywords,
+    colorSystem:
+      asStringArray(obj.colorSystem).length >= 2
+        ? asStringArray(obj.colorSystem).slice(0, 8)
+        : defaults.colorSystem,
+    materialReferences:
+      asStringArray(obj.materialReferences).length >= 2
+        ? asStringArray(obj.materialReferences).slice(0, 8)
+        : defaults.materialReferences,
+    photographyStyle: ensureMinLength(
+      asString(obj.photographyStyle),
+      40,
+      defaults.photographyStyle,
+    ),
+  };
+}
+
+function formatPaletteColor(name: string, hex: string): string {
+  const normalizedHex = hex.trim();
+  if (!normalizedHex) return "";
+  if (!name.trim()) return normalizedHex;
+  return `${name.trim()} ${normalizedHex.startsWith("#") ? normalizedHex : `#${normalizedHex}`}`;
+}
+
+function normalizePalette(value: unknown): ImagePalette {
+  const defaults = defaultPalette();
+
+  if (Array.isArray(value)) {
+    const result = { ...defaults };
+    for (let i = 0; i < PALETTE_SLOTS.length; i += 1) {
+      const entry = value[i];
+      const obj = asRecord(entry);
+      if (!obj) continue;
+      const formatted = formatPaletteColor(
+        asString(obj.name) || asString(obj.label) || asString(obj.role),
+        asString(obj.hex) || asString(obj.value) || asString(obj.color),
+      );
+      if (formatted && /#[0-9A-Fa-f]{3,8}/.test(formatted)) {
+        result[PALETTE_SLOTS[i]] = formatted;
+      }
+    }
+    return result;
+  }
+
+  const obj = asRecord(value);
+  if (!obj) return defaults;
+
+  const ensureHex = (raw: string, fallback: string) =>
+    /#[0-9A-Fa-f]{3,8}/.test(raw) ? raw : fallback;
+
+  return {
+    primary: ensureHex(asString(obj.primary), defaults.primary),
+    secondary: ensureHex(asString(obj.secondary), defaults.secondary),
+    accent: ensureHex(asString(obj.accent), defaults.accent),
+    background: ensureHex(asString(obj.background), defaults.background),
+    text: ensureHex(asString(obj.text), defaults.text),
+  };
+}
+
+function normalizeCampaignShot(
+  existing: Record<string, unknown> | undefined,
+  identity: ImageCollectionIdentity,
+  index: number,
+): ImageCampaignShot {
+  const fallback = defaultShot(identity, index);
+  if (!existing) return fallback;
+
+  const shotName = asString(existing.shotName);
+  const shotType = asString(existing.shotType);
+
+  const shotLabel =
+    shotName && shotName.includes("—")
+      ? shotName.split("—").pop()?.trim() ?? fallback.shotType.replace(/_/g, " ")
+      : shotType.length >= 2
+        ? shotType.replace(/_/g, " ")
+        : fallback.shotType.replace(/_/g, " ");
+
+  return {
+    shotName: formatAssetTitle(identity.collectionName, shotLabel),
+    shotType: shotType.length >= 2 ? shotType : fallback.shotType,
+    location: ensureMinLength(asString(existing.location), 10, fallback.location),
+    styling: ensureMinLength(asString(existing.styling), 20, fallback.styling),
+    purpose: ensureMinLength(asString(existing.purpose), 20, fallback.purpose),
+  };
+}
+
+function normalizeCampaignShots(
+  shotsRaw: unknown[],
+  identity: ImageCollectionIdentity,
+): ImageCampaignShot[] {
+  const sourceCount = shotsRaw.length;
+  const targetCount =
+    sourceCount < 12 ? 12 : Math.min(sourceCount, 24);
+  const shots: ImageCampaignShot[] = [];
+
+  for (let i = 0; i < targetCount; i += 1) {
+    shots.push(normalizeCampaignShot(asRecord(shotsRaw[i]), identity, i));
+  }
+
+  return shots;
+}
+
+function defaultMoodboard(identity: ImageCollectionIdentity): ImageMoodboardSection {
+  const { collectionName, campaignName } = identity;
+  return {
+    visualDirection: ensureMinLength(
+      `Creative direction for ${collectionName} (${campaignName}): urban luxury streetwear with editorial confidence, derived from CEO, design, content and marketing intelligence.`,
       80,
       "Visual direction from Brain reports.",
     ),
@@ -158,11 +279,11 @@ function defaultMoodboard(seed: string): ImageMoodboardSection {
 
 function normalizePrompts(
   value: unknown,
-  seed: string,
+  identity: ImageCollectionIdentity,
   subject: string,
 ): NormalizedImageAsset["prompt"] {
   const obj = asRecord(value);
-  if (!obj) return buildArtDirectionPrompt({ subject, seed });
+  if (!obj) return buildArtDirectionPrompt({ subject, collectionName: identity.collectionName, campaignName: identity.campaignName });
 
   const midjourney = asString(obj.midjourney) || asString(obj.midjourneyPrompt);
   const openai = asString(obj.openai) || asString(obj.openaiPrompt);
@@ -170,10 +291,10 @@ function normalizePrompts(
   const legacy = asString(obj.prompt);
 
   if (!midjourney && !openai && !flux && legacy) {
-    return buildArtDirectionPrompt({ subject: legacy, seed });
+    return buildArtDirectionPrompt({ subject: legacy, collectionName: identity.collectionName, campaignName: identity.campaignName });
   }
 
-  const fallback = buildArtDirectionPrompt({ subject, seed });
+  const fallback = buildArtDirectionPrompt({ subject, collectionName: identity.collectionName, campaignName: identity.campaignName });
   return {
     midjourney: ensureMinLength(midjourney || legacy, 80, fallback.midjourney),
     openai: ensureMinLength(openai || legacy, 80, fallback.openai),
@@ -182,47 +303,49 @@ function normalizePrompts(
 }
 
 function defaultCoreAsset(
-  spec: (typeof CORE_SPECS)[number],
-  seed: string,
+  spec: (typeof CORE_ASSET_SPECS)[number],
+  identity: ImageCollectionIdentity,
 ): NormalizedImageAsset {
-  const subject = `${spec.title} for ${seed}`;
+  const { collectionName, campaignName } = identity;
+  const subject = `${spec.title} for ${collectionName} (${campaignName})`;
   return {
     id: spec.id,
-    title: `${seed} — ${spec.title}`,
+    title: formatAssetTitle(collectionName, spec.title),
     type: spec.type,
     package: "core",
     dimensions: spec.dimensions,
     platform: spec.platform,
     variant: spec.variant,
     purpose: ensureMinLength(
-      `Authoritative ${spec.title.toLowerCase()} for ${seed} production package.`,
+      `Authoritative ${spec.title.toLowerCase()} for ${collectionName} core production package.`,
       20,
       "Core production asset.",
     ),
-    prompt: buildArtDirectionPrompt({ subject, seed }),
+    prompt: buildArtDirectionPrompt({ subject, collectionName, campaignName }),
     status: "ready",
   };
 }
 
 function defaultAdvancedAsset(
-  spec: (typeof ADVANCED_SPECS)[number],
-  seed: string,
+  spec: (typeof ADVANCED_ASSET_SPECS)[number],
+  identity: ImageCollectionIdentity,
 ): NormalizedImageAsset {
-  const subject = `${spec.title} for ${seed}`;
+  const { collectionName, campaignName } = identity;
+  const subject = `${spec.title} for ${collectionName} (${campaignName})`;
   return {
     id: spec.id,
-    title: `${seed} — ${spec.title}`,
+    title: formatAssetTitle(collectionName, spec.title),
     type: spec.type,
     package: "advanced",
     dimensions: spec.dimensions,
     platform: spec.platform,
     variant: spec.variant,
     purpose: ensureMinLength(
-      `Advanced production asset for ${seed} extended package.`,
+      `Advanced production asset extending ${collectionName} with ${spec.title.toLowerCase()}.`,
       20,
       "Advanced production asset.",
     ),
-    prompt: buildArtDirectionPrompt({ subject, seed }),
+    prompt: buildArtDirectionPrompt({ subject, collectionName, campaignName }),
     status: "ready",
   };
 }
@@ -230,37 +353,61 @@ function defaultAdvancedAsset(
 function normalizeAsset(
   entry: unknown,
   index: number,
-  seed: string,
+  identity: ImageCollectionIdentity,
   fallbackPackage: "core" | "advanced",
+  specs: typeof CORE_ASSET_SPECS | typeof ADVANCED_ASSET_SPECS,
 ): NormalizedImageAsset | null {
   const obj = asRecord(entry);
   if (!obj) return null;
 
-  const spec =
-    CORE_SPECS.find((item) => item.id === asString(obj.id)) ??
-    ADVANCED_SPECS.find((item) => item.id === asString(obj.id));
+  const idHint = asString(obj.id);
+  const typeHint = asString(obj.type) as NormalizedImageAsset["type"];
+  const variantHint = asString(obj.variant);
 
-  const type = asString(obj.type) as NormalizedImageAsset["type"];
+  const spec =
+    findAssetSpec(idHint) ??
+    matchAssetToSpec(
+      {
+        id: idHint || `${fallbackPackage}-${typeHint}-${index}`,
+        title: "",
+        type: typeHint || "campaign_visual",
+        package: fallbackPackage,
+        dimensions: "",
+        variant: variantHint || undefined,
+        prompt: { midjourney: "", openai: "", flux: "" },
+        status: "ready",
+      },
+      specs,
+    );
+
   const pkg = (asString(obj.package) === "advanced" ? "advanced" : fallbackPackage) as
     | "core"
     | "advanced";
-
-  const title = asString(obj.title) || spec?.title || `Asset ${index + 1}`;
-  const id =
-    asString(obj.id) ||
-    spec?.id ||
-    `${pkg}-${type}-${index}`;
+  const assetTypeLabel = spec?.title ?? `Asset ${index + 1}`;
+  const id = spec?.id ?? idHint ?? `${pkg}-${typeHint}-${index}`;
 
   return {
     id,
-    title,
-    type: (spec?.type ?? type) || "campaign_visual",
-    package: spec ? (CORE_SPECS.some((item) => item.id === spec.id) ? "core" : "advanced") : pkg,
+    title: formatAssetTitle(identity.collectionName, assetTypeLabel),
+    type: spec?.type ?? typeHint ?? "campaign_visual",
+    package: spec
+      ? CORE_ASSET_SPECS.some((item) => item.id === spec.id)
+        ? "core"
+        : "advanced"
+      : pkg,
     dimensions: asString(obj.dimensions) || spec?.dimensions || "1024x1024",
     platform: asString(obj.platform) || spec?.platform,
-    variant: asString(obj.variant) || spec?.variant,
-    purpose: asString(obj.purpose),
-    prompt: normalizePrompts(obj.prompt ?? obj.prompts, seed, title),
+    variant: variantHint || spec?.variant,
+    purpose: ensureMinLength(
+      asString(obj.purpose),
+      20,
+      `Production asset for ${identity.collectionName} ${assetTypeLabel.toLowerCase()}.`,
+    ),
+    prompt: normalizePrompts(
+      obj.prompt ?? obj.prompts,
+      identity,
+      formatAssetTitle(identity.collectionName, assetTypeLabel),
+    ),
     provider: undefined,
     status: (asString(obj.status) as NormalizedImageAsset["status"]) || "ready",
     imageUrl: asString(obj.imageUrl) || undefined,
@@ -272,33 +419,67 @@ function normalizeAsset(
 
 function ensureCoreCoverage(
   items: NormalizedImageAsset[],
-  seed: string,
+  identity: ImageCollectionIdentity,
 ): NormalizedImageAsset[] {
-  const result = [...items];
-  const present = new Set(result.map((item) => item.id));
-  for (const spec of CORE_SPECS) {
-    if (!present.has(spec.id)) {
-      result.push(defaultCoreAsset(spec, seed));
+  const deduped = dedupeImageAssets(items);
+  const bySpec = new Map<string, NormalizedImageAsset>();
+
+  for (const asset of deduped) {
+    const spec = matchAssetToSpec(asset, CORE_ASSET_SPECS);
+    if (spec) bySpec.set(spec.id, { ...asset, id: spec.id, package: "core" });
+  }
+
+  for (const spec of CORE_ASSET_SPECS) {
+    if (!bySpec.has(spec.id)) {
+      bySpec.set(spec.id, defaultCoreAsset(spec, identity));
+    } else {
+      const asset = bySpec.get(spec.id)!;
+      bySpec.set(spec.id, {
+        ...asset,
+        title: formatAssetTitle(identity.collectionName, spec.title),
+        type: spec.type,
+        variant: spec.variant,
+        dimensions: spec.dimensions,
+        platform: spec.platform,
+      });
     }
   }
-  return result;
+
+  return CORE_ASSET_SPECS.map((spec) => bySpec.get(spec.id)!);
 }
 
 function ensureAdvancedCoverage(
   items: NormalizedImageAsset[],
-  seed: string,
+  identity: ImageCollectionIdentity,
 ): NormalizedImageAsset[] {
-  const result = [...items];
-  const present = new Set(result.map((item) => item.id));
-  for (const spec of ADVANCED_SPECS) {
-    if (!present.has(spec.id)) {
-      result.push(defaultAdvancedAsset(spec, seed));
+  const deduped = dedupeImageAssets(items);
+  const bySpec = new Map<string, NormalizedImageAsset>();
+
+  for (const asset of deduped) {
+    const spec = matchAssetToSpec(asset, ADVANCED_ASSET_SPECS);
+    if (spec) bySpec.set(spec.id, { ...asset, id: spec.id, package: "advanced" });
+  }
+
+  for (const spec of ADVANCED_ASSET_SPECS) {
+    if (!bySpec.has(spec.id)) {
+      bySpec.set(spec.id, defaultAdvancedAsset(spec, identity));
+    } else {
+      const asset = bySpec.get(spec.id)!;
+      bySpec.set(spec.id, {
+        ...asset,
+        title: formatAssetTitle(identity.collectionName, spec.title),
+        type: spec.type,
+        variant: spec.variant,
+        dimensions: spec.dimensions,
+        platform: spec.platform,
+      });
     }
   }
-  return result;
+
+  return ADVANCED_ASSET_SPECS.map((spec) => bySpec.get(spec.id)!);
 }
 
-function defaultShot(seed: string, index: number): ImageCampaignShot {
+function defaultShot(identity: ImageCollectionIdentity, index: number): ImageCampaignShot {
   const types = [
     "hero_portrait",
     "wide_environment",
@@ -314,12 +495,13 @@ function defaultShot(seed: string, index: number): ImageCampaignShot {
     "campaign_key_visual",
   ];
   const shotType = types[index % types.length];
+  const shotLabel = shotType.replace(/_/g, " ");
   return {
-    shotName: `${seed} — ${shotType.replace(/_/g, " ")}`,
+    shotName: formatAssetTitle(identity.collectionName, shotLabel),
     shotType,
     location: "Urban rooftop or concrete industrial backdrop",
     styling: "Obsidian and concrete palette, signal green accent, premium streetwear",
-    purpose: `Production shot ${index + 1} for ${seed} campaign from marketing launch strategy`,
+    purpose: `Production shot ${index + 1} for ${identity.collectionName} (${identity.campaignName}) from marketing launch strategy`,
   };
 }
 
@@ -364,121 +546,86 @@ function buildFullProject(payload: Record<string, unknown>): string {
   );
 }
 
-export function enrichImagePayload(payload: Record<string, unknown>): string[] {
+export function enrichImagePayload(
+  payload: Record<string, unknown>,
+  options?: EnrichImageOptions,
+): string[] {
   const adjustments: string[] = [];
 
   payload.reportType = IMAGE_PROJECT_TYPE;
   payload.schemaVersion = IMAGE_SCHEMA_VERSION;
 
-  const projectName =
-    asString(payload.projectName) ||
-    asString(payload.title) ||
-    "Milaene Creative Production";
-  payload.projectName = projectName;
-  if (!asString(payload.title)) payload.title = projectName;
+  const identity = resolveIdentityFromPayload(
+    payload,
+    options?.collectionIdentity,
+  );
+  payload.projectName = identity.projectName;
+  payload.collectionName = identity.collectionName;
+  payload.campaignName = identity.campaignName;
+  payload.title = asString(payload.title) || identity.projectName;
 
-  const seed =
-    projectName.replace(/Creative Production|Milaene/gi, "").trim() || "Drop";
+  const coreEmpty =
+    !Array.isArray(payload.corePackage) || payload.corePackage.length === 0;
+  if (coreEmpty && hasLegacyImageFields(payload)) {
+    const migrated = migrateLegacyImageSections(
+      payload as unknown as BrainImageSections,
+      identity.collectionName,
+    );
+    payload.corePackage = migrated.corePackage ?? [];
+    payload.advancedPackage = migrated.advancedPackage ?? [];
+    if (migrated.campaignShots?.length) {
+      payload.campaignShots = migrated.campaignShots;
+    }
+    if (migrated.sourceReportTitles?.length) {
+      payload.sourceReportTitles = migrated.sourceReportTitles;
+    }
+    adjustments.push("migrated legacy top-level fields to V2 packages");
+  }
 
-  payload.moodboard = (() => {
-    const obj = asRecord(payload.moodboard);
-    const defaults = defaultMoodboard(seed);
-    if (!obj) return defaults;
-    return {
-      visualDirection: ensureMinLength(
-        asString(obj.visualDirection),
-        80,
-        defaults.visualDirection,
-      ),
-      aestheticKeywords:
-        asStringArray(obj.aestheticKeywords).length >= 3
-          ? asStringArray(obj.aestheticKeywords).slice(0, 12)
-          : defaults.aestheticKeywords,
-      colorSystem:
-        asStringArray(obj.colorSystem).length >= 2
-          ? asStringArray(obj.colorSystem).slice(0, 8)
-          : defaults.colorSystem,
-      materialReferences:
-        asStringArray(obj.materialReferences).length >= 2
-          ? asStringArray(obj.materialReferences).slice(0, 8)
-          : defaults.materialReferences,
-      photographyStyle: ensureMinLength(
-        asString(obj.photographyStyle),
-        40,
-        defaults.photographyStyle,
-      ),
-    };
-  })();
+  if (typeof payload.moodboard === "string") {
+    adjustments.push("converted string moodboard to V2 object");
+  }
+  payload.moodboard = normalizeMoodboard(payload.moodboard, identity);
 
-  payload.palette = (() => {
-    const obj = asRecord(payload.palette);
-    const defaults = defaultPalette();
-    if (!obj) return defaults;
-    const ensureHex = (value: string, fallback: string) =>
-      /#[0-9A-Fa-f]{3,8}/.test(value) ? value : fallback;
-    return {
-      primary: ensureHex(asString(obj.primary), defaults.primary),
-      secondary: ensureHex(asString(obj.secondary), defaults.secondary),
-      accent: ensureHex(asString(obj.accent), defaults.accent),
-      background: ensureHex(asString(obj.background), defaults.background),
-      text: ensureHex(asString(obj.text), defaults.text),
-    };
-  })();
+  if (Array.isArray(payload.palette)) {
+    adjustments.push("converted array palette to V2 object");
+  }
+  payload.palette = normalizePalette(payload.palette);
 
   const coreRaw = Array.isArray(payload.corePackage) ? payload.corePackage : [];
   const core = ensureCoreCoverage(
     coreRaw
-      .map((entry, index) => normalizeAsset(entry, index, seed, "core"))
+      .map((entry, index) =>
+        normalizeAsset(entry, index, identity, "core", CORE_ASSET_SPECS),
+      )
       .filter((item): item is NormalizedImageAsset => Boolean(item)),
-    seed,
+    identity,
   );
   payload.corePackage = core;
+  adjustments.push(`normalized core package for ${identity.collectionName}`);
 
   const advancedRaw = Array.isArray(payload.advancedPackage)
     ? payload.advancedPackage
     : [];
   const advanced = ensureAdvancedCoverage(
     advancedRaw
-      .map((entry, index) => normalizeAsset(entry, index, seed, "advanced"))
+      .map((entry, index) =>
+        normalizeAsset(entry, index, identity, "advanced", ADVANCED_ASSET_SPECS),
+      )
       .filter((item): item is NormalizedImageAsset => Boolean(item)),
-    seed,
+    identity,
   );
   payload.advancedPackage = advanced;
+  adjustments.push(`normalized advanced package for ${identity.collectionName}`);
 
   const shotsRaw = Array.isArray(payload.campaignShots)
     ? payload.campaignShots
     : [];
-  if (shotsRaw.length < 12) {
-    const shots: ImageCampaignShot[] = [];
-    for (let i = 0; i < 12; i += 1) {
-      const existing = asRecord(shotsRaw[i]);
-      shots.push(
-        existing
-          ? {
-              shotName: asString(existing.shotName) || defaultShot(seed, i).shotName,
-              shotType: asString(existing.shotType) || defaultShot(seed, i).shotType,
-              location: ensureMinLength(
-                asString(existing.location),
-                10,
-                defaultShot(seed, i).location,
-              ),
-              styling: ensureMinLength(
-                asString(existing.styling),
-                20,
-                defaultShot(seed, i).styling,
-              ),
-              purpose: ensureMinLength(
-                asString(existing.purpose),
-                20,
-                defaultShot(seed, i).purpose,
-              ),
-            }
-          : defaultShot(seed, i),
-      );
-    }
-    payload.campaignShots = shots;
-    adjustments.push("ensured campaign shot coverage");
+  const normalizedShots = normalizeCampaignShots(shotsRaw, identity);
+  if (normalizedShots.length !== shotsRaw.length || shotsRaw.length < 12) {
+    adjustments.push("normalized campaignShots to V2 schema");
   }
+  payload.campaignShots = normalizedShots;
 
   if (
     !Array.isArray(payload.sourceReportTitles) ||
@@ -501,6 +648,33 @@ export function enrichImagePayload(payload: Record<string, unknown>): string[] {
     adjustments.push("generated fullProject");
   }
 
+  const stripped = stripLegacyImageFields(payload);
+  if (stripped.length > 0) {
+    adjustments.push(`stripped legacy fields: ${stripped.join(", ")}`);
+  }
+
   adjustments.push("enriched V2 image packages");
   return adjustments;
+}
+
+/** Build a schemaVersion 2.0-only image project payload from enriched data. */
+export function buildV2ImageOutput(
+  payload: Record<string, unknown>,
+  options?: EnrichImageOptions,
+): Record<string, unknown> {
+  enrichImagePayload(payload, options);
+  return {
+    title: payload.title,
+    reportType: payload.reportType,
+    schemaVersion: IMAGE_SCHEMA_VERSION,
+    projectName: payload.projectName,
+    moodboard: payload.moodboard,
+    palette: payload.palette,
+    corePackage: payload.corePackage,
+    advancedPackage: payload.advancedPackage,
+    campaignShots: payload.campaignShots,
+    confidence: payload.confidence,
+    sourceReportTitles: payload.sourceReportTitles,
+    fullProject: payload.fullProject,
+  };
 }

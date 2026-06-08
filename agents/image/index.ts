@@ -4,7 +4,25 @@
 
 export { runImage, ImageKnowledgeError } from "./run";
 export { parseImageOutput, ImageParseError } from "./parse-output";
-export { enrichImagePayload } from "./enrich-packages";
+export {
+  enrichImagePayload,
+  buildV2ImageOutput,
+  stripLegacyImageFields,
+} from "./enrich-packages";
+export type { EnrichImageOptions } from "./enrich-packages";
+export {
+  extractCollectionIdentity,
+  formatAssetTitle,
+  resolveIdentityFromPayload,
+  buildProjectName,
+  isGenericCollectionName,
+} from "./collection-identity";
+export type { ImageCollectionIdentity } from "./collection-identity";
+export {
+  CORE_ASSET_SPECS,
+  ADVANCED_ASSET_SPECS,
+} from "./asset-specs";
+export { dedupeImageAssets } from "./dedupe-assets";
 export { saveImageToBrain } from "./save";
 export { retrieveImageKnowledge } from "./retrieve-context";
 export {
