@@ -18,6 +18,7 @@ import {
   rowToRecord,
   writeInputToInsert,
 } from "./mappers";
+import { sanitizeSearchTerm } from "./search-utils";
 import { slugify } from "./utils";
 
 export interface BrainSearchOptions extends BrainReadOptions {
@@ -197,8 +198,9 @@ export class SupabaseBrainClient {
       query = query.in("slug", options.slugs);
     }
 
-    if (options.query?.trim()) {
-      const term = `%${options.query.trim()}%`;
+    const searchTerm = sanitizeSearchTerm(options.query ?? "");
+    if (searchTerm) {
+      const term = `%${searchTerm}%`;
       query = query.or(`title.ilike.${term},summary.ilike.${term}`);
     }
 

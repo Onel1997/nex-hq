@@ -4,14 +4,18 @@ import { imageOutputSchema, type ImageOutput } from "./types";
 
 export const EXPECTED_IMAGE_SCHEMA = {
   title: "string (required)",
-  reportType: '"image-report" (required)',
+  reportType: '"image-project" (required)',
   projectName: "string (required)",
-  visualDirection: "string (required, min 100 chars)",
-  collectionStory: "string (required, min 80 chars)",
-  moodboard: "string (required, min 80 chars)",
-  campaignConcept: "string (required, min 80 chars)",
-  assets:
-    "{ assetName, assetType, purpose, platform, prompt, dimensions, styleNotes }[] (8–48)",
+  moodboard:
+    "{ visualDirection, aestheticKeywords, colorSystem, materialReferences, photographyStyle }",
+  productMockups:
+    "{ name, conceptType, description, prompts: { midjourney, openai, flux }, dimensions }[] (4–20)",
+  campaignVisuals:
+    "{ name, conceptType, description, platform, prompts, dimensions }[] (4–20)",
+  landingPageAssets:
+    "{ name, conceptType, description, prompts, dimensions }[] (3–12)",
+  productionChecklist:
+    "{ assetName, priority, platform, purpose }[] (8–48)",
   confidence: "number 0–1 (required)",
   sourceReportTitles: "string[] (required, min 1)",
   fullProject: "string (required, min 800 chars, Markdown)",
@@ -115,11 +119,11 @@ const REQUIRED_TOP_LEVEL_FIELDS = [
   "title",
   "reportType",
   "projectName",
-  "visualDirection",
-  "collectionStory",
   "moodboard",
-  "campaignConcept",
-  "assets",
+  "productMockups",
+  "campaignVisuals",
+  "landingPageAssets",
+  "productionChecklist",
   "confidence",
   "sourceReportTitles",
   "fullProject",
@@ -175,16 +179,21 @@ function normalizeImagePayload(
   const normalized = { ...parsed };
   const adjustments: string[] = [];
 
-  if (!normalized.reportType) {
-    normalized.reportType = "image-report";
-    adjustments.push("set reportType");
+  if (
+    !normalized.reportType ||
+    normalized.reportType === "image-report" ||
+    normalized.reportType === "image_report"
+  ) {
+    normalized.reportType = "image-project";
+    adjustments.push("set reportType=image-project");
   }
 
   const aliasMap: Record<string, string> = {
     project_name: "projectName",
-    visual_direction: "visualDirection",
-    collection_story: "collectionStory",
-    campaign_concept: "campaignConcept",
+    product_mockups: "productMockups",
+    campaign_visuals: "campaignVisuals",
+    landing_page_assets: "landingPageAssets",
+    production_checklist: "productionChecklist",
     source_report_titles: "sourceReportTitles",
     full_project: "fullProject",
     full_plan: "fullProject",

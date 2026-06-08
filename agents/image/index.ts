@@ -1,5 +1,5 @@
 /**
- * Image Agent — structured image-generation projects grounded in Brain intelligence.
+ * Image Agent — structured visual production projects grounded in Brain intelligence.
  * Phase 1: prompts only — no image API calls.
  */
 
@@ -24,7 +24,11 @@ export type {
   ImageRunInput,
   ImageRunResult,
   ImageOutput,
-  ImageAsset,
-  ImageAssetType,
+  ImageAiPrompts,
+  ImageMoodboardSection,
+  ImageProductMockup,
+  ImageCampaignVisual,
+  ImageLandingPageAsset,
+  ImageProductionChecklistItem,
 } from "./types";
-export { IMAGE_ASSET_TYPES } from "./types";
+export { IMAGE_PROJECT_TYPE_VALUE } from "./types";

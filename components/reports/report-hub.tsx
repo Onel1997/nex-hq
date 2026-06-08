@@ -192,14 +192,16 @@ function ReportCard({
     smsCampaign: string;
     confidence: string;
     projectName: string;
-    visualDirection: string;
     moodboard: string;
-    campaignConcept: string;
-    assets: string;
-    assetPrompt: string;
-    assetType: string;
-    assetPlatform: string;
-    assetDimensions: string;
+    productMockups: string;
+    campaignVisuals: string;
+    landingPageAssets: string;
+    productionChecklist: string;
+    aestheticKeywords: string;
+    photographyStyle: string;
+    midjourneyPrompt: string;
+    openaiPrompt: string;
+    fluxPrompt: string;
   };
 }) {
   const CategoryIcon = CATEGORY_ICONS[report.category];
@@ -208,7 +210,9 @@ function ReportCard({
   const isMarketingReport = report.reportType === "marketing-report";
   const isShopifyReport = report.reportType === "shopify-report";
   const isContentReport = report.reportType === "content-report";
-  const isImageReport = report.reportType === "image-report";
+  const isImageReport =
+    report.reportType === "image-project" ||
+    report.reportType === "image-report";
   const researchReportType =
     report.reportType &&
     report.reportType !== "ceo-report" &&
@@ -216,6 +220,7 @@ function ReportCard({
     report.reportType !== "marketing-report" &&
     report.reportType !== "shopify-report" &&
     report.reportType !== "content-report" &&
+    report.reportType !== "image-project" &&
     report.reportType !== "image-report"
       ? report.reportType
       : undefined;
@@ -298,52 +303,75 @@ function ReportCard({
 
           {isImageReport && image ? (
             <>
-              <ReportSection label={sectionLabels.visualDirection}>
-                <p className="text-base leading-relaxed text-muted-foreground">
-                  {image.visualDirection}
-                </p>
-              </ReportSection>
-
-              <ReportSection label={sectionLabels.collectionStory}>
-                <p className="text-base leading-relaxed text-muted-foreground">
-                  {image.collectionStory}
-                </p>
-              </ReportSection>
-
               <ReportSection label={sectionLabels.moodboard}>
                 <p className="text-base leading-relaxed text-muted-foreground">
-                  {image.moodboard}
+                  {image.moodboard.visualDirection}
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {image.moodboard.aestheticKeywords.map((keyword) => (
+                    <Badge key={keyword} variant="secondary" className="font-normal">
+                      {keyword}
+                    </Badge>
+                  ))}
+                </div>
               </ReportSection>
 
-              <ReportSection label={sectionLabels.campaignConcept}>
-                <p className="text-base leading-relaxed text-muted-foreground">
-                  {image.campaignConcept}
-                </p>
-              </ReportSection>
-
-              {image.assets.length > 0 && (
-                <ReportSection label={sectionLabels.assets}>
+              {image.productMockups.length > 0 && (
+                <ReportSection label={sectionLabels.productMockups}>
                   <ul className="space-y-3">
-                    {image.assets.slice(0, 6).map((asset) => (
+                    {image.productMockups.slice(0, 4).map((asset) => (
                       <li
-                        key={`${asset.assetName}-${asset.assetType}`}
+                        key={`${asset.name}-${asset.conceptType}`}
                         className="rounded-xl border border-border bg-muted/20 p-4 space-y-2"
                       >
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-foreground">
-                            {asset.assetName}
-                          </p>
+                          <p className="font-medium text-foreground">{asset.name}</p>
                           <Badge variant="secondary" className="font-normal text-xs">
-                            {asset.assetType.replace(/_/g, " ")}
+                            {asset.conceptType.replace(/_/g, " ")}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
-                            {asset.platform} · {asset.dimensions}
+                            {asset.dimensions}
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-2">
-                          {asset.prompt}
+                          {asset.prompts.midjourney}
                         </p>
+                      </li>
+                    ))}
+                  </ul>
+                </ReportSection>
+              )}
+
+              {image.campaignVisuals.length > 0 && (
+                <ReportSection label={sectionLabels.campaignVisuals}>
+                  <ul className="space-y-3">
+                    {image.campaignVisuals.slice(0, 4).map((asset) => (
+                      <li
+                        key={`${asset.name}-${asset.conceptType}`}
+                        className="rounded-xl border border-border bg-muted/20 p-4 space-y-2"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-foreground">{asset.name}</p>
+                          <Badge variant="secondary" className="font-normal text-xs">
+                            {asset.platform}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {asset.description}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </ReportSection>
+              )}
+
+              {image.productionChecklist.length > 0 && (
+                <ReportSection label={sectionLabels.productionChecklist}>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    {image.productionChecklist.slice(0, 6).map((item) => (
+                      <li key={item.assetName}>
+                        [{item.priority.toUpperCase()}] {item.assetName} ·{" "}
+                        {item.platform}
                       </li>
                     ))}
                   </ul>
@@ -912,14 +940,16 @@ function ReportList({
     smsCampaign: string;
     confidence: string;
     projectName: string;
-    visualDirection: string;
     moodboard: string;
-    campaignConcept: string;
-    assets: string;
-    assetPrompt: string;
-    assetType: string;
-    assetPlatform: string;
-    assetDimensions: string;
+    productMockups: string;
+    campaignVisuals: string;
+    landingPageAssets: string;
+    productionChecklist: string;
+    aestheticKeywords: string;
+    photographyStyle: string;
+    midjourneyPrompt: string;
+    openaiPrompt: string;
+    fluxPrompt: string;
   };
 }) {
   if (reports.length === 0) {

@@ -1,4 +1,6 @@
 import { getBrainClient } from "@/brain/client";
+import type { BrainSearchOptions } from "@/brain/client";
+import { extractBriefingKeywords, sanitizeSearchTerm } from "@/brain/client/search-utils";
 import type { BrainAgentContext, BrainContextSlice } from "@/brain/context";
 import {
   CEO_CONTEXT_DOMAINS,
@@ -61,6 +63,47 @@ function extractReportTitles(slices: BrainContextSlice[]): string[] {
   return reportSlice.records.map((r) => r.title);
 }
 
+async function searchWithKeywords(
+  search: (options: BrainSearchOptions) => Promise<{ records: BrainRecord[] }>,
+  base: Pick<
+    BrainSearchOptions,
+    "workspaceId" | "domains" | "status" | "tags" | "limit"
+  >,
+  keywords: string[],
+): Promise<BrainRecord[]> {
+  const seen = new Set<string>();
+  const merged: BrainRecord[] = [];
+
+  for (const keyword of keywords) {
+    const term = sanitizeSearchTerm(keyword);
+    if (!term) continue;
+
+    const result = await search({ ...base, query: term });
+    for (const record of result.records) {
+      if (!seen.has(record.id)) {
+        seen.add(record.id);
+        merged.push(record);
+      }
+    }
+
+    if (merged.length >= (base.limit ?? 10)) {
+      return merged.slice(0, base.limit);
+    }
+  }
+
+  if (merged.length === 0) {
+    const latest = await search(base);
+    for (const record of latest.records) {
+      if (!seen.has(record.id)) {
+        seen.add(record.id);
+        merged.push(record);
+      }
+    }
+  }
+
+  return merged.slice(0, base.limit);
+}
+
 /**
  * Load workspace knowledge before CEO reasoning.
  * Assembles Brain context and performs keyword search across reports.
@@ -82,32 +125,41 @@ export async function retrieveCeoKnowledge(input: {
     locale,
   });
 
-  const reportSearch = await brain.searchRecords({
-    workspaceId: input.workspaceId,
-    domains: ["reports"],
-    status: [...CEO_CONTEXT_STATUSES],
-    query: input.question,
-    limit: 12,
-  });
+  const keywords = extractBriefingKeywords(input.question);
+  const search = brain.searchRecords.bind(brain);
+
+  const reportRecords = await searchWithKeywords(
+    search,
+    {
+      workspaceId: input.workspaceId,
+      domains: ["reports"],
+      status: [...CEO_CONTEXT_STATUSES],
+      limit: 12,
+    },
+    keywords,
+  );
 
   let slices = mergeRecordsIntoSlice(
     baseContext.slices,
     "reports",
-    reportSearch.records,
+    reportRecords,
   );
 
-  const competitorSearch = await brain.searchRecords({
-    workspaceId: input.workspaceId,
-    domains: ["competitor_intelligence"],
-    status: [...CEO_CONTEXT_STATUSES],
-    query: input.question,
-    limit: 6,
-  });
+  const competitorRecords = await searchWithKeywords(
+    search,
+    {
+      workspaceId: input.workspaceId,
+      domains: ["competitor_intelligence"],
+      status: [...CEO_CONTEXT_STATUSES],
+      limit: 6,
+    },
+    keywords,
+  );
 
   slices = mergeRecordsIntoSlice(
     slices,
     "competitor_intelligence",
-    competitorSearch.records,
+    competitorRecords,
   );
 
   const sourceRecordIds = [
@@ -132,8 +184,9 @@ export async function retrieveCeoKnowledge(input: {
   console.info("[CEO Knowledge] Context retrieved", {
     workspaceId: input.workspaceId,
     questionPreview: input.question.slice(0, 120),
+    searchKeywords: keywords,
     recordCount: sourceRecordIds.length,
-    reportSearchHits: reportSearch.records.length,
+    reportSearchHits: reportRecords.length,
     reportTitles,
     domains: slices.map((s) => ({
       domain: s.domain,
@@ -144,7 +197,7 @@ export async function retrieveCeoKnowledge(input: {
 
   return {
     brainContext,
-    reportSearchCount: reportSearch.records.length,
+    reportSearchCount: reportRecords.length,
     reportTitles,
   };
 }

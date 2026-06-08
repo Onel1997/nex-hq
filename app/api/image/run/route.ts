@@ -67,8 +67,19 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof ImageKnowledgeError) {
+      console.error(`[Image Run ${requestId}] Knowledge error`, {
+        workspaceId: error.workspaceId,
+        missingReportTypes: error.missingReportTypes,
+        primaryReportCounts: error.primaryReportCounts,
+      });
       return NextResponse.json(
-        { error: error.message, code: error.code },
+        {
+          error: error.message,
+          code: error.code,
+          missingReportTypes: error.missingReportTypes,
+          primaryReportCounts: error.primaryReportCounts,
+          workspaceId: error.workspaceId,
+        },
         { status: 422 },
       );
     }

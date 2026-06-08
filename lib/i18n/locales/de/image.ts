@@ -2,52 +2,45 @@ export const image = {
   page: {
     title: "Image-Agent",
     description:
-      "Visuelle Asset-Projekte für Milaene — Moodboards, Mockups, Campaign Visuals und Social Creatives auf Basis von Design-, Content- und Marketing-Berichten.",
+      "Visual Production Agent für Milaene — Moodboards, Mockups, Campaign Visuals und Landing Assets auf Basis von CEO-, Design-, Content- und Marketing-Berichten.",
   },
   interface: {
-    label: "Image-Briefing",
-    headline: "Welche visuellen Assets sollen erstellt werden?",
+    label: "Visual Production Briefing",
+    headline: "Welches Visual Production Project soll erstellt werden?",
     placeholder:
-      "z. B. Erstelle ein Image-Projekt für Urban Echoes — Moodboard, Hoodie-Mockups, Campaign Visuals und Instagram Creatives …",
-    submit: "Image-Projekt erstellen",
-    running: "Image-Agent erstellt visuelle Prompts …",
+      "z. B. Erstelle ein Visual Production Project für Urban Echoes — Moodboard, Product Mockups, Campaign Visuals, Landing Assets und AI Prompts …",
+    submit: "Visual Production Project erstellen",
+    running: "Image-Agent erstellt Visual Production Project …",
     poweredBy:
-      "Image-Agent · Nutzt Design-, Content-, Marketing- und CEO-Berichte",
+      "Visual Production Agent · Nutzt CEO-, Design-, Content- und Marketing-Berichte",
     tryExamples: "Beispiel-Briefings",
-    success: "Image-Projekt erstellt und gespeichert",
+    success: "Visual Production Project erstellt und gespeichert",
     projectName: "Projektname",
-    visualDirection: "Visual Direction",
-    collectionStory: "Kollektions-Story",
-    moodboard: "Moodboard",
-    campaignConcept: "Campaign Concept",
-    assets: "Assets",
-    assetCount: "{count} Assets",
-    prompt: "Prompt",
-    dimensions: "Abmessungen",
-    styleNotes: "Style Notes",
-    purpose: "Zweck",
-    platform: "Plattform",
+    moodboardSection: "Moodboard",
+    productMockups: "Product Mockups",
+    campaignVisuals: "Campaign Visuals",
+    landingPageAssets: "Landing Page Assets",
+    productionChecklist: "Production Checklist",
     sources: "Genutzte Berichte",
     confidence: "Konfidenz",
     contextRecords: "{count} Wissensspeicher-Einträge als Kontext geladen",
     viewReports: "Berichte ansehen",
-    moreAssets: "+{count} weitere Assets im gespeicherten Bericht",
-    phaseNote: "Phase 1: Strukturierte Prompts — keine Bild-API-Aufrufe",
+    phaseNote: "Phase 1: Strukturierte AI-Prompts — keine Bild-API-Aufrufe",
   },
   examples: {
     urbanEchoes:
-      "Erstelle ein Image-Projekt für Urban Echoes — Moodboard, Mockups und Social Creatives",
+      "Erstelle ein Visual Production Project für Urban Echoes — Moodboard, Mockups und Campaign Visuals",
     moodboardMockups:
-      "Generiere Moodboard- und Hoodie-Mockup-Prompts aus dem Design-Bericht",
+      "Generiere Moodboard- und Product-Mockup-Prompts aus dem Design-Bericht",
     campaignVisuals:
-      "Erstelle Campaign Visuals und Landing-Page-Hero-Prompts aus Marketing- und Content-Berichten",
+      "Erstelle Campaign Visuals und Landing Page Assets aus Marketing- und Content-Berichten",
     socialLookbook:
-      "Verfasse Instagram-, TikTok- und Lookbook-Prompts für den SS26 Drop",
+      "Verfasse Social Creatives, Carousel-Konzepte und Ad-Prompts für den SS26 Drop",
   },
   errors: {
     noResponse: "Keine Antwort vom Image-Agenten erhalten.",
     noKnowledge:
-      "Design-, Content- oder Marketing-Berichte fehlen. Erstelle zuerst alle primären Intelligence-Berichte.",
+      "CEO-, Design-, Content- oder Marketing-Berichte fehlen. Erstelle zuerst alle primären Intelligence-Berichte.",
     supabaseNotConfigured:
       "Supabase ist nicht konfiguriert. Brain-Persistenz erforderlich.",
     openaiNotConfigured:

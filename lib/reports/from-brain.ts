@@ -9,7 +9,7 @@ import type {
   CeoReportType,
   ContentReportType,
   DesignReportType,
-  ImageReportType,
+  ImageProjectType,
   MarketingReportType,
   ResearchReportType,
   ShopifyReportType,
@@ -68,8 +68,13 @@ function inferReportTypeFromTags(
   if (tags.includes("content-report") || tags.includes("content")) {
     return "content-report";
   }
-  if (tags.includes("image-report") || tags.includes("image")) {
-    return "image-report";
+  if (
+    tags.includes("image-project") ||
+    tags.includes("image-agent") ||
+    tags.includes("image-report") ||
+    tags.includes("image")
+  ) {
+    return "image-project";
   }
   const types = ["competitor", "trend", "design", "pricing", "audience"] as const;
   return types.find((type) => tags.includes(type));
@@ -163,11 +168,11 @@ function mapImageSections(
   if (!sections) return undefined;
   return {
     projectName: sections.projectName,
-    visualDirection: sections.visualDirection,
-    collectionStory: sections.collectionStory,
     moodboard: sections.moodboard,
-    campaignConcept: sections.campaignConcept,
-    assets: sections.assets,
+    productMockups: sections.productMockups,
+    campaignVisuals: sections.campaignVisuals,
+    landingPageAssets: sections.landingPageAssets,
+    productionChecklist: sections.productionChecklist,
     sourceReportTitles: sections.sourceReportTitles,
   };
 }
@@ -190,7 +195,8 @@ export function brainReportRecordToListItem(
     | MarketingReportType
     | ShopifyReportType
     | ContentReportType
-    | ImageReportType
+    | ImageProjectType
+    | "image-report"
     | undefined = content.reportType ?? inferReportTypeFromTags(record.tags);
 
   const isCeoReport = reportType === "ceo-report" || content.agentId === "ceo";
@@ -203,13 +209,15 @@ export function brainReportRecordToListItem(
   const isContentReport =
     reportType === "content-report" || content.agentId === "content";
   const isImageReport =
-    reportType === "image-report" || content.agentId === "image";
+    reportType === "image-project" ||
+    reportType === "image-report" ||
+    content.agentId === "image";
 
   return {
     id: content.reportId,
     title: record.title,
     summary: isImageReport
-      ? imageSections?.visualDirection ?? content.summary
+      ? imageSections?.moodboard?.visualDirection ?? content.summary
       : isContentReport
       ? contentSections?.brandNarrative ?? content.summary
       : isShopifyReport
@@ -227,7 +235,7 @@ export function brainReportRecordToListItem(
     confidence: content.confidence,
     createdAt: record.createdAt,
     highlights: isImageReport
-      ? imageSections?.assets.map((a) => a.assetName)
+      ? imageSections?.productionChecklist?.map((item) => item.assetName)
       : isContentReport
       ? contentSections?.socialContent.launchPosts
       : isShopifyReport
@@ -240,7 +248,7 @@ export function brainReportRecordToListItem(
               ? ceoSections?.keyInsights
               : researchSections?.keyFindings ?? content.keyFindings,
     reportType: isImageReport
-      ? "image-report"
+      ? "image-project"
       : isContentReport
       ? "content-report"
       : isShopifyReport
@@ -253,7 +261,7 @@ export function brainReportRecordToListItem(
               ? "ceo-report"
               : reportType,
     executiveSummary: isImageReport
-      ? imageSections?.visualDirection ?? content.summary
+      ? imageSections?.moodboard?.visualDirection ?? content.summary
       : isContentReport
       ? contentSections?.brandNarrative ?? content.summary
       : isShopifyReport
@@ -266,7 +274,7 @@ export function brainReportRecordToListItem(
               researchSections?.executiveSummary ??
               content.summary,
     recommendations: isImageReport
-      ? imageSections?.assets.map((a) => a.purpose)
+      ? imageSections?.productionChecklist?.map((item) => item.purpose)
       : isContentReport
       ? contentSections?.socialContent.storyIdeas
       : isShopifyReport

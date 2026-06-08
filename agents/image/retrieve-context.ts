@@ -1,5 +1,6 @@
 import { getBrainClient } from "@/brain/client";
 import type { BrainSearchOptions } from "@/brain/client";
+import { extractBriefingKeywords, sanitizeSearchTerm } from "@/brain/client/search-utils";
 import { estimateTokens } from "@/brain/client/utils";
 import type { BrainAgentContext, BrainContextSlice } from "@/brain/context";
 import {
@@ -7,15 +8,12 @@ import {
   getBrainContextAssembler,
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
+import type { BrainReportContent } from "@/brain/domains/reports";
 import type { BrainRecord } from "@/brain/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
-import {
-  extractBriefingKeywords,
-  sanitizeSearchTerm,
-} from "@/agents/design/retrieve-context";
 
-/** Brand and visual memory domains for image generation. */
+/** Brand and visual memory domains for image production. */
 export const IMAGE_CONTEXT_DOMAINS = [
   "company_profile",
   "brand_vision",
@@ -27,25 +25,71 @@ export const IMAGE_CONTEXT_DOMAINS = [
 
 /** Intelligence report tags the Image Agent must consult. */
 export const IMAGE_INTELLIGENCE_TAGS = [
+  "ceo-report",
   "design-report",
   "content-report",
   "marketing-report",
-  "ceo-report",
 ] as const;
 
-/** Primary sources required before generating visual prompts. */
+/** Primary sources required before generating visual production projects. */
 export const IMAGE_PRIMARY_TAGS = [
+  "ceo-report",
   "design-report",
   "content-report",
   "marketing-report",
 ] as const;
+
+export const IMAGE_REPORT_TAG_ALIASES: Record<
+  (typeof IMAGE_PRIMARY_TAGS)[number],
+  readonly string[]
+> = {
+  "ceo-report": ["ceo-report", "ceo"],
+  "design-report": ["design-report", "designer", "design"],
+  "content-report": ["content-report", "content"],
+  "marketing-report": ["marketing-report", "marketing"],
+};
+
+const REPORT_TYPE_NORMALIZE: Record<string, (typeof IMAGE_PRIMARY_TAGS)[number]> = {
+  "ceo-report": "ceo-report",
+  ceo: "ceo-report",
+  ceo_report: "ceo-report",
+  "design-report": "design-report",
+  designer: "design-report",
+  design: "design-report",
+  design_report: "design-report",
+  "content-report": "content-report",
+  content: "content-report",
+  content_report: "content-report",
+  "marketing-report": "marketing-report",
+  marketing: "marketing-report",
+  marketing_report: "marketing-report",
+};
 
 export class ImageKnowledgeError extends Error {
   readonly code = "NO_KNOWLEDGE" as const;
+  readonly missingReportTypes: (typeof IMAGE_PRIMARY_TAGS)[number][];
+  readonly primaryReportCounts: Record<
+    (typeof IMAGE_PRIMARY_TAGS)[number],
+    number
+  >;
+  readonly workspaceId: string;
 
-  constructor(message: string) {
+  constructor(
+    message: string,
+    details: {
+      missingReportTypes: (typeof IMAGE_PRIMARY_TAGS)[number][];
+      primaryReportCounts: Record<
+        (typeof IMAGE_PRIMARY_TAGS)[number],
+        number
+      >;
+      workspaceId: string;
+    },
+  ) {
     super(message);
     this.name = "ImageKnowledgeError";
+    this.missingReportTypes = details.missingReportTypes;
+    this.primaryReportCounts = details.primaryReportCounts;
+    this.workspaceId = details.workspaceId;
   }
 }
 
@@ -92,37 +136,78 @@ function extractReportTitles(slices: BrainContextSlice[]): string[] {
   return reportSlice.records.map((r) => r.title);
 }
 
-function hasTag(record: BrainRecord, tag: string): boolean {
-  return (record.tags ?? []).includes(tag);
+function getRecordContent(
+  record: BrainRecord,
+): BrainReportContent | undefined {
+  const content = record.content;
+  if (!content || typeof content !== "object") return undefined;
+  if ((content as BrainReportContent).kind !== "reports") return undefined;
+  return content as BrainReportContent;
+}
+
+function normalizeReportTypeValue(
+  value: string | undefined,
+): (typeof IMAGE_PRIMARY_TAGS)[number] | undefined {
+  if (!value) return undefined;
+  const key = value.trim().toLowerCase().replace(/\s+/g, "_");
+  return REPORT_TYPE_NORMALIZE[key];
+}
+
+function matchesReportType(
+  record: BrainRecord,
+  canonicalType: (typeof IMAGE_PRIMARY_TAGS)[number],
+): boolean {
+  const aliases = IMAGE_REPORT_TAG_ALIASES[canonicalType];
+  const tags = (record.tags ?? []).map((t) => t.toLowerCase());
+  if (aliases.some((alias) => tags.includes(alias.toLowerCase()))) {
+    return true;
+  }
+
+  const content = getRecordContent(record);
+  const fromContent = normalizeReportTypeValue(content?.reportType);
+  if (fromContent === canonicalType) return true;
+
+  const fromAgent = normalizeReportTypeValue(content?.agentId);
+  if (fromAgent === canonicalType) return true;
+
+  return false;
 }
 
 function isIntelligenceReport(record: BrainRecord): boolean {
-  const tags = record.tags ?? [];
-  return IMAGE_INTELLIGENCE_TAGS.some((tag) => tags.includes(tag));
+  return IMAGE_INTELLIGENCE_TAGS.some((tag) => matchesReportType(record, tag));
 }
 
-function countReportsByTag(
+function countReportsByType(
   slices: BrainContextSlice[],
-  tag: string,
+  canonicalType: (typeof IMAGE_PRIMARY_TAGS)[number],
 ): number {
   const reportSlice = slices.find((s) => s.domain === "reports");
   if (!reportSlice) return 0;
-  return reportSlice.records.filter((r) => hasTag(r, tag)).length;
+  return reportSlice.records.filter((r) =>
+    matchesReportType(r, canonicalType),
+  ).length;
 }
 
 function getPrimaryReportCounts(
   slices: BrainContextSlice[],
 ): Record<(typeof IMAGE_PRIMARY_TAGS)[number], number> {
   return {
-    "design-report": countReportsByTag(slices, "design-report"),
-    "content-report": countReportsByTag(slices, "content-report"),
-    "marketing-report": countReportsByTag(slices, "marketing-report"),
+    "ceo-report": countReportsByType(slices, "ceo-report"),
+    "design-report": countReportsByType(slices, "design-report"),
+    "content-report": countReportsByType(slices, "content-report"),
+    "marketing-report": countReportsByType(slices, "marketing-report"),
   };
+}
+
+function searchTagsForType(
+  canonicalType: (typeof IMAGE_PRIMARY_TAGS)[number],
+): string[] {
+  return [...IMAGE_REPORT_TAG_ALIASES[canonicalType]];
 }
 
 function missingPrimaryTags(
   counts: Record<(typeof IMAGE_PRIMARY_TAGS)[number], number>,
-): string[] {
+): (typeof IMAGE_PRIMARY_TAGS)[number][] {
   return IMAGE_PRIMARY_TAGS.filter((tag) => counts[tag] === 0);
 }
 
@@ -194,8 +279,8 @@ async function searchReportsWithFallback(
 }
 
 /**
- * Load design, content, marketing and CEO reports plus brand context
- * before generating image-generation projects.
+ * Load CEO, design, content and marketing reports plus brand context
+ * before generating visual production projects.
  */
 export async function retrieveImageKnowledge(input: {
   workspaceId: string;
@@ -226,7 +311,7 @@ export async function retrieveImageKnowledge(input: {
         workspaceId: input.workspaceId,
         domains: ["reports"],
         status: [...CEO_CONTEXT_STATUSES],
-        tags: [tag],
+        tags: searchTagsForType(tag),
         limit: 8,
       },
       keywords,
@@ -270,7 +355,7 @@ export async function retrieveImageKnowledge(input: {
           workspaceId: input.workspaceId,
           domains: ["reports"],
           status: [...CEO_CONTEXT_STATUSES],
-          tags: [tag],
+          tags: searchTagsForType(tag),
           limit: 8,
         },
         `final-fallback:${tag}`,
@@ -287,7 +372,26 @@ export async function retrieveImageKnowledge(input: {
   }
 
   if (missing.length > 0) {
-    throw new ImageKnowledgeError(dict.image.errors.noKnowledge);
+    const missingLabels = missing
+      .map((type) => {
+        const labels: Record<(typeof IMAGE_PRIMARY_TAGS)[number], string> = {
+          "ceo-report": "CEO-Bericht (ceo-report)",
+          "design-report": "Design-Bericht (design-report)",
+          "content-report": "Content-Bericht (content-report)",
+          "marketing-report": "Marketing-Bericht (marketing-report)",
+        };
+        return labels[type];
+      })
+      .join(", ");
+
+    throw new ImageKnowledgeError(
+      `${dict.image.errors.noKnowledge} Fehlend: ${missingLabels}.`,
+      {
+        missingReportTypes: missing,
+        primaryReportCounts,
+        workspaceId: input.workspaceId,
+      },
+    );
   }
 
   const reportSlice = slices.find((s) => s.domain === "reports");

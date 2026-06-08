@@ -1,10 +1,8 @@
-import type { ImageAssetType } from "../types";
-
 /** Request to generate a single image asset. */
 export interface ImageGenerationRequest {
   prompt: string;
   dimensions: string;
-  assetType: ImageAssetType;
+  assetType: string;
   styleNotes?: string;
 }
 
@@ -12,7 +10,7 @@ export interface ImageGenerationRequest {
 export interface ImageGenerationResult {
   prompt: string;
   dimensions: string;
-  assetType: ImageAssetType;
+  assetType: string;
   status: "pending" | "completed" | "failed";
   providerId: string;
   url?: string;

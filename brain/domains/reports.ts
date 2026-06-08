@@ -31,8 +31,13 @@ export type ShopifyReportType = typeof SHOPIFY_REPORT_TYPE;
 export const CONTENT_REPORT_TYPE = "content-report" as const;
 export type ContentReportType = typeof CONTENT_REPORT_TYPE;
 
-export const IMAGE_REPORT_TYPE = "image-report" as const;
-export type ImageReportType = typeof IMAGE_REPORT_TYPE;
+export const IMAGE_PROJECT_TYPE = "image-project" as const;
+export type ImageProjectType = typeof IMAGE_PROJECT_TYPE;
+
+/** @deprecated Use IMAGE_PROJECT_TYPE */
+export const IMAGE_REPORT_TYPE = IMAGE_PROJECT_TYPE;
+/** @deprecated Use ImageProjectType */
+export type ImageReportType = ImageProjectType;
 
 export type ReportType =
   | ResearchReportType
@@ -41,7 +46,8 @@ export type ReportType =
   | MarketingReportType
   | ShopifyReportType
   | ContentReportType
-  | ImageReportType;
+  | ImageProjectType
+  | "image-report";
 
 export type CeoStepPriority = "high" | "medium" | "low";
 
@@ -213,36 +219,72 @@ export interface BrainContentSections {
   sourceReportTitles?: string[];
 }
 
-/** Single image-generation asset prompt (Image Agent). */
-export interface BrainImageAsset {
-  assetName: string;
-  assetType:
-    | "moodboard"
-    | "hoodie_mockup"
-    | "tshirt_mockup"
-    | "cargo_mockup"
-    | "campaign_visual"
-    | "landing_page_hero"
-    | "instagram_post"
-    | "instagram_story"
-    | "tiktok_cover"
-    | "email_banner"
-    | "lookbook_page";
-  purpose: string;
-  platform: string;
-  prompt: string;
-  dimensions: string;
-  styleNotes: string;
+export type BrainImageProductionPriority = "high" | "medium" | "low";
+
+/** AI image prompts for a single visual asset (Image Agent). */
+export interface BrainImageAiPrompts {
+  midjourney: string;
+  openai: string;
+  flux: string;
 }
 
-/** Structured image-generation project sections (Image Agent). */
+/** Moodboard creative direction (Image Agent). */
+export interface BrainImageMoodboardSection {
+  visualDirection: string;
+  aestheticKeywords: string[];
+  colorSystem: string[];
+  materialReferences: string[];
+  photographyStyle: string;
+}
+
+/** Product mockup concept (Image Agent). */
+export interface BrainImageProductMockup {
+  name: string;
+  conceptType: "hero_product" | "flat_lay" | "studio" | "lifestyle";
+  description: string;
+  prompts: BrainImageAiPrompts;
+  dimensions: string;
+}
+
+/** Campaign visual concept (Image Agent). */
+export interface BrainImageCampaignVisual {
+  name: string;
+  conceptType:
+    | "launch_campaign"
+    | "social_creative"
+    | "instagram_carousel"
+    | "ad_concept";
+  description: string;
+  platform: string;
+  prompts: BrainImageAiPrompts;
+  dimensions: string;
+}
+
+/** Landing page visual asset (Image Agent). */
+export interface BrainImageLandingPageAsset {
+  name: string;
+  conceptType: "hero_banner" | "collection_header" | "product_section";
+  description: string;
+  prompts: BrainImageAiPrompts;
+  dimensions: string;
+}
+
+/** Production checklist entry (Image Agent). */
+export interface BrainImageProductionChecklistItem {
+  assetName: string;
+  priority: BrainImageProductionPriority;
+  platform: string;
+  purpose: string;
+}
+
+/** Structured visual production project (Image Agent). */
 export interface BrainImageSections {
   projectName: string;
-  visualDirection: string;
-  collectionStory: string;
-  moodboard: string;
-  campaignConcept: string;
-  assets: BrainImageAsset[];
+  moodboard: BrainImageMoodboardSection;
+  productMockups: BrainImageProductMockup[];
+  campaignVisuals: BrainImageCampaignVisual[];
+  landingPageAssets: BrainImageLandingPageAsset[];
+  productionChecklist: BrainImageProductionChecklistItem[];
   /** Report titles cited as knowledge sources. */
   sourceReportTitles?: string[];
 }

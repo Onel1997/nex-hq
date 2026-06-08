@@ -20,11 +20,11 @@ export interface SaveImageResult {
 function buildImageSections(output: ImageOutput): BrainImageSections {
   return {
     projectName: output.projectName,
-    visualDirection: output.visualDirection,
-    collectionStory: output.collectionStory,
     moodboard: output.moodboard,
-    campaignConcept: output.campaignConcept,
-    assets: output.assets,
+    productMockups: output.productMockups,
+    campaignVisuals: output.campaignVisuals,
+    landingPageAssets: output.landingPageAssets,
+    productionChecklist: output.productionChecklist,
     sourceReportTitles: output.sourceReportTitles,
   };
 }
@@ -45,16 +45,16 @@ export async function saveImageToBrain(
     taskId,
     agentId: "image",
     status: "submitted",
-    summary: input.output.visualDirection.slice(0, 500),
+    summary: input.output.moodboard.visualDirection.slice(0, 500),
     confidence: input.output.confidence,
-    reportType: "image-report",
+    reportType: "image-project",
     imageSections,
-    notes: `Image-Briefing: ${input.brief}`,
+    notes: `Visual Production Briefing: ${input.brief}`,
     artifacts: [
       {
-        id: `${reportId}-image`,
+        id: `${reportId}-image-project`,
         type: "markdown",
-        label: "Vollständiges Image-Projekt",
+        label: "Vollständiges Visual Production Project",
         content: input.output.fullProject,
       },
     ],
@@ -65,10 +65,10 @@ export async function saveImageToBrain(
     domain: "reports",
     slug: `image-${baseSlug}-${slugSuffix}`,
     title: input.output.title,
-    summary: input.output.visualDirection.slice(0, 500),
+    summary: input.output.moodboard.visualDirection.slice(0, 500),
     content: reportContent,
     status: "pending_review",
-    tags: ["image-report", "image", "agent-generated", "visual", "prompts"],
+    tags: ["image-project", "image-agent", "agent-generated", "visual", "production"],
     provenance: {
       createdBy: { type: "agent", id: "image" },
       sourceTaskId: taskId,

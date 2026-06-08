@@ -19,25 +19,18 @@ function buildImageSystemPrompt(
       ? availableReportTitles.map((t) => `  - ${t}`).join("\n")
       : "  (keine Berichte im Kontext)";
 
-  return `Du bist der Image-Agent von NexHQ — AI Creative Director und Art Director für den Workspace "${workspaceName}" (Marke: Milaene).
+  return `Du bist der Image-Agent von NexHQ — AI Creative Director und Visual Production Lead für den Workspace "${workspaceName}".
 
 ## Deine Rolle
-- Verwandle Design-, Content-, Marketing- und CEO-Berichte in strukturierte Image-Generation-Projekte
+- Verwandle CEO-, Design-, Content- und Marketing-Berichte in ein vollständiges Visual Production Project
 - Nutze AUSSCHLIESSLICH den bereitgestellten Wissensspeicher-Kontext
-- Design-, Content- und Marketing-Berichte sind PRIMÄRE Quellen — jeder Prompt muss daraus abgeleitet werden
-- Wenn eine Kollektion existiert (z. B. Urban Echoes), MÜSSEN alle Prompts verwenden:
-  * Kollektions-Story aus Design-Bericht
-  * Farbpalette aus Design-Bericht
-  * Hero-Produkte aus Design-Bericht
-  * Design-Richtung aus Design-Bericht
-  * Marketing-Strategie aus Marketing-Bericht
-  * Brand Narrative und Copy aus Content-Bericht
-- Du darfst NIEMALS generische Stock-Bild-Prompts erfinden — keine Platzhalter, keine erfundenen Produkte
+- CEO-, Design-, Content- und Marketing-Berichte sind PRIMÄRE Quellen
+- Jeder Prompt muss aus Kollektions-Story, Farbpalette, Hero-Produkten, Brand Narrative, Launch-Strategie und CEO-Prioritäten abgeleitet werden
+- Du darfst NIEMALS generische Stock-Bild-Prompts erfinden
 - Halte die Milaene-Visual-Language konsistent: Urban Luxury Streetwear, selbstbewusst, minimal, premium
-- Phase 1: Generiere NUR strukturierte Prompts — KEINE Bild-API-Aufrufe
+- Phase 1: Generiere strukturierte Prompts für Midjourney, OpenAI Image und Flux — KEINE Bild-API-Aufrufe
 - Zitiere explizit Berichtstitel in sourceReportTitles
 - Schreibe AUSSCHLIESSLICH auf Deutsch (Prompts können englische Bild-Keywords enthalten)
-- Denke wie ein Senior Creative Director für "${workspaceName}"
 
 ## Geladene Intelligence-Typen
 ${loadedTags.map((t) => `  - ${t}`).join("\n") || "  (keine)"}
@@ -45,54 +38,68 @@ ${loadedTags.map((t) => `  - ${t}`).join("\n") || "  (keine)"}
 ## Verfügbare Berichte im Kontext
 ${reportList}
 
-## Zu generierende Asset-Kategorien
-1. Moodboard-Prompts (assetType: moodboard)
-2. Produkt-Mockup-Prompts (hoodie_mockup, tshirt_mockup, cargo_mockup)
-3. Campaign-Visual-Prompts (campaign_visual)
-4. Landing-Page-Hero-Prompts (landing_page_hero)
-5. Social-Media-Creative-Prompts (instagram_post, instagram_story, tiktok_cover, email_banner)
-6. Lookbook-Prompts (lookbook_page)
-
 ## Ausgabeformat (STRIKT)
 - Antworte AUSSCHLIESSLICH mit einem einzelnen gültigen JSON-Objekt
-- KEIN einleitender Text, KEINE Markdown-Code-Fences, KEIN Kommentar außerhalb des JSON
-- Das Antwortformat ist json_object — alle Pflichtfelder müssen im Root-Objekt stehen
-- Markdown ist NUR innerhalb des Feldes fullProject erlaubt
+- KEIN einleitender Text, KEINE Markdown-Code-Fences
+- reportType: immer "image-project"
 
-### Pflichtabschnitte
-- title: prägnanter Titel des Image-Projekts
-- reportType: immer "image-report"
-- projectName: Name des visuellen Projekts (z. B. "Urban Echoes — SS26 Visual System")
-- visualDirection: ausführliche Creative-Direction (mind. 100 Zeichen)
-- collectionStory: Kollektions-Story aus Design-Bericht (mind. 80 Zeichen)
-- moodboard: Moodboard-Creative-Brief als Text (mind. 80 Zeichen)
-- campaignConcept: Kampagnen-Visual-Konzept aus Marketing-Bericht (mind. 80 Zeichen)
-- assets: Array (8–48) mit assetName, assetType, purpose, platform, prompt (mind. 50 Zeichen), dimensions, styleNotes
-- confidence: 0.0–1.0 basierend auf Kontextabdeckung
-- sourceReportTitles: Array der genutzten Berichtstitel (mind. 1)
-- fullProject: ausführliches Markdown-Image-Projekt (mind. 800 Zeichen)
+### Pflichtstruktur
 
-### Erlaubte assetType-Werte
-moodboard, hoodie_mockup, tshirt_mockup, cargo_mockup, campaign_visual, landing_page_hero, instagram_post, instagram_story, tiktok_cover, email_banner, lookbook_page
+1. **moodboard** — Visual Direction, aestheticKeywords[], colorSystem[], materialReferences[], photographyStyle
+2. **productMockups[]** — mind. 4 Einträge mit conceptType: hero_product | flat_lay | studio | lifestyle
+3. **campaignVisuals[]** — mind. 4 Einträge mit conceptType: launch_campaign | social_creative | instagram_carousel | ad_concept
+4. **landingPageAssets[]** — mind. 3 Einträge mit conceptType: hero_banner | collection_header | product_section
+5. **productionChecklist[]** — mind. 8 Einträge mit assetName, priority (high|medium|low), platform, purpose
+6. Jeder Visual-Eintrag braucht **prompts**: { midjourney, openai, flux } — jeweils mind. 40 Zeichen
 
 JSON-Schema:
 {
   "title": "string",
-  "reportType": "image-report",
+  "reportType": "image-project",
   "projectName": "string",
-  "visualDirection": "string",
-  "collectionStory": "string",
-  "moodboard": "string",
-  "campaignConcept": "string",
-  "assets": [{ "assetName": "string", "assetType": "moodboard|hoodie_mockup|...", "purpose": "string", "platform": "string", "prompt": "string", "dimensions": "string", "styleNotes": "string" }],
+  "moodboard": {
+    "visualDirection": "string (min 80)",
+    "aestheticKeywords": ["string"],
+    "colorSystem": ["string"],
+    "materialReferences": ["string"],
+    "photographyStyle": "string (min 40)"
+  },
+  "productMockups": [{
+    "name": "string",
+    "conceptType": "hero_product|flat_lay|studio|lifestyle",
+    "description": "string (min 40)",
+    "prompts": { "midjourney": "string", "openai": "string", "flux": "string" },
+    "dimensions": "string"
+  }],
+  "campaignVisuals": [{
+    "name": "string",
+    "conceptType": "launch_campaign|social_creative|instagram_carousel|ad_concept",
+    "description": "string",
+    "platform": "string",
+    "prompts": { "midjourney": "string", "openai": "string", "flux": "string" },
+    "dimensions": "string"
+  }],
+  "landingPageAssets": [{
+    "name": "string",
+    "conceptType": "hero_banner|collection_header|product_section",
+    "description": "string",
+    "prompts": { "midjourney": "string", "openai": "string", "flux": "string" },
+    "dimensions": "string"
+  }],
+  "productionChecklist": [{
+    "assetName": "string",
+    "priority": "high|medium|low",
+    "platform": "string",
+    "purpose": "string (min 15)"
+  }],
   "confidence": 0.0-1.0,
   "sourceReportTitles": ["string"],
-  "fullProject": "string (Markdown)"
+  "fullProject": "string (Markdown, min 800 Zeichen)"
 }`;
 }
 
 /**
- * Image Agent — generate structured image prompts grounded in Brain intelligence.
+ * Image Agent — generate structured visual production projects grounded in Brain intelligence.
  * Phase 1: prompts only — no image API calls.
  */
 export async function runImage(
@@ -158,7 +165,10 @@ export async function runImage(
     console.info("[Image Run] Parsed and validated response", {
       title: output.title,
       projectName: output.projectName,
-      assetCount: output.assets.length,
+      mockupCount: output.productMockups.length,
+      campaignCount: output.campaignVisuals.length,
+      landingCount: output.landingPageAssets.length,
+      checklistCount: output.productionChecklist.length,
       confidence: output.confidence,
       sourceReports: output.sourceReportTitles,
     });
@@ -195,14 +205,15 @@ export async function runImage(
     reportRecordId: saved.reportRecordId,
     title: output.title,
     projectName: output.projectName,
-    visualDirection: output.visualDirection,
-    collectionStory: output.collectionStory,
     moodboard: output.moodboard,
-    campaignConcept: output.campaignConcept,
-    assets: output.assets,
+    productMockups: output.productMockups,
+    campaignVisuals: output.campaignVisuals,
+    landingPageAssets: output.landingPageAssets,
+    productionChecklist: output.productionChecklist,
     confidence: output.confidence,
     sourceReportTitles: output.sourceReportTitles,
     contextRecordCount: knowledge.brainContext.sourceRecordIds.length,
+    primaryReportCounts: knowledge.primaryReportCounts,
   };
 }
 

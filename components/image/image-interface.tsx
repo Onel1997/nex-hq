@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import type { ImageAsset } from "@/agents/image/types";
+import type {
+  ImageCampaignVisual,
+  ImageLandingPageAsset,
+  ImageMoodboardSection,
+  ImageProductMockup,
+  ImageProductionChecklistItem,
+} from "@/agents/image/types";
 import { useT, useWorkspace } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { ArrowRight, CheckCircle2, Loader2, Wand2 } from "lucide-react";
@@ -13,62 +19,56 @@ interface ImageResult {
   reportId: string;
   title: string;
   projectName: string;
-  visualDirection: string;
-  collectionStory: string;
-  moodboard: string;
-  campaignConcept: string;
-  assets: ImageAsset[];
+  moodboard: ImageMoodboardSection;
+  productMockups: ImageProductMockup[];
+  campaignVisuals: ImageCampaignVisual[];
+  landingPageAssets: ImageLandingPageAsset[];
+  productionChecklist: ImageProductionChecklistItem[];
   confidence: number;
   sourceReportTitles: string[];
   contextRecordCount: number;
 }
 
-function AssetPreview({
-  assets,
-  label,
-  moreLabel,
-}: {
-  assets: ImageAsset[];
-  label: string;
-  moreLabel: (count: string) => string;
-}) {
-  const preview = assets.slice(0, 4);
-
+function PromptPreview({ label, prompt }: { label: string; prompt: string }) {
   return (
-    <div className="space-y-3">
-      <p className="text-label text-primary/80">
-        {label} ({assets.length})
-      </p>
-      <ul className="space-y-4">
-        {preview.map((asset) => (
-          <li
-            key={`${asset.assetName}-${asset.assetType}`}
-            className="rounded-xl border border-border bg-muted/20 p-5 space-y-2"
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-medium text-foreground">{asset.assetName}</p>
-              <Badge variant="secondary" className="font-normal text-xs">
-                {asset.assetType.replace(/_/g, " ")}
-              </Badge>
-              <Badge variant="outline" className="font-normal text-xs">
-                {asset.platform}
-              </Badge>
-              <span className="text-xs text-muted-foreground">
-                {asset.dimensions}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground line-clamp-3">
-              {asset.prompt}
-            </p>
-          </li>
-        ))}
-        {assets.length > 4 && (
-          <li className="text-sm text-muted-foreground/80">
-            {moreLabel(String(assets.length - 4))}
-          </li>
-        )}
-      </ul>
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="text-sm text-muted-foreground line-clamp-3">{prompt}</p>
     </div>
+  );
+}
+
+function VisualAssetCard({
+  name,
+  badge,
+  meta,
+  description,
+  prompts,
+}: {
+  name: string;
+  badge: string;
+  meta?: string;
+  description: string;
+  prompts: { midjourney: string; openai: string; flux: string };
+}) {
+  return (
+    <li className="rounded-xl border border-border bg-muted/20 p-5 space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="font-medium text-foreground">{name}</p>
+        <Badge variant="secondary" className="font-normal text-xs">
+          {badge}
+        </Badge>
+        {meta && (
+          <span className="text-xs text-muted-foreground">{meta}</span>
+        )}
+      </div>
+      <p className="text-sm text-muted-foreground">{description}</p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <PromptPreview label="Midjourney" prompt={prompts.midjourney} />
+        <PromptPreview label="OpenAI" prompt={prompts.openai} />
+        <PromptPreview label="Flux" prompt={prompts.flux} />
+      </div>
+    </li>
   );
 }
 
@@ -106,18 +106,29 @@ export function ImageInterface() {
         const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.error ?? t("image.errors.unexpected"));
+          const parts = [data.error ?? t("image.errors.unexpected")];
+          if (data.missingReportTypes?.length) {
+            parts.push(
+              `Fehlend: ${(data.missingReportTypes as string[]).join(", ")}`,
+            );
+          }
+          if (data.primaryReportCounts) {
+            parts.push(
+              `Gefunden — CEO: ${data.primaryReportCounts["ceo-report"] ?? 0}, Design: ${data.primaryReportCounts["design-report"] ?? 0}, Content: ${data.primaryReportCounts["content-report"] ?? 0}, Marketing: ${data.primaryReportCounts["marketing-report"] ?? 0}`,
+            );
+          }
+          throw new Error(parts.join(" · "));
         }
 
         setResult({
           reportId: data.reportId,
           title: data.title,
           projectName: data.projectName,
-          visualDirection: data.visualDirection,
-          collectionStory: data.collectionStory,
           moodboard: data.moodboard,
-          campaignConcept: data.campaignConcept,
-          assets: data.assets,
+          productMockups: data.productMockups,
+          campaignVisuals: data.campaignVisuals,
+          landingPageAssets: data.landingPageAssets,
+          productionChecklist: data.productionChecklist,
           confidence: data.confidence,
           sourceReportTitles: data.sourceReportTitles,
           contextRecordCount: data.contextRecordCount,
@@ -226,7 +237,7 @@ export function ImageInterface() {
       </div>
 
       {result && (
-        <div className="luxury-surface-elevated space-y-6 rounded-2xl p-8">
+        <div className="luxury-surface-elevated space-y-8 rounded-2xl p-8">
           <div className="flex items-start gap-4">
             <CheckCircle2 className="mt-1 size-6 shrink-0 text-primary" />
             <div className="space-y-3">
@@ -247,50 +258,72 @@ export function ImageInterface() {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             <p className="text-label text-primary/80">
-              {t("image.interface.visualDirection")}
+              {t("image.interface.moodboardSection")}
             </p>
             <p className="text-base leading-relaxed text-muted-foreground">
-              {result.visualDirection}
+              {result.moodboard.visualDirection}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {result.moodboard.aestheticKeywords.map((keyword) => (
+                <Badge key={keyword} variant="secondary" className="font-normal">
+                  {keyword}
+                </Badge>
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {result.moodboard.photographyStyle}
             </p>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div className="space-y-2">
-              <p className="text-label text-primary/80">
-                {t("image.interface.collectionStory")}
-              </p>
-              <p className="text-base leading-relaxed text-muted-foreground">
-                {result.collectionStory}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-label text-primary/80">
-                {t("image.interface.campaignConcept")}
-              </p>
-              <p className="text-base leading-relaxed text-muted-foreground">
-                {result.campaignConcept}
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
+          <div className="space-y-3">
             <p className="text-label text-primary/80">
-              {t("image.interface.moodboard")}
+              {t("image.interface.productMockups")} ({result.productMockups.length})
             </p>
-            <p className="text-base leading-relaxed text-muted-foreground">
-              {result.moodboard}
-            </p>
+            <ul className="space-y-4">
+              {result.productMockups.slice(0, 4).map((asset) => (
+                <VisualAssetCard
+                  key={`${asset.name}-${asset.conceptType}`}
+                  name={asset.name}
+                  badge={asset.conceptType.replace(/_/g, " ")}
+                  meta={asset.dimensions}
+                  description={asset.description}
+                  prompts={asset.prompts}
+                />
+              ))}
+            </ul>
           </div>
 
-          <AssetPreview
-            assets={result.assets}
-            label={t("image.interface.assets")}
-            moreLabel={(count) =>
-              t("image.interface.moreAssets", { count })
-            }
-          />
+          <div className="space-y-3">
+            <p className="text-label text-primary/80">
+              {t("image.interface.campaignVisuals")} ({result.campaignVisuals.length})
+            </p>
+            <ul className="space-y-4">
+              {result.campaignVisuals.slice(0, 4).map((asset) => (
+                <VisualAssetCard
+                  key={`${asset.name}-${asset.conceptType}`}
+                  name={asset.name}
+                  badge={asset.platform}
+                  description={asset.description}
+                  prompts={asset.prompts}
+                />
+              ))}
+            </ul>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-label text-primary/80">
+              {t("image.interface.productionChecklist")} ({result.productionChecklist.length})
+            </p>
+            <ul className="space-y-2 rounded-xl border border-border bg-muted/20 p-5 text-sm text-muted-foreground">
+              {result.productionChecklist.slice(0, 8).map((item) => (
+                <li key={item.assetName}>
+                  [{item.priority.toUpperCase()}] {item.assetName} · {item.platform} — {item.purpose}
+                </li>
+              ))}
+            </ul>
+          </div>
 
           {result.sourceReportTitles.length > 0 && (
             <div className="space-y-2">

@@ -14,10 +14,15 @@ import type {
   BrainShopifyProduct,
   CeoReportType,
   CeoStepPriority,
-  BrainImageAsset,
+  BrainImageCampaignVisual,
+  BrainImageLandingPageAsset,
+  BrainImageMoodboardSection,
+  BrainImageProductMockup,
+  BrainImageProductionChecklistItem,
+  BrainImageSections,
   ContentReportType,
   DesignReportType,
-  ImageReportType,
+  ImageProjectType,
   MarketingReportType,
   ResearchReportType,
   ShopifyReportType,
@@ -59,7 +64,8 @@ export interface ReportListItem {
     | MarketingReportType
     | ShopifyReportType
     | ContentReportType
-    | ImageReportType;
+    | ImageProjectType
+    | "image-report";
   executiveSummary?: string;
   recommendations?: string[];
   opportunities?: string[];
@@ -115,11 +121,11 @@ export interface ReportListItem {
   };
   imageReport?: {
     projectName: string;
-    visualDirection: string;
-    collectionStory: string;
-    moodboard: string;
-    campaignConcept: string;
-    assets: BrainImageAsset[];
+    moodboard: BrainImageMoodboardSection;
+    productMockups: BrainImageProductMockup[];
+    campaignVisuals: BrainImageCampaignVisual[];
+    landingPageAssets: BrainImageLandingPageAsset[];
+    productionChecklist: BrainImageProductionChecklistItem[];
     sourceReportTitles?: string[];
   };
 }
