@@ -27,6 +27,8 @@ const AGENT_HREFS: Partial<Record<AgentId, string>> = {
   research: "/agents/research",
   designer: "/agents/design",
   marketing: "/agents/marketing",
+  shopify: "/agents/shopify",
+  content: "/agents/content",
 };
 
 const AGENT_ICONS: Record<AgentId, LucideIcon> = {

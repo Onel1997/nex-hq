@@ -7,6 +7,8 @@ import {
   getCeoReportTypeLabel,
   getDesignReportTypeLabel,
   getMarketingReportTypeLabel,
+  getShopifyReportTypeLabel,
+  getContentReportTypeLabel,
   getReportCategoryLabels,
   getReportStatusLabel,
   getResearchReportTypeLabels,
@@ -28,12 +30,16 @@ import {
   Palette,
   Search,
   Settings2,
+  ShoppingBag,
+  PenLine,
 } from "lucide-react";
 
 const CATEGORY_ICONS = {
   research: Search,
   design: Palette,
   marketing: Megaphone,
+  commerce: ShoppingBag,
+  content: PenLine,
   operations: Settings2,
 } as const;
 
@@ -53,6 +59,12 @@ const DESIGN_REPORT_STYLE =
 
 const MARKETING_REPORT_STYLE =
   "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300";
+
+const SHOPIFY_REPORT_STYLE =
+  "border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-300";
+
+const CONTENT_REPORT_STYLE =
+  "border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300";
 
 const PRIORITY_STYLES: Record<CeoStepPriority, string> = {
   high: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
@@ -108,6 +120,8 @@ function ReportCard({
   ceoReportTypeLabel,
   designReportTypeLabel,
   marketingReportTypeLabel,
+  shopifyReportTypeLabel,
+  contentReportTypeLabel,
   priorityLabels,
   sectionLabels,
 }: {
@@ -119,6 +133,8 @@ function ReportCard({
   ceoReportTypeLabel: string;
   designReportTypeLabel: string;
   marketingReportTypeLabel: string;
+  shopifyReportTypeLabel: string;
+  contentReportTypeLabel: string;
   priorityLabels: Record<CeoStepPriority, string>;
   sectionLabels: {
     executiveSummary: string;
@@ -147,6 +163,25 @@ function ReportCard({
     contentCalendar: string;
     launchKpis: string;
     budgetAllocation: string;
+    collectionDescription: string;
+    collectionSeo: string;
+    products: string;
+    collectionsToCreate: string;
+    navigationRecommendations: string;
+    homepageRecommendations: string;
+    launchChecklist: string;
+    storefrontWarnings: string;
+    brandNarrative: string;
+    landingPage: string;
+    heroHeadline: string;
+    productCopy: string;
+    emailSequence: string;
+    socialContent: string;
+    instagramCaptions: string;
+    tiktokHooks: string;
+    storyIdeas: string;
+    launchPosts: string;
+    smsCampaign: string;
     confidence: string;
   };
 }) {
@@ -154,15 +189,21 @@ function ReportCard({
   const isCeoReport = report.reportType === "ceo-report";
   const isDesignReport = report.reportType === "design-report";
   const isMarketingReport = report.reportType === "marketing-report";
+  const isShopifyReport = report.reportType === "shopify-report";
+  const isContentReport = report.reportType === "content-report";
   const researchReportType =
     report.reportType &&
     report.reportType !== "ceo-report" &&
     report.reportType !== "design-report" &&
-    report.reportType !== "marketing-report"
+    report.reportType !== "marketing-report" &&
+    report.reportType !== "shopify-report" &&
+    report.reportType !== "content-report"
       ? report.reportType
       : undefined;
   const design = report.designReport;
   const marketing = report.marketingReport;
+  const shopify = report.shopifyReport;
+  const content = report.contentReport;
   const executiveSummary = report.executiveSummary ?? report.summary;
   const keyFindings = report.highlights ?? [];
   const recommendations = report.recommendations ?? [];
@@ -191,7 +232,11 @@ function ReportCard({
                           ? DESIGN_REPORT_STYLE
                           : isMarketingReport
                             ? MARKETING_REPORT_STYLE
-                            : researchReportType
+                            : isShopifyReport
+                              ? SHOPIFY_REPORT_STYLE
+                              : isContentReport
+                                ? CONTENT_REPORT_STYLE
+                                : researchReportType
                               ? REPORT_TYPE_STYLES[researchReportType]
                               : undefined,
                     )}
@@ -202,7 +247,11 @@ function ReportCard({
                         ? designReportTypeLabel
                         : isMarketingReport
                           ? marketingReportTypeLabel
-                          : researchReportType
+                          : isShopifyReport
+                            ? shopifyReportTypeLabel
+                            : isContentReport
+                              ? contentReportTypeLabel
+                              : researchReportType
                             ? reportTypeLabels[researchReportType]
                             : report.reportType}
                   </Badge>
@@ -223,7 +272,155 @@ function ReportCard({
             </Badge>
           </div>
 
-          {isMarketingReport && marketing ? (
+          {isContentReport && content ? (
+            <>
+              <ReportSection label={sectionLabels.brandNarrative}>
+                <p className="text-base leading-relaxed text-muted-foreground">
+                  {content.brandNarrative}
+                </p>
+              </ReportSection>
+
+              <ReportSection label={sectionLabels.landingPage}>
+                <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-2">
+                  <p className="font-display text-xl font-medium text-foreground">
+                    {content.landingPageCopy.heroHeadline}
+                  </p>
+                  <p className="text-base text-muted-foreground">
+                    {content.landingPageCopy.heroSubheadline}
+                  </p>
+                  <p className="text-sm text-primary">{content.landingPageCopy.cta}</p>
+                </div>
+              </ReportSection>
+
+              {content.productCopy.length > 0 && (
+                <ReportSection label={sectionLabels.productCopy}>
+                  <ul className="space-y-3">
+                    {content.productCopy.map((product) => (
+                      <li
+                        key={product.productName}
+                        className="rounded-xl border border-border bg-muted/20 p-4"
+                      >
+                        <p className="font-medium text-foreground">
+                          {product.productName}
+                        </p>
+                        <p className="mt-1 text-base text-muted-foreground">
+                          {product.shortDescription}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </ReportSection>
+              )}
+
+              <ReportSection label={sectionLabels.emailSequence}>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li>
+                    <span className="font-medium text-foreground">Teaser:</span>{" "}
+                    {content.emailSequence.teaserEmail.slice(0, 120)}…
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">Launch:</span>{" "}
+                    {content.emailSequence.launchEmail.slice(0, 120)}…
+                  </li>
+                </ul>
+              </ReportSection>
+
+              {content.socialContent.instagramCaptions.length > 0 && (
+                <ReportSection label={sectionLabels.instagramCaptions}>
+                  <BulletList items={content.socialContent.instagramCaptions.slice(0, 6)} />
+                </ReportSection>
+              )}
+
+              {content.socialContent.tiktokHooks.length > 0 && (
+                <ReportSection label={sectionLabels.tiktokHooks}>
+                  <BulletList items={content.socialContent.tiktokHooks.slice(0, 6)} />
+                </ReportSection>
+              )}
+
+              <ReportSection label={sectionLabels.smsCampaign}>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  <li>{content.smsCampaign.teaserSms}</li>
+                  <li>{content.smsCampaign.launchSms}</li>
+                </ul>
+              </ReportSection>
+            </>
+          ) : isShopifyReport && shopify ? (
+            <>
+              <ReportSection label={sectionLabels.collectionName}>
+                <p className="text-base font-medium text-foreground">
+                  {shopify.collectionName}
+                </p>
+              </ReportSection>
+
+              <ReportSection label={sectionLabels.collectionDescription}>
+                <p className="text-base leading-relaxed text-muted-foreground">
+                  {shopify.collectionDescription}
+                </p>
+              </ReportSection>
+
+              <ReportSection label={sectionLabels.collectionSeo}>
+                <div className="rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">
+                    {shopify.collectionSeoTitle}
+                  </p>
+                  <p className="mt-2">{shopify.collectionSeoDescription}</p>
+                </div>
+              </ReportSection>
+
+              {shopify.products.length > 0 && (
+                <ReportSection label={sectionLabels.products}>
+                  <ul className="space-y-3">
+                    {shopify.products.map((product) => (
+                      <li
+                        key={product.productName}
+                        className="rounded-xl border border-border bg-muted/20 p-4"
+                      >
+                        <p className="font-medium text-foreground">
+                          {product.productName}{" "}
+                          <span className="text-sm font-normal text-muted-foreground">
+                            · {product.category} · {product.suggestedPrice}
+                          </span>
+                        </p>
+                        <p className="mt-1 text-base text-muted-foreground">
+                          {product.shortDescription}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </ReportSection>
+              )}
+
+              {shopify.collectionsToCreate.length > 0 && (
+                <ReportSection label={sectionLabels.collectionsToCreate}>
+                  <BulletList items={shopify.collectionsToCreate} />
+                </ReportSection>
+              )}
+
+              {shopify.navigationRecommendations.length > 0 && (
+                <ReportSection label={sectionLabels.navigationRecommendations}>
+                  <BulletList items={shopify.navigationRecommendations} />
+                </ReportSection>
+              )}
+
+              {shopify.homepageRecommendations.length > 0 && (
+                <ReportSection label={sectionLabels.homepageRecommendations}>
+                  <BulletList items={shopify.homepageRecommendations} />
+                </ReportSection>
+              )}
+
+              {shopify.launchChecklist.length > 0 && (
+                <ReportSection label={sectionLabels.launchChecklist}>
+                  <BulletList items={shopify.launchChecklist} />
+                </ReportSection>
+              )}
+
+              {shopify.storefrontWarnings.length > 0 && (
+                <ReportSection label={sectionLabels.storefrontWarnings}>
+                  <BulletList items={shopify.storefrontWarnings} />
+                </ReportSection>
+              )}
+            </>
+          ) : isMarketingReport && marketing ? (
             <>
               <ReportSection label={sectionLabels.launchStrategy}>
                 <p className="text-base leading-relaxed text-muted-foreground">
@@ -468,19 +665,31 @@ function ReportCard({
             </>
           )}
 
-          {!isDesignReport && !isMarketingReport && opportunities.length > 0 && (
+          {!isDesignReport &&
+            !isMarketingReport &&
+            !isShopifyReport &&
+            !isContentReport &&
+            opportunities.length > 0 && (
             <ReportSection label={sectionLabels.strategicOpportunities}>
               <BulletList items={opportunities} />
             </ReportSection>
           )}
 
-          {!isDesignReport && !isMarketingReport && risks.length > 0 && (
+          {!isDesignReport &&
+            !isMarketingReport &&
+            !isShopifyReport &&
+            !isContentReport &&
+            risks.length > 0 && (
             <ReportSection label={sectionLabels.risks}>
               <BulletList items={risks} />
             </ReportSection>
           )}
 
-          {!isDesignReport && !isMarketingReport && nextSteps.length > 0 && (
+          {!isDesignReport &&
+            !isMarketingReport &&
+            !isShopifyReport &&
+            !isContentReport &&
+            nextSteps.length > 0 && (
             <ReportSection label={sectionLabels.nextSteps}>
               <ul className="space-y-3">
                 {nextSteps.map((step) => (
@@ -515,7 +724,11 @@ function ReportCard({
             </ReportSection>
           )}
 
-          {!isDesignReport && !isMarketingReport && recommendations.length > 0 && (
+          {!isDesignReport &&
+            !isMarketingReport &&
+            !isShopifyReport &&
+            !isContentReport &&
+            recommendations.length > 0 && (
             <ReportSection label={sectionLabels.recommendations}>
               <BulletList items={recommendations} />
             </ReportSection>
@@ -550,6 +763,8 @@ function ReportList({
   ceoReportTypeLabel,
   designReportTypeLabel,
   marketingReportTypeLabel,
+  shopifyReportTypeLabel,
+  contentReportTypeLabel,
   priorityLabels,
   sectionLabels,
 }: {
@@ -562,6 +777,8 @@ function ReportList({
   ceoReportTypeLabel: string;
   designReportTypeLabel: string;
   marketingReportTypeLabel: string;
+  shopifyReportTypeLabel: string;
+  contentReportTypeLabel: string;
   priorityLabels: Record<CeoStepPriority, string>;
   sectionLabels: {
     executiveSummary: string;
@@ -590,6 +807,25 @@ function ReportList({
     contentCalendar: string;
     launchKpis: string;
     budgetAllocation: string;
+    collectionDescription: string;
+    collectionSeo: string;
+    products: string;
+    collectionsToCreate: string;
+    navigationRecommendations: string;
+    homepageRecommendations: string;
+    launchChecklist: string;
+    storefrontWarnings: string;
+    brandNarrative: string;
+    landingPage: string;
+    heroHeadline: string;
+    productCopy: string;
+    emailSequence: string;
+    socialContent: string;
+    instagramCaptions: string;
+    tiktokHooks: string;
+    storyIdeas: string;
+    launchPosts: string;
+    smsCampaign: string;
     confidence: string;
   };
 }) {
@@ -614,6 +850,8 @@ function ReportList({
           ceoReportTypeLabel={ceoReportTypeLabel}
           designReportTypeLabel={designReportTypeLabel}
           marketingReportTypeLabel={marketingReportTypeLabel}
+          shopifyReportTypeLabel={shopifyReportTypeLabel}
+          contentReportTypeLabel={contentReportTypeLabel}
           priorityLabels={priorityLabels}
           sectionLabels={sectionLabels}
         />
@@ -636,6 +874,8 @@ export function ReportHub() {
   const ceoReportTypeLabel = getCeoReportTypeLabel(locale);
   const designReportTypeLabel = getDesignReportTypeLabel(locale);
   const marketingReportTypeLabel = getMarketingReportTypeLabel(locale);
+  const shopifyReportTypeLabel = getShopifyReportTypeLabel(locale);
+  const contentReportTypeLabel = getContentReportTypeLabel(locale);
   const priorityLabels = getCeoPriorityLabels(locale);
   const agentCatalog = getAgentCatalog(locale);
   const agentNames = Object.fromEntries(
@@ -677,6 +917,8 @@ export function ReportHub() {
     "research",
     "design",
     "marketing",
+    "commerce",
+    "content",
     "operations",
   ] as const;
 
@@ -685,6 +927,8 @@ export function ReportHub() {
     research: reports.filter((r) => r.category === "research").length,
     design: reports.filter((r) => r.category === "design").length,
     marketing: reports.filter((r) => r.category === "marketing").length,
+    commerce: reports.filter((r) => r.category === "commerce").length,
+    content: reports.filter((r) => r.category === "content").length,
     operations: reports.filter((r) => r.category === "operations").length,
   };
 
@@ -743,6 +987,8 @@ export function ReportHub() {
                 ceoReportTypeLabel={ceoReportTypeLabel}
                 designReportTypeLabel={designReportTypeLabel}
                 marketingReportTypeLabel={marketingReportTypeLabel}
+                shopifyReportTypeLabel={shopifyReportTypeLabel}
+                contentReportTypeLabel={contentReportTypeLabel}
                 priorityLabels={priorityLabels}
                 sectionLabels={sectionLabels}
               />

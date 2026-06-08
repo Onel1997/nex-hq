@@ -23,6 +23,8 @@ export {
   getCeoReportTypeLabel,
   getDesignReportTypeLabel,
   getMarketingReportTypeLabel,
+  getShopifyReportTypeLabel,
+  getContentReportTypeLabel,
   getMockReports,
   getReportCategoryLabels,
   getReportStatusLabel,

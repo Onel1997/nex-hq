@@ -1,8 +1,10 @@
 import { agents } from "./agents";
 import { brain } from "./brain";
 import { ceo } from "./ceo";
+import { content } from "./content";
 import { design } from "./design";
 import { marketing } from "./marketing";
+import { shopify } from "./shopify";
 import { common } from "./common";
 import { dashboard } from "./dashboard";
 import { navigation } from "./navigation";
@@ -24,8 +26,10 @@ export const de = {
   research,
   settings,
   ceo,
+  content,
   design,
   marketing,
+  shopify,
 } as const;
 
 export type DeDictionary = typeof de;

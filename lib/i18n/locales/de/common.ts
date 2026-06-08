@@ -42,6 +42,8 @@ export const common = {
     research: "Research",
     design: "Design",
     marketing: "Marketing",
+    commerce: "Commerce",
+    content: "Content",
     operations: "Operations",
     all: "Alle",
   },

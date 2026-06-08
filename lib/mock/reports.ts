@@ -1,4 +1,9 @@
 import type {
+  BrainContentEmailSequence,
+  BrainContentLandingPageCopy,
+  BrainContentProductCopy,
+  BrainContentSmsCampaign,
+  BrainContentSocialContent,
   BrainDesignColor,
   BrainDesignHeroProduct,
   BrainDesignProduct,
@@ -6,11 +11,14 @@ import type {
   BrainMarketingCalendarEntry,
   BrainMarketingEmailPhase,
   BrainMarketingKpi,
+  BrainShopifyProduct,
   CeoReportType,
   CeoStepPriority,
+  ContentReportType,
   DesignReportType,
   MarketingReportType,
   ResearchReportType,
+  ShopifyReportType,
 } from "@/brain/domains/reports";
 import type { AgentId } from "@/lib/constants/agents";
 
@@ -20,7 +28,13 @@ export interface ReportNextStep {
   rationale?: string;
 }
 
-export type ReportCategory = "research" | "design" | "marketing" | "operations";
+export type ReportCategory =
+  | "research"
+  | "design"
+  | "marketing"
+  | "commerce"
+  | "content"
+  | "operations";
 
 export type ReportReviewStatus = "draft" | "submitted" | "approved" | "archived";
 
@@ -39,7 +53,9 @@ export interface ReportListItem {
     | ResearchReportType
     | CeoReportType
     | DesignReportType
-    | MarketingReportType;
+    | MarketingReportType
+    | ShopifyReportType
+    | ContentReportType;
   executiveSummary?: string;
   recommendations?: string[];
   opportunities?: string[];
@@ -71,12 +87,36 @@ export interface ReportListItem {
     budgetAllocation: BrainMarketingBudgetItem[];
     sourceReportTitles?: string[];
   };
+  shopifyReport?: {
+    collectionName: string;
+    collectionDescription: string;
+    collectionSeoTitle: string;
+    collectionSeoDescription: string;
+    products: BrainShopifyProduct[];
+    collectionsToCreate: string[];
+    navigationRecommendations: string[];
+    homepageRecommendations: string[];
+    launchChecklist: string[];
+    storefrontWarnings: string[];
+    sourceReportTitles?: string[];
+  };
+  contentReport?: {
+    brandNarrative: string;
+    landingPageCopy: BrainContentLandingPageCopy;
+    productCopy: BrainContentProductCopy[];
+    emailSequence: BrainContentEmailSequence;
+    socialContent: BrainContentSocialContent;
+    smsCampaign: BrainContentSmsCampaign;
+    sourceReportTitles?: string[];
+  };
 }
 
 export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {
   research: "Research",
   design: "Design",
   marketing: "Marketing",
+  commerce: "Commerce",
+  content: "Content",
   operations: "Operations",
 };
 

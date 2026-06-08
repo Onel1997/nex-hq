@@ -18,6 +18,8 @@ export function getReportCategoryLabels(
     research: common.reportCategory.research,
     design: common.reportCategory.design,
     marketing: common.reportCategory.marketing,
+    commerce: common.reportCategory.commerce,
+    content: common.reportCategory.content,
     operations: common.reportCategory.operations,
   };
 }
@@ -45,6 +47,14 @@ export function getDesignReportTypeLabel(locale: Locale): string {
 
 export function getMarketingReportTypeLabel(locale: Locale): string {
   return getDictionary(locale).reports.reportType.marketingReport;
+}
+
+export function getShopifyReportTypeLabel(locale: Locale): string {
+  return getDictionary(locale).reports.reportType.shopifyReport;
+}
+
+export function getContentReportTypeLabel(locale: Locale): string {
+  return getDictionary(locale).reports.reportType.contentReport;
 }
 
 export function getCeoPriorityLabels(

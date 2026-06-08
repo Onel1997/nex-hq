@@ -25,11 +25,19 @@ export type DesignReportType = typeof DESIGN_REPORT_TYPE;
 export const MARKETING_REPORT_TYPE = "marketing-report" as const;
 export type MarketingReportType = typeof MARKETING_REPORT_TYPE;
 
+export const SHOPIFY_REPORT_TYPE = "shopify-report" as const;
+export type ShopifyReportType = typeof SHOPIFY_REPORT_TYPE;
+
+export const CONTENT_REPORT_TYPE = "content-report" as const;
+export type ContentReportType = typeof CONTENT_REPORT_TYPE;
+
 export type ReportType =
   | ResearchReportType
   | CeoReportType
   | DesignReportType
-  | MarketingReportType;
+  | MarketingReportType
+  | ShopifyReportType
+  | ContentReportType;
 
 export type CeoStepPriority = "high" | "medium" | "low";
 
@@ -105,6 +113,100 @@ export interface BrainMarketingEmailPhase {
   subject: string;
   objective: string;
   content: string;
+}
+
+/** Product variant draft for Shopify storefront. */
+export interface BrainShopifyProductVariant {
+  optionName: string;
+  optionValues: string[];
+  sku?: string;
+  price?: string;
+}
+
+/** Product listing draft for Shopify storefront. */
+export interface BrainShopifyProduct {
+  productName: string;
+  productType: string;
+  category: string;
+  description: string;
+  shortDescription: string;
+  materials: string;
+  tags: string[];
+  seoTitle: string;
+  seoDescription: string;
+  suggestedPrice: string;
+  compareAtPrice?: string;
+  variants: BrainShopifyProductVariant[];
+  inventoryRecommendation: string;
+}
+
+/** Structured Shopify storefront draft sections (Shopify Agent). */
+export interface BrainShopifySections {
+  collectionName: string;
+  collectionDescription: string;
+  collectionSeoTitle: string;
+  collectionSeoDescription: string;
+  products: BrainShopifyProduct[];
+  collectionsToCreate: string[];
+  navigationRecommendations: string[];
+  homepageRecommendations: string[];
+  launchChecklist: string[];
+  storefrontWarnings: string[];
+  /** Report titles cited as knowledge sources. */
+  sourceReportTitles?: string[];
+}
+
+/** Landing page copy block (Content Agent). */
+export interface BrainContentLandingPageCopy {
+  heroHeadline: string;
+  heroSubheadline: string;
+  brandStory: string;
+  collectionIntroduction: string;
+  cta: string;
+}
+
+/** Product copy block (Content Agent). */
+export interface BrainContentProductCopy {
+  productName: string;
+  shortDescription: string;
+  longDescription: string;
+  featureBullets: string[];
+  seoCopy: string;
+}
+
+/** Email launch sequence (Content Agent). */
+export interface BrainContentEmailSequence {
+  teaserEmail: string;
+  revealEmail: string;
+  countdownEmail: string;
+  launchEmail: string;
+}
+
+/** Social content package (Content Agent). */
+export interface BrainContentSocialContent {
+  instagramCaptions: string[];
+  tiktokHooks: string[];
+  storyIdeas: string[];
+  launchPosts: string[];
+}
+
+/** SMS campaign messages (Content Agent). */
+export interface BrainContentSmsCampaign {
+  teaserSms: string;
+  countdownSms: string;
+  launchSms: string;
+}
+
+/** Structured publish-ready content sections (Content Agent). */
+export interface BrainContentSections {
+  brandNarrative: string;
+  landingPageCopy: BrainContentLandingPageCopy;
+  productCopy: BrainContentProductCopy[];
+  emailSequence: BrainContentEmailSequence;
+  socialContent: BrainContentSocialContent;
+  smsCampaign: BrainContentSmsCampaign;
+  /** Report titles cited as knowledge sources. */
+  sourceReportTitles?: string[];
 }
 
 /** Structured marketing campaign plan sections (Marketing Agent). */
@@ -190,4 +292,8 @@ export interface BrainReportContent {
   designSections?: BrainDesignSections;
   /** Marketing Agent — structured campaign plan payload. */
   marketingSections?: BrainMarketingSections;
+  /** Shopify Agent — structured storefront draft payload. */
+  shopifySections?: BrainShopifySections;
+  /** Content Agent — structured publish-ready copy payload. */
+  contentSections?: BrainContentSections;
 }

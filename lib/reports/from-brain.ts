@@ -1,12 +1,16 @@
 import type {
   BrainCeoNextStep,
+  BrainContentSections,
   BrainDesignSections,
   BrainMarketingSections,
   BrainReportContent,
+  BrainShopifySections,
   CeoReportType,
+  ContentReportType,
   DesignReportType,
   MarketingReportType,
   ResearchReportType,
+  ShopifyReportType,
 } from "@/brain/domains/reports";
 import type { BrainRecord } from "@/brain/types";
 import type { ReportCategory, ReportListItem } from "@/lib/mock/reports";
@@ -20,9 +24,11 @@ function mapAgentToCategory(agentId: AgentId): ReportCategory {
       return "design";
     case "marketing":
       return "marketing";
-    case "ceo":
     case "shopify":
+      return "commerce";
     case "content":
+      return "content";
+    case "ceo":
       return "operations";
     default:
       return "research";
@@ -51,6 +57,12 @@ function inferReportTypeFromTags(
   }
   if (tags.includes("marketing-report") || tags.includes("marketing")) {
     return "marketing-report";
+  }
+  if (tags.includes("shopify-report") || tags.includes("shopify")) {
+    return "shopify-report";
+  }
+  if (tags.includes("content-report") || tags.includes("content")) {
+    return "content-report";
   }
   const types = ["competitor", "trend", "design", "pricing", "audience"] as const;
   return types.find((type) => tags.includes(type));
@@ -104,6 +116,40 @@ function mapDesignSections(
   };
 }
 
+function mapShopifySections(
+  sections: BrainShopifySections | undefined,
+): ReportListItem["shopifyReport"] {
+  if (!sections) return undefined;
+  return {
+    collectionName: sections.collectionName,
+    collectionDescription: sections.collectionDescription,
+    collectionSeoTitle: sections.collectionSeoTitle,
+    collectionSeoDescription: sections.collectionSeoDescription,
+    products: sections.products,
+    collectionsToCreate: sections.collectionsToCreate,
+    navigationRecommendations: sections.navigationRecommendations,
+    homepageRecommendations: sections.homepageRecommendations,
+    launchChecklist: sections.launchChecklist,
+    storefrontWarnings: sections.storefrontWarnings,
+    sourceReportTitles: sections.sourceReportTitles,
+  };
+}
+
+function mapContentSections(
+  sections: BrainContentSections | undefined,
+): ReportListItem["contentReport"] {
+  if (!sections) return undefined;
+  return {
+    brandNarrative: sections.brandNarrative,
+    landingPageCopy: sections.landingPageCopy,
+    productCopy: sections.productCopy,
+    emailSequence: sections.emailSequence,
+    socialContent: sections.socialContent,
+    smsCampaign: sections.smsCampaign,
+    sourceReportTitles: sections.sourceReportTitles,
+  };
+}
+
 export function brainReportRecordToListItem(
   record: BrainRecord<"reports">,
 ): ReportListItem {
@@ -112,11 +158,15 @@ export function brainReportRecordToListItem(
   const ceoSections = content.ceoSections;
   const designSections = content.designSections;
   const marketingSections = content.marketingSections;
+  const shopifySections = content.shopifySections;
+  const contentSections = content.contentSections;
   const reportType:
     | ResearchReportType
     | CeoReportType
     | DesignReportType
     | MarketingReportType
+    | ShopifyReportType
+    | ContentReportType
     | undefined = content.reportType ?? inferReportTypeFromTags(record.tags);
 
   const isCeoReport = reportType === "ceo-report" || content.agentId === "ceo";
@@ -124,63 +174,101 @@ export function brainReportRecordToListItem(
     reportType === "design-report" || content.agentId === "designer";
   const isMarketingReport =
     reportType === "marketing-report" || content.agentId === "marketing";
+  const isShopifyReport =
+    reportType === "shopify-report" || content.agentId === "shopify";
+  const isContentReport =
+    reportType === "content-report" || content.agentId === "content";
 
   return {
     id: content.reportId,
     title: record.title,
-    summary: isMarketingReport
-      ? marketingSections?.launchStrategy ?? content.summary
-      : isDesignReport
-        ? designSections?.collectionStory ?? content.summary
-        : ceoSections?.executiveSummary ??
-          researchSections?.executiveSummary ??
-          content.summary,
+    summary: isContentReport
+      ? contentSections?.brandNarrative ?? content.summary
+      : isShopifyReport
+        ? shopifySections?.collectionDescription ?? content.summary
+        : isMarketingReport
+          ? marketingSections?.launchStrategy ?? content.summary
+          : isDesignReport
+            ? designSections?.collectionStory ?? content.summary
+            : ceoSections?.executiveSummary ??
+              researchSections?.executiveSummary ??
+              content.summary,
     category: mapAgentToCategory(content.agentId),
     agentId: content.agentId,
     status: mapBrainStatusToUi(record.status, content.status),
     confidence: content.confidence,
     createdAt: record.createdAt,
-    highlights: isMarketingReport
-      ? marketingSections?.contentPillars
-      : isDesignReport
-        ? designSections?.silhouettes
-        : isCeoReport
-          ? ceoSections?.keyInsights
-          : researchSections?.keyFindings ?? content.keyFindings,
-    reportType: isMarketingReport
-      ? "marketing-report"
-      : isDesignReport
-        ? "design-report"
-        : isCeoReport
-          ? "ceo-report"
-          : reportType,
-    executiveSummary: isMarketingReport
-      ? marketingSections?.launchStrategy ?? content.summary
-      : isDesignReport
-        ? designSections?.collectionStory ?? content.summary
-        : ceoSections?.executiveSummary ??
-          researchSections?.executiveSummary ??
-          content.summary,
-    recommendations: isMarketingReport
-      ? marketingSections?.contentPillars
-      : isCeoReport || isDesignReport
-        ? isDesignReport
-          ? designSections?.launchRecommendations
-          : undefined
-        : researchSections?.recommendations,
+    highlights: isContentReport
+      ? contentSections?.socialContent.launchPosts
+      : isShopifyReport
+        ? shopifySections?.launchChecklist
+        : isMarketingReport
+          ? marketingSections?.contentPillars
+          : isDesignReport
+            ? designSections?.silhouettes
+            : isCeoReport
+              ? ceoSections?.keyInsights
+              : researchSections?.keyFindings ?? content.keyFindings,
+    reportType: isContentReport
+      ? "content-report"
+      : isShopifyReport
+        ? "shopify-report"
+        : isMarketingReport
+          ? "marketing-report"
+          : isDesignReport
+            ? "design-report"
+            : isCeoReport
+              ? "ceo-report"
+              : reportType,
+    executiveSummary: isContentReport
+      ? contentSections?.brandNarrative ?? content.summary
+      : isShopifyReport
+        ? shopifySections?.collectionDescription ?? content.summary
+        : isMarketingReport
+          ? marketingSections?.launchStrategy ?? content.summary
+          : isDesignReport
+            ? designSections?.collectionStory ?? content.summary
+            : ceoSections?.executiveSummary ??
+              researchSections?.executiveSummary ??
+              content.summary,
+    recommendations: isContentReport
+      ? contentSections?.socialContent.storyIdeas
+      : isShopifyReport
+        ? shopifySections?.navigationRecommendations
+        : isMarketingReport
+          ? marketingSections?.contentPillars
+          : isCeoReport || isDesignReport
+            ? isDesignReport
+              ? designSections?.launchRecommendations
+              : undefined
+            : researchSections?.recommendations,
     opportunities: isCeoReport
       ? ceoSections?.strategicOpportunities
       : researchSections?.opportunities,
-    risks: isCeoReport ? ceoSections?.risks : researchSections?.risks,
+    risks: isShopifyReport
+      ? shopifySections?.storefrontWarnings
+      : isCeoReport
+        ? ceoSections?.risks
+        : researchSections?.risks,
     nextSteps: isCeoReport ? mapCeoNextSteps(ceoSections?.nextSteps) : undefined,
-    sourceReportTitles: isMarketingReport
-      ? marketingSections?.sourceReportTitles
-      : isDesignReport
-        ? designSections?.sourceReportTitles
-        : ceoSections?.sourceReportTitles,
+    sourceReportTitles: isContentReport
+      ? contentSections?.sourceReportTitles
+      : isShopifyReport
+        ? shopifySections?.sourceReportTitles
+        : isMarketingReport
+          ? marketingSections?.sourceReportTitles
+          : isDesignReport
+            ? designSections?.sourceReportTitles
+            : ceoSections?.sourceReportTitles,
     designReport: isDesignReport ? mapDesignSections(designSections) : undefined,
     marketingReport: isMarketingReport
       ? mapMarketingSections(marketingSections)
+      : undefined,
+    shopifyReport: isShopifyReport
+      ? mapShopifySections(shopifySections)
+      : undefined,
+    contentReport: isContentReport
+      ? mapContentSections(contentSections)
       : undefined,
   };
 }
