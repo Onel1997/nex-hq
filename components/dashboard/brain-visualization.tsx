@@ -1,0 +1,89 @@
+import Link from "next/link";
+import { BRAIN_NODES } from "@/lib/mock/command-center";
+import { SectionHeading } from "@/components/shared/section-heading";
+import { cn } from "@/lib/utils";
+import { ArrowRight } from "lucide-react";
+
+export function BrainVisualization() {
+  const totalEntries = BRAIN_NODES.reduce((sum, n) => sum + n.entries, 0);
+  const avgSync = Math.round(
+    BRAIN_NODES.reduce((sum, n) => sum + n.sync, 0) / BRAIN_NODES.length,
+  );
+
+  return (
+    <section className="space-y-12">
+      <SectionHeading
+        label="Milaene Brain"
+        title="The heart of your brand"
+        description="Living knowledge — brand memory, design intelligence, and market context in one place."
+        action={
+          <Link
+            href="/brain"
+            className="flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-primary"
+          >
+            Explore Brain
+            <ArrowRight className="size-4" />
+          </Link>
+        }
+      />
+
+      <div className="luxury-surface-elevated relative overflow-hidden p-10 lg:p-14">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,oklch(0.82_0.055_85/0.08),transparent_70%)]" />
+
+        <div className="relative mb-14 flex flex-col items-center justify-center gap-8 sm:flex-row sm:gap-20">
+          <div className="text-center">
+            <p className="font-display text-6xl font-medium tabular-nums tracking-tight text-foreground">
+              {totalEntries}
+            </p>
+            <p className="mt-2 text-base text-muted-foreground">knowledge entries</p>
+          </div>
+          <div className="hidden h-16 w-px bg-border sm:block" />
+          <div className="text-center">
+            <p className="font-display text-6xl font-medium tabular-nums tracking-tight text-primary">
+              {avgSync}%
+            </p>
+            <p className="mt-2 text-base text-muted-foreground">synced</p>
+          </div>
+        </div>
+
+        <div className="relative grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
+          {BRAIN_NODES.map((node) => (
+            <div
+              key={node.id}
+              className={cn(
+                "group rounded-2xl border border-border bg-background/30 p-6",
+                "transition-all duration-500 hover:border-primary/25 hover:bg-primary/[0.03]",
+              )}
+            >
+              <div className="mb-5 flex items-center justify-between">
+                <span
+                  className={cn(
+                    "size-2 rounded-full",
+                    node.status === "live" && "bg-primary",
+                    node.status === "syncing" && "animate-pulse bg-amber-300/80",
+                    node.status === "draft" && "bg-muted-foreground/50",
+                  )}
+                />
+                <span className="text-sm tabular-nums text-muted-foreground">
+                  {node.sync}%
+                </span>
+              </div>
+              <h3 className="font-display text-xl font-medium leading-snug text-foreground">
+                {node.label}
+              </h3>
+              <p className="mt-2 text-base text-muted-foreground">
+                {node.entries} entries
+              </p>
+              <div className="mt-5 h-1 overflow-hidden rounded-full bg-border">
+                <div
+                  className="h-full rounded-full bg-primary/70 transition-all duration-700"
+                  style={{ width: `${node.sync}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

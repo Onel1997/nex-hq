@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Milaene HQ
+
+AI-powered command center for the Milaene streetwear brand.
+
+## Stack
+
+- **Next.js 15** — App Router, TypeScript
+- **Tailwind CSS + Shadcn UI** — styling and components
+- **Supabase** — database, auth, storage (scaffolded)
+- **OpenAI** — LLM inference (scaffolded)
+- **LangGraph** — future agent orchestration (dependency installed)
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+cp .env.example .env.local
+# Fill in Supabase and OpenAI credentials
+
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+app/           Next.js pages and API routes
+components/    UI, layout, and domain components
+lib/           Config, Supabase, OpenAI clients
+agents/        Agent modules (CEO + specialists)
+brain/         Shared Milaene Brain knowledge layer
+tasks/         Task system types and handlers
+reports/       Agent report types and aggregation
+docs/          Vision, architecture, agents, roadmap
+```
 
-## Learn More
+## Documentation
 
-To learn more about Next.js, take a look at the following resources:
+| Doc | Description |
+|-----|-------------|
+| [docs/vision.md](docs/vision.md) | Mission and principles |
+| [docs/architecture.md](docs/architecture.md) | System design and data flow |
+| [docs/agents.md](docs/agents.md) | Agent hierarchy and responsibilities |
+| [docs/roadmap.md](docs/roadmap.md) | Phased implementation plan |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Status
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Phase 0 — Foundation.** No agents or automation implemented yet.
