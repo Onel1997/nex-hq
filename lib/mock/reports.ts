@@ -1,3 +1,4 @@
+import type { ResearchReportType } from "@/brain/domains/reports";
 import type { AgentId } from "@/lib/constants/agents";
 
 export type ReportCategory = "research" | "design" | "marketing" | "operations";
@@ -15,6 +16,11 @@ export interface ReportListItem {
   createdAt: string;
   drop?: string;
   highlights?: string[];
+  reportType?: ResearchReportType;
+  executiveSummary?: string;
+  recommendations?: string[];
+  opportunities?: string[];
+  risks?: string[];
 }
 
 export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {

@@ -1,13 +1,19 @@
 import { z } from "zod";
+import { enrichResearchPayload } from "./enrich-output";
 import { researchOutputSchema, type ResearchOutput } from "./types";
 
 export const EXPECTED_RESEARCH_SCHEMA = {
   title: "string (required)",
-  summary: "string (required)",
-  reportType: "competitor | trend | design | pricing | general (required)",
-  keyFindings: "string[] (required, 1–8 items)",
+  executiveSummary: "string (required, min 80 chars)",
+  reportType: "competitor | trend | design | pricing | audience (required)",
+  keyFindings: "string[] (required, 5–12 detailed items)",
+  opportunities: "string[] (required, 3–10 items)",
+  risks: "string[] (required, 3–8 items)",
+  recommendations: "string[] (required, 4–10 items)",
   confidence: "number 0–1 (required)",
-  fullAnalysis: "string (required)",
+  fullAnalysis: "string (required, min 800 chars, Markdown)",
+  competitorReport: "auto-generated or filled when reportType=competitor",
+  trendReport: "auto-generated or filled when reportType=trend",
   competitorIntelligence: "optional { competitors, competitiveEdge, ... }",
   marketingMemory: "optional { name, objective, notes, ... }",
   designMemory: "optional { silhouettes, moodKeywords, ... }",
@@ -97,24 +103,54 @@ export class ResearchParseError extends Error {
 
 const REQUIRED_TOP_LEVEL_FIELDS = [
   "title",
-  "summary",
+  "executiveSummary",
   "reportType",
   "keyFindings",
+  "opportunities",
+  "risks",
+  "recommendations",
   "confidence",
   "fullAnalysis",
 ] as const;
+
+const REPORT_TYPE_ALIASES: Record<string, string> = {
+  competitor: "competitor",
+  competitors: "competitor",
+  wettbewerb: "competitor",
+  trend: "trend",
+  trends: "trend",
+  design: "design",
+  pricing: "pricing",
+  price: "pricing",
+  preise: "pricing",
+  audience: "audience",
+  zielgruppe: "audience",
+  general: "audience",
+  market: "audience",
+};
+
+const ADOPTION_LEVEL_ALIASES: Record<string, string> = {
+  nascent: "nascent",
+  emerging: "emerging",
+  mainstream: "mainstream",
+  declining: "declining",
+  früh: "nascent",
+  frueh: "nascent",
+  aufstrebend: "emerging",
+  etabliert: "mainstream",
+  rückläufig: "declining",
+  ruecklaeufig: "declining",
+};
 
 /** Strip markdown code fences and surrounding whitespace from model output. */
 export function stripMarkdownJsonFences(raw: string): string {
   let text = raw.trim();
 
-  // ```json ... ``` or ``` ... ```
   const fenced = text.match(/^```(?:json|JSON)?\s*\n?([\s\S]*?)\n?```\s*$/);
   if (fenced) {
     return fenced[1].trim();
   }
 
-  // Leading fence without reliable closing match
   if (text.startsWith("```")) {
     text = text.replace(/^```(?:json|JSON)?\s*\n?/, "");
     text = text.replace(/\n?```\s*$/, "");
@@ -158,11 +194,11 @@ const COMPETITOR_TIER_ALIASES: Record<string, string> = {
   direct: "direct",
   "tier 1": "direct",
   "tier-1": "direct",
-  "tier1": "direct",
+  tier1: "direct",
   aspirational: "aspirational",
   "tier 2": "aspirational",
   "tier-2": "aspirational",
-  "tier2": "aspirational",
+  tier2: "aspirational",
   emerging: "emerging",
   watchlist: "watchlist",
   watch: "watchlist",
@@ -181,6 +217,85 @@ function normalizeCompetitorTier(tier: unknown): string | undefined {
     : undefined;
 }
 
+function normalizeStringArray(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value
+      .split(/\n|;/)
+      .map((item) => item.replace(/^[-*•]\s*/, "").trim())
+      .filter(Boolean);
+  }
+  return undefined;
+}
+
+function normalizeCompetitorReport(
+  raw: unknown,
+  adjustments: string[],
+): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+
+  const report = { ...(raw as Record<string, unknown>) };
+
+  const milaeneOpportunities =
+    report.brandOpportunities ??
+    report.milaeneOpportunities ??
+    report.milaene_opportunities;
+  if (milaeneOpportunities && !report.brandOpportunities) {
+    report.brandOpportunities = milaeneOpportunities;
+    adjustments.push("mapped milaeneOpportunities → brandOpportunities");
+  }
+
+  for (const key of [
+    "productCategories",
+    "strengths",
+    "weaknesses",
+    "brandOpportunities",
+  ] as const) {
+    const normalized = normalizeStringArray(report[key]);
+    if (normalized) report[key] = normalized;
+  }
+
+  return report;
+}
+
+function normalizeTrendReport(
+  raw: unknown,
+  adjustments: string[],
+): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+
+  const report = { ...(raw as Record<string, unknown>) };
+
+  const relevance =
+    report.relevanceForBrand ??
+    report.relevanceForMilaene ??
+    report.relevance_for_brand;
+  if (relevance && !report.relevanceForBrand) {
+    report.relevanceForBrand = relevance;
+    adjustments.push("mapped relevanceForMilaene → relevanceForBrand");
+  }
+
+  if (typeof report.adoptionLevel === "string") {
+    const key = report.adoptionLevel.toLowerCase().trim();
+    const mapped = ADOPTION_LEVEL_ALIASES[key];
+    if (mapped && mapped !== report.adoptionLevel) {
+      adjustments.push(
+        `normalized adoptionLevel: ${report.adoptionLevel} → ${mapped}`,
+      );
+      report.adoptionLevel = mapped;
+    }
+  }
+
+  for (const key of ["designImplications", "contentImplications"] as const) {
+    const normalized = normalizeStringArray(report[key]);
+    if (normalized) report[key] = normalized;
+  }
+
+  return report;
+}
+
 /** Normalize common OpenAI field-name and type deviations before schema validation. */
 export function normalizeResearchPayload(
   parsed: Record<string, unknown>,
@@ -188,13 +303,20 @@ export function normalizeResearchPayload(
   const adjustments: string[] = [];
   const normalized: Record<string, unknown> = { ...parsed };
 
+  if (!normalized.executiveSummary) {
+    if (typeof normalized.summary === "string") {
+      normalized.executiveSummary = normalized.summary;
+      adjustments.push("mapped summary → executiveSummary");
+    } else if (typeof normalized.executive_summary === "string") {
+      normalized.executiveSummary = normalized.executive_summary;
+      adjustments.push("mapped executive_summary → executiveSummary");
+    }
+  }
+
   if (!normalized.keyFindings) {
     if (Array.isArray(normalized.findings)) {
       normalized.keyFindings = normalized.findings;
       adjustments.push("mapped findings → keyFindings");
-    } else if (Array.isArray(normalized.recommendations)) {
-      normalized.keyFindings = normalized.recommendations;
-      adjustments.push("mapped recommendations → keyFindings");
     }
   }
 
@@ -208,12 +330,23 @@ export function normalizeResearchPayload(
     }
   }
 
+  for (const field of ["opportunities", "risks", "recommendations"] as const) {
+    const coerced = normalizeStringArray(normalized[field]);
+    if (coerced && !normalized[field]) {
+      normalized[field] = coerced;
+      adjustments.push(`coerced ${field} to string array`);
+    }
+  }
+
   if (typeof normalized.reportType === "string") {
     const lowered = normalized.reportType.toLowerCase().trim();
-    if (lowered !== normalized.reportType) {
-      adjustments.push(`normalized reportType casing: ${normalized.reportType} → ${lowered}`);
+    const mapped = REPORT_TYPE_ALIASES[lowered] ?? lowered;
+    if (mapped !== normalized.reportType) {
+      adjustments.push(
+        `normalized reportType: ${normalized.reportType} → ${mapped}`,
+      );
     }
-    normalized.reportType = lowered;
+    normalized.reportType = mapped;
   }
 
   if (normalized.confidence !== undefined) {
@@ -233,6 +366,20 @@ export function normalizeResearchPayload(
       adjustments.push(`scaled confidence percent → ratio: ${normalized.confidence} → ${scaled}`);
       normalized.confidence = scaled;
     }
+  }
+
+  if (normalized.competitorReport) {
+    normalized.competitorReport = normalizeCompetitorReport(
+      normalized.competitorReport,
+      adjustments,
+    );
+  }
+
+  if (normalized.trendReport) {
+    normalized.trendReport = normalizeTrendReport(
+      normalized.trendReport,
+      adjustments,
+    );
   }
 
   if (
@@ -263,15 +410,97 @@ export function normalizeResearchPayload(
   return { normalized, adjustments };
 }
 
+function isOptionalNestedRoot(path: string): boolean {
+  return (
+    path === "competitorIntelligence" ||
+    path === "marketingMemory" ||
+    path === "designMemory"
+  );
+}
+
+function hasCompetitorReportIssues(
+  issues: z.ZodIssue[],
+  reportType: unknown,
+): boolean {
+  return (
+    reportType === "competitor" &&
+    issues.some((issue) => String(issue.path[0] ?? "") === "competitorReport")
+  );
+}
+
+function hasTrendReportIssues(
+  issues: z.ZodIssue[],
+  reportType: unknown,
+): boolean {
+  return (
+    reportType === "trend" &&
+    issues.some((issue) => String(issue.path[0] ?? "") === "trendReport")
+  );
+}
+
+interface ValidateContext {
+  rawResponse: string;
+  strippedJson: string;
+  strippedOptionalBlocks?: boolean;
+}
+
 function validateResearchPayload(
   parsed: Record<string, unknown>,
-  context: { rawResponse: string; strippedJson: string },
+  context: ValidateContext,
 ): ResearchOutput {
   const missingFields = findMissingRequiredFields(parsed);
-  const result = researchOutputSchema.safeParse(parsed);
+  let result = researchOutputSchema.safeParse(parsed);
 
   if (result.success) {
     return result.data;
+  }
+
+  if (hasCompetitorReportIssues(result.error.issues, parsed.reportType)) {
+    const partial =
+      parsed.competitorReport &&
+      typeof parsed.competitorReport === "object" &&
+      !Array.isArray(parsed.competitorReport)
+        ? (parsed.competitorReport as Record<string, unknown>)
+        : undefined;
+
+    const enrichAdjustments = enrichResearchPayload({
+      ...parsed,
+      competitorReport: partial,
+    });
+    if (enrichAdjustments.length > 0) {
+      console.info("[Research Run] Re-enriched competitorReport after validation issues", {
+        adjustments: enrichAdjustments,
+      });
+    }
+
+    result = researchOutputSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
+    }
+  }
+
+  if (hasTrendReportIssues(result.error.issues, parsed.reportType)) {
+    const partial =
+      parsed.trendReport &&
+      typeof parsed.trendReport === "object" &&
+      !Array.isArray(parsed.trendReport)
+        ? (parsed.trendReport as Record<string, unknown>)
+        : undefined;
+
+    const enrichAdjustments = enrichResearchPayload({
+      ...parsed,
+      trendReport: partial,
+    });
+    if (enrichAdjustments.length > 0) {
+      console.info("[Research Run] Re-enriched trendReport after validation issues", {
+        adjustments: enrichAdjustments,
+      });
+    }
+
+    result = researchOutputSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
+    }
   }
 
   const validationIssues = result.error.issues.map((issue) =>
@@ -280,14 +509,22 @@ function validateResearchPayload(
 
   const onlyOptionalNestedFailures = result.error.issues.every((issue) => {
     const root = String(issue.path[0] ?? "");
-    return (
-      root === "competitorIntelligence" ||
-      root === "marketingMemory" ||
-      root === "designMemory"
-    );
+    return isOptionalNestedRoot(root);
   });
 
   if (onlyOptionalNestedFailures) {
+    if (context.strippedOptionalBlocks) {
+      throw new ResearchParseError({
+        message: `Schema validation failed with ${result.error.issues.length} issue(s) after stripping optional blocks`,
+        stage: "validation",
+        rawResponse: context.rawResponse,
+        strippedJson: context.strippedJson,
+        parsed,
+        missingFields,
+        validationIssues,
+      });
+    }
+
     const stripped = { ...parsed };
     const removed: string[] = [];
     for (const key of [
@@ -295,7 +532,7 @@ function validateResearchPayload(
       "marketingMemory",
       "designMemory",
     ] as const) {
-      if (stripped[key] !== undefined) {
+      if (stripped[key] !== undefined && isOptionalNestedRoot(key)) {
         removed.push(key);
         delete stripped[key];
       }
@@ -304,7 +541,10 @@ function validateResearchPayload(
       removed,
       validationIssues,
     });
-    return validateResearchPayload(stripped, context);
+    return validateResearchPayload(stripped, {
+      ...context,
+      strippedOptionalBlocks: true,
+    });
   }
 
   throw new ResearchParseError({
@@ -347,8 +587,13 @@ export function parseResearchOutput(raw: string): ResearchOutput {
     parsed as Record<string, unknown>,
   );
 
-  if (adjustments.length > 0) {
-    console.info("[Research Run] Normalized model output", { adjustments });
+  const enrichAdjustments = enrichResearchPayload(normalized);
+  const allAdjustments = [...adjustments, ...enrichAdjustments];
+
+  if (allAdjustments.length > 0) {
+    console.info("[Research Run] Normalized model output", {
+      adjustments: allAdjustments,
+    });
   }
 
   console.info("[Research Run] Parsed JSON (pre-validation):", JSON.stringify(normalized, null, 2));

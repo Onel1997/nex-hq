@@ -5,8 +5,10 @@ import {
   getAgentCatalog,
   getReportCategoryLabels,
   getReportStatusLabel,
+  getResearchReportTypeLabels,
 } from "@/lib/i18n/data";
 import type { ReportListItem } from "@/lib/mock/reports";
+import type { ResearchReportType } from "@/brain/domains/reports";
 import { useDictionary, useLocale, useT, useWorkspace } from "@/lib/i18n";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +30,14 @@ const CATEGORY_ICONS = {
   operations: Settings2,
 } as const;
 
+const REPORT_TYPE_STYLES: Record<ResearchReportType, string> = {
+  competitor: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  trend: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  pricing: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  audience: "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  design: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+};
+
 const STATUS_STYLES: Record<ReportListItem["status"], string> = {
   draft: "bg-muted text-muted-foreground",
   submitted: "bg-primary/10 text-primary",
@@ -35,18 +45,61 @@ const STATUS_STYLES: Record<ReportListItem["status"], string> = {
   archived: "bg-muted text-muted-foreground",
 };
 
+function ReportSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-label text-primary/80">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function BulletList({ items }: { items: string[] }) {
+  return (
+    <ul className="space-y-2 rounded-xl border border-border bg-muted/20 p-5">
+      {items.map((item) => (
+        <li
+          key={item}
+          className="flex gap-3 text-base text-muted-foreground"
+        >
+          <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-primary/50" />
+          {item}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function ReportCard({
   report,
   categoryLabel,
   agentName,
   statusLabel,
+  reportTypeLabels,
+  sectionLabels,
 }: {
   report: ReportListItem;
   categoryLabel: string;
   agentName: string;
   statusLabel: string;
+  reportTypeLabels: Record<ResearchReportType, string>;
+  sectionLabels: {
+    executiveSummary: string;
+    keyFindings: string;
+    recommendations: string;
+    confidence: string;
+  };
 }) {
   const CategoryIcon = CATEGORY_ICONS[report.category];
+  const executiveSummary = report.executiveSummary ?? report.summary;
+  const keyFindings = report.highlights ?? [];
+  const recommendations = report.recommendations ?? [];
 
   return (
     <div className="luxury-surface rounded-2xl p-8 transition-colors hover:border-primary/15">
@@ -54,15 +107,28 @@ function ReportCard({
         <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <CategoryIcon className="size-5" />
         </div>
-        <div className="min-w-0 flex-1 space-y-4">
+        <div className="min-w-0 flex-1 space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {report.reportType && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "font-normal",
+                      REPORT_TYPE_STYLES[report.reportType],
+                    )}
+                  >
+                    {reportTypeLabels[report.reportType]}
+                  </Badge>
+                )}
+                <Badge variant="outline" className="font-normal">
+                  {categoryLabel}
+                </Badge>
+              </div>
               <h3 className="font-display text-2xl font-medium leading-snug">
                 {report.title}
               </h3>
-              <p className="mt-2 text-base leading-relaxed text-muted-foreground">
-                {report.summary}
-              </p>
             </div>
             <Badge
               variant="secondary"
@@ -72,27 +138,31 @@ function ReportCard({
             </Badge>
           </div>
 
-          {report.highlights && report.highlights.length > 0 && (
-            <ul className="space-y-2 rounded-xl border border-border bg-muted/20 p-5">
-              {report.highlights.map((h) => (
-                <li
-                  key={h}
-                  className="flex gap-3 text-base text-muted-foreground"
-                >
-                  <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-primary/50" />
-                  {h}
-                </li>
-              ))}
-            </ul>
+          <ReportSection label={sectionLabels.executiveSummary}>
+            <p className="text-base leading-relaxed text-muted-foreground">
+              {executiveSummary}
+            </p>
+          </ReportSection>
+
+          {keyFindings.length > 0 && (
+            <ReportSection label={sectionLabels.keyFindings}>
+              <BulletList items={keyFindings} />
+            </ReportSection>
+          )}
+
+          {recommendations.length > 0 && (
+            <ReportSection label={sectionLabels.recommendations}>
+              <BulletList items={recommendations} />
+            </ReportSection>
           )}
 
           <div className="flex flex-wrap items-center gap-4 border-t border-border pt-4 text-sm text-muted-foreground">
-            <Badge variant="outline" className="font-normal">
-              {categoryLabel}
-            </Badge>
             <span>{agentName}</span>
             {report.drop && <span>{report.drop}</span>}
             <div className="ml-auto flex items-center gap-3">
+              <span className="text-label text-primary/70">
+                {sectionLabels.confidence}
+              </span>
               <Progress value={report.confidence * 100} className="h-1 w-20" />
               <span className="tabular-nums">
                 {Math.round(report.confidence * 100)}%
@@ -111,12 +181,21 @@ function ReportList({
   agentNames,
   getStatusLabel,
   emptyLabel,
+  reportTypeLabels,
+  sectionLabels,
 }: {
   reports: ReportListItem[];
   categoryLabels: ReturnType<typeof getReportCategoryLabels>;
   agentNames: Record<string, string>;
   getStatusLabel: (status: ReportListItem["status"]) => string;
   emptyLabel: string;
+  reportTypeLabels: Record<ResearchReportType, string>;
+  sectionLabels: {
+    executiveSummary: string;
+    keyFindings: string;
+    recommendations: string;
+    confidence: string;
+  };
 }) {
   if (reports.length === 0) {
     return (
@@ -135,6 +214,8 @@ function ReportList({
           categoryLabel={categoryLabels[report.category]}
           agentName={agentNames[report.agentId]}
           statusLabel={getStatusLabel(report.status)}
+          reportTypeLabels={reportTypeLabels}
+          sectionLabels={sectionLabels}
         />
       ))}
     </div>
@@ -151,12 +232,14 @@ export function ReportHub() {
   const [error, setError] = useState<string | null>(null);
 
   const categoryLabels = getReportCategoryLabels(locale);
+  const reportTypeLabels = getResearchReportTypeLabels(locale);
   const agentCatalog = getAgentCatalog(locale);
   const agentNames = Object.fromEntries(
     Object.values(agentCatalog).map((a) => [a.id, a.name]),
   );
   const getStatusLabel = (status: ReportListItem["status"]) =>
     getReportStatusLabel(locale, status);
+  const sectionLabels = reportsCopy.hub.sections;
 
   const loadReports = useCallback(async () => {
     setIsLoading(true);
@@ -245,6 +328,8 @@ export function ReportHub() {
                 agentNames={agentNames}
                 getStatusLabel={getStatusLabel}
                 emptyLabel={reportsCopy.hub.empty}
+                reportTypeLabels={reportTypeLabels}
+                sectionLabels={sectionLabels}
               />
             </TabsContent>
           ))}

@@ -10,6 +10,19 @@ export const reports = {
     description:
       "Research-, Design- und Marketing-Briefings — bereit für deine Prüfung.",
     empty: "Noch keine Berichte in dieser Kategorie.",
+    sections: {
+      executiveSummary: "Executive Summary",
+      keyFindings: "Kernaussagen",
+      recommendations: "Empfehlungen",
+      confidence: "Konfidenz",
+    },
+  },
+  reportType: {
+    competitor: "Wettbewerb",
+    trend: "Trend",
+    design: "Design",
+    pricing: "Pricing",
+    audience: "Zielgruppe",
   },
   items: {
     rpt001: {

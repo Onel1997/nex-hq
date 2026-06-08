@@ -22,6 +22,7 @@ export {
   getMockReports,
   getReportCategoryLabels,
   getReportStatusLabel,
+  getResearchReportTypeLabels,
 } from "./reports";
 export {
   getMockTasks,

@@ -16,6 +16,10 @@ export const research = {
     savedDomains: "Gespeichert in: {domains}",
     viewReports: "Berichte ansehen",
     success: "Bericht erstellt und gespeichert",
+    executiveSummary: "Executive Summary",
+    keyFindings: "Kernaussagen",
+    recommendations: "Empfehlungen",
+    confidence: "Konfidenz",
   },
   examples: {
     represent: "Analysiere Represent",

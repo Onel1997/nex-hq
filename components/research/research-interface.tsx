@@ -2,22 +2,40 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
-import { useT, useWorkspace } from "@/lib/i18n";
+import type { ResearchReportType } from "@/brain/domains/reports";
+import {
+  getResearchReportTypeLabels,
+} from "@/lib/i18n/data";
+import { useLocale, useT, useWorkspace } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { ArrowRight, CheckCircle2, Loader2, Search } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 
 interface ResearchResult {
   reportId: string;
   title: string;
-  summary: string;
+  executiveSummary: string;
   keyFindings: string[];
+  recommendations: string[];
   confidence: number;
+  reportType: ResearchReportType;
   savedDomains: string[];
 }
 
+const REPORT_TYPE_STYLES: Record<ResearchReportType, string> = {
+  competitor: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  trend: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  pricing: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  audience: "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  design: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+};
+
 export function ResearchInterface() {
   const t = useT();
+  const locale = useLocale();
   const workspace = useWorkspace();
+  const reportTypeLabels = getResearchReportTypeLabels(locale);
   const [request, setRequest] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,9 +74,11 @@ export function ResearchInterface() {
         setResult({
           reportId: data.reportId,
           title: data.title,
-          summary: data.summary,
+          executiveSummary: data.executiveSummary,
           keyFindings: data.keyFindings,
+          recommendations: data.recommendations,
           confidence: data.confidence,
+          reportType: data.reportType,
           savedDomains: data.savedDomains,
         });
         setRequest("");
@@ -168,30 +188,69 @@ export function ResearchInterface() {
         <div className="luxury-surface-elevated space-y-6 rounded-2xl p-8">
           <div className="flex items-start gap-4">
             <CheckCircle2 className="mt-1 size-6 shrink-0 text-primary" />
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-label text-primary">
                 {t("research.interface.success")}
               </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "font-normal",
+                    REPORT_TYPE_STYLES[result.reportType],
+                  )}
+                >
+                  {reportTypeLabels[result.reportType]}
+                </Badge>
+              </div>
               <h3 className="font-display text-3xl font-medium">
                 {result.title}
               </h3>
-              <p className="text-base leading-relaxed text-muted-foreground">
-                {result.summary}
-              </p>
             </div>
           </div>
 
-          <ul className="space-y-2 rounded-xl border border-border bg-muted/20 p-5">
-            {result.keyFindings.map((finding) => (
-              <li
-                key={finding}
-                className="flex gap-3 text-base text-muted-foreground"
-              >
-                <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-primary/50" />
-                {finding}
-              </li>
-            ))}
-          </ul>
+          <div className="space-y-2">
+            <p className="text-label text-primary/80">
+              {t("research.interface.executiveSummary")}
+            </p>
+            <p className="text-base leading-relaxed text-muted-foreground">
+              {result.executiveSummary}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-label text-primary/80">
+              {t("research.interface.keyFindings")}
+            </p>
+            <ul className="space-y-2 rounded-xl border border-border bg-muted/20 p-5">
+              {result.keyFindings.map((finding) => (
+                <li
+                  key={finding}
+                  className="flex gap-3 text-base text-muted-foreground"
+                >
+                  <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-primary/50" />
+                  {finding}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-label text-primary/80">
+              {t("research.interface.recommendations")}
+            </p>
+            <ul className="space-y-2 rounded-xl border border-border bg-muted/20 p-5">
+              {result.recommendations.map((item) => (
+                <li
+                  key={item}
+                  className="flex gap-3 text-base text-muted-foreground"
+                >
+                  <span className="mt-2.5 size-1.5 shrink-0 rounded-full bg-primary/50" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
             <p className="text-sm text-muted-foreground">
@@ -199,6 +258,15 @@ export function ResearchInterface() {
                 domains: result.savedDomains.join(", "),
               })}
             </p>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">
+                {t("research.interface.confidence")}
+              </span>
+              <Progress value={result.confidence * 100} className="h-1 w-20" />
+              <span className="tabular-nums text-sm">
+                {Math.round(result.confidence * 100)}%
+              </span>
+            </div>
             <Link
               href="/reports"
               className="inline-flex items-center gap-2 text-base text-primary hover:underline"

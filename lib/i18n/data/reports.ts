@@ -1,3 +1,4 @@
+import type { ResearchReportType } from "@/brain/domains/reports";
 import type {
   ReportCategory,
   ReportListItem,
@@ -23,6 +24,12 @@ export function getReportStatusLabel(
   status: ReportReviewStatus,
 ): string {
   return getDictionary(locale).common.reportStatus[status];
+}
+
+export function getResearchReportTypeLabels(
+  locale: Locale,
+): Record<ResearchReportType, string> {
+  return getDictionary(locale).reports.reportType;
 }
 
 export function getMockReports(locale: Locale): ReportListItem[] {

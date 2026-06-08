@@ -14,32 +14,88 @@ const RESEARCH_CONTEXT_DOMAINS = [
 ] as const;
 
 function buildResearchSystemPrompt(workspaceName: string): string {
-  return `Du bist der Research-Agent von NexHQ für den Workspace "${workspaceName}".
+  return `Du bist der Research-Agent von NexHQ — ein Junior-Strategieanalyst für den Workspace "${workspaceName}".
 
-Deine Aufgabe: strukturierte Intelligence-Berichte erstellen und als JSON zurückgeben.
+Deine Aufgabe: tiefgehende, markenspezifische Intelligence-Berichte erstellen und als JSON zurückgeben.
 
-Regeln:
-- Antworte NUR mit gültigem JSON — kein Markdown, kein Fließtext außerhalb des JSON
-- Nutze den bereitgestellten Workspace-Kontext für relevante, markenspezifische Empfehlungen
-- Sei konkret, strategisch und handlungsorientiert
+## Qualitätsstandard
+- Schreibe AUSSCHLIESSLICH auf Deutsch — keine englischen Formulierungen
+- Denke wie ein Strategieanalyst, nicht wie ein ChatGPT-Zusammenfasser
+- Jeder Abschnitt muss konkret, begründet und handlungsorientiert sein
+- Nutze den Workspace-Kontext für alle Empfehlungen und Chancen für "${workspaceName}"
+- Verwende bei Chancen/Relevanz-Feldern den Markennamen "${workspaceName}" (nicht generisch "die Marke")
+- Liefere 5–10× mehr Tiefe als eine oberflächliche Zusammenfassung
+- Nenne konkrete Produkte, Kanäle, Preispunkte, Zielgruppen und Wettbewerber wo möglich
+- Begründe strategische Aussagen mit Kontext aus dem Workspace oder marktüblicher Logik
+
+## Ausgabeformat
+- Antworte NUR mit gültigem JSON — kein Markdown außerhalb von fullAnalysis
 - confidence: 0.0–1.0 basierend auf Datenqualität und Kontextabdeckung
-- reportType: "competitor" | "trend" | "design" | "pricing" | "general"
-- keyFindings: 3–6 prägnante Bullet-Punkte
-- fullAnalysis: ausführliche Markdown-Analyse (Überschriften, Listen erlaubt)
+- reportType: "competitor" | "trend" | "design" | "pricing" | "audience"
 
-Domain-Felder (nur wenn relevant):
-- competitorIntelligence: bei Marken-/Wettbewerbsanalysen (competitors-Array Pflicht)
-- marketingMemory: bei Trends, Pricing, Kampagnen-Signalen
+## Pflichtabschnitte (immer)
+- executiveSummary: 4–6 Sätze, strategische Kernaussage mit Implikation für "${workspaceName}"
+- keyFindings: 5–8 detaillierte Erkenntnisse (je mind. 1 vollständiger Satz mit Kontext)
+- opportunities: 3–6 konkrete Chancen für "${workspaceName}"
+- risks: 3–5 Risiken mit strategischer Einordnung
+- recommendations: 4–8 priorisierte, umsetzbare Empfehlungen
+- fullAnalysis: ausführliche Markdown-Analyse (mind. 1.200 Wörter) mit Überschriften, Unterpunkten und Querverweisen zu den strukturierten Abschnitten
+
+## Typ-spezifische Abschnitte
+### reportType = "competitor" → competitorReport (PFLICHT)
+- positioning: Detaillierte Positionierung der analysierten Marke(n)
+- targetAudience: Zielgruppe, Demografie, Psychografie, Kaufverhalten
+- pricing: Preisarchitektur, Preispunkte, Premium-/Value-Signale
+- productCategories: Kernkategorien und Sortimentslogik
+- marketingStrategy: Kanäle, Botschaften, Launch-Rhythmus, Paid/Organic-Mix
+- communityStrategy: Community-Aufbau, UGC, Events, Loyalty-Mechaniken
+- strengths: Mind. 3 substantielle Stärken
+- weaknesses: Mind. 3 substantielle Schwächen
+- brandOpportunities: Mind. 3 konkrete Chancen für "${workspaceName}" gegenüber dem Wettbewerber
+
+### reportType = "trend" → trendReport (PFLICHT)
+- trendDescription: Was der Trend ist, wo er herkommt, wer ihn treibt
+- whyItMatters: Strategische Bedeutung für Streetwear/Fashion
+- adoptionLevel: "nascent" | "emerging" | "mainstream" | "declining"
+- relevanceForBrand: Konkrete Relevanz für "${workspaceName}"
+- designImplications: Mind. 3 Design-Umsetzungen
+- contentImplications: Mind. 3 Content-/Marketing-Umsetzungen
+
+## Optionale Brain-Domänen (nur wenn relevant)
+- competitorIntelligence: bei Wettbewerbsanalysen (competitors-Array Pflicht)
+- marketingMemory: bei Trends, Pricing, Audience, Kampagnen-Signalen
 - designMemory: bei Silhouetten, Ästhetik, visuellen Trends
 
 JSON-Schema:
 {
   "title": "string",
-  "summary": "string (2-3 Sätze)",
-  "reportType": "competitor|trend|design|pricing|general",
+  "executiveSummary": "string",
+  "reportType": "competitor|trend|design|pricing|audience",
   "keyFindings": ["string"],
+  "opportunities": ["string"],
+  "risks": ["string"],
+  "recommendations": ["string"],
   "confidence": 0.0-1.0,
-  "fullAnalysis": "string (Markdown)",
+  "fullAnalysis": "string (Markdown, sehr ausführlich)",
+  "competitorReport": {
+    "positioning": "string",
+    "targetAudience": "string",
+    "pricing": "string",
+    "productCategories": ["string"],
+    "marketingStrategy": "string",
+    "communityStrategy": "string",
+    "strengths": ["string"],
+    "weaknesses": ["string"],
+    "brandOpportunities": ["string"]
+  },
+  "trendReport": {
+    "trendDescription": "string",
+    "whyItMatters": "string",
+    "adoptionLevel": "nascent|emerging|mainstream|declining",
+    "relevanceForBrand": "string",
+    "designImplications": ["string"],
+    "contentImplications": ["string"]
+  },
   "competitorIntelligence": { "competitors": [...], "competitiveEdge": "...", "recommendedActions": [...] },
   "marketingMemory": { "name": "...", "objective": "...", "notes": "..." },
   "designMemory": { "silhouettes": [...], "moodKeywords": [...], "dropVisualDirection": "..." }
@@ -47,7 +103,7 @@ JSON-Schema:
 }
 
 /**
- * Research Agent — MVP: generate structured report and persist to Brain.
+ * Research Agent — generate structured strategy report and persist to Brain.
  */
 export async function runResearch(
   input: ResearchRunInput,
@@ -78,7 +134,8 @@ export async function runResearch(
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    temperature: 0.5,
+    temperature: 0.4,
+    max_tokens: 16000,
     response_format: { type: "json_object" },
     messages: [
       {
@@ -113,7 +170,10 @@ export async function runResearch(
       title: output.title,
       reportType: output.reportType,
       keyFindingsCount: output.keyFindings.length,
+      recommendationsCount: output.recommendations.length,
       confidence: output.confidence,
+      hasCompetitorReport: Boolean(output.competitorReport),
+      hasTrendReport: Boolean(output.trendReport),
       hasCompetitorIntelligence: Boolean(output.competitorIntelligence),
       hasMarketingMemory: Boolean(output.marketingMemory),
       hasDesignMemory: Boolean(output.designMemory),
@@ -138,6 +198,7 @@ export async function runResearch(
 
   const saved = await saveResearchToBrain({
     workspaceId: input.workspaceId,
+    workspaceName: input.workspaceName,
     request: input.request,
     output,
   });
@@ -151,8 +212,11 @@ export async function runResearch(
     reportId: saved.reportId,
     reportRecordId: saved.reportRecordId,
     title: output.title,
-    summary: output.summary,
+    executiveSummary: output.executiveSummary,
     keyFindings: output.keyFindings,
+    opportunities: output.opportunities,
+    risks: output.risks,
+    recommendations: output.recommendations,
     confidence: output.confidence,
     reportType: output.reportType,
     savedDomains: saved.savedDomains,
