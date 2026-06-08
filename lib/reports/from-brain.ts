@@ -46,8 +46,17 @@ function mapBrainStatusToUi(
 ): ReportListItem["status"] {
   if (recordStatus === "archived") return "archived";
   if (recordStatus === "approved") return "approved";
+  if (recordStatus === "rejected") return "rejected";
+  if (recordStatus === "revision_requested") return "revision_requested";
+  if (recordStatus === "pending_review") return "pending_review";
   if (contentStatus === "draft" || recordStatus === "draft") return "draft";
-  return "submitted";
+  if (
+    contentStatus === "submitted" ||
+    contentStatus === "pending_review"
+  ) {
+    return "pending_review";
+  }
+  return "pending_review";
 }
 
 function inferReportTypeFromTags(
@@ -227,6 +236,7 @@ export function brainReportRecordToListItem(
     status: mapBrainStatusToUi(record.status, content.status),
     confidence: content.confidence,
     createdAt: record.createdAt,
+    originTaskId: content.originTaskId,
     highlights: isImageReport
       ? toImageProjectView(imageSections)?.corePackage.map((item) => item.title)
       : isContentReport

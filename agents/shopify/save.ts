@@ -4,12 +4,14 @@ import type {
 } from "@/brain/domains/reports";
 import { getBrainClient } from "@/brain/client";
 import { slugify } from "@/brain/client/utils";
+import { resolveReportTaskIds } from "@/lib/reports/task-link";
 import type { ShopifyOutput } from "./types";
 
 export interface SaveShopifyInput {
   workspaceId: string;
   brief: string;
   output: ShopifyOutput;
+  originTaskId?: string;
 }
 
 export interface SaveShopifyResult {
@@ -38,7 +40,11 @@ export async function saveShopifyToBrain(
 ): Promise<SaveShopifyResult> {
   const brain = getBrainClient();
   const reportId = crypto.randomUUID();
-  const taskId = `shopify-${reportId}`;
+  const { taskId, originTaskId } = resolveReportTaskIds(
+    input.originTaskId,
+    reportId,
+    "shopify",
+  );
   const baseSlug = slugify(input.output.title).slice(0, 48) || "shopify";
   const slugSuffix = reportId.slice(0, 8);
   const shopifySections = buildShopifySections(input.output);
@@ -47,6 +53,7 @@ export async function saveShopifyToBrain(
     kind: "reports",
     reportId,
     taskId,
+    ...(originTaskId ? { originTaskId } : {}),
     agentId: "shopify",
     status: "submitted",
     summary: input.output.collectionDescription.slice(0, 500),

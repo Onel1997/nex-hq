@@ -168,6 +168,7 @@ export async function runDesign(
     workspaceId: input.workspaceId,
     brief: input.brief,
     output,
+    originTaskId: input.originTaskId,
   });
 
   console.info("[Design Run] Saved to Brain", {

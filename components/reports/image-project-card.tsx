@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReportListItem } from "@/lib/mock/reports";
 import { countImageAssets } from "@/agents/image/normalized";
+import { ReportReviewActions } from "@/components/reports/report-review-actions";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -20,6 +21,8 @@ interface ImageProjectCardProps {
   agentName: string;
   statusLabel: string;
   onDelete?: (brainRecordId: string) => void;
+  onReviewComplete?: () => void | Promise<void>;
+  onReviewError?: (message: string) => void;
 }
 
 export function ImageProjectCard({
@@ -27,6 +30,8 @@ export function ImageProjectCard({
   agentName,
   statusLabel,
   onDelete,
+  onReviewComplete,
+  onReviewError,
 }: ImageProjectCardProps) {
   const t = useT();
   const project = report.imageProject;
@@ -123,6 +128,16 @@ export function ImageProjectCard({
           {t("image.interface.corePackage")}: {project?.corePackage.length ?? 0}
         </span>
       </div>
+
+      {onReviewComplete && (
+        <ReportReviewActions
+          brainRecordId={brainRecordId}
+          status={report.status}
+          onReviewComplete={onReviewComplete}
+          onError={onReviewError}
+          className="mt-4 border-t border-border pt-4"
+        />
+      )}
     </div>
   );
 }

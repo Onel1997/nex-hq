@@ -96,6 +96,7 @@ export interface ResearchRunInput {
   request: string;
   workspaceId: string;
   workspaceName: string;
+  originTaskId?: string;
 }
 
 export interface ResearchRunResult {

@@ -17,14 +17,19 @@ export const common = {
   },
   taskStatus: {
     pending: "Ausstehend",
+    assigned: "Zugewiesen",
     in_progress: "In Bearbeitung",
     review: "Prüfung",
-    complete: "Abgeschlossen",
+    completed: "Abgeschlossen",
+    failed: "Fehlgeschlagen",
   },
   reportStatus: {
     draft: "Entwurf",
+    pending_review: "Prüfung ausstehend",
     submitted: "Eingereicht",
     approved: "Freigegeben",
+    rejected: "Abgelehnt",
+    revision_requested: "Überarbeitung angefordert",
     archived: "Archiviert",
   },
   integrationState: {

@@ -8,6 +8,7 @@ import type { MarketingMemoryContent } from "@/brain/domains/marketing-memory";
 import { getBrainClient } from "@/brain/client";
 import { slugify } from "@/brain/client/utils";
 import type { BrainDomain } from "@/brain/types";
+import { resolveReportTaskIds } from "@/lib/reports/task-link";
 import type { ResearchOutput } from "./types";
 
 export interface SaveResearchInput {
@@ -15,6 +16,7 @@ export interface SaveResearchInput {
   workspaceName: string;
   request: string;
   output: ResearchOutput;
+  originTaskId?: string;
 }
 
 export interface SaveResearchResult {
@@ -67,7 +69,11 @@ export async function saveResearchToBrain(
 ): Promise<SaveResearchResult> {
   const brain = getBrainClient();
   const reportId = crypto.randomUUID();
-  const taskId = `research-${reportId}`;
+  const { taskId, originTaskId } = resolveReportTaskIds(
+    input.originTaskId,
+    reportId,
+    "research",
+  );
   const timestamp = new Date().toISOString();
   const baseSlug = slugify(input.output.title).slice(0, 48) || "research";
   const slugSuffix = reportId.slice(0, 8);
@@ -78,6 +84,7 @@ export async function saveResearchToBrain(
     kind: "reports",
     reportId,
     taskId,
+    ...(originTaskId ? { originTaskId } : {}),
     agentId: "research",
     status: "submitted",
     summary: input.output.executiveSummary,

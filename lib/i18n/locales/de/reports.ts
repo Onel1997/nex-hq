@@ -10,6 +10,26 @@ export const reports = {
     description:
       "Research-, Design-, Marketing-, Commerce-, Content- und Image-Briefings — bereit für deine Prüfung.",
     empty: "Noch keine Berichte in dieser Kategorie.",
+    review: {
+      approve: "Freigeben",
+      reject: "Ablehnen",
+      requestRevision: "Überarbeitung anfordern",
+      processing: "Wird verarbeitet…",
+      confirmApproveTitle: "Bericht freigeben?",
+      confirmApproveDescription:
+        "Der Bericht wird als freigegeben markiert und steht downstream-Agenten als genehmigte Intelligence zur Verfügung.",
+      confirmRejectTitle: "Bericht ablehnen?",
+      confirmRejectDescription:
+        "Der Bericht wird abgelehnt und nicht für nachgelagerte Agenten verwendet.",
+      confirmRevisionTitle: "Überarbeitung anfordern?",
+      confirmRevisionDescription:
+        "Der Bericht wird zur Überarbeitung zurückgegeben. Der Agent kann nach Anpassung erneut eingereicht werden.",
+      noteLabel: "Anmerkung (optional)",
+      notePlaceholder: "Feedback für den Agenten…",
+      confirm: "Bestätigen",
+      cancel: "Abbrechen",
+      error: "Review-Aktion fehlgeschlagen.",
+    },
     sections: {
       executiveSummary: "Executive Summary",
       keyFindings: "Kernaussagen",

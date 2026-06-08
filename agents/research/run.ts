@@ -201,6 +201,7 @@ export async function runResearch(
     workspaceName: input.workspaceName,
     request: input.request,
     output,
+    originTaskId: input.originTaskId,
   });
 
   console.info("[Research Run] Saved to Brain", {

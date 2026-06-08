@@ -170,6 +170,7 @@ export async function runMarketing(
     workspaceId: input.workspaceId,
     brief: input.brief,
     output,
+    originTaskId: input.originTaskId,
   });
 
   console.info("[Marketing Run] Saved to Brain", {

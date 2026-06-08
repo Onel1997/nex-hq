@@ -34,8 +34,10 @@ const STATUS_SORT_ORDER: Record<BrainRecordStatus, number> = {
   approved: 0,
   pending_review: 1,
   draft: 2,
-  archived: 3,
-  superseded: 4,
+  revision_requested: 3,
+  rejected: 4,
+  archived: 5,
+  superseded: 6,
 };
 
 /** Per-domain record caps to keep prompt size reasonable. */

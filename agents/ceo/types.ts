@@ -33,6 +33,7 @@ export interface CeoRunInput {
   question: string;
   workspaceId: string;
   workspaceName: string;
+  originTaskId?: string;
 }
 
 export interface CeoRunResult {

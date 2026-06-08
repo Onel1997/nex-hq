@@ -39,7 +39,13 @@ export type ReportCategory =
   | "image"
   | "operations";
 
-export type ReportReviewStatus = "draft" | "submitted" | "approved" | "archived";
+export type ReportReviewStatus =
+  | "draft"
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "revision_requested"
+  | "archived";
 
 export interface ReportListItem {
   id: string;
@@ -52,6 +58,7 @@ export interface ReportListItem {
   confidence: number;
   createdAt: string;
   drop?: string;
+  originTaskId?: string;
   highlights?: string[];
   reportType?:
     | ResearchReportType
@@ -136,7 +143,7 @@ export const MOCK_REPORTS: ReportListItem[] = [
       "Competitive analysis of 12 major drops in Q2. Corteiz led with scarcity-driven sell-through; average drop window compressed to 48 hours.",
     category: "research",
     agentId: "research",
-    status: "submitted",
+      status: "pending_review",
     confidence: 0.89,
     createdAt: "2026-06-07T14:00:00Z",
     drop: "SS26 Capsule",
@@ -170,7 +177,7 @@ export const MOCK_REPORTS: ReportListItem[] = [
       "Concept A: obsidian base, signal green wordmark, concrete texture overlay. Aligns with design rules.",
     category: "design",
     agentId: "designer",
-    status: "submitted",
+      status: "pending_review",
     confidence: 0.91,
     createdAt: "2026-06-06T16:45:00Z",
     drop: "SS26 Capsule",
@@ -220,7 +227,7 @@ export const MOCK_REPORTS: ReportListItem[] = [
       "4-email VIP sequence drafted. Open rate target 40%+. Copy follows brand voice rules from Brain.",
     category: "marketing",
     agentId: "marketing",
-    status: "submitted",
+      status: "pending_review",
     confidence: 0.86,
     createdAt: "2026-06-07T08:30:00Z",
     drop: "SS26 Capsule",

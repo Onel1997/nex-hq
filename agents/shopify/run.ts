@@ -190,6 +190,7 @@ export async function runShopify(
     workspaceId: input.workspaceId,
     brief: input.brief,
     output,
+    originTaskId: input.originTaskId,
   });
 
   // Simulate Shopify API draft creation for future integration hook

@@ -4,6 +4,7 @@ import type {
 } from "@/brain/domains/reports";
 import { getBrainClient } from "@/brain/client";
 import { slugify } from "@/brain/client/utils";
+import { resolveReportTaskIds } from "@/lib/reports/task-link";
 import { IMAGE_SCHEMA_VERSION } from "./normalized";
 import type { ImageOutput } from "./types";
 
@@ -11,6 +12,7 @@ export interface SaveImageInput {
   workspaceId: string;
   brief: string;
   output: ImageOutput;
+  originTaskId?: string;
 }
 
 export interface SaveImageResult {
@@ -36,7 +38,11 @@ export async function saveImageToBrain(
 ): Promise<SaveImageResult> {
   const brain = getBrainClient();
   const reportId = crypto.randomUUID();
-  const taskId = `image-${reportId}`;
+  const { taskId, originTaskId } = resolveReportTaskIds(
+    input.originTaskId,
+    reportId,
+    "image",
+  );
   const baseSlug = slugify(input.output.projectName).slice(0, 48) || "image";
   const slugSuffix = reportId.slice(0, 8);
   const imageSections = buildImageSections(input.output);
@@ -45,6 +51,7 @@ export async function saveImageToBrain(
     kind: "reports",
     reportId,
     taskId,
+    ...(originTaskId ? { originTaskId } : {}),
     agentId: "image",
     status: "submitted",
     summary: input.output.moodboard.visualDirection.slice(0, 500),

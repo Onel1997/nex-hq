@@ -51,6 +51,7 @@ export interface DesignRunInput {
   brief: string;
   workspaceId: string;
   workspaceName: string;
+  originTaskId?: string;
 }
 
 export interface DesignRunResult {

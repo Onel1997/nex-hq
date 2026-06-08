@@ -1,12 +1,14 @@
 import type { BrainCeoSections, BrainReportContent } from "@/brain/domains/reports";
 import { getBrainClient } from "@/brain/client";
 import { slugify } from "@/brain/client/utils";
+import { resolveReportTaskIds } from "@/lib/reports/task-link";
 import type { CeoOutput } from "./types";
 
 export interface SaveCeoInput {
   workspaceId: string;
   question: string;
   output: CeoOutput;
+  originTaskId?: string;
 }
 
 export interface SaveCeoResult {
@@ -30,7 +32,11 @@ export async function saveCeoToBrain(
 ): Promise<SaveCeoResult> {
   const brain = getBrainClient();
   const reportId = crypto.randomUUID();
-  const taskId = `ceo-${reportId}`;
+  const { taskId, originTaskId } = resolveReportTaskIds(
+    input.originTaskId,
+    reportId,
+    "ceo",
+  );
   const baseSlug = slugify(input.output.title).slice(0, 48) || "ceo";
   const slugSuffix = reportId.slice(0, 8);
   const ceoSections = buildCeoSections(input.output);
@@ -39,6 +45,7 @@ export async function saveCeoToBrain(
     kind: "reports",
     reportId,
     taskId,
+    ...(originTaskId ? { originTaskId } : {}),
     agentId: "ceo",
     status: "submitted",
     summary: input.output.executiveSummary,

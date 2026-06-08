@@ -170,6 +170,7 @@ export async function runContent(
     workspaceId: input.workspaceId,
     brief: input.brief,
     output,
+    originTaskId: input.originTaskId,
   });
 
   await publishToShopify(input.workspaceId, output);

@@ -56,6 +56,7 @@ export interface ShopifyRunInput {
   brief: string;
   workspaceId: string;
   workspaceName: string;
+  originTaskId?: string;
 }
 
 export interface ShopifyRunResult {

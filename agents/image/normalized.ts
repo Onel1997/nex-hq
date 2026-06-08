@@ -139,6 +139,7 @@ export interface ImageRunInput {
   brief: string;
   workspaceId: string;
   workspaceName: string;
+  originTaskId?: string;
 }
 
 export interface ImageRunResult {

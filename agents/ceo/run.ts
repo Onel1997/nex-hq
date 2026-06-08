@@ -135,6 +135,7 @@ export async function runCeo(input: CeoRunInput): Promise<CeoRunResult> {
     workspaceId: input.workspaceId,
     question: input.question,
     output,
+    originTaskId: input.originTaskId,
   });
 
   console.info("[CEO Run] Saved to Brain", {

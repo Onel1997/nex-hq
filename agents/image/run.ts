@@ -182,6 +182,7 @@ export async function runImage(
     workspaceId: input.workspaceId,
     brief: input.brief,
     output,
+    originTaskId: input.originTaskId,
   });
 
   return {

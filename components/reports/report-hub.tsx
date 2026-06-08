@@ -21,6 +21,7 @@ import type {
 } from "@/brain/domains/reports";
 import { useDictionary, useLocale, useT, useWorkspace } from "@/lib/i18n";
 import { ImageProjectCard } from "@/components/reports/image-project-card";
+import { ReportReviewActions } from "@/components/reports/report-review-actions";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -82,8 +83,10 @@ const PRIORITY_STYLES: Record<CeoStepPriority, string> = {
 
 const STATUS_STYLES: Record<ReportListItem["status"], string> = {
   draft: "bg-muted text-muted-foreground",
-  submitted: "bg-primary/10 text-primary",
-  approved: "bg-primary/15 text-primary",
+  pending_review: "bg-amber-500/10 text-amber-800 dark:text-amber-300",
+  approved: "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
+  rejected: "bg-destructive/10 text-destructive",
+  revision_requested: "bg-orange-500/10 text-orange-800 dark:text-orange-300",
   archived: "bg-muted text-muted-foreground",
 };
 
@@ -133,6 +136,8 @@ function ReportCard({
   priorityLabels,
   sectionLabels,
   onDeleteProject,
+  onReviewComplete,
+  onReviewError,
 }: {
   report: ReportListItem;
   categoryLabel: string;
@@ -213,6 +218,8 @@ function ReportCard({
     fluxPrompt: string;
   };
   onDeleteProject?: (brainRecordId: string) => void;
+  onReviewComplete?: () => void | Promise<void>;
+  onReviewError?: (message: string) => void;
 }) {
   const CategoryIcon = CATEGORY_ICONS[report.category];
   const isCeoReport = report.reportType === "ceo-report";
@@ -252,6 +259,8 @@ function ReportCard({
         agentName={agentName}
         statusLabel={statusLabel}
         onDelete={onDeleteProject}
+        onReviewComplete={onReviewComplete}
+        onReviewError={onReviewError}
       />
     );
   }
@@ -800,6 +809,16 @@ function ReportCard({
               </span>
             </div>
           </div>
+
+          {onReviewComplete && (
+            <ReportReviewActions
+              brainRecordId={report.brainRecordId ?? report.id}
+              status={report.status}
+              onReviewComplete={onReviewComplete}
+              onError={onReviewError}
+              className="border-t border-border pt-4"
+            />
+          )}
         </div>
       </div>
     </div>
@@ -822,6 +841,8 @@ function ReportList({
   priorityLabels,
   sectionLabels,
   onDeleteProject,
+  onReviewComplete,
+  onReviewError,
 }: {
   reports: ReportListItem[];
   categoryLabels: ReturnType<typeof getReportCategoryLabels>;
@@ -903,6 +924,8 @@ function ReportList({
     fluxPrompt: string;
   };
   onDeleteProject?: (brainRecordId: string) => void;
+  onReviewComplete?: () => void | Promise<void>;
+  onReviewError?: (message: string) => void;
 }) {
   if (reports.length === 0) {
     return (
@@ -931,6 +954,8 @@ function ReportList({
           priorityLabels={priorityLabels}
           sectionLabels={sectionLabels}
           onDeleteProject={onDeleteProject}
+          onReviewComplete={onReviewComplete}
+          onReviewError={onReviewError}
         />
       ))}
     </div>
@@ -1000,6 +1025,10 @@ export function ReportHub() {
     },
     [loadReports, t],
   );
+
+  const handleReviewError = useCallback((message: string) => {
+    setError(message);
+  }, []);
 
   useEffect(() => {
     loadReports();
@@ -1088,6 +1117,8 @@ export function ReportHub() {
                 priorityLabels={priorityLabels}
                 sectionLabels={sectionLabels}
                 onDeleteProject={handleDeleteProject}
+                onReviewComplete={loadReports}
+                onReviewError={handleReviewError}
               />
             </TabsContent>
           ))}

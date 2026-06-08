@@ -4,12 +4,14 @@ import type {
 } from "@/brain/domains/reports";
 import { getBrainClient } from "@/brain/client";
 import { slugify } from "@/brain/client/utils";
+import { resolveReportTaskIds } from "@/lib/reports/task-link";
 import type { DesignOutput } from "./types";
 
 export interface SaveDesignInput {
   workspaceId: string;
   brief: string;
   output: DesignOutput;
+  originTaskId?: string;
 }
 
 export interface SaveDesignResult {
@@ -37,7 +39,11 @@ export async function saveDesignToBrain(
 ): Promise<SaveDesignResult> {
   const brain = getBrainClient();
   const reportId = crypto.randomUUID();
-  const taskId = `design-${reportId}`;
+  const { taskId, originTaskId } = resolveReportTaskIds(
+    input.originTaskId,
+    reportId,
+    "design",
+  );
   const baseSlug = slugify(input.output.title).slice(0, 48) || "design";
   const slugSuffix = reportId.slice(0, 8);
   const designSections = buildDesignSections(input.output);
@@ -46,6 +52,7 @@ export async function saveDesignToBrain(
     kind: "reports",
     reportId,
     taskId,
+    ...(originTaskId ? { originTaskId } : {}),
     agentId: "designer",
     status: "submitted",
     summary: input.output.collectionStory,

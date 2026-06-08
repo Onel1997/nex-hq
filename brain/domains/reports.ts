@@ -504,6 +504,8 @@ export interface BrainReportContent {
   kind: "reports";
   reportId: string;
   taskId: string;
+  /** Real Brain task ID when report was generated from a task queue item. */
+  originTaskId?: string;
   agentId: AgentId;
   status: ReportStatus;
   summary: string;
