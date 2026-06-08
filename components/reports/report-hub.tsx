@@ -20,6 +20,7 @@ import type {
   ResearchReportType,
 } from "@/brain/domains/reports";
 import { useDictionary, useLocale, useT, useWorkspace } from "@/lib/i18n";
+import { ImageProjectCard } from "@/components/reports/image-project-card";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -131,6 +132,7 @@ function ReportCard({
   imageReportTypeLabel,
   priorityLabels,
   sectionLabels,
+  onDeleteProject,
 }: {
   report: ReportListItem;
   categoryLabel: string;
@@ -193,9 +195,16 @@ function ReportCard({
     confidence: string;
     projectName: string;
     moodboard: string;
+    palette: string;
+    heroBanner: string;
     productMockups: string;
     campaignVisuals: string;
     landingPageAssets: string;
+    landingAssets: string;
+    instagramGrid: string;
+    reelsConcepts: string;
+    tiktokConcepts: string;
+    campaignShots: string;
     productionChecklist: string;
     aestheticKeywords: string;
     photographyStyle: string;
@@ -203,6 +212,7 @@ function ReportCard({
     openaiPrompt: string;
     fluxPrompt: string;
   };
+  onDeleteProject?: (brainRecordId: string) => void;
 }) {
   const CategoryIcon = CATEGORY_ICONS[report.category];
   const isCeoReport = report.reportType === "ceo-report";
@@ -228,13 +238,23 @@ function ReportCard({
   const marketing = report.marketingReport;
   const shopify = report.shopifyReport;
   const content = report.contentReport;
-  const image = report.imageReport;
   const executiveSummary = report.executiveSummary ?? report.summary;
   const keyFindings = report.highlights ?? [];
   const recommendations = report.recommendations ?? [];
   const opportunities = report.opportunities ?? [];
   const risks = report.risks ?? [];
   const nextSteps = report.nextSteps ?? [];
+
+  if (isImageReport && report.imageProject) {
+    return (
+      <ImageProjectCard
+        report={report}
+        agentName={agentName}
+        statusLabel={statusLabel}
+        onDelete={onDeleteProject}
+      />
+    );
+  }
 
   return (
     <div className="luxury-surface rounded-2xl p-8 transition-colors hover:border-primary/15">
@@ -301,84 +321,7 @@ function ReportCard({
             </Badge>
           </div>
 
-          {isImageReport && image ? (
-            <>
-              <ReportSection label={sectionLabels.moodboard}>
-                <p className="text-base leading-relaxed text-muted-foreground">
-                  {image.moodboard.visualDirection}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {image.moodboard.aestheticKeywords.map((keyword) => (
-                    <Badge key={keyword} variant="secondary" className="font-normal">
-                      {keyword}
-                    </Badge>
-                  ))}
-                </div>
-              </ReportSection>
-
-              {image.productMockups.length > 0 && (
-                <ReportSection label={sectionLabels.productMockups}>
-                  <ul className="space-y-3">
-                    {image.productMockups.slice(0, 4).map((asset) => (
-                      <li
-                        key={`${asset.name}-${asset.conceptType}`}
-                        className="rounded-xl border border-border bg-muted/20 p-4 space-y-2"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-foreground">{asset.name}</p>
-                          <Badge variant="secondary" className="font-normal text-xs">
-                            {asset.conceptType.replace(/_/g, " ")}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {asset.dimensions}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {asset.prompts.midjourney}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </ReportSection>
-              )}
-
-              {image.campaignVisuals.length > 0 && (
-                <ReportSection label={sectionLabels.campaignVisuals}>
-                  <ul className="space-y-3">
-                    {image.campaignVisuals.slice(0, 4).map((asset) => (
-                      <li
-                        key={`${asset.name}-${asset.conceptType}`}
-                        className="rounded-xl border border-border bg-muted/20 p-4 space-y-2"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-foreground">{asset.name}</p>
-                          <Badge variant="secondary" className="font-normal text-xs">
-                            {asset.platform}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {asset.description}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </ReportSection>
-              )}
-
-              {image.productionChecklist.length > 0 && (
-                <ReportSection label={sectionLabels.productionChecklist}>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    {image.productionChecklist.slice(0, 6).map((item) => (
-                      <li key={item.assetName}>
-                        [{item.priority.toUpperCase()}] {item.assetName} ·{" "}
-                        {item.platform}
-                      </li>
-                    ))}
-                  </ul>
-                </ReportSection>
-              )}
-            </>
-          ) : isContentReport && content ? (
+          {isContentReport && content ? (
             <>
               <ReportSection label={sectionLabels.brandNarrative}>
                 <p className="text-base leading-relaxed text-muted-foreground">
@@ -878,6 +821,7 @@ function ReportList({
   imageReportTypeLabel,
   priorityLabels,
   sectionLabels,
+  onDeleteProject,
 }: {
   reports: ReportListItem[];
   categoryLabels: ReturnType<typeof getReportCategoryLabels>;
@@ -941,9 +885,16 @@ function ReportList({
     confidence: string;
     projectName: string;
     moodboard: string;
+    palette: string;
+    heroBanner: string;
     productMockups: string;
     campaignVisuals: string;
     landingPageAssets: string;
+    landingAssets: string;
+    instagramGrid: string;
+    reelsConcepts: string;
+    tiktokConcepts: string;
+    campaignShots: string;
     productionChecklist: string;
     aestheticKeywords: string;
     photographyStyle: string;
@@ -951,6 +902,7 @@ function ReportList({
     openaiPrompt: string;
     fluxPrompt: string;
   };
+  onDeleteProject?: (brainRecordId: string) => void;
 }) {
   if (reports.length === 0) {
     return (
@@ -978,6 +930,7 @@ function ReportList({
           imageReportTypeLabel={imageReportTypeLabel}
           priorityLabels={priorityLabels}
           sectionLabels={sectionLabels}
+          onDeleteProject={onDeleteProject}
         />
       ))}
     </div>
@@ -1032,6 +985,21 @@ export function ReportHub() {
       setIsLoading(false);
     }
   }, [t]);
+
+  const handleDeleteProject = useCallback(
+    async (brainRecordId: string) => {
+      const res = await fetch(`/api/reports/${brainRecordId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? t("image.errors.unexpected"));
+        return;
+      }
+      await loadReports();
+    },
+    [loadReports, t],
+  );
 
   useEffect(() => {
     loadReports();
@@ -1119,6 +1087,7 @@ export function ReportHub() {
                 imageReportTypeLabel={imageReportTypeLabel}
                 priorityLabels={priorityLabels}
                 sectionLabels={sectionLabels}
+                onDeleteProject={handleDeleteProject}
               />
             </TabsContent>
           ))}

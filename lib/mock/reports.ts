@@ -14,12 +14,6 @@ import type {
   BrainShopifyProduct,
   CeoReportType,
   CeoStepPriority,
-  BrainImageCampaignVisual,
-  BrainImageLandingPageAsset,
-  BrainImageMoodboardSection,
-  BrainImageProductMockup,
-  BrainImageProductionChecklistItem,
-  BrainImageSections,
   ContentReportType,
   DesignReportType,
   ImageProjectType,
@@ -27,6 +21,7 @@ import type {
   ResearchReportType,
   ShopifyReportType,
 } from "@/brain/domains/reports";
+import type { ImageProjectView } from "@/lib/reports/image-project";
 import type { AgentId } from "@/lib/constants/agents";
 
 export interface ReportNextStep {
@@ -48,6 +43,7 @@ export type ReportReviewStatus = "draft" | "submitted" | "approved" | "archived"
 
 export interface ReportListItem {
   id: string;
+  brainRecordId?: string;
   title: string;
   summary: string;
   category: ReportCategory;
@@ -119,15 +115,7 @@ export interface ReportListItem {
     smsCampaign: BrainContentSmsCampaign;
     sourceReportTitles?: string[];
   };
-  imageReport?: {
-    projectName: string;
-    moodboard: BrainImageMoodboardSection;
-    productMockups: BrainImageProductMockup[];
-    campaignVisuals: BrainImageCampaignVisual[];
-    landingPageAssets: BrainImageLandingPageAsset[];
-    productionChecklist: BrainImageProductionChecklistItem[];
-    sourceReportTitles?: string[];
-  };
+  imageProject?: ImageProjectView;
 }
 
 export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {

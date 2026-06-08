@@ -4,6 +4,7 @@ import type {
 } from "@/brain/domains/reports";
 import { getBrainClient } from "@/brain/client";
 import { slugify } from "@/brain/client/utils";
+import { IMAGE_SCHEMA_VERSION } from "./normalized";
 import type { ImageOutput } from "./types";
 
 export interface SaveImageInput {
@@ -19,12 +20,13 @@ export interface SaveImageResult {
 
 function buildImageSections(output: ImageOutput): BrainImageSections {
   return {
+    schemaVersion: IMAGE_SCHEMA_VERSION,
     projectName: output.projectName,
     moodboard: output.moodboard,
-    productMockups: output.productMockups,
-    campaignVisuals: output.campaignVisuals,
-    landingPageAssets: output.landingPageAssets,
-    productionChecklist: output.productionChecklist,
+    palette: output.palette,
+    corePackage: output.corePackage,
+    advancedPackage: output.advancedPackage,
+    campaignShots: output.campaignShots,
     sourceReportTitles: output.sourceReportTitles,
   };
 }
@@ -49,12 +51,12 @@ export async function saveImageToBrain(
     confidence: input.output.confidence,
     reportType: "image-project",
     imageSections,
-    notes: `Visual Production Briefing: ${input.brief}`,
+    notes: `Creative Production Briefing: ${input.brief}`,
     artifacts: [
       {
         id: `${reportId}-image-project`,
         type: "markdown",
-        label: "Vollständiges Visual Production Project",
+        label: "Creative Production Project",
         content: input.output.fullProject,
       },
     ],

@@ -277,16 +277,166 @@ export interface BrainImageProductionChecklistItem {
   purpose: string;
 }
 
+/** Brand color palette with HEX values (Image Agent). */
+export interface BrainImagePalette {
+  primary: string;
+  secondary: string;
+  accent: string;
+  background: string;
+  text: string;
+}
+
+/** Hero banner concept for landing pages (Image Agent). */
+export interface BrainImageHeroBanner {
+  headline: string;
+  subheadline: string;
+  visualDirection: string;
+  openaiPrompt: string;
+  fluxPrompt: string;
+  midjourneyPrompt: string;
+}
+
+/** Landing page visual section (Image Agent). */
+export interface BrainImageLandingSection {
+  sectionTitle: string;
+  sectionType:
+    | "hero"
+    | "collection_showcase"
+    | "product_grid"
+    | "brand_story"
+    | "cta_section";
+  purpose: string;
+  visualDirection: string;
+  prompt: string;
+}
+
+/** Instagram grid post concept (Image Agent). */
+export interface BrainImageInstagramGridItem {
+  name: string;
+  conceptType:
+    | "product_hero"
+    | "lifestyle_scene"
+    | "detail_closeup"
+    | "brand_mood"
+    | "community_style"
+    | "launch_teaser";
+  description: string;
+  visualDirection: string;
+  prompts: BrainImageAiPrompts;
+}
+
+/** Instagram Reels concept (Image Agent). */
+export interface BrainImageReelsConcept {
+  name: string;
+  conceptType:
+    | "unboxing_reel"
+    | "styling_tips"
+    | "behind_the_scenes"
+    | "product_reveal"
+    | "day_in_life"
+    | "trend_hook";
+  hook: string;
+  description: string;
+  visualDirection: string;
+  prompts: BrainImageAiPrompts;
+}
+
+/** TikTok concept (Image Agent). */
+export interface BrainImageTiktokConcept {
+  name: string;
+  conceptType:
+    | "hook_opener"
+    | "outfit_transition"
+    | "cap_styling"
+    | "drop_countdown"
+    | "street_culture"
+    | "ugc_style";
+  hook: string;
+  description: string;
+  visualDirection: string;
+  prompts: BrainImageAiPrompts;
+}
+
+/** Generated image asset stored in Supabase Storage (Image Agent). */
+export interface BrainImageGeneratedAsset {
+  assetKey: string;
+  section: string;
+  assetIndex: number;
+  assetName: string;
+  provider: "openai" | "flux";
+  prompt: string;
+  dimensions: string;
+  status: "pending" | "generating" | "completed" | "failed";
+  storagePath?: string;
+  url?: string;
+  createdAt: string;
+  message?: string;
+}
+
+/** Campaign photography shot (Image Agent). */
+export interface BrainImageCampaignShot {
+  shotName: string;
+  shotType: string;
+  location: string;
+  styling: string;
+  purpose: string;
+}
+
+/** Normalized image asset (Image Agent V2). */
+export interface BrainNormalizedImageAsset {
+  id: string;
+  title: string;
+  type:
+    | "hero_banner"
+    | "product_mockup"
+    | "campaign_key_visual"
+    | "instagram_carousel"
+    | "reels_concept"
+    | "tiktok_concept"
+    | "landing_section"
+    | "instagram_grid"
+    | "campaign_visual"
+    | "social_concept"
+    | "extra_mockup"
+    | "community_concept"
+    | "launch_teaser"
+    | "email_asset"
+    | string;
+  package: "core" | "advanced";
+  dimensions: string;
+  platform?: string;
+  purpose?: string;
+  variant?: string;
+  prompt: BrainImageAiPrompts;
+  provider?: "openai" | "flux" | "replicate" | "midjourney";
+  status: "ready" | "generating" | "completed" | "failed";
+  imageUrl?: string;
+  storagePath?: string;
+  createdAt?: string;
+  message?: string;
+}
+
 /** Structured visual production project (Image Agent). */
 export interface BrainImageSections {
+  schemaVersion?: "2.0" | "1.0";
   projectName: string;
   moodboard: BrainImageMoodboardSection;
-  productMockups: BrainImageProductMockup[];
-  campaignVisuals: BrainImageCampaignVisual[];
-  landingPageAssets: BrainImageLandingPageAsset[];
-  productionChecklist: BrainImageProductionChecklistItem[];
-  /** Report titles cited as knowledge sources. */
+  palette?: BrainImagePalette;
+  corePackage?: BrainNormalizedImageAsset[];
+  advancedPackage?: BrainNormalizedImageAsset[];
+  campaignShots?: BrainImageCampaignShot[];
   sourceReportTitles?: string[];
+  /** Legacy V1 — migrated on read */
+  heroBanner?: BrainImageHeroBanner;
+  productMockups?: BrainImageProductMockup[];
+  campaignVisuals?: BrainImageCampaignVisual[];
+  landingPageAssets?: BrainImageLandingPageAsset[];
+  landingAssets?: BrainImageLandingSection[];
+  instagramGrid?: BrainImageInstagramGridItem[];
+  reelsConcepts?: BrainImageReelsConcept[];
+  tiktokConcepts?: BrainImageTiktokConcept[];
+  generatedAssets?: BrainImageGeneratedAsset[];
+  productionChecklist?: BrainImageProductionChecklistItem[];
 }
 
 /** Structured marketing campaign plan sections (Marketing Agent). */

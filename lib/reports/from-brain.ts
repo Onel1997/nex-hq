@@ -16,6 +16,7 @@ import type {
 } from "@/brain/domains/reports";
 import type { BrainRecord } from "@/brain/types";
 import type { ReportCategory, ReportListItem } from "@/lib/mock/reports";
+import { toImageProjectView } from "@/lib/reports/image-project";
 import type { AgentId } from "@/lib/constants/agents";
 
 function mapAgentToCategory(agentId: AgentId): ReportCategory {
@@ -164,17 +165,8 @@ function mapContentSections(
 
 function mapImageSections(
   sections: BrainImageSections | undefined,
-): ReportListItem["imageReport"] {
-  if (!sections) return undefined;
-  return {
-    projectName: sections.projectName,
-    moodboard: sections.moodboard,
-    productMockups: sections.productMockups,
-    campaignVisuals: sections.campaignVisuals,
-    landingPageAssets: sections.landingPageAssets,
-    productionChecklist: sections.productionChecklist,
-    sourceReportTitles: sections.sourceReportTitles,
-  };
+): ReportListItem["imageProject"] {
+  return toImageProjectView(sections);
 }
 
 export function brainReportRecordToListItem(
@@ -215,6 +207,7 @@ export function brainReportRecordToListItem(
 
   return {
     id: content.reportId,
+    brainRecordId: record.id,
     title: record.title,
     summary: isImageReport
       ? imageSections?.moodboard?.visualDirection ?? content.summary
@@ -235,7 +228,7 @@ export function brainReportRecordToListItem(
     confidence: content.confidence,
     createdAt: record.createdAt,
     highlights: isImageReport
-      ? imageSections?.productionChecklist?.map((item) => item.assetName)
+      ? toImageProjectView(imageSections)?.corePackage.map((item) => item.title)
       : isContentReport
       ? contentSections?.socialContent.launchPosts
       : isShopifyReport
@@ -274,7 +267,7 @@ export function brainReportRecordToListItem(
               researchSections?.executiveSummary ??
               content.summary,
     recommendations: isImageReport
-      ? imageSections?.productionChecklist?.map((item) => item.purpose)
+      ? toImageProjectView(imageSections)?.campaignShots.map((item) => item.purpose)
       : isContentReport
       ? contentSections?.socialContent.storyIdeas
       : isShopifyReport
@@ -316,7 +309,7 @@ export function brainReportRecordToListItem(
     contentReport: isContentReport
       ? mapContentSections(contentSections)
       : undefined,
-    imageReport: isImageReport
+    imageProject: isImageReport
       ? mapImageSections(imageSections)
       : undefined,
   };

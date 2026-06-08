@@ -14,6 +14,7 @@ export function getIntegrationStatuses(): IntegrationStatus[] {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
   const openaiConfigured = Boolean(process.env.OPENAI_API_KEY);
+  const replicateConfigured = Boolean(process.env.REPLICATE_API_TOKEN);
 
   return [
     {
@@ -33,6 +34,15 @@ export function getIntegrationStatuses(): IntegrationStatus[] {
       detail: openaiConfigured
         ? "API key detected"
         : "Add OPENAI_API_KEY to .env.local",
+    },
+    {
+      id: "replicate",
+      name: "Replicate (Flux)",
+      description: "Flux image generation via Replicate API",
+      state: replicateConfigured ? "connected" : "disconnected",
+      detail: replicateConfigured
+        ? "API token detected"
+        : "Add REPLICATE_API_TOKEN to .env.local",
     },
     {
       id: "shopify",

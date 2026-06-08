@@ -20,6 +20,7 @@ const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: optionalEnvString(),
   SUPABASE_SERVICE_ROLE_KEY: optionalEnvString(),
   OPENAI_API_KEY: optionalEnvString(),
+  REPLICATE_API_TOKEN: optionalEnvString(),
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
@@ -36,6 +37,7 @@ function parseEnv(): Env {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    REPLICATE_API_TOKEN: process.env.REPLICATE_API_TOKEN,
     NODE_ENV: process.env.NODE_ENV,
   });
 }

@@ -1,24 +1,22 @@
 import { z } from "zod";
-import { enrichImagePayload } from "./enrich-output";
+import { enrichImagePayload } from "./enrich-packages";
 import { imageOutputSchema, type ImageOutput } from "./types";
 
 export const EXPECTED_IMAGE_SCHEMA = {
   title: "string (required)",
   reportType: '"image-project" (required)',
+  schemaVersion: '"2.0" (required)',
   projectName: "string (required)",
-  moodboard:
-    "{ visualDirection, aestheticKeywords, colorSystem, materialReferences, photographyStyle }",
-  productMockups:
-    "{ name, conceptType, description, prompts: { midjourney, openai, flux }, dimensions }[] (4–20)",
-  campaignVisuals:
-    "{ name, conceptType, description, platform, prompts, dimensions }[] (4–20)",
-  landingPageAssets:
-    "{ name, conceptType, description, prompts, dimensions }[] (3–12)",
-  productionChecklist:
-    "{ assetName, priority, platform, purpose }[] (8–48)",
+  moodboard: "{ visualDirection, aestheticKeywords, colorSystem, materialReferences, photographyStyle }",
+  palette: "{ primary, secondary, accent, background, text } — Name + HEX",
+  corePackage:
+    "{ id, title, type, package: core, dimensions, platform, prompt }[] (7–16)",
+  advancedPackage:
+    "{ id, title, type, package: advanced, dimensions, prompt }[] (0–32)",
+  campaignShots: "{ shotName, shotType, location, styling, purpose }[] (12–24)",
   confidence: "number 0–1 (required)",
   sourceReportTitles: "string[] (required, min 1)",
-  fullProject: "string (required, min 800 chars, Markdown)",
+  fullProject: "string (required, min 600 chars, Markdown)",
 } as const;
 
 export class ImageParseError extends Error {
@@ -120,10 +118,10 @@ const REQUIRED_TOP_LEVEL_FIELDS = [
   "reportType",
   "projectName",
   "moodboard",
-  "productMockups",
-  "campaignVisuals",
-  "landingPageAssets",
-  "productionChecklist",
+  "palette",
+  "corePackage",
+  "advancedPackage",
+  "campaignShots",
   "confidence",
   "sourceReportTitles",
   "fullProject",
@@ -190,13 +188,12 @@ function normalizeImagePayload(
 
   const aliasMap: Record<string, string> = {
     project_name: "projectName",
-    product_mockups: "productMockups",
-    campaign_visuals: "campaignVisuals",
-    landing_page_assets: "landingPageAssets",
-    production_checklist: "productionChecklist",
+    core_package: "corePackage",
+    advanced_package: "advancedPackage",
+    campaign_shots: "campaignShots",
     source_report_titles: "sourceReportTitles",
     full_project: "fullProject",
-    full_plan: "fullProject",
+    schema_version: "schemaVersion",
   };
 
   for (const [from, to] of Object.entries(aliasMap)) {
@@ -208,19 +205,15 @@ function normalizeImagePayload(
 
   if (!normalized.title && normalized.projectName) {
     normalized.title = normalized.projectName;
-    adjustments.push("set title from projectName");
   }
-
   if (!normalized.projectName && normalized.title) {
     normalized.projectName = normalized.title;
-    adjustments.push("set projectName from title");
   }
 
   if (typeof normalized.confidence === "string") {
     const parsedConfidence = Number(normalized.confidence);
     if (!Number.isNaN(parsedConfidence)) {
       normalized.confidence = parsedConfidence;
-      adjustments.push("coerced confidence to number");
     }
   }
 
@@ -239,9 +232,6 @@ function validateImagePayload(
 
   const enrichAdjustments = enrichImagePayload(parsed);
   if (enrichAdjustments.length > 0) {
-    console.info("[Image Parse] Re-enriched payload after validation issues", {
-      adjustments: enrichAdjustments,
-    });
     result = imageOutputSchema.safeParse(parsed);
     if (result.success) {
       return result.data;
@@ -252,13 +242,6 @@ function validateImagePayload(
   const validationIssues = result.error.issues.map((issue) =>
     zodIssueToDetail(issue, parsed),
   );
-
-  console.error("[Image Parse] Validation failed", {
-    missingFields,
-    validationIssues,
-    parsedJson: JSON.stringify(parsed, null, 2),
-    rawResponsePreview: context.rawResponse.slice(0, 4000),
-  });
 
   throw new ImageParseError({
     message: `Schema validation failed with ${result.error.issues.length} issue(s)`,
@@ -272,18 +255,12 @@ function validateImagePayload(
 }
 
 export function parseImageOutput(raw: string): ImageOutput {
-  console.info("[Image Parse] Raw response:", raw);
-
   const strippedJson = stripJsonFences(raw);
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(strippedJson);
   } catch (jsonError) {
-    console.error("[Image Parse] JSON parse failed", {
-      error: jsonError instanceof Error ? jsonError.message : jsonError,
-      strippedJsonPreview: strippedJson.slice(0, 2000),
-    });
     throw new ImageParseError({
       message: `JSON parse failed: ${jsonError instanceof Error ? jsonError.message : "unknown error"}`,
       stage: "json",
@@ -305,18 +282,12 @@ export function parseImageOutput(raw: string): ImageOutput {
   const { normalized, adjustments: normalizeAdjustments } =
     normalizeImagePayload(parsed as Record<string, unknown>);
   const enrichAdjustments = enrichImagePayload(normalized);
-  const allAdjustments = [...normalizeAdjustments, ...enrichAdjustments];
 
-  if (allAdjustments.length > 0) {
+  if ([...normalizeAdjustments, ...enrichAdjustments].length > 0) {
     console.info("[Image Parse] Normalized model output", {
-      adjustments: allAdjustments,
+      adjustments: [...normalizeAdjustments, ...enrichAdjustments],
     });
   }
-
-  console.info(
-    "[Image Parse] Parsed JSON (pre-validation):",
-    JSON.stringify(normalized, null, 2),
-  );
 
   return validateImagePayload(normalized, { rawResponse: raw, strippedJson });
 }
