@@ -1,4 +1,4 @@
-# Milaene HQ — Roadmap
+# NexHQ — Roadmap
 
 ## Overview
 
@@ -48,7 +48,7 @@ This roadmap defines the implementation phases from foundation to HQ OS platform
 - [ ] RLS policies for workspace-scoped access
 - [ ] `BrainClient` implementation (read, write, update, search, archive)
 - [ ] `BrainContextAssembler` implementation
-- [ ] Seed data: Milaene company profile, brand vision, brand rules, design memory
+- [ ] Workspace seed data: company profile, brand vision, brand rules, design memory
 - [ ] Brain API routes (`/api/brain/records`, `/api/brain/query`)
 - [ ] Wire Brain UI to real data (replace mock)
 
@@ -219,7 +219,7 @@ An approved drop copy and product data flows from Brain to a live Shopify listin
 
 ### Exit Criteria
 
-Milaene HQ runs recurring workflows without manual task creation. Knowledge compounds across drops.
+NexHQ workspaces run recurring workflows without manual task creation. Knowledge compounds across drops.
 
 ---
 
@@ -285,7 +285,7 @@ Phases 4–8 can partially overlap after Phase 3 is complete. Each specialist ag
 2. **Human approval by default** — automation earns trust over time
 3. **Brain first** — never let agents or integrations bypass shared context
 4. **Document as you build** — update `docs/` when architecture changes
-5. **Test with real brand work** — validate against actual Milaene drops, not synthetic demos
+5. **Test with real brand work** — validate against actual workspace operations, not synthetic demos
 6. **Types before logic** — define contracts before implementations
 
 ---

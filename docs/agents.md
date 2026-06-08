@@ -1,8 +1,8 @@
-# Milaene HQ — Agent System
+# NexHQ — Agent System
 
 ## Overview
 
-Milaene HQ operates as a **hierarchical multi-agent system**. Every specialist agent reports to the CEO Agent. Every agent — including the CEO — reads from and writes to the shared **Milaene Brain**.
+NexHQ operates as a **hierarchical multi-agent system**. Every specialist agent reports to the CEO Agent. Every agent — including the CEO — reads from and writes to the shared **NexHQ Brain** for the active workspace.
 
 Agents do **not** communicate directly with each other. All coordination flows through the CEO Agent and the Brain. This keeps the system auditable and prevents conflicting directives.
 
@@ -24,7 +24,7 @@ Agents do **not** communicate directly with each other. All coordination flows t
            └───────────────┴───────────────┘
                            │
                     ┌──────▼──────┐
-                    │Milaene Brain│
+                    │ NexHQ Brain │
                     │  (shared)   │
                     └─────────────┘
 ```
@@ -179,7 +179,7 @@ interface AgentResult {
 
 ### Responsibilities
 
-- Generate design concepts aligned with Milaene brand guidelines
+- Generate design concepts aligned with workspace brand guidelines
 - Produce mood boards, color palettes, and layout directions
 - Prepare assets for review before production
 - Maintain design history in the Brain

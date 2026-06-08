@@ -1,14 +1,14 @@
-# Milaene Brain — Architecture
+# NexHQ Brain — Architecture
 
 ## Purpose
 
-The Brain is the **permanent memory layer** of Milaene HQ and the future HQ OS platform. It is the single source of truth that every agent, integration, and workflow reads from and writes back to.
+The Brain is the **permanent memory layer** of NexHQ — scoped per workspace, shared across all agents and integrations. It is the single source of truth that every agent, integration, and workflow reads from and writes back to.
 
 The Brain is **not an agent**. It is the knowledge substrate beneath the agent layer.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│              HQ OS Workspaces (multi-tenant)                 │
+│              NexHQ Workspaces (multi-tenant)                 │
 │   Fashion HQ · Agency HQ · Creator HQ · Ecommerce · SaaS    │
 └──────────────────────────┬──────────────────────────────────┘
                            │
@@ -55,7 +55,7 @@ A workspace's **enabled domains** = core domains + its industry pack's domains.
 | `tasks` | Tasks | Work unit memory — delegation history, status snapshots, task context |
 | `reports` | Reports | Agent report archive linked to tasks — structured outputs for review |
 
-### Industry Domains — Fashion HQ (Milaene)
+### Industry Domains — Fashion HQ
 
 | Domain ID | Title | Responsibility |
 |-----------|-------|----------------|
@@ -156,7 +156,7 @@ Snapshots of agent reports archived in Brain for long-term retrieval and cross-a
 | Product Memory | name, status, SKUs, drop info, Shopify IDs |
 | Content Memory | format, channel, blocks, narrativeArc, copyRules |
 | Marketing Memory | campaign name, status, channelMix, KPIs, launchSequence |
-| Competitor Intelligence | competitor profiles, marketSignals, milaeneEdge |
+| Competitor Intelligence | competitor profiles, marketSignals, competitiveEdge |
 
 ---
 

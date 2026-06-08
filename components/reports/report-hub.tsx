@@ -1,11 +1,13 @@
 "use client";
 
-import { AGENT_CATALOG } from "@/lib/constants/agents";
 import {
-  MOCK_REPORTS,
-  REPORT_CATEGORY_LABELS,
-  type ReportListItem,
-} from "@/lib/mock/reports";
+  getAgentCatalog,
+  getMockReports,
+  getReportCategoryLabels,
+  getReportStatusLabel,
+} from "@/lib/i18n/data";
+import type { ReportListItem } from "@/lib/mock/reports";
+import { useDictionary, useLocale } from "@/lib/i18n";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -32,7 +34,17 @@ const STATUS_STYLES: Record<ReportListItem["status"], string> = {
   archived: "bg-muted text-muted-foreground",
 };
 
-function ReportCard({ report }: { report: ReportListItem }) {
+function ReportCard({
+  report,
+  categoryLabel,
+  agentName,
+  statusLabel,
+}: {
+  report: ReportListItem;
+  categoryLabel: string;
+  agentName: string;
+  statusLabel: string;
+}) {
   const CategoryIcon = CATEGORY_ICONS[report.category];
 
   return (
@@ -53,9 +65,9 @@ function ReportCard({ report }: { report: ReportListItem }) {
             </div>
             <Badge
               variant="secondary"
-              className={cn("shrink-0 text-sm font-normal capitalize", STATUS_STYLES[report.status])}
+              className={cn("shrink-0 text-sm font-normal", STATUS_STYLES[report.status])}
             >
-              {report.status}
+              {statusLabel}
             </Badge>
           </div>
 
@@ -75,13 +87,15 @@ function ReportCard({ report }: { report: ReportListItem }) {
 
           <div className="flex flex-wrap items-center gap-4 border-t border-border pt-4 text-sm text-muted-foreground">
             <Badge variant="outline" className="font-normal">
-              {REPORT_CATEGORY_LABELS[report.category]}
+              {categoryLabel}
             </Badge>
-            <span>{AGENT_CATALOG[report.agentId].name}</span>
+            <span>{agentName}</span>
             {report.drop && <span>{report.drop}</span>}
             <div className="ml-auto flex items-center gap-3">
               <Progress value={report.confidence * 100} className="h-1 w-20" />
-              <span className="tabular-nums">{Math.round(report.confidence * 100)}%</span>
+              <span className="tabular-nums">
+                {Math.round(report.confidence * 100)}%
+              </span>
             </div>
           </div>
         </div>
@@ -90,11 +104,23 @@ function ReportCard({ report }: { report: ReportListItem }) {
   );
 }
 
-function ReportList({ reports }: { reports: ReportListItem[] }) {
+function ReportList({
+  reports,
+  categoryLabels,
+  agentNames,
+  getStatusLabel,
+  emptyLabel,
+}: {
+  reports: ReportListItem[];
+  categoryLabels: ReturnType<typeof getReportCategoryLabels>;
+  agentNames: Record<string, string>;
+  getStatusLabel: (status: ReportListItem["status"]) => string;
+  emptyLabel: string;
+}) {
   if (reports.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border py-20 text-center text-base text-muted-foreground">
-        No reports in this category yet.
+        {emptyLabel}
       </div>
     );
   }
@@ -102,35 +128,52 @@ function ReportList({ reports }: { reports: ReportListItem[] }) {
   return (
     <div className="space-y-5">
       {reports.map((report) => (
-        <ReportCard key={report.id} report={report} />
+        <ReportCard
+          key={report.id}
+          report={report}
+          categoryLabel={categoryLabels[report.category]}
+          agentName={agentNames[report.agentId]}
+          statusLabel={getStatusLabel(report.status)}
+        />
       ))}
     </div>
   );
 }
 
 export function ReportHub() {
+  const locale = useLocale();
+  const { common, reports: reportsCopy } = useDictionary();
+  const mockReports = getMockReports(locale);
+  const categoryLabels = getReportCategoryLabels(locale);
+  const agentCatalog = getAgentCatalog(locale);
+  const agentNames = Object.fromEntries(
+    Object.values(agentCatalog).map((a) => [a.id, a.name]),
+  );
+  const getStatusLabel = (status: ReportListItem["status"]) =>
+    getReportStatusLabel(locale, status);
+
   const categories = ["all", "research", "design", "marketing"] as const;
 
   const counts: Record<(typeof categories)[number], number> = {
-    all: MOCK_REPORTS.length,
-    research: MOCK_REPORTS.filter((r) => r.category === "research").length,
-    design: MOCK_REPORTS.filter((r) => r.category === "design").length,
-    marketing: MOCK_REPORTS.filter((r) => r.category === "marketing").length,
+    all: mockReports.length,
+    research: mockReports.filter((r) => r.category === "research").length,
+    design: mockReports.filter((r) => r.category === "design").length,
+    marketing: mockReports.filter((r) => r.category === "marketing").length,
   };
 
   return (
     <div className="space-y-10">
       <SectionHeading
-        label="Intelligence"
-        title="Agent reports"
-        description="Research, design, and marketing briefs — ready for your review."
+        label={reportsCopy.hub.label}
+        title={reportsCopy.hub.title}
+        description={reportsCopy.hub.description}
       />
 
       <Tabs defaultValue="all" className="space-y-8">
         <TabsList className="h-12 bg-muted/30 p-1">
           {categories.map((cat) => (
             <TabsTrigger key={cat} value={cat} className="gap-2 px-5 text-base">
-              {cat === "all" ? "All" : REPORT_CATEGORY_LABELS[cat]}
+              {cat === "all" ? common.reportCategory.all : categoryLabels[cat]}
               <span className="text-sm text-muted-foreground">{counts[cat]}</span>
             </TabsTrigger>
           ))}
@@ -141,9 +184,13 @@ export function ReportHub() {
             <ReportList
               reports={
                 cat === "all"
-                  ? MOCK_REPORTS
-                  : MOCK_REPORTS.filter((r) => r.category === cat)
+                  ? mockReports
+                  : mockReports.filter((r) => r.category === cat)
               }
+              categoryLabels={categoryLabels}
+              agentNames={agentNames}
+              getStatusLabel={getStatusLabel}
+              emptyLabel={reportsCopy.hub.empty}
             />
           </TabsContent>
         ))}

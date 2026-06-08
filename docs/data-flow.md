@@ -1,8 +1,8 @@
-# Milaene HQ — Data Flow
+# NexHQ — Data Flow
 
 ## Overview
 
-This document describes how information moves through Milaene HQ — from human intent to agent execution, Brain persistence, report generation, and human review.
+This document describes how information moves through NexHQ — from human intent to agent execution, Brain persistence, report generation, and human review.
 
 The system follows a strict unidirectional flow with the Brain as the central hub:
 
@@ -51,7 +51,7 @@ No specialist agent communicates directly with another. All coordination passes 
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│                         MILAENE BRAIN                                 │
+│                         NEXHQ BRAIN                                   │
 │  Stores: drafts, decisions, domain knowledge, task snapshots         │
 │  Status: draft → pending_review → approved → archived                │
 └───────────────────────────────┬──────────────────────────────────────┘
@@ -202,7 +202,7 @@ All agent outputs land in the Brain as records with full provenance:
 
 ```typescript
 {
-  workspaceId: "ws_milaene",
+  workspaceId: "<workspace-uuid>",
   domain: "content_memory",
   slug: "summer-26-drop-copy",
   title: "Summer '26 Drop Copy",

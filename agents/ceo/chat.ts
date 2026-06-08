@@ -1,10 +1,15 @@
 import { getBrainContextAssembler } from "@/brain/context/assembler-impl";
 import type { BrainAgentContext } from "@/brain/context";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { createTranslator } from "@/lib/i18n/translate";
 import { getOpenAIClient } from "@/lib/openai/client";
 
 export interface CeoChatInput {
   message: string;
   workspaceId: string;
+  workspaceName: string;
+  locale?: Locale;
 }
 
 export interface CeoChatOutput {
@@ -12,29 +17,35 @@ export interface CeoChatOutput {
   brainContext: BrainAgentContext;
 }
 
-const CEO_SYSTEM_PROMPT = `You are the CEO Agent for Milaene HQ — the strategic intelligence layer for the Milaene streetwear brand.
+function buildCeoSystemPrompt(
+  workspaceName: string,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const dict = getDictionary(locale);
+  const t = createTranslator(dict as unknown as Record<string, unknown>);
 
-Your role in this conversation:
-- Advise the founder using ONLY the Milaene Brain context provided below
-- Answer questions about the company, brand vision, brand values, target audience, and strategic direction
-- Be concise, confident, and on-brand — speak like an insider, not a marketer
-- If the answer is not in the provided context, say honestly that you don't have that information in the Brain yet
-- Do NOT delegate tasks, create task lists, or claim to have taken actions — you are in advisory mode only
-
-## Milaene Brain Context
-
-`;
+  return (
+    t("ceo.systemPrompt", {
+      platformName: dict.platform.name,
+      workspaceName,
+      brainName: dict.platform.brainName,
+    }) + "\n"
+  );
+}
 
 /**
  * CEO Agent — Phase 1 advisory mode.
- * Reads Brain context and responds to founder questions via OpenAI.
+ * Reads workspace Brain context and responds to founder questions via OpenAI.
  */
 export async function runCeoChat(input: CeoChatInput): Promise<CeoChatOutput> {
+  const locale = input.locale ?? DEFAULT_LOCALE;
+  const dict = getDictionary(locale);
   const assembler = getBrainContextAssembler();
 
   const brainContext = await assembler.assemble({
     workspaceId: input.workspaceId,
     agentId: "ceo",
+    locale,
   });
 
   const openai = getOpenAIClient();
@@ -45,7 +56,9 @@ export async function runCeoChat(input: CeoChatInput): Promise<CeoChatOutput> {
     messages: [
       {
         role: "system",
-        content: CEO_SYSTEM_PROMPT + brainContext.promptContext,
+        content:
+          buildCeoSystemPrompt(input.workspaceName, locale) +
+          brainContext.promptContext,
       },
       {
         role: "user",
@@ -56,7 +69,7 @@ export async function runCeoChat(input: CeoChatInput): Promise<CeoChatOutput> {
 
   const response =
     completion.choices[0]?.message?.content?.trim() ??
-    "I wasn't able to generate a response. Please try again.";
+    dict.ceo.fallbackResponse;
 
   return { response, brainContext };
 }

@@ -44,7 +44,7 @@ export const BRAIN_SECTIONS: BrainSection[] = [
       {
         label: "Mission",
         value:
-          "Milaene is a streetwear brand for urban creatives who move between culture, art, and the city — built on scarcity, story, and visual identity.",
+          "{workspace} is a streetwear brand for urban creatives who move between culture, art, and the city — built on scarcity, story, and visual identity.",
         tags: ["core"],
       },
       {
@@ -155,7 +155,7 @@ export const BRAIN_SECTIONS: BrainSection[] = [
         tags: ["aspirational"],
       },
       {
-        label: "Milaene Edge",
+        label: "Competitive Edge",
         value:
           "Tighter drops, stronger visual narrative per capsule, AI-accelerated ops without losing human creative control.",
         tags: ["differentiation"],

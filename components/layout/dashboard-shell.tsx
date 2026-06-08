@@ -6,6 +6,7 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
+import { I18nProvider } from "@/lib/i18n";
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -13,12 +14,14 @@ interface DashboardShellProps {
 
 export function DashboardShell({ children }: DashboardShellProps) {
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset className="overflow-hidden">
-        <DashboardHeader />
-        {children}
-      </SidebarInset>
-    </SidebarProvider>
+    <I18nProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="overflow-hidden">
+          <DashboardHeader />
+          {children}
+        </SidebarInset>
+      </SidebarProvider>
+    </I18nProvider>
   );
 }

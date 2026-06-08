@@ -1,7 +1,8 @@
-import {
-  AGENT_STATUS_LABELS,
-  type AgentStatus,
-} from "@/lib/constants/agents";
+"use client";
+
+import { type AgentStatus } from "@/lib/constants/agents";
+import { getAgentStatusLabels } from "@/lib/i18n/data";
+import { useLocale } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,9 @@ export function AgentStatusBadge({
   showPulse = false,
   className,
 }: AgentStatusBadgeProps) {
+  const locale = useLocale();
+  const labels = getAgentStatusLabels(locale);
+
   return (
     <Badge
       variant="outline"
@@ -38,7 +42,7 @@ export function AgentStatusBadge({
           <span className="relative inline-flex size-2 rounded-full bg-primary" />
         </span>
       )}
-      {AGENT_STATUS_LABELS[status]}
+      {labels[status]}
     </Badge>
   );
 }

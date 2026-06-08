@@ -1,18 +1,28 @@
+"use client";
+
 import {
-  FOUNDER_NAME,
-  STATUS_PULSES,
-  type StatusPulse,
-} from "@/lib/mock/command-center";
+  getFounderName,
+  getPulseStateLabel,
+  getStatusPulses,
+} from "@/lib/i18n/data";
+import type { StatusPulse } from "@/lib/mock/command-center";
+import { useLocale, useT, useWorkspace } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-function getGreeting(): string {
+function getGreeting(t: ReturnType<typeof useT>): string {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
+  if (hour < 12) return t("common.greeting.morning");
+  if (hour < 18) return t("common.greeting.afternoon");
+  return t("common.greeting.evening");
 }
 
-function PulseItem({ pulse }: { pulse: StatusPulse }) {
+function PulseItem({
+  pulse,
+  stateLabel,
+}: {
+  pulse: StatusPulse;
+  stateLabel: string;
+}) {
   return (
     <div className="space-y-3">
       <p className="text-label">{pulse.label}</p>
@@ -31,29 +41,39 @@ function PulseItem({ pulse }: { pulse: StatusPulse }) {
             pulse.state === "critical" && "status-critical",
           )}
         />
-        <span className="text-sm capitalize text-muted-foreground">
-          {pulse.state}
-        </span>
+        <span className="text-sm text-muted-foreground">{stateLabel}</span>
       </div>
     </div>
   );
 }
 
 export function CommandHero() {
+  const locale = useLocale();
+  const t = useT();
+  const workspace = useWorkspace();
+  const pulses = getStatusPulses(locale);
+  const founderName = getFounderName(locale);
+
   return (
     <header className="space-y-16">
       <div className="space-y-6">
         <p className="text-lg text-muted-foreground">
-          {getGreeting()}, {FOUNDER_NAME}.
+          {getGreeting(t)}, {founderName}.
         </p>
         <h1 className="text-display-xl max-w-4xl text-foreground">
-          Milaene is operating normally.
+          {t("dashboard.hero.operatingNormally", {
+            workspace: workspace.name,
+          })}
         </h1>
       </div>
 
       <div className="grid gap-12 border-y border-border py-12 sm:grid-cols-2 lg:grid-cols-4 lg:gap-16">
-        {STATUS_PULSES.map((pulse) => (
-          <PulseItem key={pulse.id} pulse={pulse} />
+        {pulses.map((pulse) => (
+          <PulseItem
+            key={pulse.id}
+            pulse={pulse}
+            stateLabel={getPulseStateLabel(locale, pulse.state)}
+          />
         ))}
       </div>
     </header>

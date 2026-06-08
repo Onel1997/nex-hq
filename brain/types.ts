@@ -1,7 +1,7 @@
 /**
- * Milaene Brain — core type system.
+ * NexHQ Brain — core type system.
  *
- * The Brain is the permanent memory layer of Milaene HQ and HQ OS platforms.
+ * The Brain is the permanent memory layer of NexHQ workspaces.
  * Every agent, integration, and workflow reads from and writes back to the
  * Brain through typed interfaces — never to raw storage.
  */

@@ -1,20 +1,20 @@
-# Milaene HQ — Vision
+# NexHQ — Vision
 
 ## Mission
 
-Milaene HQ is the central command center for the Milaene streetwear brand. It unifies research, design, content, marketing, and commerce into a single AI-powered operating system — giving a small team the strategic reach of a full creative and growth organization.
+NexHQ is an AI-powered operating system for multi-workspace companies. It unifies research, design, content, marketing, and commerce into a single platform — giving small teams the strategic reach of a full creative and growth organization.
 
-Milaene HQ is not a chatbot. It is a **command center**: a persistent intelligence layer where humans set direction, specialized AI agents execute domain work, and a shared Brain keeps every decision coherent.
+NexHQ is not a chatbot. It is a **command center**: a persistent intelligence layer where humans set direction, specialized AI agents execute domain work, and a shared Brain keeps every decision coherent across workspaces.
 
 ---
 
 ## What We Are Building Today
 
-### Milaene HQ as the First Implementation
+### NexHQ Platform — Multi-Workspace by Design
 
-Milaene HQ is the **first concrete product** built on a larger platform vision. It is purpose-built for streetwear: drop cadence, scarcity, visual identity, cultural fluency, and commerce operations.
+NexHQ is the platform. Workspaces (Milaene, NexTrends, NexAgency, and future tenants) are tenant-scoped configurations with industry packs and seed data. The platform resolves the active workspace from environment configuration — it never assumes a specific tenant.
 
-Today, Milaene HQ includes:
+Today, NexHQ includes:
 
 - A **Next.js command center UI** — dashboard, agents, Brain, tasks, reports, and settings
 - A **typed architecture layer** — Brain, agents, tasks, and reports defined in TypeScript
@@ -23,20 +23,28 @@ Today, Milaene HQ includes:
 
 No agent logic or Brain persistence is live yet. The foundation — types, contracts, documentation, and UI shell — is in place.
 
-### The Future: HQ OS Platform
+### Multi-Workspace Architecture
 
-Milaene HQ will evolve into **HQ OS** — a multi-industry platform where any company can provision a workspace with:
+NexHQ supports multiple workspaces, each with its own industry pack and seed configuration:
 
-- A shared **Brain** memory layer
+```
+NexHQ
+├── milaene      (fashion_hq)
+├── nex-trends   (creator_hq)
+├── nex-agency   (agency_hq)
+└── future …
+```
+
+Each workspace provisions:
+
+- A scoped **NexHQ Brain** memory layer
 - A **CEO Agent** orchestration model
 - **Industry-specific domain packs** (Fashion, Agency, Creator, Ecommerce, SaaS)
 - **Toggleable modules** (agents, commerce, design studio, analytics, etc.)
 
-Milaene (Fashion HQ) is the reference implementation. HQ OS is the platform.
-
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         HQ OS Platform                       │
+│                         NexHQ Platform                       │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
 │  │ Fashion  │ │  Agency  │ │ Creator  │ │Ecommerce │  ...  │
 │  │    HQ    │ │    HQ    │ │    HQ    │ │    HQ    │       │
@@ -56,7 +64,7 @@ Milaene (Fashion HQ) is the reference implementation. HQ OS is the platform.
 
 ### 1. One Brain, Many Agents
 
-All agents and integrations share a single **Milaene Brain** — the permanent memory layer. The Brain stores company identity, domain knowledge, agent outputs, decisions, and operational context. Every consumer reads from and writes back to the Brain through typed interfaces. No agent bypasses it.
+All agents and integrations share the **NexHQ Brain** — the permanent memory layer, scoped per workspace. The Brain stores company identity, domain knowledge, agent outputs, decisions, and operational context. Every consumer reads from and writes back to the Brain through typed interfaces. No agent bypasses it.
 
 ### 2. CEO-Led Hierarchy
 
@@ -68,7 +76,7 @@ Automation accelerates work; humans approve what matters. High-stakes outputs �
 
 ### 4. Industry-Native Intelligence
 
-Milaene HQ is built for streetwear culture: drop cadence, scarcity, community, visual identity, and fast-moving trends. HQ OS extends this model to other industries with domain packs that speak each industry's language — client memory for agencies, audience memory for creators, product roadmaps for SaaS.
+Each workspace selects an industry pack that shapes its domains and modules — Fashion HQ for streetwear (drop cadence, scarcity, visual identity), Agency HQ for client and campaign memory, Creator HQ for audience and content intelligence, and more.
 
 ### 5. Compounding Knowledge
 
@@ -113,7 +121,7 @@ Research Designer Content Marketing Shopify
    └───────┴───────┴───────┴───────┘
                    │
             ┌──────▼──────┐
-            │Milaene Brain│
+            │ NexHQ Brain │
             └─────────────┘
 ```
 
@@ -151,7 +159,7 @@ See [hq-os-future.md](./hq-os-future.md) for the full platform evolution plan.
 |---------|--------|
 | **Near-term** | Agents produce usable drafts (briefs, copy, designs) that reduce manual work by 50%+ |
 | **Mid-term** | End-to-end drop workflows — from trend signal to Shopify listing — run with minimal human touchpoints |
-| **Long-term** | Milaene HQ operates as a persistent brand intelligence layer that compounds knowledge every season |
+| **Long-term** | NexHQ workspaces operate as persistent brand intelligence layers that compound knowledge every season |
 | **Platform** | HQ OS supports multiple industries with shared Brain infrastructure and industry-specific domain packs |
 
 ---

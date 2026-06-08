@@ -1,9 +1,10 @@
 import { getBrainClient } from "@/brain/client";
 import { HQ_INDUSTRY_PACKS } from "@/brain/platform/industries";
 import type { BrainWorkspacesRow } from "@/brain/schema";
+import { getWorkspaceConfig } from "@/brain/workspaces";
+import type { WorkspaceDefinition } from "@/brain/workspaces/types";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { MILAENE_WORKSPACE_SLUG } from "@/lib/constants/workspace";
-import { MILAENE_SEED_RECORDS } from "./milaene-data";
+import { getActiveWorkspaceSlug } from "@/lib/workspace/active";
 
 export interface WorkspaceContext {
   workspace: BrainWorkspacesRow;
@@ -11,16 +12,19 @@ export interface WorkspaceContext {
 }
 
 /**
- * Resolve or create the Milaene workspace.
+ * Resolve or create a workspace from its configuration.
  */
-export async function getOrCreateMilaeneWorkspace(): Promise<BrainWorkspacesRow> {
+export async function getOrCreateWorkspace(
+  slug: string,
+): Promise<BrainWorkspacesRow> {
+  const config = getWorkspaceConfig(slug);
   const db = createAdminClient();
-  const fashionPack = HQ_INDUSTRY_PACKS.fashion_hq;
+  const industryPack = HQ_INDUSTRY_PACKS[config.industryId];
 
   const { data: existing } = await db
     .from("brain_workspaces")
     .select()
-    .eq("slug", MILAENE_WORKSPACE_SLUG)
+    .eq("slug", config.slug)
     .maybeSingle();
 
   if (existing) {
@@ -30,38 +34,42 @@ export async function getOrCreateMilaeneWorkspace(): Promise<BrainWorkspacesRow>
   const { data: created, error } = await db
     .from("brain_workspaces")
     .insert({
-      slug: MILAENE_WORKSPACE_SLUG,
-      name: "Milaene",
-      industry_id: fashionPack.id,
-      active_modules: fashionPack.availableModules,
+      slug: config.slug,
+      name: config.name,
+      industry_id: industryPack.id,
+      active_modules: industryPack.availableModules,
       enabled_domains: [
         "company_profile",
         "decisions",
         "tasks",
         "reports",
-        ...fashionPack.domains,
+        ...industryPack.domains,
       ],
     })
     .select()
     .single();
 
   if (error) {
-    throw new Error(`Failed to create Milaene workspace: ${error.message}`);
+    throw new Error(`Failed to create workspace "${config.slug}": ${error.message}`);
   }
 
   return created as BrainWorkspacesRow;
 }
 
 /**
- * Seed starter Brain records for Milaene if they don't exist.
+ * Seed starter Brain records for a workspace if they don't exist.
  * Idempotent — skips records that already exist by slug.
  */
-export async function ensureMilaeneBrainSeeded(): Promise<WorkspaceContext> {
-  const workspace = await getOrCreateMilaeneWorkspace();
+export async function ensureWorkspaceBrainSeeded(
+  slug?: string,
+): Promise<WorkspaceContext> {
+  const workspaceSlug = slug ?? getActiveWorkspaceSlug();
+  const config = getWorkspaceConfig(workspaceSlug);
+  const workspace = await getOrCreateWorkspace(workspaceSlug);
   const brain = getBrainClient();
   let seeded = false;
 
-  for (const seed of MILAENE_SEED_RECORDS) {
+  for (const seed of config.seedRecords) {
     const existing = await brain.getRecordBySlug(
       workspace.id,
       seed.domain,
@@ -88,4 +96,11 @@ export async function ensureMilaeneBrainSeeded(): Promise<WorkspaceContext> {
   }
 
   return { workspace, seeded };
+}
+
+/** Provision a workspace row without seeding records. */
+export async function provisionWorkspace(
+  config: WorkspaceDefinition,
+): Promise<BrainWorkspacesRow> {
+  return getOrCreateWorkspace(config.slug);
 }

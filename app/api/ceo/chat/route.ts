@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { runCeoChat } from "@/agents/ceo";
-import { ensureMilaeneBrainSeeded } from "@/brain/seed";
+import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/get-dictionary";
 import { isSupabaseConfigured } from "@/lib/supabase/admin";
+
+const dict = getDictionary(DEFAULT_LOCALE);
 
 const chatRequestSchema = z.object({
   message: z.string().min(1).max(4000),
@@ -12,17 +16,14 @@ export async function POST(request: Request) {
   try {
     if (!isSupabaseConfigured()) {
       return NextResponse.json(
-        {
-          error:
-            "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to .env.local and run the brain migration.",
-        },
+        { error: dict.ceo.errors.supabaseNotConfigured },
         { status: 503 },
       );
     }
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
-        { error: "OpenAI is not configured. Add OPENAI_API_KEY to .env.local." },
+        { error: dict.ceo.errors.openaiNotConfigured },
         { status: 503 },
       );
     }
@@ -32,16 +33,18 @@ export async function POST(request: Request) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Invalid request", details: parsed.error.flatten() },
+        { error: dict.ceo.errors.invalidRequest, details: parsed.error.flatten() },
         { status: 400 },
       );
     }
 
-    const { workspace } = await ensureMilaeneBrainSeeded();
+    const { workspace } = await ensureWorkspaceBrainSeeded();
 
     const result = await runCeoChat({
       message: parsed.data.message,
       workspaceId: workspace.id,
+      workspaceName: workspace.name,
+      locale: DEFAULT_LOCALE,
     });
 
     return NextResponse.json({
@@ -51,7 +54,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "An unexpected error occurred";
+      error instanceof Error ? error.message : dict.ceo.errors.unexpected;
 
     console.error("[CEO Chat]", message);
 

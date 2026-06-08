@@ -1,27 +1,34 @@
+"use client";
+
 import Link from "next/link";
-import { BRAIN_NODES } from "@/lib/mock/command-center";
+import { getBrainNodes } from "@/lib/i18n/data";
+import { useDictionary, useLocale, useT } from "@/lib/i18n";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { cn } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
 
 export function BrainVisualization() {
-  const totalEntries = BRAIN_NODES.reduce((sum, n) => sum + n.entries, 0);
+  const locale = useLocale();
+  const t = useT();
+  const { dashboard } = useDictionary();
+  const brainNodes = getBrainNodes(locale);
+  const totalEntries = brainNodes.reduce((sum, n) => sum + n.entries, 0);
   const avgSync = Math.round(
-    BRAIN_NODES.reduce((sum, n) => sum + n.sync, 0) / BRAIN_NODES.length,
+    brainNodes.reduce((sum, n) => sum + n.sync, 0) / brainNodes.length,
   );
 
   return (
     <section className="space-y-12">
       <SectionHeading
-        label="Milaene Brain"
-        title="The heart of your brand"
-        description="Living knowledge — brand memory, design intelligence, and market context in one place."
+        label={dashboard.brainViz.label}
+        title={dashboard.brainViz.title}
+        description={dashboard.brainViz.description}
         action={
           <Link
             href="/brain"
             className="flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-primary"
           >
-            Explore Brain
+            {dashboard.brainViz.exploreBrain}
             <ArrowRight className="size-4" />
           </Link>
         }
@@ -35,19 +42,23 @@ export function BrainVisualization() {
             <p className="font-display text-6xl font-medium tabular-nums tracking-tight text-foreground">
               {totalEntries}
             </p>
-            <p className="mt-2 text-base text-muted-foreground">knowledge entries</p>
+            <p className="mt-2 text-base text-muted-foreground">
+              {dashboard.brainViz.knowledgeEntries}
+            </p>
           </div>
           <div className="hidden h-16 w-px bg-border sm:block" />
           <div className="text-center">
             <p className="font-display text-6xl font-medium tabular-nums tracking-tight text-primary">
               {avgSync}%
             </p>
-            <p className="mt-2 text-base text-muted-foreground">synced</p>
+            <p className="mt-2 text-base text-muted-foreground">
+              {dashboard.brainViz.synced}
+            </p>
           </div>
         </div>
 
         <div className="relative grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
-          {BRAIN_NODES.map((node) => (
+          {brainNodes.map((node) => (
             <div
               key={node.id}
               className={cn(
@@ -72,7 +83,7 @@ export function BrainVisualization() {
                 {node.label}
               </h3>
               <p className="mt-2 text-base text-muted-foreground">
-                {node.entries} entries
+                {t("common.entriesCount", { count: node.entries })}
               </p>
               <div className="mt-5 h-1 overflow-hidden rounded-full bg-border">
                 <div

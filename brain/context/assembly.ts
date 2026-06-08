@@ -6,6 +6,7 @@
  */
 
 import type { AgentId } from "@/lib/constants/agents";
+import type { Locale } from "@/lib/i18n/config";
 import type { BrainDomain } from "../types";
 import type { BrainRecord } from "../types";
 
@@ -13,6 +14,8 @@ export interface BrainContextRequest {
   workspaceId: string;
   agentId: AgentId;
   taskId?: string;
+  /** UI locale for prompt label formatting. */
+  locale?: Locale;
   /** Domains to include. Defaults to agent's primary read domains. */
   domains?: BrainDomain[];
   /** Max records per domain. */

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { SUGGESTED_ACTIONS } from "@/lib/mock/command-center";
+import { getSuggestedActions } from "@/lib/i18n/data";
+import { getDateLocale, useDictionary, useLocale, useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { ArrowUp, Crown, Loader2 } from "lucide-react";
 
@@ -12,20 +13,25 @@ interface ChatMessage {
   timestamp: string;
 }
 
-function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
 export function AiCommandInterface() {
+  const locale = useLocale();
+  const t = useT();
+  const { platform } = useDictionary();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const formatTimestamp = useCallback(
+    (iso: string) =>
+      new Date(iso).toLocaleTimeString(getDateLocale(locale), {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    [locale],
+  );
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -58,7 +64,9 @@ export function AiCommandInterface() {
         const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.error ?? "Failed to reach CEO Agent");
+          throw new Error(
+            data.error ?? t("dashboard.command.errors.reachCeo"),
+          );
         }
 
         const ceoMessage: ChatMessage = {
@@ -71,13 +79,17 @@ export function AiCommandInterface() {
         setMessages((prev) => [...prev, ceoMessage]);
         setTimeout(scrollToBottom, 50);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong");
+        setError(
+          err instanceof Error
+            ? err.message
+            : t("dashboard.command.errors.generic"),
+        );
       } finally {
         setIsLoading(false);
         textareaRef.current?.focus();
       }
     },
-    [isLoading, scrollToBottom],
+    [isLoading, scrollToBottom, t],
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -93,6 +105,14 @@ export function AiCommandInterface() {
   };
 
   const hasMessages = messages.length > 0;
+  const suggestedActions = getSuggestedActions(locale);
+
+  const suggestedQuestions = [
+    t("dashboard.command.suggestedQuestions.whatIsOurMission"),
+    t("dashboard.command.suggestedQuestions.brandValues"),
+    t("dashboard.command.suggestedQuestions.targetAudience"),
+    ...suggestedActions.map((a) => a.label),
+  ];
 
   return (
     <section className="relative py-8">
@@ -105,11 +125,13 @@ export function AiCommandInterface() {
 
       <div className="relative mx-auto max-w-4xl">
         <div className="command-interface overflow-hidden px-10 py-14 sm:px-14 sm:py-16 lg:px-20 lg:py-20">
-          <p className="text-label mb-8 text-primary/80">Command Center</p>
+          <p className="text-label mb-8 text-primary/80">
+            {platform.commandCenterName}
+          </p>
 
           {!hasMessages ? (
             <h2 className="command-interface-headline mb-12 max-w-3xl">
-              What would you like Milaene to do today?
+              {t("dashboard.command.headline")}
             </h2>
           ) : (
             <div className="mb-8 max-h-[420px] space-y-6 overflow-y-auto pr-2">
@@ -136,7 +158,7 @@ export function AiCommandInterface() {
                   >
                     {msg.role === "ceo" && (
                       <p className="mb-1.5 text-xs font-medium text-primary">
-                        CEO Agent
+                        {t("dashboard.command.ceoAgent")}
                       </p>
                     )}
                     <p className="whitespace-pre-wrap text-base leading-relaxed">
@@ -161,7 +183,9 @@ export function AiCommandInterface() {
                   <div className="flex size-9 items-center justify-center rounded-xl bg-primary/15">
                     <Loader2 className="size-4 animate-spin text-primary" />
                   </div>
-                  <span className="text-sm">CEO Agent is thinking…</span>
+                  <span className="text-sm">
+                    {t("dashboard.command.thinking")}
+                  </span>
                 </div>
               )}
 
@@ -181,7 +205,7 @@ export function AiCommandInterface() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about Milaene, brand values, audience, strategy..."
+              placeholder={t("dashboard.command.placeholder")}
               rows={hasMessages ? 2 : 4}
               disabled={isLoading}
               className={cn(
@@ -199,7 +223,7 @@ export function AiCommandInterface() {
                 "bg-primary text-primary-foreground transition-opacity",
                 "disabled:opacity-40",
               )}
-              aria-label="Send message"
+              aria-label={t("common.sendMessage")}
             >
               {isLoading ? (
                 <Loader2 className="size-5 animate-spin" />
@@ -211,21 +235,22 @@ export function AiCommandInterface() {
 
           <p className="mt-8 text-center text-base text-muted-foreground">
             {isLoading
-              ? "Reading Milaene Brain · Generating response"
-              : "CEO Agent · Powered by Milaene Brain"}
+              ? t("dashboard.command.readingBrain", {
+                  brainName: platform.brainName,
+                })
+              : t("dashboard.command.poweredBy", {
+                  brainName: platform.brainName,
+                })}
           </p>
         </div>
 
         {!hasMessages && (
           <div className="mt-12 space-y-6">
-            <p className="text-center text-label">Try asking</p>
+            <p className="text-center text-label">
+              {t("dashboard.command.tryAsking")}
+            </p>
             <div className="flex flex-wrap justify-center gap-3">
-              {[
-                "Who is Milaene?",
-                "What are our brand values?",
-                "What is our target audience?",
-                ...SUGGESTED_ACTIONS.map((a) => a.label),
-              ].map((label) => (
+              {suggestedQuestions.map((label) => (
                 <button
                   key={label}
                   type="button"

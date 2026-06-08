@@ -1,8 +1,11 @@
+"use client";
+
 import {
-  INTELLIGENCE_FEED,
-  type IntelligenceItem,
-  type IntelligenceType,
-} from "@/lib/mock/command-center";
+  getIntelligenceFeed,
+  getIntelligenceTypeLabel,
+} from "@/lib/i18n/data";
+import type { IntelligenceItem, IntelligenceType } from "@/lib/mock/command-center";
+import { useDictionary, useLocale, useT } from "@/lib/i18n";
 import { SectionHeading } from "@/components/shared/section-heading";
 import {
   Lightbulb,
@@ -12,25 +15,25 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-const TYPE_CONFIG: Record<
-  IntelligenceType,
-  { icon: LucideIcon; label: string }
-> = {
-  trend: { icon: TrendingUp, label: "Trend" },
-  design: { icon: Palette, label: "Design" },
-  market: { icon: Megaphone, label: "Market" },
-  content: { icon: Lightbulb, label: "Content" },
+const TYPE_ICONS: Record<IntelligenceType, LucideIcon> = {
+  trend: TrendingUp,
+  design: Palette,
+  market: Megaphone,
+  content: Lightbulb,
 };
 
 function FeedItem({
   item,
   isLast,
+  typeLabel,
+  actLabel,
 }: {
   item: IntelligenceItem;
   isLast: boolean;
+  typeLabel: string;
+  actLabel: string;
 }) {
-  const config = TYPE_CONFIG[item.type];
-  const Icon = config.icon;
+  const Icon = TYPE_ICONS[item.type];
 
   return (
     <article className="relative pl-8">
@@ -43,12 +46,12 @@ function FeedItem({
         <div className="flex flex-wrap items-center gap-3">
           <Icon className="size-4 text-primary/70" />
           <span className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-            {config.label}
+            {typeLabel}
           </span>
           <span className="text-sm text-muted-foreground/60">{item.time}</span>
           {item.actionable && (
             <span className="ml-auto rounded-full border border-primary/25 bg-primary/5 px-3 py-1 text-xs font-medium uppercase tracking-wider text-primary">
-              Act
+              {actLabel}
             </span>
           )}
         </div>
@@ -64,19 +67,26 @@ function FeedItem({
 }
 
 export function IntelligenceFeed() {
+  const locale = useLocale();
+  const t = useT();
+  const { dashboard } = useDictionary();
+  const feed = getIntelligenceFeed(locale);
+
   return (
     <section className="space-y-10">
       <SectionHeading
-        label="Intelligence"
-        title="Signals & opportunities"
+        label={dashboard.intelligence.label}
+        title={dashboard.intelligence.title}
       />
 
       <div className="luxury-surface p-8 lg:p-10">
-        {INTELLIGENCE_FEED.map((item, index) => (
+        {feed.map((item, index) => (
           <FeedItem
             key={item.id}
             item={item}
-            isLast={index === INTELLIGENCE_FEED.length - 1}
+            isLast={index === feed.length - 1}
+            typeLabel={getIntelligenceTypeLabel(locale, item.type)}
+            actLabel={t("common.act")}
           />
         ))}
       </div>

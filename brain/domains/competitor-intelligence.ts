@@ -25,7 +25,7 @@ export interface MarketSignal {
 export interface CompetitorIntelligenceContent {
   kind: "competitor_intelligence";
   competitors: CompetitorProfile[];
-  milaeneEdge?: string;
+  competitiveEdge?: string;
   marketSignals?: MarketSignal[];
   analysisSummary?: string;
   recommendedActions?: string[];

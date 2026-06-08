@@ -65,7 +65,7 @@ export const AGENT_CATALOG: Record<AgentId, AgentDefinition> = {
     responsibilities: [
       "Monitor streetwear and culture signals weekly",
       "Produce trend briefs for upcoming drops",
-      "Feed competitive intelligence into Milaene Brain",
+      "Feed competitive intelligence into NexHQ Brain",
       "Recommend positioning based on market gaps",
     ],
   },
@@ -75,7 +75,7 @@ export const AGENT_CATALOG: Record<AgentId, AgentDefinition> = {
     role: "Visual Design",
     reportsTo: "ceo",
     description:
-      "Visual ideation engine aligned to Milaene design rules — concepts, mood boards, and asset direction.",
+      "Visual ideation engine aligned to workspace design rules — concepts, mood boards, and asset direction.",
     status: "planned",
     icon: "palette",
     capabilities: [
@@ -86,7 +86,7 @@ export const AGENT_CATALOG: Record<AgentId, AgentDefinition> = {
     ],
     responsibilities: [
       "Generate design concepts per drop capsule",
-      "Enforce Milaene design rules from Brain",
+      "Enforce workspace design rules from Brain",
       "Prepare review-ready visual directions",
       "Archive approved design history to Brain",
     ],
@@ -132,7 +132,7 @@ export const AGENT_CATALOG: Record<AgentId, AgentDefinition> = {
       "Build campaign calendars aligned to drop schedule",
       "Coordinate timing with Research and Content agents",
       "Draft paid and organic growth briefs",
-      "Track campaign metadata in Milaene Brain",
+      "Track campaign metadata in NexHQ Brain",
     ],
   },
   shopify: {

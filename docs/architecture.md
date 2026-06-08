@@ -1,8 +1,8 @@
-# Milaene HQ — System Architecture
+# NexHQ — System Architecture
 
 ## Overview
 
-Milaene HQ is a **Next.js 15** full-stack application backed by **Supabase** (database, auth, storage, realtime) and powered by **OpenAI** models. Future agent orchestration will use **LangGraph** for stateful, multi-step workflows.
+NexHQ is a **Next.js 15** full-stack application backed by **Supabase** (database, auth, storage, realtime) and powered by **OpenAI** models. Future agent orchestration will use **LangGraph** for stateful, multi-step workflows.
 
 The system is organized into five architectural layers:
 
@@ -315,7 +315,7 @@ START → load_brain_context → plan → execute → validate → submit_report
 ## Directory Structure
 
 ```
-milaene-hq/
+nexhq/
 ├── app/                  # Next.js App Router pages
 ├── components/           # React components
 ├── hooks/                # Custom React hooks

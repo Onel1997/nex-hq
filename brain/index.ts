@@ -1,7 +1,7 @@
 /**
- * Milaene Brain — central context and memory layer.
+ * NexHQ Brain — central context and memory layer.
  *
- * Single source of truth for Milaene HQ and HQ OS platforms.
+ * Single source of truth for all NexHQ workspaces.
  * Implementation (Supabase, vector store, client) is deferred — this
  * module exports the type system and contracts only.
  */
@@ -47,6 +47,14 @@ export {
   BRAIN_CORE_DOMAINS,
   BRAIN_INDUSTRY_DOMAINS,
 } from "./registry";
+
+// Workspaces
+export type { WorkspaceDefinition, WorkspaceSeedRecord } from "./workspaces";
+export {
+  getWorkspaceConfig,
+  listWorkspaces,
+  WORKSPACE_REGISTRY,
+} from "./workspaces";
 
 // Platform (HQ OS)
 export type {

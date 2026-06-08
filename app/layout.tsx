@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { DEFAULT_LOCALE } from "@/lib/i18n";
+import { getDictionary } from "@/lib/i18n/get-dictionary";
 import "./globals.css";
+
+const dict = getDictionary(DEFAULT_LOCALE);
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,11 +25,10 @@ const display = Cormorant_Garamond({
 
 export const metadata: Metadata = {
   title: {
-    default: "Milaene HQ",
-    template: "%s · Milaene HQ",
+    default: "NexHQ",
+    template: "%s · NexHQ",
   },
-  description:
-    "AI-powered command center for the Milaene streetwear brand.",
+  description: dict.common.metadata.description,
 };
 
 export default function RootLayout({
@@ -35,7 +38,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang={DEFAULT_LOCALE}
       className={`${geistSans.variable} ${geistMono.variable} ${display.variable} dark h-full antialiased`}
     >
       <body className="min-h-full font-sans">

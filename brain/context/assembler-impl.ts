@@ -47,7 +47,7 @@ export class SupabaseBrainContextAssembler implements BrainContextAssembler {
       }
     }
 
-    const promptContext = buildPromptContext(slices);
+    const promptContext = buildPromptContext(slices, request.locale);
     const sourceRecordIds = slices.flatMap((s) =>
       s.records.map((r) => r.id),
     );

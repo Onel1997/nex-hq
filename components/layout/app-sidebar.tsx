@@ -3,10 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  MAIN_NAV,
-  SECONDARY_NAV,
-} from "@/lib/constants/navigation";
-import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -18,10 +14,18 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { getMainNav, getSecondaryNav } from "@/lib/i18n/data";
+import { useDictionary, useLocale, useT, useWorkspace } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const locale = useLocale();
+  const t = useT();
+  const workspace = useWorkspace();
+  const { platform } = useDictionary();
+  const mainNav = getMainNav(locale);
+  const secondaryNav = getSecondaryNav(locale);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -38,14 +42,16 @@ export function AppSidebar() {
             >
               <div className="flex aspect-square size-10 items-center justify-center rounded-xl border border-border bg-card">
                 <span className="font-display text-lg font-medium tracking-tight text-foreground">
-                  M
+                  N
                 </span>
               </div>
               <div className="grid flex-1 text-left leading-tight">
                 <span className="font-display text-lg font-medium tracking-tight">
-                  Milaene
+                  {platform.name}
                 </span>
-                <span className="text-sm text-muted-foreground">Headquarters</span>
+                <span className="text-sm text-muted-foreground">
+                  {t("common.workspaceSuffix", { name: workspace.name })}
+                </span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -56,7 +62,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu className="gap-1">
-              {MAIN_NAV.map((item) => (
+              {mainNav.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     isActive={isActive(item.href)}
@@ -79,7 +85,7 @@ export function AppSidebar() {
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>
-              {SECONDARY_NAV.map((item) => (
+              {secondaryNav.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     isActive={isActive(item.href)}
@@ -103,11 +109,11 @@ export function AppSidebar() {
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/40" />
             <span className="relative inline-flex size-2 rounded-full bg-primary" />
           </span>
-          CEO Agent active
+          {platform.ceoAgentActive}
         </div>
       </SidebarFooter>
 
-      <SidebarRail />
+      <SidebarRail label={t("common.toggleSidebar")} />
     </Sidebar>
   );
 }

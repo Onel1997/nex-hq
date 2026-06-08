@@ -1,4 +1,4 @@
--- Milaene Brain — Phase 1 persistence layer
+-- NexHQ Brain — Phase 1 persistence layer
 -- brain_workspaces, brain_records, brain_embeddings (placeholder), brain_events
 
 -- ---------------------------------------------------------------------------

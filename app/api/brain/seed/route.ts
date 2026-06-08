@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { ensureMilaeneBrainSeeded } from "@/brain/seed";
+import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { getActiveWorkspaceSlug } from "@/lib/workspace/active";
 import { isSupabaseConfigured } from "@/lib/supabase/admin";
 
 /**
- * POST /api/brain/seed — idempotent Milaene Brain seeding.
- * Useful for manual setup and development.
+ * POST /api/brain/seed — idempotent workspace Brain seeding.
+ * Optional query: ?slug=nex-trends
  */
-export async function POST() {
+export async function POST(request: Request) {
   try {
     if (!isSupabaseConfigured()) {
       return NextResponse.json(
@@ -15,7 +16,9 @@ export async function POST() {
       );
     }
 
-    const result = await ensureMilaeneBrainSeeded();
+    const { searchParams } = new URL(request.url);
+    const slug = searchParams.get("slug") ?? getActiveWorkspaceSlug();
+    const result = await ensureWorkspaceBrainSeeded(slug);
 
     return NextResponse.json({
       workspaceId: result.workspace.id,

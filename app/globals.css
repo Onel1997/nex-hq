@@ -53,7 +53,7 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Milaene luxury palette — warm anthracite, ivory, champagne */
+/* NexHQ luxury palette — warm anthracite, ivory, champagne */
 :root {
   --ivory: oklch(0.97 0.012 90);
   --champagne: oklch(0.82 0.055 85);

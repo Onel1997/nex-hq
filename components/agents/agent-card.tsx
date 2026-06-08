@@ -1,8 +1,11 @@
+"use client";
+
 import {
-  AGENT_CATALOG,
   type AgentDefinition,
   type AgentId,
 } from "@/lib/constants/agents";
+import { getAgentCatalog } from "@/lib/i18n/data";
+import { useDictionary, useLocale, useT } from "@/lib/i18n";
 import { AgentStatusBadge } from "@/components/shared/agent-status-badge";
 import { OsPanel, OsPanelContent, OsPanelHeader } from "@/components/shared/os-panel";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +37,8 @@ interface AgentCardProps {
 }
 
 export function AgentCard({ agent, featured = false, className }: AgentCardProps) {
+  const t = useT();
+  const { agents } = useDictionary();
   const Icon = AGENT_ICONS[agent.id];
   const isActive = agent.status === "active";
 
@@ -53,7 +58,7 @@ export function AgentCard({ agent, featured = false, className }: AgentCardProps
         </p>
 
         <div className="space-y-3">
-          <p className="text-label">Capabilities</p>
+          <p className="text-label">{agents.capabilities}</p>
           <div className="flex flex-wrap gap-2">
             {agent.capabilities.map((cap) => (
               <Badge
@@ -70,7 +75,7 @@ export function AgentCard({ agent, featured = false, className }: AgentCardProps
         <Separator />
 
         <div className="space-y-3">
-          <p className="text-label">Responsibilities</p>
+          <p className="text-label">{agents.responsibilities}</p>
           <ul className="space-y-3">
             {agent.responsibilities.map((item) => (
               <li
@@ -86,9 +91,11 @@ export function AgentCard({ agent, featured = false, className }: AgentCardProps
 
         <div className="flex items-center justify-between pt-2 text-sm text-muted-foreground">
           <span>
-            Reports to{" "}
+            {t("common.reportsTo")}{" "}
             <span className="font-medium text-foreground">
-              {agent.reportsTo === "human" ? "Founder" : "CEO Agent"}
+              {agent.reportsTo === "human"
+                ? t("common.founderLabel")
+                : t("dashboard.command.ceoAgent")}
             </span>
           </span>
           <Icon className="size-4 opacity-40" />
@@ -99,14 +106,17 @@ export function AgentCard({ agent, featured = false, className }: AgentCardProps
 }
 
 export function AgentRoster() {
-  const ceo = AGENT_CATALOG.ceo;
-  const specialists = Object.values(AGENT_CATALOG).filter((a) => a.id !== "ceo");
+  const locale = useLocale();
+  const { agents } = useDictionary();
+  const catalog = getAgentCatalog(locale);
+  const ceo = catalog.ceo;
+  const specialists = Object.values(catalog).filter((a) => a.id !== "ceo");
 
   return (
     <div className="space-y-10">
       <AgentCard agent={ceo} featured />
       <div>
-        <p className="text-label mb-6">Specialist Agents</p>
+        <p className="text-label mb-6">{agents.specialistAgents}</p>
         <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
           {specialists.map((agent) => (
             <AgentCard key={agent.id} agent={agent} />

@@ -1,5 +1,8 @@
-import { AGENT_CATALOG, type AgentId } from "@/lib/constants/agents";
-import { AGENT_LIVE_STATUS } from "@/lib/mock/command-center";
+"use client";
+
+import type { AgentId } from "@/lib/constants/agents";
+import { getAgentCatalog, getAgentLiveStatus } from "@/lib/i18n/data";
+import { useDictionary, useLocale, useT } from "@/lib/i18n";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { cn } from "@/lib/utils";
 import {
@@ -21,34 +24,33 @@ const AGENT_ICONS: Record<AgentId, LucideIcon> = {
   shopify: ShoppingBag,
 };
 
-const PRIORITY_LABEL: Record<string, string> = {
-  urgent: "Urgent",
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-};
-
 export function AiTeamLive() {
+  const locale = useLocale();
+  const t = useT();
+  const { common, dashboard } = useDictionary();
+  const agentCatalog = getAgentCatalog(locale);
+  const agentLiveStatus = getAgentLiveStatus(locale);
+
   return (
     <section className="space-y-12">
       <SectionHeading
-        label="AI Team"
-        title="Your creative intelligence"
-        description="Six agents aligned to your brand — one active, five preparing for launch."
+        label={dashboard.team.label}
+        title={dashboard.team.title}
+        description={dashboard.team.description}
         action={
           <div className="flex items-center gap-3 text-base text-muted-foreground">
             <span className="relative flex size-2.5">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/50" />
               <span className="relative inline-flex size-2.5 rounded-full bg-primary" />
             </span>
-            1 active
+            {t("common.activeCount", { count: 1 })}
           </div>
         }
       />
 
       <div className="grid gap-5 sm:grid-cols-2">
-        {AGENT_LIVE_STATUS.map((live) => {
-          const agent = AGENT_CATALOG[live.id];
+        {agentLiveStatus.map((live) => {
+          const agent = agentCatalog[live.id];
           const Icon = AGENT_ICONS[live.id];
           const isActive = live.status === "active";
 
@@ -90,40 +92,42 @@ export function AiTeamLive() {
                       : "bg-muted text-muted-foreground",
                   )}
                 >
-                  {isActive ? "Active" : "Planned"}
+                  {isActive ? common.status.active : common.status.planned}
                 </span>
               </div>
 
               <div className="space-y-6">
                 <div>
-                  <p className="text-label mb-2">Current Focus</p>
+                  <p className="text-label mb-2">{dashboard.team.currentFocus}</p>
                   <p className="text-lg leading-relaxed text-foreground">
                     {live.currentFocus}
                   </p>
                 </div>
                 <div>
-                  <p className="text-label mb-2">Next Objective</p>
+                  <p className="text-label mb-2">{dashboard.team.nextObjective}</p>
                   <p className="text-lg leading-relaxed text-muted-foreground">
                     {live.nextTask}
                   </p>
                 </div>
                 <div className="flex items-center justify-between border-t border-border pt-6">
                   <div>
-                    <p className="text-label mb-1">Priority</p>
+                    <p className="text-label mb-1">{dashboard.team.priority}</p>
                     <p
                       className={cn(
-                        "text-base font-medium capitalize",
+                        "text-base font-medium",
                         live.priority === "urgent" && "text-red-400",
                         live.priority === "high" && "text-amber-300/90",
                         live.priority === "medium" && "text-foreground",
                         live.priority === "low" && "text-muted-foreground",
                       )}
                     >
-                      {PRIORITY_LABEL[live.priority]}
+                      {common.priority[live.priority]}
                     </p>
                   </div>
                   {isActive && (
-                    <span className="text-sm text-primary/80">In session</span>
+                    <span className="text-sm text-primary/80">
+                      {common.inSession}
+                    </span>
                   )}
                 </div>
               </div>

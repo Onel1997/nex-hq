@@ -4,12 +4,12 @@ import type { AgentReport } from "@/reports/types";
 import type { Task } from "@/tasks/types";
 
 /**
- * Base contract for all Milaene HQ agents.
+ * Base contract for all NexHQ agents.
  * Implementation deferred — types define the future interface.
  */
 export interface AgentContext {
   task: Task;
-  /** Pre-assembled context from Milaene Brain — agents must read via this slice. */
+  /** Pre-assembled context from NexHQ Brain — agents must read via this slice. */
   brainContext: BrainAgentContext;
 }
 

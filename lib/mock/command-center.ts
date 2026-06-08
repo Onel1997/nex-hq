@@ -161,7 +161,7 @@ export const INTELLIGENCE_FEED: IntelligenceItem[] = [
     type: "design",
     title: "Signal green gaining share in EU drops",
     insight:
-      "Corteiz and Represent both used accent greens in recent capsules. Milaene palette already aligned.",
+      "Corteiz and Represent both used accent greens in recent capsules. Brand palette already aligned.",
     time: "1h ago",
   },
   {

@@ -1,8 +1,8 @@
-# Milaene HQ — Integrations
+# NexHQ — Integrations
 
 ## Overview
 
-Integrations connect Milaene HQ to external services. Every integration reads from and writes to the **Milaene Brain** through typed `BrainIntegrationHook` contracts — never directly to agent logic or raw database tables.
+Integrations connect NexHQ workspaces to external services. Every integration reads from and writes to the **NexHQ Brain** through typed `BrainIntegrationHook` contracts — never directly to agent logic or raw database tables.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -17,7 +17,7 @@ Integrations connect Milaene HQ to external services. Every integration reads fr
               └────────────┬────────────┘
                            │
               ┌────────────▼────────────┐
-              │     Milaene Brain       │
+              │     NexHQ Brain         │
               │  (approved records)     │
               └────────────┬────────────┘
                            │
@@ -198,7 +198,7 @@ Outbound (Brain → Shopify):
 ### Configuration (Future)
 
 ```
-SHOPIFY_STORE_DOMAIN=milaene.myshopify.com
+SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
 SHOPIFY_ADMIN_API_TOKEN=shpat_...    # Server-only
 SHOPIFY_API_VERSION=2024-10
 ```
