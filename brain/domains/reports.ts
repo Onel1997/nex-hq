@@ -16,6 +16,123 @@ export const RESEARCH_REPORT_TYPES = [
 
 export type ResearchReportType = (typeof RESEARCH_REPORT_TYPES)[number];
 
+export const CEO_REPORT_TYPE = "ceo-report" as const;
+export type CeoReportType = typeof CEO_REPORT_TYPE;
+
+export const DESIGN_REPORT_TYPE = "design-report" as const;
+export type DesignReportType = typeof DESIGN_REPORT_TYPE;
+
+export const MARKETING_REPORT_TYPE = "marketing-report" as const;
+export type MarketingReportType = typeof MARKETING_REPORT_TYPE;
+
+export type ReportType =
+  | ResearchReportType
+  | CeoReportType
+  | DesignReportType
+  | MarketingReportType;
+
+export type CeoStepPriority = "high" | "medium" | "low";
+
+/** Prioritized action item from CEO strategic briefing. */
+export interface BrainCeoNextStep {
+  action: string;
+  priority: CeoStepPriority;
+  rationale?: string;
+}
+
+/** Color entry in a design collection concept. */
+export interface BrainDesignColor {
+  name: string;
+  hex?: string;
+  role: string;
+}
+
+/** Product SKU in a design collection lineup. */
+export interface BrainDesignProduct {
+  name: string;
+  category: string;
+  description: string;
+}
+
+/** Hero product highlight in a design collection concept. */
+export interface BrainDesignHeroProduct {
+  name: string;
+  description: string;
+  rationale: string;
+}
+
+/** Structured design collection concept sections (Designer Agent). */
+export interface BrainDesignSections {
+  collectionName: string;
+  collectionStory: string;
+  colorPalette: BrainDesignColor[];
+  silhouettes: string[];
+  productLineup: BrainDesignProduct[];
+  heroProducts: BrainDesignHeroProduct[];
+  materials: string[];
+  designDirection: string;
+  launchRecommendations: string[];
+  /** Report titles cited as knowledge sources. */
+  sourceReportTitles?: string[];
+}
+
+/** Single day in a 30-day content calendar. */
+export interface BrainMarketingCalendarEntry {
+  day: number;
+  title: string;
+  channel: string;
+  format: string;
+  description: string;
+}
+
+/** Launch KPI target. */
+export interface BrainMarketingKpi {
+  metric: string;
+  target: string;
+  rationale: string;
+}
+
+/** Budget allocation line item. */
+export interface BrainMarketingBudgetItem {
+  category: string;
+  allocation: string;
+  rationale: string;
+}
+
+/** Email campaign phase. */
+export interface BrainMarketingEmailPhase {
+  phase: string;
+  subject: string;
+  objective: string;
+  content: string;
+}
+
+/** Structured marketing campaign plan sections (Marketing Agent). */
+export interface BrainMarketingSections {
+  launchStrategy: string;
+  contentPillars: string[];
+  tiktokIdeas: string[];
+  instagramIdeas: string[];
+  influencerStrategy: string;
+  emailCampaignPlan: BrainMarketingEmailPhase[];
+  communityBuildingPlan: string;
+  contentCalendar30Day: BrainMarketingCalendarEntry[];
+  launchKpis: BrainMarketingKpi[];
+  budgetAllocation: BrainMarketingBudgetItem[];
+  sourceReportTitles?: string[];
+}
+
+/** Structured CEO strategic briefing sections. */
+export interface BrainCeoSections {
+  executiveSummary: string;
+  keyInsights: string[];
+  strategicOpportunities: string[];
+  risks: string[];
+  nextSteps: BrainCeoNextStep[];
+  /** Report titles cited as knowledge sources. */
+  sourceReportTitles?: string[];
+}
+
 /** Structured competitor analysis sections (Research Agent V2). */
 export interface BrainCompetitorReportSections {
   positioning: string;
@@ -63,8 +180,14 @@ export interface BrainReportContent {
   notes?: string;
   /** Key takeaways indexed for fast agent retrieval. */
   keyFindings?: string[];
-  /** Research Agent V2 — report classification. */
-  reportType?: ResearchReportType;
+  /** Report classification — research types or ceo-report. */
+  reportType?: ReportType;
   /** Research Agent V2 — structured section payload. */
   researchSections?: BrainResearchSections;
+  /** CEO Agent — structured strategic briefing payload. */
+  ceoSections?: BrainCeoSections;
+  /** Designer Agent — structured collection concept payload. */
+  designSections?: BrainDesignSections;
+  /** Marketing Agent — structured campaign plan payload. */
+  marketingSections?: BrainMarketingSections;
 }

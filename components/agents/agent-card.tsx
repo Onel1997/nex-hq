@@ -23,7 +23,10 @@ import {
 } from "lucide-react";
 
 const AGENT_HREFS: Partial<Record<AgentId, string>> = {
+  ceo: "/agents/ceo",
   research: "/agents/research",
+  designer: "/agents/design",
+  marketing: "/agents/marketing",
 };
 
 const AGENT_ICONS: Record<AgentId, LucideIcon> = {

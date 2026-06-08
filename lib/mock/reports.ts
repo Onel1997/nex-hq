@@ -1,5 +1,24 @@
-import type { ResearchReportType } from "@/brain/domains/reports";
+import type {
+  BrainDesignColor,
+  BrainDesignHeroProduct,
+  BrainDesignProduct,
+  BrainMarketingBudgetItem,
+  BrainMarketingCalendarEntry,
+  BrainMarketingEmailPhase,
+  BrainMarketingKpi,
+  CeoReportType,
+  CeoStepPriority,
+  DesignReportType,
+  MarketingReportType,
+  ResearchReportType,
+} from "@/brain/domains/reports";
 import type { AgentId } from "@/lib/constants/agents";
+
+export interface ReportNextStep {
+  action: string;
+  priority: CeoStepPriority;
+  rationale?: string;
+}
 
 export type ReportCategory = "research" | "design" | "marketing" | "operations";
 
@@ -16,11 +35,42 @@ export interface ReportListItem {
   createdAt: string;
   drop?: string;
   highlights?: string[];
-  reportType?: ResearchReportType;
+  reportType?:
+    | ResearchReportType
+    | CeoReportType
+    | DesignReportType
+    | MarketingReportType;
   executiveSummary?: string;
   recommendations?: string[];
   opportunities?: string[];
   risks?: string[];
+  nextSteps?: ReportNextStep[];
+  sourceReportTitles?: string[];
+  designReport?: {
+    collectionName: string;
+    collectionStory: string;
+    colorPalette: BrainDesignColor[];
+    silhouettes: string[];
+    productLineup: BrainDesignProduct[];
+    heroProducts: BrainDesignHeroProduct[];
+    materials: string[];
+    designDirection: string;
+    launchRecommendations: string[];
+    sourceReportTitles?: string[];
+  };
+  marketingReport?: {
+    launchStrategy: string;
+    contentPillars: string[];
+    tiktokIdeas: string[];
+    instagramIdeas: string[];
+    influencerStrategy: string;
+    emailCampaignPlan: BrainMarketingEmailPhase[];
+    communityBuildingPlan: string;
+    contentCalendar30Day: BrainMarketingCalendarEntry[];
+    launchKpis: BrainMarketingKpi[];
+    budgetAllocation: BrainMarketingBudgetItem[];
+    sourceReportTitles?: string[];
+  };
 }
 
 export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {

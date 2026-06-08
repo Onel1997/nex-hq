@@ -19,6 +19,10 @@ export {
 } from "./integrations";
 export { getMainNav, getSecondaryNav, getPageTitle } from "./navigation";
 export {
+  getCeoPriorityLabels,
+  getCeoReportTypeLabel,
+  getDesignReportTypeLabel,
+  getMarketingReportTypeLabel,
   getMockReports,
   getReportCategoryLabels,
   getReportStatusLabel,

@@ -1,4 +1,42 @@
 export const ceo = {
+  page: {
+    title: "CEO-Agent",
+    description:
+      "Strategische Entscheidungen auf Basis deines Wissensspeichers — Chancen, Risiken und nächste Schritte.",
+  },
+  interface: {
+    label: "Strategische Frage",
+    headline: "Welche strategische Entscheidung steht an?",
+    placeholder:
+      "z. B. Was sind die größten Chancen für Milaene? Welche Kollektion als nächstes? …",
+    submit: "Strategie-Briefing erstellen",
+    running: "CEO-Agent analysiert Wissensspeicher …",
+    poweredBy:
+      "CEO-Agent · Antworten basieren auf gespeicherten Berichten und Brain-Kontext",
+    tryExamples: "Beispiel-Fragen",
+    success: "Strategie-Briefing erstellt und gespeichert",
+    executiveSummary: "Executive Summary",
+    keyInsights: "Key Insights",
+    strategicOpportunities: "Strategische Chancen",
+    risks: "Risiken",
+    nextSteps: "Konkrete nächste Schritte",
+    sources: "Genutzte Berichte",
+    confidence: "Konfidenz",
+    contextRecords: "{count} Wissensspeicher-Einträge als Kontext geladen",
+    viewReports: "Berichte ansehen",
+  },
+  examples: {
+    opportunities: "Was sind die größten Chancen für Milaene?",
+    nextCollection: "Welche Kollektion sollten wir als nächstes entwickeln?",
+    trends2026: "Welche Trends sollten wir 2026 verfolgen?",
+    differentiateRepresent:
+      "Wie können wir uns von Represent differenzieren?",
+  },
+  priority: {
+    high: "Hoch",
+    medium: "Mittel",
+    low: "Niedrig",
+  },
   systemPrompt: `Ich bin der CEO-Agent von {platformName}. Der aktuell aktive Workspace ist: {workspaceName}.
 
 Deine Rolle in diesem Gespräch:
@@ -19,6 +57,9 @@ Deine Rolle in diesem Gespräch:
   fallbackResponse:
     "Ich konnte keine Antwort generieren. Bitte versuche es erneut.",
   errors: {
+    noResponse: "Keine Antwort vom CEO-Agenten erhalten.",
+    noKnowledge:
+      "Der Wissensspeicher enthält noch keine relevanten Daten. Erstelle zuerst Research-Berichte oder seede den Brain-Kontext.",
     supabaseNotConfigured:
       "Supabase ist nicht konfiguriert. Füge NEXT_PUBLIC_SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY in .env.local hinzu und führe die Brain-Migration aus.",
     openaiNotConfigured:

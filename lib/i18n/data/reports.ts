@@ -1,4 +1,7 @@
-import type { ResearchReportType } from "@/brain/domains/reports";
+import type {
+  CeoStepPriority,
+  ResearchReportType,
+} from "@/brain/domains/reports";
 import type {
   ReportCategory,
   ReportListItem,
@@ -30,6 +33,24 @@ export function getResearchReportTypeLabels(
   locale: Locale,
 ): Record<ResearchReportType, string> {
   return getDictionary(locale).reports.reportType;
+}
+
+export function getCeoReportTypeLabel(locale: Locale): string {
+  return getDictionary(locale).reports.reportType.ceoReport;
+}
+
+export function getDesignReportTypeLabel(locale: Locale): string {
+  return getDictionary(locale).reports.reportType.designReport;
+}
+
+export function getMarketingReportTypeLabel(locale: Locale): string {
+  return getDictionary(locale).reports.reportType.marketingReport;
+}
+
+export function getCeoPriorityLabels(
+  locale: Locale,
+): Record<CeoStepPriority, string> {
+  return getDictionary(locale).ceo.priority;
 }
 
 export function getMockReports(locale: Locale): ReportListItem[] {
