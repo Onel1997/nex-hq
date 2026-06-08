@@ -1,3 +1,4 @@
+import type { BrainAgentContext } from "@/brain/context";
 import type { AgentId } from "@/lib/constants/agents";
 import type { AgentReport } from "@/reports/types";
 import type { Task } from "@/tasks/types";
@@ -8,7 +9,8 @@ import type { Task } from "@/tasks/types";
  */
 export interface AgentContext {
   task: Task;
-  brainContext: Record<string, unknown>;
+  /** Pre-assembled context from Milaene Brain — agents must read via this slice. */
+  brainContext: BrainAgentContext;
 }
 
 export interface AgentResult {
