@@ -102,6 +102,10 @@ export const dashboard = {
       currentFocus: "Wartet auf Aktivierung",
       nextTask: "Drop-Ankündigungstexte",
     },
+    image: {
+      currentFocus: "Wartet auf Aktivierung",
+      nextTask: "Urban Echoes Image-Projekt erstellen",
+    },
     marketing: {
       currentFocus: "Kampagnenplan in Prüfung",
       nextTask: "VIP-E-Mail-Sequenz freigeben",

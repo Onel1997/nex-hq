@@ -14,8 +14,10 @@ import type {
   BrainShopifyProduct,
   CeoReportType,
   CeoStepPriority,
+  BrainImageAsset,
   ContentReportType,
   DesignReportType,
+  ImageReportType,
   MarketingReportType,
   ResearchReportType,
   ShopifyReportType,
@@ -34,6 +36,7 @@ export type ReportCategory =
   | "marketing"
   | "commerce"
   | "content"
+  | "image"
   | "operations";
 
 export type ReportReviewStatus = "draft" | "submitted" | "approved" | "archived";
@@ -55,7 +58,8 @@ export interface ReportListItem {
     | DesignReportType
     | MarketingReportType
     | ShopifyReportType
-    | ContentReportType;
+    | ContentReportType
+    | ImageReportType;
   executiveSummary?: string;
   recommendations?: string[];
   opportunities?: string[];
@@ -109,6 +113,15 @@ export interface ReportListItem {
     smsCampaign: BrainContentSmsCampaign;
     sourceReportTitles?: string[];
   };
+  imageReport?: {
+    projectName: string;
+    visualDirection: string;
+    collectionStory: string;
+    moodboard: string;
+    campaignConcept: string;
+    assets: BrainImageAsset[];
+    sourceReportTitles?: string[];
+  };
 }
 
 export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {
@@ -117,6 +130,7 @@ export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {
   marketing: "Marketing",
   commerce: "Commerce",
   content: "Content",
+  image: "Image",
   operations: "Operations",
 };
 

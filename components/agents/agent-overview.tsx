@@ -14,7 +14,7 @@ export function AgentOverview() {
   return (
     <div className="grid gap-6 sm:grid-cols-3">
       {[
-        { label: agents.overview.total, value: "6" },
+        { label: agents.overview.total, value: "7" },
         { label: agents.overview.active, value: String(active), highlight: true },
         { label: agents.overview.planned, value: String(planned) },
       ].map((stat) => (

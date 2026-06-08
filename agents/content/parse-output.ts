@@ -210,6 +210,51 @@ function normalizeContentPayload(
     }
   }
 
+  const landing = normalized.landingPageCopy;
+  if (landing && typeof landing === "object" && !Array.isArray(landing)) {
+    const landingObj = { ...(landing as Record<string, unknown>) };
+    if (landingObj.CTA !== undefined && landingObj.cta === undefined) {
+      landingObj.cta = landingObj.CTA;
+      adjustments.push("alias landingPageCopy.CTA -> cta");
+    }
+    normalized.landingPageCopy = landingObj;
+  }
+
+  const email = normalized.emailSequence;
+  if (email && typeof email === "object" && !Array.isArray(email)) {
+    const emailObj = { ...(email as Record<string, unknown>) };
+    const emailAliases: Record<string, string> = {
+      teaser: "teaserEmail",
+      reveal: "revealEmail",
+      countdown: "countdownEmail",
+      launch: "launchEmail",
+    };
+    for (const [from, to] of Object.entries(emailAliases)) {
+      if (emailObj[from] !== undefined && emailObj[to] === undefined) {
+        emailObj[to] = emailObj[from];
+        adjustments.push(`alias emailSequence.${from} -> ${to}`);
+      }
+    }
+    normalized.emailSequence = emailObj;
+  }
+
+  const sms = normalized.smsCampaign;
+  if (sms && typeof sms === "object" && !Array.isArray(sms)) {
+    const smsObj = { ...(sms as Record<string, unknown>) };
+    const smsAliases: Record<string, string> = {
+      teaser: "teaserSms",
+      countdown: "countdownSms",
+      launch: "launchSms",
+    };
+    for (const [from, to] of Object.entries(smsAliases)) {
+      if (smsObj[from] !== undefined && smsObj[to] === undefined) {
+        smsObj[to] = smsObj[from];
+        adjustments.push(`alias smsCampaign.${from} -> ${to}`);
+      }
+    }
+    normalized.smsCampaign = smsObj;
+  }
+
   return { normalized, adjustments };
 }
 

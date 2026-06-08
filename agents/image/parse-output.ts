@@ -1,32 +1,28 @@
 import { z } from "zod";
-import { enrichShopifyPayload } from "./enrich-output";
-import { shopifyOutputSchema, type ShopifyOutput } from "./types";
+import { enrichImagePayload } from "./enrich-output";
+import { imageOutputSchema, type ImageOutput } from "./types";
 
-export const EXPECTED_SHOPIFY_SCHEMA = {
+export const EXPECTED_IMAGE_SCHEMA = {
   title: "string (required)",
-  reportType: '"shopify-report" (required)',
-  collectionName: "string (required)",
-  collectionDescription: "string (required, min 80 chars)",
-  collectionSeoTitle: "string (required, 10–70 chars)",
-  collectionSeoDescription: "string (required, 50–320 chars)",
-  products:
-    "{ productName, productType, category, description, shortDescription, materials, tags[], seoTitle, seoDescription, suggestedPrice, compareAtPrice?, variants[], inventoryRecommendation }[] (1–24)",
-  collectionsToCreate: "string[] (1–8)",
-  navigationRecommendations: "string[] (2–10)",
-  homepageRecommendations: "string[] (2–10)",
-  launchChecklist: "string[] (4–16)",
-  storefrontWarnings: "string[] (1–8)",
+  reportType: '"image-report" (required)',
+  projectName: "string (required)",
+  visualDirection: "string (required, min 100 chars)",
+  collectionStory: "string (required, min 80 chars)",
+  moodboard: "string (required, min 80 chars)",
+  campaignConcept: "string (required, min 80 chars)",
+  assets:
+    "{ assetName, assetType, purpose, platform, prompt, dimensions, styleNotes }[] (8–48)",
   confidence: "number 0–1 (required)",
   sourceReportTitles: "string[] (required, min 1)",
-  fullDraft: "string (required, min 800 chars, Markdown)",
+  fullProject: "string (required, min 800 chars, Markdown)",
 } as const;
 
-export class ShopifyParseError extends Error {
+export class ImageParseError extends Error {
   readonly stage: "json" | "validation";
   readonly rawResponse?: string;
   readonly strippedJson?: string;
   readonly parsed?: unknown;
-  readonly expectedSchema: typeof EXPECTED_SHOPIFY_SCHEMA;
+  readonly expectedSchema: typeof EXPECTED_IMAGE_SCHEMA;
   readonly receivedKeys?: string[];
   readonly missingFields?: string[];
   readonly validationIssues?: Array<{
@@ -43,15 +39,15 @@ export class ShopifyParseError extends Error {
     strippedJson?: string;
     parsed?: unknown;
     missingFields?: string[];
-    validationIssues?: ShopifyParseError["validationIssues"];
+    validationIssues?: ImageParseError["validationIssues"];
   }) {
     super(params.message);
-    this.name = "ShopifyParseError";
+    this.name = "ImageParseError";
     this.stage = params.stage;
     this.rawResponse = params.rawResponse;
     this.strippedJson = params.strippedJson;
     this.parsed = params.parsed;
-    this.expectedSchema = EXPECTED_SHOPIFY_SCHEMA;
+    this.expectedSchema = EXPECTED_IMAGE_SCHEMA;
     this.receivedKeys =
       params.parsed && typeof params.parsed === "object" && params.parsed !== null
         ? Object.keys(params.parsed as Record<string, unknown>)
@@ -118,19 +114,15 @@ export class ShopifyParseError extends Error {
 const REQUIRED_TOP_LEVEL_FIELDS = [
   "title",
   "reportType",
-  "collectionName",
-  "collectionDescription",
-  "collectionSeoTitle",
-  "collectionSeoDescription",
-  "products",
-  "collectionsToCreate",
-  "navigationRecommendations",
-  "homepageRecommendations",
-  "launchChecklist",
-  "storefrontWarnings",
+  "projectName",
+  "visualDirection",
+  "collectionStory",
+  "moodboard",
+  "campaignConcept",
+  "assets",
   "confidence",
   "sourceReportTitles",
-  "fullDraft",
+  "fullProject",
 ] as const;
 
 function stripJsonFences(raw: string): string {
@@ -177,30 +169,25 @@ function findMissingRequiredFields(parsed: Record<string, unknown>): string[] {
   });
 }
 
-function normalizeShopifyPayload(
+function normalizeImagePayload(
   parsed: Record<string, unknown>,
 ): { normalized: Record<string, unknown>; adjustments: string[] } {
   const normalized = { ...parsed };
   const adjustments: string[] = [];
 
   if (!normalized.reportType) {
-    normalized.reportType = "shopify-report";
+    normalized.reportType = "image-report";
     adjustments.push("set reportType");
   }
 
   const aliasMap: Record<string, string> = {
-    collection_name: "collectionName",
-    collection_description: "collectionDescription",
-    collection_seo_title: "collectionSeoTitle",
-    collection_seo_description: "collectionSeoDescription",
-    collections_to_create: "collectionsToCreate",
-    navigation_recommendations: "navigationRecommendations",
-    homepage_recommendations: "homepageRecommendations",
-    launch_checklist: "launchChecklist",
-    storefront_warnings: "storefrontWarnings",
+    project_name: "projectName",
+    visual_direction: "visualDirection",
+    collection_story: "collectionStory",
+    campaign_concept: "campaignConcept",
     source_report_titles: "sourceReportTitles",
-    full_draft: "fullDraft",
-    full_plan: "fullDraft",
+    full_project: "fullProject",
+    full_plan: "fullProject",
   };
 
   for (const [from, to] of Object.entries(aliasMap)) {
@@ -210,30 +197,14 @@ function normalizeShopifyPayload(
     }
   }
 
-  if (Array.isArray(normalized.products)) {
-    normalized.products = normalized.products.map((entry) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-        return entry;
-      }
-      const product = { ...(entry as Record<string, unknown>) };
-      const productAliases: Record<string, string> = {
-        product_name: "productName",
-        product_type: "productType",
-        short_description: "shortDescription",
-        seo_title: "seoTitle",
-        seo_description: "seoDescription",
-        suggested_price: "suggestedPrice",
-        compare_at_price: "compareAtPrice",
-        inventory_recommendation: "inventoryRecommendation",
-      };
-      for (const [from, to] of Object.entries(productAliases)) {
-        if (product[from] !== undefined && product[to] === undefined) {
-          product[to] = product[from];
-          adjustments.push(`alias products.${from} -> ${to}`);
-        }
-      }
-      return product;
-    });
+  if (!normalized.title && normalized.projectName) {
+    normalized.title = normalized.projectName;
+    adjustments.push("set title from projectName");
+  }
+
+  if (!normalized.projectName && normalized.title) {
+    normalized.projectName = normalized.title;
+    adjustments.push("set projectName from title");
   }
 
   if (typeof normalized.confidence === "string") {
@@ -247,22 +218,22 @@ function normalizeShopifyPayload(
   return { normalized, adjustments };
 }
 
-function validateShopifyPayload(
+function validateImagePayload(
   parsed: Record<string, unknown>,
   context: { rawResponse: string; strippedJson: string },
-): ShopifyOutput {
-  let result = shopifyOutputSchema.safeParse(parsed);
+): ImageOutput {
+  let result = imageOutputSchema.safeParse(parsed);
 
   if (result.success) {
     return result.data;
   }
 
-  const enrichAdjustments = enrichShopifyPayload(parsed);
+  const enrichAdjustments = enrichImagePayload(parsed);
   if (enrichAdjustments.length > 0) {
-    console.info("[Shopify Parse] Re-enriched payload after validation issues", {
+    console.info("[Image Parse] Re-enriched payload after validation issues", {
       adjustments: enrichAdjustments,
     });
-    result = shopifyOutputSchema.safeParse(parsed);
+    result = imageOutputSchema.safeParse(parsed);
     if (result.success) {
       return result.data;
     }
@@ -273,19 +244,14 @@ function validateShopifyPayload(
     zodIssueToDetail(issue, parsed),
   );
 
-  console.log("[Shopify Parse] Raw Response", context.rawResponse);
-  console.log("[Shopify Parse] Parsed JSON", parsed);
-  console.log("[Shopify Parse] Validation Issues", validationIssues);
-
-  console.error("[Shopify Parse] Validation failed", {
+  console.error("[Image Parse] Validation failed", {
     missingFields,
     validationIssues,
-    receivedKeys: Object.keys(parsed),
     parsedJson: JSON.stringify(parsed, null, 2),
     rawResponsePreview: context.rawResponse.slice(0, 4000),
   });
 
-  throw new ShopifyParseError({
+  throw new ImageParseError({
     message: `Schema validation failed with ${result.error.issues.length} issue(s)`,
     stage: "validation",
     rawResponse: context.rawResponse,
@@ -296,9 +262,8 @@ function validateShopifyPayload(
   });
 }
 
-export function parseShopifyOutput(raw: string): ShopifyOutput {
-  console.log("[Shopify Parse] Raw Response", raw);
-  console.info("[Shopify Parse] Raw response:", raw);
+export function parseImageOutput(raw: string): ImageOutput {
+  console.info("[Image Parse] Raw response:", raw);
 
   const strippedJson = stripJsonFences(raw);
 
@@ -306,11 +271,11 @@ export function parseShopifyOutput(raw: string): ShopifyOutput {
   try {
     parsed = JSON.parse(strippedJson);
   } catch (jsonError) {
-    console.error("[Shopify Parse] JSON parse failed", {
+    console.error("[Image Parse] JSON parse failed", {
       error: jsonError instanceof Error ? jsonError.message : jsonError,
       strippedJsonPreview: strippedJson.slice(0, 2000),
     });
-    throw new ShopifyParseError({
+    throw new ImageParseError({
       message: `JSON parse failed: ${jsonError instanceof Error ? jsonError.message : "unknown error"}`,
       stage: "json",
       rawResponse: raw,
@@ -319,7 +284,7 @@ export function parseShopifyOutput(raw: string): ShopifyOutput {
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new ShopifyParseError({
+    throw new ImageParseError({
       message: "Parsed response is not a JSON object",
       stage: "validation",
       rawResponse: raw,
@@ -329,21 +294,20 @@ export function parseShopifyOutput(raw: string): ShopifyOutput {
   }
 
   const { normalized, adjustments: normalizeAdjustments } =
-    normalizeShopifyPayload(parsed as Record<string, unknown>);
-  const enrichAdjustments = enrichShopifyPayload(normalized);
+    normalizeImagePayload(parsed as Record<string, unknown>);
+  const enrichAdjustments = enrichImagePayload(normalized);
   const allAdjustments = [...normalizeAdjustments, ...enrichAdjustments];
 
   if (allAdjustments.length > 0) {
-    console.info("[Shopify Parse] Normalized model output", {
+    console.info("[Image Parse] Normalized model output", {
       adjustments: allAdjustments,
     });
   }
 
-  console.log("[Shopify Parse] Parsed JSON", normalized);
   console.info(
-    "[Shopify Parse] Parsed JSON (pre-validation):",
+    "[Image Parse] Parsed JSON (pre-validation):",
     JSON.stringify(normalized, null, 2),
   );
 
-  return validateShopifyPayload(normalized, { rawResponse: raw, strippedJson });
+  return validateImagePayload(normalized, { rawResponse: raw, strippedJson });
 }

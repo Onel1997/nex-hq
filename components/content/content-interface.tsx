@@ -98,7 +98,18 @@ export function ContentInterface() {
         const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data.error ?? t("content.errors.unexpected"));
+          const parts = [data.error ?? t("content.errors.unexpected")];
+          if (data.missingReportTypes?.length) {
+            parts.push(
+              `Fehlend: ${(data.missingReportTypes as string[]).join(", ")}`,
+            );
+          }
+          if (data.primaryReportCounts) {
+            parts.push(
+              `Gefunden — CEO: ${data.primaryReportCounts["ceo-report"] ?? 0}, Design: ${data.primaryReportCounts["design-report"] ?? 0}, Marketing: ${data.primaryReportCounts["marketing-report"] ?? 0}, Shopify: ${data.primaryReportCounts["shopify-report"] ?? 0}`,
+            );
+          }
+          throw new Error(parts.join(" · "));
         }
 
         setResult({

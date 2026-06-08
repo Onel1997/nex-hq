@@ -4,6 +4,8 @@ import type { ShopifyProduct, ShopifyProductVariant } from "./types";
 const MIN_COLLECTION_DESC = 80;
 const MIN_PRODUCT_DESC = 40;
 const MIN_FULL_DRAFT = 800;
+const MIN_BULLET_CHARS = 12;
+const MIN_SEO_TITLE = 10;
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -34,6 +36,42 @@ function ensureMinLength(text: string, min: number, suffix: string): string {
     result = `${result} ${suffix}`.trim();
   }
   return result;
+}
+
+function ensureBulletList(
+  items: string[],
+  min: number,
+  max: number,
+  pool: string[],
+): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  const add = (item: string) => {
+    const normalized = ensureMinLength(
+      item,
+      MIN_BULLET_CHARS,
+      "Basierend auf Design- und Marketing-Intelligence.",
+    );
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      result.push(normalized);
+    }
+  };
+
+  for (const item of items) add(item);
+  for (const item of pool) {
+    if (result.length >= min) break;
+    add(item);
+  }
+
+  const filler =
+    "Weitere Storefront-Empfehlung aus Design- und Marketing-Berichten ableiten.";
+  while (result.length < min) {
+    add(`${filler} (${result.length + 1})`);
+  }
+
+  return result.slice(0, max);
 }
 
 function defaultVariants(productName: string): ShopifyProductVariant[] {
@@ -182,9 +220,16 @@ export function enrichShopifyPayload(
     adjustments.push("enriched collectionDescription");
   }
 
-  if (!asString(payload.collectionSeoTitle)) {
-    payload.collectionSeoTitle = `${collectionName} | Drop`.slice(0, 70);
-    adjustments.push("generated collectionSeoTitle");
+  const seoTitle = asString(payload.collectionSeoTitle);
+  if (!seoTitle || seoTitle.length < MIN_SEO_TITLE) {
+    payload.collectionSeoTitle = ensureMinLength(
+      seoTitle || `${collectionName} | Drop`,
+      MIN_SEO_TITLE,
+      "Kollektion | Shopify Drop",
+    ).slice(0, 70);
+    adjustments.push("enriched collectionSeoTitle");
+  } else {
+    payload.collectionSeoTitle = seoTitle.slice(0, 70);
   }
 
   if (
@@ -231,39 +276,68 @@ export function enrichShopifyPayload(
     payload.products = products;
   }
 
-  const bulletDefaults: Record<string, string[]> = {
-    collectionsToCreate: [
-      `Hauptkollektion "${collectionName}" mit allen Hero-SKUs aus Design-Bericht`,
-    ],
-    navigationRecommendations: [
-      "Neue Kollektion als primärer Navigationspunkt im Hauptmenü",
-      "Shop-All-Link mit Filter auf aktuelle Drop-Kategorie",
-    ],
-    homepageRecommendations: [
-      `Hero-Banner mit Kollektionsstory "${collectionName}"`,
-      "Featured Products: Top-3-SKUs aus Design-Hero-Produkten",
-    ],
-    launchChecklist: [
-      "Produktentwürfe aus Design-Bericht als Shopify-Drafts anlegen",
-      "SEO-Titel und -Beschreibungen aus Marketing-Plan übernehmen",
-      "Kollektion erstellen und Produkte zuordnen",
-      "Navigation und Homepage-Sektionen aktualisieren",
-      "Preise und Bestände aus Pricing- und CEO-Berichten setzen",
-      "Storefront-Preview prüfen vor Veröffentlichung",
-    ],
-    storefrontWarnings: [
-      "Keine generischen Produkte — nur SKUs aus Design-Bericht verwenden",
-      "Preise müssen mit Pricing-Intelligence übereinstimmen",
-    ],
+  const bulletConfig: Record<
+    string,
+    { min: number; max: number; pool: string[] }
+  > = {
+    collectionsToCreate: {
+      min: 1,
+      max: 8,
+      pool: [
+        `Hauptkollektion "${collectionName}" mit allen Hero-SKUs aus Design-Bericht`,
+        `Capsule-Collection "${collectionName}" als sekundäre Shopify-Kollektion`,
+      ],
+    },
+    navigationRecommendations: {
+      min: 2,
+      max: 10,
+      pool: [
+        "Neue Kollektion als primärer Navigationspunkt im Hauptmenü",
+        "Shop-All-Link mit Filter auf aktuelle Drop-Kategorie",
+        "Lookbook-Seite in Footer-Navigation verlinken",
+      ],
+    },
+    homepageRecommendations: {
+      min: 2,
+      max: 10,
+      pool: [
+        `Hero-Banner mit Kollektionsstory "${collectionName}"`,
+        "Featured Products: Top-3-SKUs aus Design-Hero-Produkten",
+        "Scarcity-Countdown-Modul für Launch-Tag integrieren",
+      ],
+    },
+    launchChecklist: {
+      min: 4,
+      max: 16,
+      pool: [
+        "Produktentwürfe aus Design-Bericht als Shopify-Drafts anlegen",
+        "SEO-Titel und -Beschreibungen aus Marketing-Plan übernehmen",
+        "Kollektion erstellen und Produkte zuordnen",
+        "Navigation und Homepage-Sektionen aktualisieren",
+        "Preise und Bestände aus Pricing- und CEO-Berichten setzen",
+        "Storefront-Preview prüfen vor Veröffentlichung",
+        "Varianten und SKUs aus Design-Produktlinie synchronisieren",
+      ],
+    },
+    storefrontWarnings: {
+      min: 1,
+      max: 8,
+      pool: [
+        "Keine generischen Produkte — nur SKUs aus Design-Bericht verwenden",
+        "Preise müssen mit Pricing-Intelligence übereinstimmen",
+        "SEO-Felder vor Publish gegen Marketing-Plan validieren",
+      ],
+    },
   };
 
-  for (const [field, defaults] of Object.entries(bulletDefaults)) {
-    const items = asStringArray(payload[field]);
-    if (items.length < defaults.length) {
-      payload[field] = [
-        ...items,
-        ...defaults.filter((d) => !items.includes(d)),
-      ].slice(0, field === "launchChecklist" ? 16 : 10);
+  for (const [field, config] of Object.entries(bulletConfig)) {
+    const before = asStringArray(payload[field]);
+    const enriched = ensureBulletList(before, config.min, config.max, config.pool);
+    if (
+      enriched.length !== before.length ||
+      enriched.some((item, i) => item !== before[i])
+    ) {
+      payload[field] = enriched;
       adjustments.push(`enriched ${field}`);
     }
   }

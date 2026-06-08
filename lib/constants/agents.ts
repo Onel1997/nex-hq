@@ -3,6 +3,7 @@ export const AGENT_IDS = [
   "research",
   "designer",
   "content",
+  "image",
   "marketing",
   "shopify",
 ] as const;
@@ -98,7 +99,7 @@ export const AGENT_CATALOG: Record<AgentId, AgentDefinition> = {
     reportsTo: "ceo",
     description:
       "Brand voice guardian — product copy, drop narratives, and channel-specific messaging.",
-    status: "planned",
+    status: "active",
     icon: "pen-line",
     capabilities: [
       "Product descriptions",
@@ -111,6 +112,29 @@ export const AGENT_CATALOG: Record<AgentId, AgentDefinition> = {
       "Adapt messaging per channel (IG, site, email)",
       "Maintain voice consistency via Brain templates",
       "Submit copy for human approval before publish",
+    ],
+  },
+  image: {
+    id: "image",
+    name: "Image Agent",
+    role: "Visual Creative Direction",
+    reportsTo: "ceo",
+    description:
+      "AI Creative Director — transforms design, content and marketing intelligence into image-generation projects and visual asset prompts.",
+    status: "active",
+    icon: "wand",
+    capabilities: [
+      "Moodboard prompts",
+      "Product mockup prompts",
+      "Campaign visuals",
+      "Social creative prompts",
+      "Lookbook direction",
+    ],
+    responsibilities: [
+      "Convert design and content reports into visual asset briefs",
+      "Generate platform-specific image prompts per drop",
+      "Maintain visual consistency via Brain brand rules",
+      "Store prompt projects in Brain for human review",
     ],
   },
   marketing: {

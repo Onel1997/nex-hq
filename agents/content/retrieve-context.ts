@@ -7,6 +7,7 @@ import {
   getBrainContextAssembler,
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
+import type { BrainReportContent } from "@/brain/domains/reports";
 import type { BrainRecord } from "@/brain/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
@@ -40,12 +41,58 @@ export const CONTENT_PRIMARY_TAGS = [
   "shopify-report",
 ] as const;
 
+/** Canonical report type → accepted DB tags and content.reportType aliases. */
+export const CONTENT_REPORT_TAG_ALIASES: Record<
+  (typeof CONTENT_PRIMARY_TAGS)[number],
+  readonly string[]
+> = {
+  "ceo-report": ["ceo-report", "ceo"],
+  "design-report": ["design-report", "designer", "design"],
+  "marketing-report": ["marketing-report", "marketing"],
+  "shopify-report": ["shopify-report", "shopify"],
+};
+
+const REPORT_TYPE_NORMALIZE: Record<string, (typeof CONTENT_PRIMARY_TAGS)[number]> = {
+  "ceo-report": "ceo-report",
+  ceo: "ceo-report",
+  ceo_report: "ceo-report",
+  "design-report": "design-report",
+  designer: "design-report",
+  design: "design-report",
+  design_report: "design-report",
+  "marketing-report": "marketing-report",
+  marketing: "marketing-report",
+  marketing_report: "marketing-report",
+  "shopify-report": "shopify-report",
+  shopify: "shopify-report",
+  shopify_report: "shopify-report",
+};
+
 export class ContentKnowledgeError extends Error {
   readonly code = "NO_KNOWLEDGE" as const;
+  readonly missingReportTypes: (typeof CONTENT_PRIMARY_TAGS)[number][];
+  readonly primaryReportCounts: Record<
+    (typeof CONTENT_PRIMARY_TAGS)[number],
+    number
+  >;
+  readonly workspaceId: string;
 
-  constructor(message: string) {
+  constructor(
+    message: string,
+    details: {
+      missingReportTypes: (typeof CONTENT_PRIMARY_TAGS)[number][];
+      primaryReportCounts: Record<
+        (typeof CONTENT_PRIMARY_TAGS)[number],
+        number
+      >;
+      workspaceId: string;
+    },
+  ) {
     super(message);
     this.name = "ContentKnowledgeError";
+    this.missingReportTypes = details.missingReportTypes;
+    this.primaryReportCounts = details.primaryReportCounts;
+    this.workspaceId = details.workspaceId;
   }
 }
 
@@ -92,38 +139,78 @@ function extractReportTitles(slices: BrainContextSlice[]): string[] {
   return reportSlice.records.map((r) => r.title);
 }
 
-function hasTag(record: BrainRecord, tag: string): boolean {
-  return (record.tags ?? []).includes(tag);
+function normalizeReportTypeValue(
+  value: string | undefined,
+): (typeof CONTENT_PRIMARY_TAGS)[number] | undefined {
+  if (!value) return undefined;
+  const key = value.trim().toLowerCase().replace(/\s+/g, "_");
+  return REPORT_TYPE_NORMALIZE[key];
+}
+
+function getRecordContent(
+  record: BrainRecord,
+): BrainReportContent | undefined {
+  const content = record.content;
+  if (!content || typeof content !== "object") return undefined;
+  if ((content as BrainReportContent).kind !== "reports") return undefined;
+  return content as BrainReportContent;
+}
+
+function matchesReportType(
+  record: BrainRecord,
+  canonicalType: (typeof CONTENT_PRIMARY_TAGS)[number],
+): boolean {
+  const aliases = CONTENT_REPORT_TAG_ALIASES[canonicalType];
+  const tags = (record.tags ?? []).map((t) => t.toLowerCase());
+  if (aliases.some((alias) => tags.includes(alias.toLowerCase()))) {
+    return true;
+  }
+
+  const content = getRecordContent(record);
+  const fromContent = normalizeReportTypeValue(content?.reportType);
+  if (fromContent === canonicalType) return true;
+
+  const fromAgent = normalizeReportTypeValue(content?.agentId);
+  if (fromAgent === canonicalType) return true;
+
+  return false;
 }
 
 function isIntelligenceReport(record: BrainRecord): boolean {
-  const tags = record.tags ?? [];
-  return CONTENT_INTELLIGENCE_TAGS.some((tag) => tags.includes(tag));
+  return CONTENT_INTELLIGENCE_TAGS.some((tag) => matchesReportType(record, tag));
 }
 
-function countReportsByTag(
+function countReportsByType(
   slices: BrainContextSlice[],
-  tag: string,
-): number {
+  canonicalType: (typeof CONTENT_PRIMARY_TAGS)[number],
+): BrainRecord[] {
   const reportSlice = slices.find((s) => s.domain === "reports");
-  if (!reportSlice) return 0;
-  return reportSlice.records.filter((r) => hasTag(r, tag)).length;
+  if (!reportSlice) return [];
+  return reportSlice.records.filter((r) => matchesReportType(r, canonicalType));
+}
+
+function searchTagsForType(
+  canonicalType: (typeof CONTENT_PRIMARY_TAGS)[number],
+): string[] {
+  return [...CONTENT_REPORT_TAG_ALIASES[canonicalType]];
 }
 
 function getPrimaryReportCounts(
   slices: BrainContextSlice[],
 ): Record<(typeof CONTENT_PRIMARY_TAGS)[number], number> {
   return {
-    "ceo-report": countReportsByTag(slices, "ceo-report"),
-    "design-report": countReportsByTag(slices, "design-report"),
-    "marketing-report": countReportsByTag(slices, "marketing-report"),
-    "shopify-report": countReportsByTag(slices, "shopify-report"),
+    "ceo-report": countReportsByType(slices, "ceo-report").length,
+    "design-report": countReportsByType(slices, "design-report").length,
+    "marketing-report": countReportsByType(slices, "marketing-report").length,
+    "shopify-report": countReportsByType(slices, "shopify-report").length,
   };
 }
 
+type ContentPrimaryTag = (typeof CONTENT_PRIMARY_TAGS)[number];
+
 function missingPrimaryTags(
-  counts: Record<(typeof CONTENT_PRIMARY_TAGS)[number], number>,
-): string[] {
+  counts: Record<ContentPrimaryTag, number>,
+): ContentPrimaryTag[] {
   return CONTENT_PRIMARY_TAGS.filter((tag) => counts[tag] === 0);
 }
 
@@ -227,7 +314,7 @@ export async function retrieveContentKnowledge(input: {
         workspaceId: input.workspaceId,
         domains: ["reports"],
         status: [...CEO_CONTEXT_STATUSES],
-        tags: [tag],
+        tags: searchTagsForType(tag),
         limit: 8,
       },
       keywords,
@@ -271,7 +358,7 @@ export async function retrieveContentKnowledge(input: {
           workspaceId: input.workspaceId,
           domains: ["reports"],
           status: [...CEO_CONTEXT_STATUSES],
-          tags: [tag],
+          tags: searchTagsForType(tag),
           limit: 8,
         },
         `final-fallback:${tag}`,
@@ -287,8 +374,70 @@ export async function retrieveContentKnowledge(input: {
     missing = missingPrimaryTags(primaryReportCounts);
   }
 
+  const ceoReports = countReportsByType(slices, "ceo-report");
+  const designReports = countReportsByType(slices, "design-report");
+  const marketingReports = countReportsByType(slices, "marketing-report");
+  const shopifyReports = countReportsByType(slices, "shopify-report");
+
+  console.log("CEO Reports", ceoReports.length);
+  console.log("Design Reports", designReports.length);
+  console.log("Marketing Reports", marketingReports.length);
+  console.log("Shopify Reports", shopifyReports.length);
+
   if (missing.length > 0) {
-    throw new ContentKnowledgeError(dict.content.errors.noKnowledge);
+    const diagnosticReports = await safeSearchRecords(
+      search,
+      {
+        workspaceId: input.workspaceId,
+        domains: ["reports"],
+        status: [...CEO_CONTEXT_STATUSES],
+        limit: 50,
+      },
+      "diagnostic:all-workspace-reports",
+    );
+
+    console.warn("[Content Knowledge] Missing primary report types", {
+      workspaceId: input.workspaceId,
+      missingReportTypes: missing,
+      primaryReportCounts,
+      loadedTags,
+      diagnosticReportCount: diagnosticReports.length,
+      diagnosticReports: diagnosticReports.map((record) => {
+        const content = getRecordContent(record);
+        return {
+          id: record.id,
+          title: record.title,
+          status: record.status,
+          tags: record.tags,
+          reportType: content?.reportType,
+          agentId: content?.agentId,
+          matchedTypes: CONTENT_PRIMARY_TAGS.filter((type) =>
+            matchesReportType(record, type),
+          ),
+        };
+      }),
+    });
+
+    const missingLabels = missing
+      .map((type: ContentPrimaryTag) => {
+        const labels: Record<ContentPrimaryTag, string> = {
+          "ceo-report": "CEO-Bericht (ceo-report)",
+          "design-report": "Design-Bericht (design-report)",
+          "marketing-report": "Marketing-Bericht (marketing-report)",
+          "shopify-report": "Shopify-Bericht (shopify-report)",
+        };
+        return labels[type];
+      })
+      .join(", ");
+
+    throw new ContentKnowledgeError(
+      `${dict.content.errors.noKnowledge} Fehlend: ${missingLabels}.`,
+      {
+        missingReportTypes: missing,
+        primaryReportCounts,
+        workspaceId: input.workspaceId,
+      },
+    );
   }
 
   const reportSlice = slices.find((s) => s.domain === "reports");

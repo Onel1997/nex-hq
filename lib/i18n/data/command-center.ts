@@ -89,6 +89,7 @@ export function getAgentLiveStatus(locale: Locale): AgentLiveStatus[] {
     "research",
     "designer",
     "content",
+    "image",
     "marketing",
     "shopify",
   ];
@@ -97,7 +98,16 @@ export function getAgentLiveStatus(locale: Locale): AgentLiveStatus[] {
     const live = dashboard.agentLive[id];
     return {
       id,
-      status: id === "ceo" ? "active" : "planned",
+      status:
+        id === "ceo" ||
+        id === "research" ||
+        id === "designer" ||
+        id === "content" ||
+        id === "image" ||
+        id === "marketing" ||
+        id === "shopify"
+          ? "active"
+          : "planned",
       currentFocus: live.currentFocus,
       nextTask: live.nextTask,
       priority: {
@@ -105,6 +115,7 @@ export function getAgentLiveStatus(locale: Locale): AgentLiveStatus[] {
         research: "high",
         designer: "high",
         content: "medium",
+        image: "medium",
         marketing: "medium",
         shopify: "medium",
       }[id] as AgentLiveStatus["priority"],

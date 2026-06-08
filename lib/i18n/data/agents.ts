@@ -36,7 +36,8 @@ export function getAgentCatalog(
           id === "designer" ||
           id === "marketing" ||
           id === "shopify" ||
-          id === "content"
+          id === "content" ||
+          id === "image"
           ? "active"
           : "planned") as AgentStatus,
         icon: {
@@ -44,6 +45,7 @@ export function getAgentCatalog(
           research: "search",
           designer: "palette",
           content: "pen-line",
+          image: "wand",
           marketing: "megaphone",
           shopify: "shopping-bag",
         }[id],

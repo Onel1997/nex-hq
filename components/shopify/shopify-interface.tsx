@@ -65,6 +65,17 @@ export function ShopifyInterface() {
   const [brief, setBrief] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [parseDebug, setParseDebug] = useState<{
+    validationIssues?: Array<{
+      path: string;
+      message: string;
+      expected: string;
+      received: unknown;
+    }>;
+    missingFields?: string[];
+    receivedKeys?: string[];
+    parsedPreview?: unknown;
+  } | null>(null);
   const [result, setResult] = useState<ShopifyResult | null>(null);
 
   const examples = [
@@ -81,6 +92,7 @@ export function ShopifyInterface() {
 
       setIsLoading(true);
       setError(null);
+      setParseDebug(null);
       setResult(null);
 
       try {
@@ -93,6 +105,14 @@ export function ShopifyInterface() {
         const data = await res.json();
 
         if (!res.ok) {
+          if (data.validationIssues || data.missingFields || data.parsedPreview) {
+            setParseDebug({
+              validationIssues: data.validationIssues,
+              missingFields: data.missingFields,
+              receivedKeys: data.receivedKeys,
+              parsedPreview: data.parsedPreview,
+            });
+          }
           throw new Error(data.error ?? t("shopify.errors.unexpected"));
         }
 
@@ -188,9 +208,52 @@ export function ShopifyInterface() {
         </form>
 
         {error && (
-          <p className="mt-6 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </p>
+          <div className="mt-6 space-y-4">
+            <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </p>
+            {parseDebug && (
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm space-y-3">
+                {parseDebug.missingFields && parseDebug.missingFields.length > 0 && (
+                  <div>
+                    <p className="font-medium text-foreground">Missing fields</p>
+                    <p className="text-muted-foreground">
+                      {parseDebug.missingFields.join(", ")}
+                    </p>
+                  </div>
+                )}
+                {parseDebug.receivedKeys && parseDebug.receivedKeys.length > 0 && (
+                  <div>
+                    <p className="font-medium text-foreground">Received keys</p>
+                    <p className="text-muted-foreground">
+                      {parseDebug.receivedKeys.join(", ")}
+                    </p>
+                  </div>
+                )}
+                {parseDebug.validationIssues &&
+                  parseDebug.validationIssues.length > 0 && (
+                    <div>
+                      <p className="font-medium text-foreground">
+                        Validation issues ({parseDebug.validationIssues.length})
+                      </p>
+                      <ul className="mt-2 space-y-2">
+                        {parseDebug.validationIssues.map((issue) => (
+                          <li
+                            key={`${issue.path}-${issue.message}`}
+                            className="rounded-lg border border-border bg-background/50 p-3 text-muted-foreground"
+                          >
+                            <span className="font-mono text-foreground">
+                              {issue.path}
+                            </span>
+                            : {issue.message}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+              </div>
+            )}
+          </div>
         )}
       </div>
 

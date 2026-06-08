@@ -86,6 +86,25 @@ export const agents = {
         "Copy vor Veröffentlichung zur Freigabe einreichen",
       ],
     },
+    image: {
+      name: "Image-Agent",
+      role: "Visuelle Creative Direction",
+      description:
+        "AI Creative Director — verwandelt Design-, Content- und Marketing-Intelligence in Image-Generation-Projekte und visuelle Asset-Prompts.",
+      capabilities: [
+        "Moodboard-Prompts",
+        "Produkt-Mockup-Prompts",
+        "Campaign Visuals",
+        "Social-Creative-Prompts",
+        "Lookbook-Richtung",
+      ],
+      responsibilities: [
+        "Design- und Content-Berichte in visuelle Asset-Briefings umwandeln",
+        "Plattformspezifische Image-Prompts pro Drop generieren",
+        "Visuelle Konsistenz über Wissensspeicher-Brand-Rules sicherstellen",
+        "Prompt-Projekte im Wissensspeicher zur Prüfung speichern",
+      ],
+    },
     marketing: {
       name: "Marketing-Agent",
       role: "Kampagnenplanung",

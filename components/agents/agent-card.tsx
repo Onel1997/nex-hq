@@ -19,6 +19,7 @@ import {
   PenLine,
   Search,
   ShoppingBag,
+  Wand2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,6 +30,7 @@ const AGENT_HREFS: Partial<Record<AgentId, string>> = {
   marketing: "/agents/marketing",
   shopify: "/agents/shopify",
   content: "/agents/content",
+  image: "/agents/image",
 };
 
 const AGENT_ICONS: Record<AgentId, LucideIcon> = {
@@ -36,6 +38,7 @@ const AGENT_ICONS: Record<AgentId, LucideIcon> = {
   research: Search,
   designer: Palette,
   content: PenLine,
+  image: Wand2,
   marketing: Megaphone,
   shopify: ShoppingBag,
 };

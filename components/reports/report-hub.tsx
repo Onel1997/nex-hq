@@ -9,6 +9,7 @@ import {
   getMarketingReportTypeLabel,
   getShopifyReportTypeLabel,
   getContentReportTypeLabel,
+  getImageReportTypeLabel,
   getReportCategoryLabels,
   getReportStatusLabel,
   getResearchReportTypeLabels,
@@ -32,6 +33,7 @@ import {
   Settings2,
   ShoppingBag,
   PenLine,
+  Wand2,
 } from "lucide-react";
 
 const CATEGORY_ICONS = {
@@ -40,6 +42,7 @@ const CATEGORY_ICONS = {
   marketing: Megaphone,
   commerce: ShoppingBag,
   content: PenLine,
+  image: Wand2,
   operations: Settings2,
 } as const;
 
@@ -65,6 +68,9 @@ const SHOPIFY_REPORT_STYLE =
 
 const CONTENT_REPORT_STYLE =
   "border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300";
+
+const IMAGE_REPORT_STYLE =
+  "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300";
 
 const PRIORITY_STYLES: Record<CeoStepPriority, string> = {
   high: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
@@ -122,6 +128,7 @@ function ReportCard({
   marketingReportTypeLabel,
   shopifyReportTypeLabel,
   contentReportTypeLabel,
+  imageReportTypeLabel,
   priorityLabels,
   sectionLabels,
 }: {
@@ -135,6 +142,7 @@ function ReportCard({
   marketingReportTypeLabel: string;
   shopifyReportTypeLabel: string;
   contentReportTypeLabel: string;
+  imageReportTypeLabel: string;
   priorityLabels: Record<CeoStepPriority, string>;
   sectionLabels: {
     executiveSummary: string;
@@ -183,6 +191,15 @@ function ReportCard({
     launchPosts: string;
     smsCampaign: string;
     confidence: string;
+    projectName: string;
+    visualDirection: string;
+    moodboard: string;
+    campaignConcept: string;
+    assets: string;
+    assetPrompt: string;
+    assetType: string;
+    assetPlatform: string;
+    assetDimensions: string;
   };
 }) {
   const CategoryIcon = CATEGORY_ICONS[report.category];
@@ -191,19 +208,22 @@ function ReportCard({
   const isMarketingReport = report.reportType === "marketing-report";
   const isShopifyReport = report.reportType === "shopify-report";
   const isContentReport = report.reportType === "content-report";
+  const isImageReport = report.reportType === "image-report";
   const researchReportType =
     report.reportType &&
     report.reportType !== "ceo-report" &&
     report.reportType !== "design-report" &&
     report.reportType !== "marketing-report" &&
     report.reportType !== "shopify-report" &&
-    report.reportType !== "content-report"
+    report.reportType !== "content-report" &&
+    report.reportType !== "image-report"
       ? report.reportType
       : undefined;
   const design = report.designReport;
   const marketing = report.marketingReport;
   const shopify = report.shopifyReport;
   const content = report.contentReport;
+  const image = report.imageReport;
   const executiveSummary = report.executiveSummary ?? report.summary;
   const keyFindings = report.highlights ?? [];
   const recommendations = report.recommendations ?? [];
@@ -236,7 +256,9 @@ function ReportCard({
                               ? SHOPIFY_REPORT_STYLE
                               : isContentReport
                                 ? CONTENT_REPORT_STYLE
-                                : researchReportType
+                                : isImageReport
+                                  ? IMAGE_REPORT_STYLE
+                                  : researchReportType
                               ? REPORT_TYPE_STYLES[researchReportType]
                               : undefined,
                     )}
@@ -251,7 +273,9 @@ function ReportCard({
                             ? shopifyReportTypeLabel
                             : isContentReport
                               ? contentReportTypeLabel
-                              : researchReportType
+                              : isImageReport
+                                ? imageReportTypeLabel
+                                : researchReportType
                             ? reportTypeLabels[researchReportType]
                             : report.reportType}
                   </Badge>
@@ -272,7 +296,61 @@ function ReportCard({
             </Badge>
           </div>
 
-          {isContentReport && content ? (
+          {isImageReport && image ? (
+            <>
+              <ReportSection label={sectionLabels.visualDirection}>
+                <p className="text-base leading-relaxed text-muted-foreground">
+                  {image.visualDirection}
+                </p>
+              </ReportSection>
+
+              <ReportSection label={sectionLabels.collectionStory}>
+                <p className="text-base leading-relaxed text-muted-foreground">
+                  {image.collectionStory}
+                </p>
+              </ReportSection>
+
+              <ReportSection label={sectionLabels.moodboard}>
+                <p className="text-base leading-relaxed text-muted-foreground">
+                  {image.moodboard}
+                </p>
+              </ReportSection>
+
+              <ReportSection label={sectionLabels.campaignConcept}>
+                <p className="text-base leading-relaxed text-muted-foreground">
+                  {image.campaignConcept}
+                </p>
+              </ReportSection>
+
+              {image.assets.length > 0 && (
+                <ReportSection label={sectionLabels.assets}>
+                  <ul className="space-y-3">
+                    {image.assets.slice(0, 6).map((asset) => (
+                      <li
+                        key={`${asset.assetName}-${asset.assetType}`}
+                        className="rounded-xl border border-border bg-muted/20 p-4 space-y-2"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-foreground">
+                            {asset.assetName}
+                          </p>
+                          <Badge variant="secondary" className="font-normal text-xs">
+                            {asset.assetType.replace(/_/g, " ")}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {asset.platform} · {asset.dimensions}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {asset.prompt}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </ReportSection>
+              )}
+            </>
+          ) : isContentReport && content ? (
             <>
               <ReportSection label={sectionLabels.brandNarrative}>
                 <p className="text-base leading-relaxed text-muted-foreground">
@@ -669,6 +747,7 @@ function ReportCard({
             !isMarketingReport &&
             !isShopifyReport &&
             !isContentReport &&
+            !isImageReport &&
             opportunities.length > 0 && (
             <ReportSection label={sectionLabels.strategicOpportunities}>
               <BulletList items={opportunities} />
@@ -679,6 +758,7 @@ function ReportCard({
             !isMarketingReport &&
             !isShopifyReport &&
             !isContentReport &&
+            !isImageReport &&
             risks.length > 0 && (
             <ReportSection label={sectionLabels.risks}>
               <BulletList items={risks} />
@@ -689,6 +769,7 @@ function ReportCard({
             !isMarketingReport &&
             !isShopifyReport &&
             !isContentReport &&
+            !isImageReport &&
             nextSteps.length > 0 && (
             <ReportSection label={sectionLabels.nextSteps}>
               <ul className="space-y-3">
@@ -728,6 +809,7 @@ function ReportCard({
             !isMarketingReport &&
             !isShopifyReport &&
             !isContentReport &&
+            !isImageReport &&
             recommendations.length > 0 && (
             <ReportSection label={sectionLabels.recommendations}>
               <BulletList items={recommendations} />
@@ -765,6 +847,7 @@ function ReportList({
   marketingReportTypeLabel,
   shopifyReportTypeLabel,
   contentReportTypeLabel,
+  imageReportTypeLabel,
   priorityLabels,
   sectionLabels,
 }: {
@@ -779,6 +862,7 @@ function ReportList({
   marketingReportTypeLabel: string;
   shopifyReportTypeLabel: string;
   contentReportTypeLabel: string;
+  imageReportTypeLabel: string;
   priorityLabels: Record<CeoStepPriority, string>;
   sectionLabels: {
     executiveSummary: string;
@@ -827,6 +911,15 @@ function ReportList({
     launchPosts: string;
     smsCampaign: string;
     confidence: string;
+    projectName: string;
+    visualDirection: string;
+    moodboard: string;
+    campaignConcept: string;
+    assets: string;
+    assetPrompt: string;
+    assetType: string;
+    assetPlatform: string;
+    assetDimensions: string;
   };
 }) {
   if (reports.length === 0) {
@@ -852,6 +945,7 @@ function ReportList({
           marketingReportTypeLabel={marketingReportTypeLabel}
           shopifyReportTypeLabel={shopifyReportTypeLabel}
           contentReportTypeLabel={contentReportTypeLabel}
+          imageReportTypeLabel={imageReportTypeLabel}
           priorityLabels={priorityLabels}
           sectionLabels={sectionLabels}
         />
@@ -876,6 +970,7 @@ export function ReportHub() {
   const marketingReportTypeLabel = getMarketingReportTypeLabel(locale);
   const shopifyReportTypeLabel = getShopifyReportTypeLabel(locale);
   const contentReportTypeLabel = getContentReportTypeLabel(locale);
+  const imageReportTypeLabel = getImageReportTypeLabel(locale);
   const priorityLabels = getCeoPriorityLabels(locale);
   const agentCatalog = getAgentCatalog(locale);
   const agentNames = Object.fromEntries(
@@ -919,6 +1014,7 @@ export function ReportHub() {
     "marketing",
     "commerce",
     "content",
+    "image",
     "operations",
   ] as const;
 
@@ -929,6 +1025,7 @@ export function ReportHub() {
     marketing: reports.filter((r) => r.category === "marketing").length,
     commerce: reports.filter((r) => r.category === "commerce").length,
     content: reports.filter((r) => r.category === "content").length,
+    image: reports.filter((r) => r.category === "image").length,
     operations: reports.filter((r) => r.category === "operations").length,
   };
 
@@ -989,6 +1086,7 @@ export function ReportHub() {
                 marketingReportTypeLabel={marketingReportTypeLabel}
                 shopifyReportTypeLabel={shopifyReportTypeLabel}
                 contentReportTypeLabel={contentReportTypeLabel}
+                imageReportTypeLabel={imageReportTypeLabel}
                 priorityLabels={priorityLabels}
                 sectionLabels={sectionLabels}
               />

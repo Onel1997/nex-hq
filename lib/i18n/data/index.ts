@@ -25,6 +25,7 @@ export {
   getMarketingReportTypeLabel,
   getShopifyReportTypeLabel,
   getContentReportTypeLabel,
+  getImageReportTypeLabel,
   getMockReports,
   getReportCategoryLabels,
   getReportStatusLabel,

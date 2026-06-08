@@ -85,13 +85,10 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: error.message,
-          stage: error.stage,
-          missingFields: error.missingFields,
           validationIssues: error.validationIssues,
+          missingFields: error.missingFields,
           receivedKeys: error.receivedKeys,
-          rawResponsePreview: error.rawResponse?.slice(0, 4000),
           parsedPreview: error.parsed,
-          detailedError: error.toDetailedMessage(),
         },
         { status: 500 },
       );

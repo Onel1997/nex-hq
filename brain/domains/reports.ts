@@ -31,13 +31,17 @@ export type ShopifyReportType = typeof SHOPIFY_REPORT_TYPE;
 export const CONTENT_REPORT_TYPE = "content-report" as const;
 export type ContentReportType = typeof CONTENT_REPORT_TYPE;
 
+export const IMAGE_REPORT_TYPE = "image-report" as const;
+export type ImageReportType = typeof IMAGE_REPORT_TYPE;
+
 export type ReportType =
   | ResearchReportType
   | CeoReportType
   | DesignReportType
   | MarketingReportType
   | ShopifyReportType
-  | ContentReportType;
+  | ContentReportType
+  | ImageReportType;
 
 export type CeoStepPriority = "high" | "medium" | "low";
 
@@ -209,6 +213,40 @@ export interface BrainContentSections {
   sourceReportTitles?: string[];
 }
 
+/** Single image-generation asset prompt (Image Agent). */
+export interface BrainImageAsset {
+  assetName: string;
+  assetType:
+    | "moodboard"
+    | "hoodie_mockup"
+    | "tshirt_mockup"
+    | "cargo_mockup"
+    | "campaign_visual"
+    | "landing_page_hero"
+    | "instagram_post"
+    | "instagram_story"
+    | "tiktok_cover"
+    | "email_banner"
+    | "lookbook_page";
+  purpose: string;
+  platform: string;
+  prompt: string;
+  dimensions: string;
+  styleNotes: string;
+}
+
+/** Structured image-generation project sections (Image Agent). */
+export interface BrainImageSections {
+  projectName: string;
+  visualDirection: string;
+  collectionStory: string;
+  moodboard: string;
+  campaignConcept: string;
+  assets: BrainImageAsset[];
+  /** Report titles cited as knowledge sources. */
+  sourceReportTitles?: string[];
+}
+
 /** Structured marketing campaign plan sections (Marketing Agent). */
 export interface BrainMarketingSections {
   launchStrategy: string;
@@ -296,4 +334,6 @@ export interface BrainReportContent {
   shopifySections?: BrainShopifySections;
   /** Content Agent — structured publish-ready copy payload. */
   contentSections?: BrainContentSections;
+  /** Image Agent — structured image-generation project payload. */
+  imageSections?: BrainImageSections;
 }

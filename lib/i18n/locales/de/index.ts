@@ -2,6 +2,7 @@ import { agents } from "./agents";
 import { brain } from "./brain";
 import { ceo } from "./ceo";
 import { content } from "./content";
+import { image } from "./image";
 import { design } from "./design";
 import { marketing } from "./marketing";
 import { shopify } from "./shopify";
@@ -27,6 +28,7 @@ export const de = {
   settings,
   ceo,
   content,
+  image,
   design,
   marketing,
   shopify,

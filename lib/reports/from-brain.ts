@@ -2,12 +2,14 @@ import type {
   BrainCeoNextStep,
   BrainContentSections,
   BrainDesignSections,
+  BrainImageSections,
   BrainMarketingSections,
   BrainReportContent,
   BrainShopifySections,
   CeoReportType,
   ContentReportType,
   DesignReportType,
+  ImageReportType,
   MarketingReportType,
   ResearchReportType,
   ShopifyReportType,
@@ -28,6 +30,8 @@ function mapAgentToCategory(agentId: AgentId): ReportCategory {
       return "commerce";
     case "content":
       return "content";
+    case "image":
+      return "image";
     case "ceo":
       return "operations";
     default:
@@ -63,6 +67,9 @@ function inferReportTypeFromTags(
   }
   if (tags.includes("content-report") || tags.includes("content")) {
     return "content-report";
+  }
+  if (tags.includes("image-report") || tags.includes("image")) {
+    return "image-report";
   }
   const types = ["competitor", "trend", "design", "pricing", "audience"] as const;
   return types.find((type) => tags.includes(type));
@@ -150,6 +157,21 @@ function mapContentSections(
   };
 }
 
+function mapImageSections(
+  sections: BrainImageSections | undefined,
+): ReportListItem["imageReport"] {
+  if (!sections) return undefined;
+  return {
+    projectName: sections.projectName,
+    visualDirection: sections.visualDirection,
+    collectionStory: sections.collectionStory,
+    moodboard: sections.moodboard,
+    campaignConcept: sections.campaignConcept,
+    assets: sections.assets,
+    sourceReportTitles: sections.sourceReportTitles,
+  };
+}
+
 export function brainReportRecordToListItem(
   record: BrainRecord<"reports">,
 ): ReportListItem {
@@ -160,6 +182,7 @@ export function brainReportRecordToListItem(
   const marketingSections = content.marketingSections;
   const shopifySections = content.shopifySections;
   const contentSections = content.contentSections;
+  const imageSections = content.imageSections;
   const reportType:
     | ResearchReportType
     | CeoReportType
@@ -167,6 +190,7 @@ export function brainReportRecordToListItem(
     | MarketingReportType
     | ShopifyReportType
     | ContentReportType
+    | ImageReportType
     | undefined = content.reportType ?? inferReportTypeFromTags(record.tags);
 
   const isCeoReport = reportType === "ceo-report" || content.agentId === "ceo";
@@ -178,11 +202,15 @@ export function brainReportRecordToListItem(
     reportType === "shopify-report" || content.agentId === "shopify";
   const isContentReport =
     reportType === "content-report" || content.agentId === "content";
+  const isImageReport =
+    reportType === "image-report" || content.agentId === "image";
 
   return {
     id: content.reportId,
     title: record.title,
-    summary: isContentReport
+    summary: isImageReport
+      ? imageSections?.visualDirection ?? content.summary
+      : isContentReport
       ? contentSections?.brandNarrative ?? content.summary
       : isShopifyReport
         ? shopifySections?.collectionDescription ?? content.summary
@@ -198,7 +226,9 @@ export function brainReportRecordToListItem(
     status: mapBrainStatusToUi(record.status, content.status),
     confidence: content.confidence,
     createdAt: record.createdAt,
-    highlights: isContentReport
+    highlights: isImageReport
+      ? imageSections?.assets.map((a) => a.assetName)
+      : isContentReport
       ? contentSections?.socialContent.launchPosts
       : isShopifyReport
         ? shopifySections?.launchChecklist
@@ -209,7 +239,9 @@ export function brainReportRecordToListItem(
             : isCeoReport
               ? ceoSections?.keyInsights
               : researchSections?.keyFindings ?? content.keyFindings,
-    reportType: isContentReport
+    reportType: isImageReport
+      ? "image-report"
+      : isContentReport
       ? "content-report"
       : isShopifyReport
         ? "shopify-report"
@@ -220,7 +252,9 @@ export function brainReportRecordToListItem(
             : isCeoReport
               ? "ceo-report"
               : reportType,
-    executiveSummary: isContentReport
+    executiveSummary: isImageReport
+      ? imageSections?.visualDirection ?? content.summary
+      : isContentReport
       ? contentSections?.brandNarrative ?? content.summary
       : isShopifyReport
         ? shopifySections?.collectionDescription ?? content.summary
@@ -231,7 +265,9 @@ export function brainReportRecordToListItem(
             : ceoSections?.executiveSummary ??
               researchSections?.executiveSummary ??
               content.summary,
-    recommendations: isContentReport
+    recommendations: isImageReport
+      ? imageSections?.assets.map((a) => a.purpose)
+      : isContentReport
       ? contentSections?.socialContent.storyIdeas
       : isShopifyReport
         ? shopifySections?.navigationRecommendations
@@ -251,7 +287,9 @@ export function brainReportRecordToListItem(
         ? ceoSections?.risks
         : researchSections?.risks,
     nextSteps: isCeoReport ? mapCeoNextSteps(ceoSections?.nextSteps) : undefined,
-    sourceReportTitles: isContentReport
+    sourceReportTitles: isImageReport
+      ? imageSections?.sourceReportTitles
+      : isContentReport
       ? contentSections?.sourceReportTitles
       : isShopifyReport
         ? shopifySections?.sourceReportTitles
@@ -269,6 +307,9 @@ export function brainReportRecordToListItem(
       : undefined,
     contentReport: isContentReport
       ? mapContentSections(contentSections)
+      : undefined,
+    imageReport: isImageReport
+      ? mapImageSections(imageSections)
       : undefined,
   };
 }

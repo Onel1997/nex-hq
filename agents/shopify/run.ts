@@ -164,9 +164,21 @@ export async function runShopify(
   } catch (error) {
     if (error instanceof ShopifyParseError) {
       console.error("[Shopify Run] Parse/validation failed", error.toLogPayload());
+      console.log(
+        "[Shopify Run] Validation issues:",
+        error.validationIssues,
+      );
       console.error(
         "[Shopify Run] Validation issues:",
         JSON.stringify(error.validationIssues, null, 2),
+      );
+      console.error(
+        "[Shopify Run] Missing fields:",
+        error.missingFields,
+      );
+      console.error(
+        "[Shopify Run] Received keys:",
+        error.receivedKeys,
       );
       console.error("[Shopify Run] Detailed error:\n", error.toDetailedMessage());
       throw error;

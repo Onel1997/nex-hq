@@ -8,7 +8,7 @@ export const reports = {
     label: "Intelligence",
     title: "Agenten-Berichte",
     description:
-      "Research-, Design-, Marketing-, Commerce- und Content-Briefings — bereit für deine Prüfung.",
+      "Research-, Design-, Marketing-, Commerce-, Content- und Image-Briefings — bereit für deine Prüfung.",
     empty: "Noch keine Berichte in dieser Kategorie.",
     sections: {
       executiveSummary: "Executive Summary",
@@ -57,6 +57,15 @@ export const reports = {
       launchPosts: "Launch-Posts",
       smsCampaign: "SMS-Kampagne",
       confidence: "Konfidenz",
+      projectName: "Projektname",
+      visualDirection: "Visual Direction",
+      moodboard: "Moodboard",
+      campaignConcept: "Campaign Concept",
+      assets: "Assets",
+      assetPrompt: "Prompt",
+      assetType: "Asset-Typ",
+      assetPlatform: "Plattform",
+      assetDimensions: "Abmessungen",
     },
   },
   reportType: {
@@ -70,6 +79,7 @@ export const reports = {
     marketingReport: "Marketing-Kampagne",
     shopifyReport: "Shopify-Storefront",
     contentReport: "Content-Paket",
+    imageReport: "Image-Projekt",
   },
   items: {
     rpt001: {
