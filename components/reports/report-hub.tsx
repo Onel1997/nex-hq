@@ -1,19 +1,20 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import {
   getAgentCatalog,
-  getMockReports,
   getReportCategoryLabels,
   getReportStatusLabel,
 } from "@/lib/i18n/data";
 import type { ReportListItem } from "@/lib/mock/reports";
-import { useDictionary, useLocale } from "@/lib/i18n";
+import { useDictionary, useLocale, useT, useWorkspace } from "@/lib/i18n";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
+  Loader2,
   Megaphone,
   Palette,
   Search,
@@ -142,8 +143,13 @@ function ReportList({
 
 export function ReportHub() {
   const locale = useLocale();
+  const t = useT();
+  const workspace = useWorkspace();
   const { common, reports: reportsCopy } = useDictionary();
-  const mockReports = getMockReports(locale);
+  const [reports, setReports] = useState<ReportListItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const categoryLabels = getReportCategoryLabels(locale);
   const agentCatalog = getAgentCatalog(locale);
   const agentNames = Object.fromEntries(
@@ -152,13 +158,40 @@ export function ReportHub() {
   const getStatusLabel = (status: ReportListItem["status"]) =>
     getReportStatusLabel(locale, status);
 
+  const loadReports = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/reports");
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? t("research.errors.unexpected"));
+      }
+
+      setReports(data.reports ?? []);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("research.errors.unexpected"),
+      );
+      setReports([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    loadReports();
+  }, [loadReports, workspace.slug]);
+
   const categories = ["all", "research", "design", "marketing"] as const;
 
   const counts: Record<(typeof categories)[number], number> = {
-    all: mockReports.length,
-    research: mockReports.filter((r) => r.category === "research").length,
-    design: mockReports.filter((r) => r.category === "design").length,
-    marketing: mockReports.filter((r) => r.category === "marketing").length,
+    all: reports.length,
+    research: reports.filter((r) => r.category === "research").length,
+    design: reports.filter((r) => r.category === "design").length,
+    marketing: reports.filter((r) => r.category === "marketing").length,
   };
 
   return (
@@ -167,34 +200,56 @@ export function ReportHub() {
         label={reportsCopy.hub.label}
         title={reportsCopy.hub.title}
         description={reportsCopy.hub.description}
+        action={
+          <p className="text-sm text-muted-foreground">
+            {t("dashboard.command.activeWorkspace", {
+              workspace: workspace.name,
+            })}
+          </p>
+        }
       />
 
-      <Tabs defaultValue="all" className="space-y-8">
-        <TabsList className="h-12 bg-muted/30 p-1">
-          {categories.map((cat) => (
-            <TabsTrigger key={cat} value={cat} className="gap-2 px-5 text-base">
-              {cat === "all" ? common.reportCategory.all : categoryLabels[cat]}
-              <span className="text-sm text-muted-foreground">{counts[cat]}</span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {isLoading && (
+        <div className="flex items-center justify-center gap-3 py-16 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+          <span className="text-base">{t("research.interface.running")}</span>
+        </div>
+      )}
 
-        {categories.map((cat) => (
-          <TabsContent key={cat} value={cat}>
-            <ReportList
-              reports={
-                cat === "all"
-                  ? mockReports
-                  : mockReports.filter((r) => r.category === cat)
-              }
-              categoryLabels={categoryLabels}
-              agentNames={agentNames}
-              getStatusLabel={getStatusLabel}
-              emptyLabel={reportsCopy.hub.empty}
-            />
-          </TabsContent>
-        ))}
-      </Tabs>
+      {error && !isLoading && (
+        <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+
+      {!isLoading && (
+        <Tabs defaultValue="all" className="space-y-8">
+          <TabsList className="h-12 bg-muted/30 p-1">
+            {categories.map((cat) => (
+              <TabsTrigger key={cat} value={cat} className="gap-2 px-5 text-base">
+                {cat === "all" ? common.reportCategory.all : categoryLabels[cat]}
+                <span className="text-sm text-muted-foreground">{counts[cat]}</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {categories.map((cat) => (
+            <TabsContent key={cat} value={cat}>
+              <ReportList
+                reports={
+                  cat === "all"
+                    ? reports
+                    : reports.filter((r) => r.category === cat)
+                }
+                categoryLabels={categoryLabels}
+                agentNames={agentNames}
+                getStatusLabel={getStatusLabel}
+                emptyLabel={reportsCopy.hub.empty}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   type AgentDefinition,
   type AgentId,
@@ -21,6 +22,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+const AGENT_HREFS: Partial<Record<AgentId, string>> = {
+  research: "/agents/research",
+};
+
 const AGENT_ICONS: Record<AgentId, LucideIcon> = {
   ceo: Crown,
   research: Search,
@@ -41,11 +46,12 @@ export function AgentCard({ agent, featured = false, className }: AgentCardProps
   const { agents } = useDictionary();
   const Icon = AGENT_ICONS[agent.id];
   const isActive = agent.status === "active";
+  const href = AGENT_HREFS[agent.id];
 
   return (
     <OsPanel
       glow={isActive}
-      className={cn(featured && "border-primary/15", className)}
+      className={cn(featured && "border-primary/15", href && "group", className)}
     >
       <OsPanelHeader
         title={agent.name}
@@ -98,7 +104,17 @@ export function AgentCard({ agent, featured = false, className }: AgentCardProps
                 : t("dashboard.command.ceoAgent")}
             </span>
           </span>
-          <Icon className="size-4 opacity-40" />
+          {href ? (
+            <Link
+              href={href}
+              className="inline-flex items-center gap-1.5 text-primary transition-colors hover:underline"
+            >
+              {t("common.openAgent")}
+              <Icon className="size-4" />
+            </Link>
+          ) : (
+            <Icon className="size-4 opacity-40" />
+          )}
         </div>
       </OsPanelContent>
     </OsPanel>

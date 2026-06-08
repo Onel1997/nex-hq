@@ -52,6 +52,7 @@ export const common = {
   },
   founder: "Silane",
   workspaceSuffix: "{name}-Workspace",
+  activeWorkspace: "Aktiver Workspace",
   reportsTo: "Berichtet an",
   founderLabel: "Gründer",
   due: "Fällig",
@@ -64,6 +65,7 @@ export const common = {
   activeCount: "{count} aktiv",
   toggleSidebar: "Seitenleiste umschalten",
   sendMessage: "Nachricht senden",
+  openAgent: "Öffnen",
   metadata: {
     description:
       "KI-gestütztes Betriebssystem für Unternehmen mit mehreren Workspaces.",

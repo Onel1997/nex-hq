@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BrainKnowledgeSystem } from "@/components/brain/brain-knowledge-system";
+import { ActiveWorkspaceBadge } from "@/components/shared/active-workspace-badge";
 import { CommandSurface } from "@/components/shared/command-surface";
 import { PageHeader } from "@/components/shared/page-header";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
@@ -17,7 +18,9 @@ export default function BrainPage() {
       <PageHeader
         title={dict.brain.page.title}
         description={dict.brain.page.description}
-      />
+      >
+        <ActiveWorkspaceBadge />
+      </PageHeader>
 
       <BrainKnowledgeSystem />
     </CommandSurface>

@@ -2,7 +2,13 @@
 
 import { useCallback, useRef, useState } from "react";
 import { getSuggestedActions } from "@/lib/i18n/data";
-import { getDateLocale, useDictionary, useLocale, useT } from "@/lib/i18n";
+import {
+  getDateLocale,
+  useDictionary,
+  useLocale,
+  useT,
+  useWorkspace,
+} from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { ArrowUp, Crown, Loader2 } from "lucide-react";
 
@@ -16,6 +22,7 @@ interface ChatMessage {
 export function AiCommandInterface() {
   const locale = useLocale();
   const t = useT();
+  const workspace = useWorkspace();
   const { platform } = useDictionary();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -125,9 +132,16 @@ export function AiCommandInterface() {
 
       <div className="relative mx-auto max-w-4xl">
         <div className="command-interface overflow-hidden px-10 py-14 sm:px-14 sm:py-16 lg:px-20 lg:py-20">
-          <p className="text-label mb-8 text-primary/80">
-            {platform.commandCenterName}
-          </p>
+          <div className="mb-8 space-y-2">
+            <p className="text-label text-primary/80">
+              {platform.commandCenterName}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {t("dashboard.command.activeWorkspace", {
+                workspace: workspace.name,
+              })}
+            </p>
+          </div>
 
           {!hasMessages ? (
             <h2 className="command-interface-headline mb-12 max-w-3xl">
@@ -158,7 +172,9 @@ export function AiCommandInterface() {
                   >
                     {msg.role === "ceo" && (
                       <p className="mb-1.5 text-xs font-medium text-primary">
-                        {t("dashboard.command.ceoAgent")}
+                        {t("dashboard.command.ceoAgentForWorkspace", {
+                          workspace: workspace.name,
+                        })}
                       </p>
                     )}
                     <p className="whitespace-pre-wrap text-base leading-relaxed">

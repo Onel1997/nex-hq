@@ -48,6 +48,22 @@ export async function runCeoChat(input: CeoChatInput): Promise<CeoChatOutput> {
     locale,
   });
 
+  console.info("[CEO Chat] Context ready", {
+    workspaceId: input.workspaceId,
+    workspaceName: input.workspaceName,
+    recordCount: brainContext.sourceRecordIds.length,
+    tokenEstimate: brainContext.tokenEstimate,
+    domains: brainContext.slices.map((s) => ({
+      domain: s.domain,
+      records: s.records.map((r) => ({
+        id: r.id,
+        title: r.title,
+        status: r.status,
+      })),
+    })),
+    messagePreview: input.message.slice(0, 120),
+  });
+
   const openai = getOpenAIClient();
 
   const completion = await openai.chat.completions.create({

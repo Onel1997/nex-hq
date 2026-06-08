@@ -7,7 +7,9 @@ export const dashboard = {
     ceoAgent: "CEO-Agent",
     thinking: "CEO-Agent denkt nach …",
     placeholder:
-      "Stelle Fragen zu Unternehmen, Strategie, Marke oder Zielen …",
+      "Stelle Fragen zum aktiven Workspace — Unternehmen, Strategie, Marke oder Ziele …",
+    activeWorkspace: "Aktiver Workspace: {workspace}",
+    ceoAgentForWorkspace: "CEO-Agent · {workspace}",
     poweredBy: "CEO-Agent · Angetrieben vom {brainName}",
     readingBrain: "{brainName} wird gelesen · Antwort wird generiert",
     tryAsking: "Probiere zu fragen",
@@ -25,7 +27,7 @@ export const dashboard = {
     label: "KI-Team",
     title: "Deine kreative Intelligenz",
     description:
-      "Sechs Agenten, auf deine Marke ausgerichtet — einer aktiv, fünf in Vorbereitung.",
+      "Sechs Agenten, auf den aktiven Workspace ausgerichtet — einer aktiv, fünf in Vorbereitung.",
     currentFocus: "Aktueller Fokus",
     nextObjective: "Nächstes Ziel",
     priority: "Priorität",
@@ -36,7 +38,7 @@ export const dashboard = {
   },
   brainViz: {
     label: "NexHQ Wissensspeicher",
-    title: "Das Herz deiner Marke",
+    title: "Wissensspeicher von {workspace}",
     description:
       "Lebendiges Wissen — Markengedächtnis, Design-Intelligenz und Marktkontext an einem Ort.",
     exploreBrain: "Wissensspeicher erkunden",

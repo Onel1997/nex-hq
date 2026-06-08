@@ -1,13 +1,14 @@
 "use client";
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { useDictionary, useT } from "@/lib/i18n";
+import { useDictionary, useT, useWorkspace } from "@/lib/i18n";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 export function DashboardHeader() {
   const pathname = usePathname();
   const t = useT();
+  const workspace = useWorkspace();
   const { platform } = useDictionary();
   const isHome = pathname === "/";
 
@@ -24,11 +25,17 @@ export function DashboardHeader() {
         className="-ml-1 size-8 text-muted-foreground hover:text-foreground"
         label={t("common.toggleSidebar")}
       />
-      {!isHome && (
-        <span className="ml-3 text-xs text-muted-foreground/60">
-          {platform.name}
-        </span>
-      )}
+      <span className="ml-3 text-xs text-muted-foreground/60">
+        {isHome ? (
+          <>
+            {platform.name}
+            <span className="mx-2 text-muted-foreground/30">·</span>
+            {workspace.name}
+          </>
+        ) : (
+          platform.name
+        )}
+      </span>
     </header>
   );
 }

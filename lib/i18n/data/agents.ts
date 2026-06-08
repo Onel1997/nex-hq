@@ -31,7 +31,9 @@ export function getAgentCatalog(
           id === "ceo"
             ? ("human" as const)
             : ("ceo" as const),
-        status: (id === "ceo" ? "active" : "planned") as AgentStatus,
+        status: (id === "ceo" || id === "research"
+          ? "active"
+          : "planned") as AgentStatus,
         icon: {
           ceo: "crown",
           research: "search",

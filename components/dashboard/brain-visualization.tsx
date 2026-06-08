@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { getBrainNodes } from "@/lib/i18n/data";
-import { useDictionary, useLocale, useT } from "@/lib/i18n";
+import { useDictionary, useLocale, useT, useWorkspace } from "@/lib/i18n";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { cn } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
@@ -10,6 +10,7 @@ import { ArrowRight } from "lucide-react";
 export function BrainVisualization() {
   const locale = useLocale();
   const t = useT();
+  const workspace = useWorkspace();
   const { dashboard } = useDictionary();
   const brainNodes = getBrainNodes(locale);
   const totalEntries = brainNodes.reduce((sum, n) => sum + n.entries, 0);
@@ -21,7 +22,7 @@ export function BrainVisualization() {
     <section className="space-y-12">
       <SectionHeading
         label={dashboard.brainViz.label}
-        title={dashboard.brainViz.title}
+        title={t("dashboard.brainViz.title", { workspace: workspace.name })}
         description={dashboard.brainViz.description}
         action={
           <Link

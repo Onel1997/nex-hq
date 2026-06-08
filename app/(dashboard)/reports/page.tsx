@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ActiveWorkspaceBadge } from "@/components/shared/active-workspace-badge";
 import { CommandSurface } from "@/components/shared/command-surface";
 import { PageHeader } from "@/components/shared/page-header";
 import { ReportHub } from "@/components/reports/report-hub";
@@ -17,7 +18,9 @@ export default function ReportsPage() {
       <PageHeader
         title={dict.reports.page.title}
         description={dict.reports.page.description}
-      />
+      >
+        <ActiveWorkspaceBadge />
+      </PageHeader>
 
       <ReportHub />
     </CommandSurface>

@@ -6,6 +6,7 @@ import { dashboard } from "./dashboard";
 import { navigation } from "./navigation";
 import { platform } from "./platform";
 import { reports } from "./reports";
+import { research } from "./research";
 import { settings } from "./settings";
 import { tasks } from "./tasks";
 
@@ -18,6 +19,7 @@ export const de = {
   brain,
   tasks,
   reports,
+  research,
   settings,
   ceo,
 } as const;
