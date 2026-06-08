@@ -28,12 +28,13 @@ export interface CeoCreateTaskInput {
   title: string;
   description: string;
   priority?: TaskPriority;
+  status?: TaskStatus;
   assigneeAgentId?: AgentId | null;
   parentTaskId?: string | null;
   payload?: Record<string, unknown>;
 }
 
-/** CEO Agent — create a delegated task (infrastructure only, no auto-routing). */
+/** CEO Agent — create a delegated task. */
 export async function ceoCreateTask(
   input: CeoCreateTaskInput,
 ): Promise<{ task: TaskListItem; eventIds: string[] }> {

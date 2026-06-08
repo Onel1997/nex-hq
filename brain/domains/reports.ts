@@ -19,6 +19,9 @@ export type ResearchReportType = (typeof RESEARCH_REPORT_TYPES)[number];
 export const CEO_REPORT_TYPE = "ceo-report" as const;
 export type CeoReportType = typeof CEO_REPORT_TYPE;
 
+export const CEO_FINAL_REPORT_TYPE = "ceo-final-report" as const;
+export type CeoFinalReportType = typeof CEO_FINAL_REPORT_TYPE;
+
 export const DESIGN_REPORT_TYPE = "design-report" as const;
 export type DesignReportType = typeof DESIGN_REPORT_TYPE;
 
@@ -42,6 +45,7 @@ export type ImageReportType = ImageProjectType;
 export type ReportType =
   | ResearchReportType
   | CeoReportType
+  | CeoFinalReportType
   | DesignReportType
   | MarketingReportType
   | ShopifyReportType
@@ -465,6 +469,34 @@ export interface BrainCeoSections {
   sourceReportTitles?: string[];
 }
 
+/** Reference to a source report used in CEO final synthesis. */
+export interface BrainCeoFinalReportRef {
+  reportId: string;
+  brainRecordId: string;
+  title: string;
+  taskId: string;
+  agentId: AgentId;
+}
+
+/** Structured CEO final executive synthesis sections. */
+export interface BrainCeoFinalSections {
+  executiveSummary: string;
+  keyFindings: string[];
+  opportunities: string[];
+  risks: string[];
+  recommendedActions: BrainCeoNextStep[];
+  launchStrategy: string;
+  nextMilestones: string[];
+  ceoVerdict: string;
+  founderGoal: string;
+  completionScore: number;
+  parentGoalTaskId: string;
+  sourceTaskIds: string[];
+  researchReports: BrainCeoFinalReportRef[];
+  designReports: BrainCeoFinalReportRef[];
+  marketingReports: BrainCeoFinalReportRef[];
+}
+
 /** Structured competitor analysis sections (Research Agent V2). */
 export interface BrainCompetitorReportSections {
   positioning: string;
@@ -520,6 +552,8 @@ export interface BrainReportContent {
   researchSections?: BrainResearchSections;
   /** CEO Agent — structured strategic briefing payload. */
   ceoSections?: BrainCeoSections;
+  /** CEO Agent — final executive synthesis payload. */
+  ceoFinalSections?: BrainCeoFinalSections;
   /** Designer Agent — structured collection concept payload. */
   designSections?: BrainDesignSections;
   /** Marketing Agent — structured campaign plan payload. */

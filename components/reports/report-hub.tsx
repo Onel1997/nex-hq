@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getAgentCatalog,
   getCeoPriorityLabels,
+  getCeoFinalReportTypeLabel,
   getCeoReportTypeLabel,
   getDesignReportTypeLabel,
   getMarketingReportTypeLabel,
@@ -128,6 +129,7 @@ function ReportCard({
   statusLabel,
   reportTypeLabels,
   ceoReportTypeLabel,
+  ceoFinalReportTypeLabel,
   designReportTypeLabel,
   marketingReportTypeLabel,
   shopifyReportTypeLabel,
@@ -145,6 +147,7 @@ function ReportCard({
   statusLabel: string;
   reportTypeLabels: Record<ResearchReportType, string>;
   ceoReportTypeLabel: string;
+  ceoFinalReportTypeLabel: string;
   designReportTypeLabel: string;
   marketingReportTypeLabel: string;
   shopifyReportTypeLabel: string;
@@ -222,6 +225,7 @@ function ReportCard({
   onReviewError?: (message: string) => void;
 }) {
   const CategoryIcon = CATEGORY_ICONS[report.category];
+  const isCeoFinalReport = report.reportType === "ceo-final-report";
   const isCeoReport = report.reportType === "ceo-report";
   const isDesignReport = report.reportType === "design-report";
   const isMarketingReport = report.reportType === "marketing-report";
@@ -233,6 +237,7 @@ function ReportCard({
   const researchReportType =
     report.reportType &&
     report.reportType !== "ceo-report" &&
+    report.reportType !== "ceo-final-report" &&
     report.reportType !== "design-report" &&
     report.reportType !== "marketing-report" &&
     report.reportType !== "shopify-report" &&
@@ -280,7 +285,9 @@ function ReportCard({
                     variant="outline"
                     className={cn(
                       "font-normal",
-                      isCeoReport
+                      isCeoFinalReport
+                        ? CEO_REPORT_STYLE
+                        : isCeoReport
                         ? CEO_REPORT_STYLE
                         : isDesignReport
                           ? DESIGN_REPORT_STYLE
@@ -297,7 +304,9 @@ function ReportCard({
                               : undefined,
                     )}
                   >
-                    {isCeoReport
+                    {isCeoFinalReport
+                      ? ceoFinalReportTypeLabel
+                      : isCeoReport
                       ? ceoReportTypeLabel
                       : isDesignReport
                         ? designReportTypeLabel
@@ -833,6 +842,7 @@ function ReportList({
   emptyLabel,
   reportTypeLabels,
   ceoReportTypeLabel,
+  ceoFinalReportTypeLabel,
   designReportTypeLabel,
   marketingReportTypeLabel,
   shopifyReportTypeLabel,
@@ -851,6 +861,7 @@ function ReportList({
   emptyLabel: string;
   reportTypeLabels: Record<ResearchReportType, string>;
   ceoReportTypeLabel: string;
+  ceoFinalReportTypeLabel: string;
   designReportTypeLabel: string;
   marketingReportTypeLabel: string;
   shopifyReportTypeLabel: string;
@@ -946,6 +957,7 @@ function ReportList({
           statusLabel={getStatusLabel(report.status)}
           reportTypeLabels={reportTypeLabels}
           ceoReportTypeLabel={ceoReportTypeLabel}
+          ceoFinalReportTypeLabel={ceoFinalReportTypeLabel}
           designReportTypeLabel={designReportTypeLabel}
           marketingReportTypeLabel={marketingReportTypeLabel}
           shopifyReportTypeLabel={shopifyReportTypeLabel}
@@ -974,6 +986,7 @@ export function ReportHub() {
   const categoryLabels = getReportCategoryLabels(locale);
   const reportTypeLabels = getResearchReportTypeLabels(locale);
   const ceoReportTypeLabel = getCeoReportTypeLabel(locale);
+  const ceoFinalReportTypeLabel = getCeoFinalReportTypeLabel(locale);
   const designReportTypeLabel = getDesignReportTypeLabel(locale);
   const marketingReportTypeLabel = getMarketingReportTypeLabel(locale);
   const shopifyReportTypeLabel = getShopifyReportTypeLabel(locale);
@@ -1109,6 +1122,7 @@ export function ReportHub() {
                 emptyLabel={reportsCopy.hub.empty}
                 reportTypeLabels={reportTypeLabels}
                 ceoReportTypeLabel={ceoReportTypeLabel}
+          ceoFinalReportTypeLabel={ceoFinalReportTypeLabel}
                 designReportTypeLabel={designReportTypeLabel}
                 marketingReportTypeLabel={marketingReportTypeLabel}
                 shopifyReportTypeLabel={shopifyReportTypeLabel}

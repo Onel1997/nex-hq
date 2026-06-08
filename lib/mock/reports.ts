@@ -13,6 +13,7 @@ import type {
   BrainMarketingKpi,
   BrainShopifyProduct,
   CeoReportType,
+  CeoFinalReportType,
   CeoStepPriority,
   ContentReportType,
   DesignReportType,
@@ -63,6 +64,7 @@ export interface ReportListItem {
   reportType?:
     | ResearchReportType
     | CeoReportType
+    | CeoFinalReportType
     | DesignReportType
     | MarketingReportType
     | ShopifyReportType
@@ -123,6 +125,41 @@ export interface ReportListItem {
     sourceReportTitles?: string[];
   };
   imageProject?: ImageProjectView;
+  ceoFinalReport?: {
+    executiveSummary: string;
+    keyFindings: string[];
+    opportunities: string[];
+    risks: string[];
+    recommendedActions: ReportNextStep[];
+    launchStrategy: string;
+    nextMilestones: string[];
+    ceoVerdict: string;
+    completionScore: number;
+    founderGoal: string;
+    parentGoalTaskId: string;
+    sourceTaskIds: string[];
+    researchReports: Array<{
+      reportId: string;
+      brainRecordId: string;
+      title: string;
+      taskId: string;
+      agentId: AgentId;
+    }>;
+    designReports: Array<{
+      reportId: string;
+      brainRecordId: string;
+      title: string;
+      taskId: string;
+      agentId: AgentId;
+    }>;
+    marketingReports: Array<{
+      reportId: string;
+      brainRecordId: string;
+      title: string;
+      taskId: string;
+      agentId: AgentId;
+    }>;
+  };
 }
 
 export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {

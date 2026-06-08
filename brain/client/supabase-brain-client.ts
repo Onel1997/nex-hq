@@ -319,6 +319,27 @@ export class SupabaseBrainClient {
     });
   }
 
+  /** Audit trail entry for CEO final report synthesis. */
+  async logCeoFinalReportEvent(params: {
+    workspaceId: string;
+    recordId?: string;
+    actor: BrainActor;
+    eventType:
+      | "ceo.final_report.started"
+      | "ceo.final_report.generated"
+      | "ceo.final_report.completed";
+    payload: Record<string, unknown>;
+  }): Promise<string> {
+    return this.publishEvent({
+      workspaceId: params.workspaceId,
+      eventType: params.eventType,
+      domain: "reports",
+      recordId: params.recordId,
+      actor: params.actor,
+      payload: params.payload,
+    });
+  }
+
   /** Audit trail entry for task lifecycle actions. */
   async logTaskEvent(params: {
     workspaceId: string;
@@ -330,7 +351,11 @@ export class SupabaseBrainClient {
       | "task.assigned"
       | "task.status_changed"
       | "task.completed"
-      | "task.deleted";
+      | "task.deleted"
+      | "task.execution.started"
+      | "task.execution.completed"
+      | "task.execution.failed"
+      | "task.review.completed";
     payload: Record<string, unknown>;
   }): Promise<string> {
     return this.publishEvent({

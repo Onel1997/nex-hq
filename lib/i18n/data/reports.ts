@@ -42,6 +42,10 @@ export function getCeoReportTypeLabel(locale: Locale): string {
   return getDictionary(locale).reports.reportType.ceoReport;
 }
 
+export function getCeoFinalReportTypeLabel(locale: Locale): string {
+  return getDictionary(locale).reports.reportType.ceoFinalReport;
+}
+
 export function getDesignReportTypeLabel(locale: Locale): string {
   return getDictionary(locale).reports.reportType.designReport;
 }

@@ -21,6 +21,7 @@ export { getMainNav, getSecondaryNav, getPageTitle } from "./navigation";
 export {
   getCeoPriorityLabels,
   getCeoReportTypeLabel,
+  getCeoFinalReportTypeLabel,
   getDesignReportTypeLabel,
   getMarketingReportTypeLabel,
   getShopifyReportTypeLabel,

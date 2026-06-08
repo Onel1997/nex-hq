@@ -23,7 +23,14 @@ export type BrainEventType =
   | "task.assigned"
   | "task.status_changed"
   | "task.completed"
-  | "task.deleted";
+  | "task.deleted"
+  | "task.execution.started"
+  | "task.execution.completed"
+  | "task.execution.failed"
+  | "task.review.completed"
+  | "ceo.final_report.started"
+  | "ceo.final_report.generated"
+  | "ceo.final_report.completed";
 
 export interface BrainEventBase {
   id: string;

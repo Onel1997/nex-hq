@@ -2,6 +2,8 @@ import { getBrainClient } from "@/brain/client";
 import type { BrainReportContent } from "@/brain/domains/reports";
 import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
 import type { BrainActor, BrainRecordStatus } from "@/brain/types";
+import { completeTaskFromApproval } from "@/lib/orchestration/task-review";
+import { maybeTriggerCeoFinalReport } from "@/lib/reports/final-report-trigger";
 import { brainReportRecordToListItem } from "@/lib/reports/from-brain";
 import type { ReportStatus } from "@/reports/types";
 
@@ -59,6 +61,8 @@ export interface ReviewReportResult {
   previousStatus: BrainRecordStatus;
   newStatus: BrainRecordStatus;
   reviewEventId: string;
+  taskSync?: Awaited<ReturnType<typeof completeTaskFromApproval>>;
+  finalReportSync?: Awaited<ReturnType<typeof maybeTriggerCeoFinalReport>>;
 }
 
 export async function reviewReportRecord(
@@ -119,11 +123,27 @@ export async function reviewReportRecord(
     },
   });
 
+  let taskSync: ReviewReportResult["taskSync"];
+  let finalReportSync: ReviewReportResult["finalReportSync"];
+
+  if (action === "approve" || action === "reject") {
+    taskSync = await completeTaskFromApproval(
+      brainRecordId,
+      action === "approve" ? "approved" : "rejected",
+    );
+  }
+
+  if (action === "approve" && existingContent.reportType !== "ceo-final-report") {
+    finalReportSync = await maybeTriggerCeoFinalReport(brainRecordId);
+  }
+
   return {
     report: brainReportRecordToListItem(updatedRecord),
     brainRecordId,
     previousStatus,
     newStatus: transition.recordStatus,
     reviewEventId,
+    taskSync: taskSync ?? undefined,
+    finalReportSync: finalReportSync ?? undefined,
   };
 }

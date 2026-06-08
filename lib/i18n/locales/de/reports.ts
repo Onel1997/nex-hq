@@ -104,6 +104,7 @@ export const reports = {
     pricing: "Pricing",
     audience: "Zielgruppe",
     ceoReport: "CEO-Strategie",
+    ceoFinalReport: "CEO Executive Final",
     designReport: "Design-Kollektion",
     marketingReport: "Marketing-Kampagne",
     shopifyReport: "Shopify-Storefront",

@@ -8,6 +8,18 @@ function optionalEnvString() {
   );
 }
 
+function optionalEnvBoolean(defaultValue = false) {
+  return z.preprocess((val) => {
+    if (val === undefined || val === null || val === "") return defaultValue;
+    if (typeof val === "boolean") return val;
+    if (typeof val === "string") {
+      const lower = val.trim().toLowerCase();
+      return lower === "true" || lower === "1" || lower === "yes";
+    }
+    return defaultValue;
+  }, z.boolean());
+}
+
 const envSchema = z.object({
   /** Active workspace slug — server-side resolution. */
   NEXHQ_WORKSPACE_SLUG: optionalEnvString(),
@@ -21,6 +33,8 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: optionalEnvString(),
   OPENAI_API_KEY: optionalEnvString(),
   REPLICATE_API_TOKEN: optionalEnvString(),
+  /** When true, research/designer/marketing tasks auto-execute on assignment. */
+  AUTO_EXECUTION_ENABLED: optionalEnvBoolean(false),
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
@@ -38,6 +52,7 @@ function parseEnv(): Env {
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     REPLICATE_API_TOKEN: process.env.REPLICATE_API_TOKEN,
+    AUTO_EXECUTION_ENABLED: process.env.AUTO_EXECUTION_ENABLED,
     NODE_ENV: process.env.NODE_ENV,
   });
 }
