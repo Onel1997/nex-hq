@@ -3,52 +3,60 @@ import type { TransmissionEvent } from "@/lib/facility/types";
 
 interface TransmissionDef {
   from: AgentId;
-  to: AgentId;
+  to: AgentId | "brain";
   edgeId: string;
   label: string;
   eventTypes: string[];
 }
 
+/** Knowledge stream transmissions — always route through Nexus edges. */
 const TRANSMISSION_DEFS: TransmissionDef[] = [
   {
     from: "research",
-    to: "designer",
-    edgeId: "research-designer",
+    to: "brain",
+    edgeId: "research-brain",
     label: "Trend Report Delivered",
     eventTypes: ["task.completed", "report.approved", "task.execution.completed"],
   },
   {
     from: "designer",
-    to: "marketing",
-    edgeId: "designer-marketing",
+    to: "brain",
+    edgeId: "designer-brain",
     label: "Collection Approved",
     eventTypes: ["report.approved", "task.completed"],
   },
   {
     from: "marketing",
-    to: "ceo",
-    edgeId: "ceo-marketing",
+    to: "brain",
+    edgeId: "marketing-brain",
     label: "Campaign Ready",
     eventTypes: ["task.completed", "report.approved", "task.execution.completed"],
   },
   {
     from: "content",
-    to: "marketing",
-    edgeId: "marketing-content",
+    to: "brain",
+    edgeId: "content-brain",
     label: "Content Package Complete",
     eventTypes: ["task.completed", "report.approved"],
   },
   {
     from: "image",
-    to: "marketing",
-    edgeId: "marketing-content",
+    to: "brain",
+    edgeId: "image-brain",
     label: "Visual Assets Delivered",
     eventTypes: ["task.completed", "report.approved"],
   },
   {
+    from: "shopify",
+    to: "brain",
+    edgeId: "shopify-brain",
+    label: "Commerce Sync Complete",
+    eventTypes: ["task.completed", "report.approved"],
+  },
+  {
     from: "ceo",
-    to: "research",
-    edgeId: "ceo-research",
+    to: "brain",
+    edgeId: "ceo-brain",
     label: "Goal Delegated",
     eventTypes: ["task.created", "task.assigned", "task.execution.started"],
   },
@@ -62,10 +70,10 @@ export function matchTransmission(
     if (!def.eventTypes.includes(eventType)) continue;
 
     if (eventType === "task.assigned" || eventType === "task.execution.started") {
-      if (actorId === def.to || actorId === def.from) {
+      if (actorId === def.from || actorId === "ceo") {
         return {
           from: def.from,
-          to: def.to,
+          to: def.to as AgentId,
           edgeId: def.edgeId,
           label: def.label,
         };
@@ -73,10 +81,10 @@ export function matchTransmission(
       continue;
     }
 
-    if (actorId === def.from || actorId === def.to || actorId === "ceo") {
+    if (actorId === def.from || actorId === "ceo") {
       return {
         from: def.from,
-        to: def.to,
+        to: def.to as AgentId,
         edgeId: def.edgeId,
         label: def.label,
       };

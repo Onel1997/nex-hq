@@ -26,11 +26,12 @@ interface NeuralGraphProps {
 }
 
 const STROKE_COLORS = {
-  ambient: "rgb(56 189 248 / 0.06)",
-  active: "rgb(56 189 248 / 0.32)",
-  executing: "rgb(34 211 238 / 0.5)",
-  error: "rgb(248 113 113 / 0.5)",
-  pulse: "rgb(234 242 255 / 0.55)",
+  ambient: "rgb(56 189 248 / 0.02)",
+  active: "rgb(56 189 248 / 0.38)",
+  executing: "rgb(34 211 238 / 0.55)",
+  error: "rgb(248 113 113 / 0.55)",
+  pulse: "rgb(234 242 255 / 0.6)",
+  command: "rgb(255 209 102 / 0.22)",
 } as const;
 
 function particleCount(
@@ -38,15 +39,13 @@ function particleCount(
   active: boolean,
   surge: boolean,
 ): number {
-  if (!active) return flowMode === "ambient" ? 1 : 0;
+  if (!active) return 0;
   switch (flowMode) {
     case "to-brain":
     case "from-brain":
-      return surge ? 5 : 3;
+      return surge ? 4 : 2;
     case "error":
       return 2;
-    case "ambient":
-      return 1;
     default:
       return 0;
   }
@@ -83,6 +82,7 @@ const SynapsePath = memo(function SynapsePath({
 }) {
   const isError = edge.flowMode === "error";
   const isExecuting = edge.flowMode === "to-brain" && accelerated;
+  const isCommand = edge.id === "ceo-brain";
   const isSurge = networkSurge !== "none" && networkSurge !== undefined;
   const stroke =
     isSurge && edge.active
@@ -95,11 +95,16 @@ const SynapsePath = memo(function SynapsePath({
         ? STROKE_COLORS.error
         : isExecuting
           ? STROKE_COLORS.executing
-          : edge.active
+          : isCommand
+            ? STROKE_COLORS.command
+            : edge.active
             ? STROKE_COLORS.active
             : STROKE_COLORS.ambient;
 
   const count = particleCount(edge.flowMode, edge.active, isSurge);
+  const visible = edge.active || isCommand;
+
+  if (!visible) return null;
 
   return (
     <g>
@@ -110,7 +115,7 @@ const SynapsePath = memo(function SynapsePath({
           stroke={stroke}
           strokeWidth={isExecuting ? 4 : 3}
           strokeLinecap="round"
-          opacity={0.15}
+          opacity={0.12}
           style={{ filter: "blur(3px)" }}
         />
       )}
@@ -118,9 +123,11 @@ const SynapsePath = memo(function SynapsePath({
         d={edge.path}
         fill="none"
         stroke={stroke}
-        strokeWidth={edge.active ? (isExecuting ? 2 : 1.5) : 0.75}
+        strokeWidth={
+          edge.active ? (isExecuting ? 2 : 1.5) : isCommand ? 0.85 : 0.75
+        }
         strokeLinecap="round"
-        strokeDasharray={edge.active ? "6 10" : undefined}
+        strokeDasharray={edge.active ? "6 10" : isCommand ? "3 12" : undefined}
         animate={
           isError
             ? { opacity: [0.35, 0.95, 0.35] }
@@ -128,7 +135,9 @@ const SynapsePath = memo(function SynapsePath({
               ? { opacity: [0.5, 1, 0.5], strokeDashoffset: [0, -32] }
               : edge.active
                 ? { strokeDashoffset: [0, -32] }
-                : { opacity: [0.4, 0.65, 0.4] }
+                : isCommand
+                  ? { opacity: [0.35, 0.55, 0.35] }
+                  : undefined
         }
         transition={
           isError
@@ -144,7 +153,9 @@ const SynapsePath = memo(function SynapsePath({
                     ? { duration: 0.9, repeat: 1 }
                     : undefined,
                 }
-              : { duration: 5, repeat: Infinity, ease: "easeInOut" }
+              : isCommand
+                ? { duration: 4, repeat: Infinity, ease: "easeInOut" }
+                : undefined
         }
       />
       {Array.from({ length: count }, (_, i) => (

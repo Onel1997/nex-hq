@@ -81,7 +81,10 @@ export function FacilityShell({
                 startup={startup}
                 onLabSelect={onLabSelect}
               />
-              <ReviewQueuePanel items={data.reviewQueue} />
+              <ReviewQueuePanel
+                items={data.reviewQueue}
+                startupReady={startup.isComplete}
+              />
               <EventStreamPanel
                 events={data.events}
                 startupReady={startup.isComplete}

@@ -1,33 +1,51 @@
 import type { FacilityNodeLayout, FacilitySceneNodeId } from "@/lib/facility/types";
 
 /**
- * Sector-based facility layout (% of scene canvas).
- * Hero composition: CEO → Neural Nexus → Agent Labs, all within safe viewport bounds.
+ * Facility distribution — each lab owns a distinct territory across the HQ.
+ *
+ * Labs are spread into empty regions to break left/right clustering.
+ * Center-left and center-right chambers (Analytics, Image) sit nearer leadership;
+ * corner chambers (Research, Design, Marketing, Operations) feel distant.
+ *
+ *              CEO (50, 6)
+ *           NEXUS (50, 26)
+ *         ═══ protected void ═══
+ *
+ *  Research (5,10)                    Marketing (97,9)
+ *
+ *       Analytics (38,42)      Image (64,38)
+ *
+ *    Content (30,70)              Shopify (88,68)
+ *
+ *  Design (4,90)         Commerce (68,84)    Operations (96,88)
  */
 export const FACILITY_NODE_LAYOUT: FacilityNodeLayout[] = [
-  { id: "brain", left: 50, top: 46, size: 272, zone: "command" },
-  { id: "ceo", left: 50, top: 17, size: 168, zone: "command" },
-  { id: "research", left: 14, top: 31, size: 158, zone: "research" },
-  { id: "analytics", left: 14, top: 58, size: 158, zone: "research" },
-  { id: "marketing", left: 86, top: 31, size: 158, zone: "marketing" },
-  { id: "image", left: 86, top: 58, size: 158, zone: "marketing" },
-  { id: "designer", left: 24, top: 79, size: 158, zone: "design" },
-  { id: "content", left: 38, top: 79, size: 158, zone: "design" },
-  { id: "commerce", left: 54, top: 79, size: 158, zone: "commerce" },
-  { id: "shopify", left: 68, top: 79, size: 158, zone: "commerce" },
-  { id: "operations", left: 82, top: 79, size: 158, zone: "operations" },
+  { id: "brain", left: 50, top: 26, size: 278, zone: "command" },
+  { id: "ceo", left: 50, top: 6, size: 164, zone: "command" },
+
+  { id: "research", left: 5, top: 10, size: 154, zone: "research" },
+  { id: "analytics", left: 38, top: 42, size: 154, zone: "research" },
+  { id: "content", left: 30, top: 70, size: 154, zone: "design" },
+  { id: "designer", left: 4, top: 90, size: 154, zone: "design" },
+
+  { id: "marketing", left: 97, top: 9, size: 154, zone: "marketing" },
+  { id: "image", left: 64, top: 38, size: 154, zone: "marketing" },
+  { id: "shopify", left: 88, top: 68, size: 154, zone: "commerce" },
+  { id: "operations", left: 96, top: 88, size: 154, zone: "operations" },
+
+  { id: "commerce", left: 68, top: 84, size: 154, zone: "commerce" },
 ];
 
 export const FACILITY_ZONES = [
-  { id: "command", label: "CEO Command", left: 50, top: 8 },
-  { id: "research", label: "Research", left: 10, top: 20 },
-  { id: "marketing", label: "Marketing", left: 90, top: 20 },
-  { id: "design", label: "Design", left: 26, top: 92 },
-  { id: "commerce", label: "Commerce", left: 62, top: 92 },
+  { id: "command", label: "Command Core", left: 50, top: 1 },
+  { id: "research", label: "Research", left: 3, top: 6 },
+  { id: "marketing", label: "Marketing", left: 97, top: 5 },
+  { id: "design", label: "Design", left: 3, top: 84 },
+  { id: "commerce", label: "Commerce", left: 92, top: 78 },
 ] as const;
 
-/** Default overview camera — zoomed out ~20% for full HQ hero shot. */
-export const FACILITY_HERO_SCALE = 0.8;
+/** Default overview camera — zoomed out for expansive HQ hero shot. */
+export const FACILITY_HERO_SCALE = 0.73;
 
 const FALLBACK_NODE_LAYOUT: FacilityNodeLayout = {
   id: "brain",

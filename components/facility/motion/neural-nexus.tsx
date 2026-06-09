@@ -28,13 +28,13 @@ const STATE_CONFIG: Record<
   }
 > = {
   idle: {
-    fogSpeed: 0.15,
-    synapseSpeed: 0.4,
-    particleSpeed: 0.3,
-    connectionDist: 22,
-    clusterCount: 5,
-    particleCount: 90,
-    fragmentRate: 0.002,
+    fogSpeed: 0.18,
+    synapseSpeed: 0.55,
+    particleSpeed: 0.38,
+    connectionDist: 24,
+    clusterCount: 6,
+    particleCount: 110,
+    fragmentRate: 0.003,
   },
   processing: {
     fogSpeed: 0.28,
@@ -280,7 +280,7 @@ function drawCortexMesh(
   palette: ReturnType<typeof statePalette>,
   absorbBoost: boolean,
 ) {
-  const filaments = 18;
+  const filaments = 24;
   for (let i = 0; i < filaments; i++) {
     const angle = (i / filaments) * Math.PI * 2 + tick * 0.06;
     const len = (14 + Math.sin(tick * 0.9 + i) * 4) * scale;

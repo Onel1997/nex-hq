@@ -70,25 +70,25 @@ export const IntelligenceHierarchyBeams = memo(
         height={height}
         aria-hidden
       >
-        {geometry.labBeams.map(({ agentId, path, color, active }) => (
+        {geometry.labBeams
+          .filter(({ active }) => active)
+          .map(({ agentId, path, color }) => (
           <g key={agentId} className="facility-hierarchy-lab-beam">
             <path
               d={path}
               fill="none"
               stroke={color}
-              strokeWidth={active ? 1.2 : 0.5}
+              strokeWidth={1.2}
               strokeLinecap="round"
-              opacity={active ? 0.35 : 0.08}
+              opacity={0.4}
             />
-            {active && (
-              <circle r="2.5" fill={color} opacity="0.8">
-                <animateMotion
-                  dur="3.5s"
-                  repeatCount="indefinite"
-                  path={path}
-                />
-              </circle>
-            )}
+            <circle r="2.5" fill={color} opacity="0.85">
+              <animateMotion
+                dur="3.5s"
+                repeatCount="indefinite"
+                path={path}
+              />
+            </circle>
           </g>
         ))}
 

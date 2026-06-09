@@ -62,6 +62,8 @@ export const PlaceholderLabPod = memo(function PlaceholderLabPod({
         agentColor={lab.color}
       />
 
+      <div className="facility-lab-containment-field" aria-hidden />
+      <div className="facility-lab-containment-ring" aria-hidden />
       <div className="facility-lab-glow" aria-hidden />
       <div className="facility-lab-chamber-inner">
         <div className="facility-lab-header">

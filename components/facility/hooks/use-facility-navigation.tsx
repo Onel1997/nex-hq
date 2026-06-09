@@ -113,12 +113,12 @@ export function navigationTransform(
   }
 
   const labOffsets: Partial<Record<AgentId, { x: number; y: number }>> = {
-    research: { x: 6, y: 2 },
-    designer: { x: 5, y: -5 },
-    marketing: { x: -6, y: 2 },
-    content: { x: 4, y: -6 },
-    image: { x: -5, y: 0 },
-    shopify: { x: -4, y: -5 },
+    research: { x: 10, y: 6 },
+    designer: { x: 9, y: -11 },
+    content: { x: 4, y: -7 },
+    marketing: { x: -10, y: 6 },
+    image: { x: -3, y: 0 },
+    shopify: { x: -8, y: -7 },
   };
 
   const offset = labOffsets[focusTarget] ?? { x: 0, y: 0 };

@@ -99,6 +99,8 @@ export const LabPod = memo(function LabPod({
         opsState={lab.opsState}
         color={agentColor}
       />
+      <div className="facility-lab-containment-field" aria-hidden />
+      <div className="facility-lab-containment-ring" aria-hidden />
       <ActivityRing
         key={`${lab.agentId}-${lab.opsState}-${lab.activeTask?.id ?? "none"}`}
         size={nodeSize}
