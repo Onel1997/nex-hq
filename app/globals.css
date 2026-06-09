@@ -251,8 +251,8 @@
 
 .facility-shell {
   --facility-bg: #05070b;
-  --facility-bg-deep: #071019;
-  --facility-bg-elevated: #0a1320;
+  --facility-bg-deep: #08111a;
+  --facility-bg-elevated: #0b1622;
   --facility-bg-glass: rgb(8 14 22 / 0.78);
   --facility-border: #152030;
   --facility-border-subtle: rgb(21 32 48 / 0.55);
@@ -279,8 +279,8 @@
   background: linear-gradient(
     180deg,
     var(--facility-bg) 0%,
-    var(--facility-bg-deep) 45%,
-    #010204 100%
+    var(--facility-bg-deep) 52%,
+    var(--facility-bg-elevated) 100%
   );
   color: var(--facility-text);
   font-family: var(--font-sans), system-ui, sans-serif;
@@ -541,129 +541,208 @@
   inset: 0;
 }
 
+/* Facility backdrop — Phase 1 atmosphere (dark-only, no brightening) */
 .facility-backdrop {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
-  background: #05070b;
-  --nexus-x: 47%;
-  --nexus-y: 38%;
+  --brain-x: 47%;
+  --brain-y: 38%;
+  background:
+    radial-gradient(
+      ellipse 88% 72% at 50% 42%,
+      transparent 42%,
+      rgb(2 5 10 / 0.45) 100%
+    ),
+    radial-gradient(
+      ellipse 70% 55% at 50% 40%,
+      #08111a 0%,
+      #05070b 55%,
+      #020406 100%
+    ),
+    linear-gradient(
+      180deg,
+      #05070b 0%,
+      #08111a 52%,
+      #0b1622 100%
+    );
 }
 
-.facility-env-layer {
+/* Architecture — massive facility forms behind the network */
+.facility-architecture {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.facility-arch-plane {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-/* Base — deep facility interior */
-.facility-env-base {
-  background:
-    linear-gradient(180deg, #05070b 0%, #071019 48%, #0a1320 100%),
-    linear-gradient(135deg, #05070b 0%, #071019 100%);
+/* Far plane — holographic rings & distant structures */
+.facility-arch-far {
+  z-index: 0;
+  animation: facility-arch-far-drift 110s ease-in-out infinite;
 }
 
-/* Distant darkness — edges fall off, no center spotlight */
-.facility-env-distant-dark {
-  background:
-    linear-gradient(90deg, #030508 0%, transparent 18%, transparent 82%, #030508 100%),
-    linear-gradient(0deg, #020406 0%, transparent 14%, transparent 88%, #030508 100%);
-  opacity: 0.85;
+.facility-arch-rings {
+  position: absolute;
+  inset: -8%;
+  width: 116%;
+  height: 116%;
+  opacity: 0.06;
 }
 
-/* Subtle volumetric depth */
-.facility-env-volume {
-  background:
-    linear-gradient(
-      180deg,
-      transparent 0%,
-      rgb(7 16 28 / 0.25) 55%,
-      rgb(5 10 18 / 0.45) 100%
-    );
-  opacity: 0.6;
-  animation: facility-volume-drift 40s ease-in-out infinite;
+.facility-arch-rings g {
+  stroke: rgb(14 36 54 / 0.35);
 }
 
-@keyframes facility-volume-drift {
-  0%,
-  100% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 0.62;
-  }
+.facility-arch-distant {
+  position: absolute;
+  inset: 0;
 }
 
-/* Faint neural grid — full bleed, no circular mask */
-.facility-env-neural-grid {
+.facility-arch-pillar {
+  position: absolute;
+  bottom: 8%;
+  width: 1.2%;
+  min-width: 6px;
+  max-width: 14px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgb(8 22 36 / 0.14) 28%,
+    rgb(6 18 30 / 0.1) 62%,
+    transparent 100%
+  );
+  filter: blur(5px);
+  opacity: 0.07;
+  animation: facility-arch-pillar-drift 95s ease-in-out infinite;
+}
+
+.facility-arch-tower {
+  position: absolute;
+  bottom: 4%;
+  width: 2.5%;
+  min-width: 12px;
+  max-width: 28px;
+  height: 55%;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgb(10 26 40 / 0.12) 22%,
+    rgb(8 20 32 / 0.08) 55%,
+    transparent 100%
+  );
+  filter: blur(8px);
+  opacity: 0.06;
+  animation: facility-arch-pillar-drift 100s ease-in-out infinite;
+}
+
+.facility-arch-tower-left {
+  left: 22%;
+}
+
+.facility-arch-tower-right {
+  right: 20%;
+}
+
+/* Mid plane — perspective floor grid & brain framework */
+.facility-arch-mid {
+  z-index: 0;
+  animation: facility-arch-mid-drift 88s ease-in-out infinite;
+}
+
+.facility-arch-floor {
+  position: absolute;
+  left: -18%;
+  right: -18%;
+  bottom: -28%;
+  height: 72%;
+  transform: perspective(520px) rotateX(72deg);
+  transform-origin: 50% 0%;
   background-image:
-    linear-gradient(rgb(30 80 110 / 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(30 80 110 / 0.06) 1px, transparent 1px);
-  background-size: 64px 64px;
-  opacity: 0.18;
+    linear-gradient(90deg, rgb(12 32 48 / 0.07) 1px, transparent 1px),
+    linear-gradient(0deg, rgb(12 32 48 / 0.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+  opacity: 0.055;
+  mask-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgb(0 0 0 / 0.35) 18%,
+    rgb(0 0 0 / 0.7) 45%,
+    transparent 88%
+  );
 }
 
-/* Distant holographic structures */
-.facility-env-holo-structures {
-  background:
-    linear-gradient(90deg, transparent 6%, rgb(30 70 95 / 0.04) 6.1%, transparent 6.3%),
-    linear-gradient(90deg, transparent 93.5%, rgb(30 70 95 / 0.04) 93.7%, transparent 94%),
-    linear-gradient(168deg, transparent 55%, rgb(25 60 85 / 0.03) 55.4%, transparent 55.8%),
-    linear-gradient(12deg, transparent 48%, rgb(25 60 85 / 0.025) 48.3%, transparent 48.6%),
-    repeating-linear-gradient(
-      90deg,
-      transparent 0 120px,
-      rgb(20 55 75 / 0.025) 120px 121px,
-      transparent 121px 240px
-    );
-  opacity: 0.35;
-  animation: facility-holo-drift 48s ease-in-out infinite;
-}
-
-@keyframes facility-holo-drift {
-  0%,
-  100% {
-    opacity: 0.28;
-  }
-  50% {
-    opacity: 0.38;
-  }
-}
-
-/* Nexus environmental light — cyan, local, never washes screen */
-.facility-env-nexus-light {
+.facility-arch-framework {
+  position: absolute;
+  inset: 0;
+  opacity: 0.07;
   background:
     radial-gradient(
-      ellipse 38% 30% at var(--nexus-x) var(--nexus-y),
-      rgb(25 90 120 / 0.09) 0%,
-      rgb(15 55 80 / 0.04) 42%,
-      transparent 68%
+      ellipse 98% 82% at var(--brain-x) var(--brain-y),
+      transparent 47.5%,
+      rgb(12 32 48 / 0.14) 48%,
+      transparent 48.5%
+    ),
+    radial-gradient(
+      ellipse 108% 88% at var(--brain-x) var(--brain-y),
+      transparent 51.5%,
+      rgb(10 28 42 / 0.1) 52%,
+      transparent 52.4%
+    ),
+    radial-gradient(
+      ellipse 118% 94% at var(--brain-x) var(--brain-y),
+      transparent 55%,
+      rgb(8 24 38 / 0.08) 55.4%,
+      transparent 55.8%
+    ),
+    radial-gradient(
+      ellipse 128% 100% at var(--brain-x) var(--brain-y),
+      transparent 58%,
+      rgb(8 22 34 / 0.06) 58.3%,
+      transparent 58.6%
     );
-  animation: facility-nexus-light-drift 12s ease-in-out infinite;
 }
 
-@keyframes facility-nexus-light-drift {
-  0%,
-  100% {
-    opacity: 0.7;
-  }
-  50% {
-    opacity: 0.9;
-  }
+/* Fog — dark volumetric density, strongest at Brain Core */
+.facility-atmo-fog {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 36% 30% at var(--brain-x) var(--brain-y),
+    rgb(5 14 26 / 0.16) 0%,
+    rgb(4 11 20 / 0.08) 38%,
+    rgb(3 8 16 / 0.03) 62%,
+    transparent 78%
+  );
+  animation: facility-atmo-fog-drift 72s ease-in-out infinite;
 }
 
-/* Edge depth — linear only, no visible circular frame */
-.facility-env-edge-depth {
-  z-index: 3;
-  background:
-    linear-gradient(90deg, #020305 0%, transparent 8%, transparent 92%, #020305 100%),
-    linear-gradient(0deg, #020305 0%, transparent 6%, transparent 94%, #020305 100%);
-  opacity: 0.55;
+/* Energy field — soft dark-blue glow, large radius, no hard edges */
+.facility-atmo-energy {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 52% 44% at var(--brain-x) var(--brain-y),
+    rgb(14 40 62 / 0.07) 0%,
+    rgb(8 24 40 / 0.04) 42%,
+    rgb(4 12 22 / 0.015) 68%,
+    transparent 82%
+  );
+  animation: facility-atmo-energy-drift 64s ease-in-out infinite;
 }
 
-/* Ambience — tiny particles + distant motion */
+/* Sparse floating particles */
 .facility-ambience {
   position: absolute;
   inset: 0;
@@ -672,101 +751,89 @@
   z-index: 1;
 }
 
-.facility-ambience-data-streams,
-.facility-ambience-particles,
-.facility-ambience-distant-flickers {
+.facility-ambience-particles {
   position: absolute;
   inset: 0;
-}
-
-.facility-ambience-data-stream {
-  position: absolute;
-  top: -15%;
-  width: 1px;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgb(30 90 120 / 0.08) 40%,
-    rgb(20 60 85 / 0.04) 70%,
-    transparent 100%
-  );
-  animation: facility-data-stream-fall linear infinite;
-  opacity: 0.2;
-}
-
-@keyframes facility-data-stream-fall {
-  0% {
-    transform: translateY(0);
-    opacity: 0;
-  }
-  10% {
-    opacity: 0.18;
-  }
-  90% {
-    opacity: 0.08;
-  }
-  100% {
-    transform: translateY(130%);
-    opacity: 0;
-  }
 }
 
 .facility-ambience-particle {
   position: absolute;
   border-radius: 9999px;
-  background: rgb(35 95 125 / 0.35);
-  animation: facility-particle-drift linear infinite;
+  background: rgb(22 58 82 / 0.22);
+  animation: facility-atmo-particle-drift linear infinite;
 }
 
-@keyframes facility-particle-drift {
+@keyframes facility-arch-far-drift {
+  0%,
+  100% {
+    opacity: 0.92;
+    transform: translate(0, 0) scale(1.04);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-0.15%, 0.1%) scale(1.045);
+  }
+}
+
+@keyframes facility-arch-mid-drift {
+  0%,
+  100% {
+    opacity: 0.94;
+    transform: translate(0, 0);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(0.12%, -0.08%);
+  }
+}
+
+@keyframes facility-arch-pillar-drift {
+  0%,
+  100% {
+    opacity: 0.05;
+  }
+  50% {
+    opacity: 0.08;
+  }
+}
+
+@keyframes facility-atmo-fog-drift {
+  0%,
+  100% {
+    opacity: 0.92;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.015);
+  }
+}
+
+@keyframes facility-atmo-energy-drift {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes facility-atmo-particle-drift {
   0% {
     transform: translateY(0) translateX(0);
     opacity: 0;
   }
   15% {
-    opacity: 0.22;
+    opacity: 0.09;
   }
   85% {
-    opacity: 0.12;
+    opacity: 0.05;
   }
   100% {
-    transform: translateY(-36px) translateX(4px);
+    transform: translateY(-22px) translateX(2px);
     opacity: 0;
   }
-}
-
-.facility-ambience-holo-flicker {
-  position: absolute;
-  width: 22px;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgb(30 85 115 / 0.2),
-    transparent
-  );
-  opacity: 0;
-  animation: facility-holo-flicker ease-in-out infinite;
-}
-
-@keyframes facility-holo-flicker {
-  0%,
-  90%,
-  100% {
-    opacity: 0;
-  }
-  94% {
-    opacity: 0.22;
-  }
-}
-
-/* Foreground — particles only, no wash */
-.facility-foreground-field {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  opacity: 1;
 }
 
 @keyframes facility-glow-flicker {
@@ -889,6 +956,38 @@
   box-shadow:
     0 0 40px rgb(56 189 248 / 0.15),
     inset 0 0 50px rgb(56 189 248 / 0.08);
+}
+
+/* Continuous routing — streams absorbed into the core */
+.facility-brain-nexus-routing .facility-brain-nexus-frame {
+  animation: facility-brain-routing-absorb 7s ease-in-out infinite;
+}
+
+.facility-brain-nexus-streaming .facility-brain-nexus-frame {
+  animation-duration: 4.5s;
+  border-color: rgb(56 189 248 / 0.48);
+}
+
+@keyframes facility-brain-routing-absorb {
+  0%,
+  100% {
+    box-shadow:
+      0 0 64px rgb(56 189 248 / 0.24),
+      0 0 120px rgb(56 189 248 / 0.1),
+      inset 0 0 60px rgb(0 0 0 / 0.65),
+      inset 0 -20px 40px rgb(56 189 248 / 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 72px rgb(56 189 248 / 0.28),
+      0 0 130px rgb(56 189 248 / 0.12),
+      inset 0 0 72px rgb(56 189 248 / 0.06),
+      inset 0 -16px 48px rgb(56 189 248 / 0.12);
+  }
+}
+
+.facility-brain-stream-absorption {
+  pointer-events: none;
 }
 
 /* Neural Nexus V5 — layered consciousness */
@@ -4120,13 +4219,13 @@
   .facility-brain-neural-texture,
   .facility-nexus-flow-absorb,
   .facility-scene-node-ambient,
+  .facility-arch-far,
+  .facility-arch-mid,
+  .facility-arch-pillar,
+  .facility-arch-tower,
+  .facility-atmo-fog,
+  .facility-atmo-energy,
   .facility-ambience-particle,
-  .facility-ambience-data-stream,
-  .facility-ambience-holo-flicker,
-  .facility-env-nexus-light,
-  .facility-env-volume,
-  .facility-env-holo-structures,
-  .facility-env-neural-grid,
   .facility-event-pulse-ring,
   .facility-event-live-count,
   .facility-lab-containment-ring,

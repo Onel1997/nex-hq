@@ -41,8 +41,8 @@ const NEURAL_DARK: FacilityThemeTokens = {
   cssClass: "facility-theme-neural-dark",
   vars: {
     "--facility-bg": "#05070B",
-    "--facility-bg-deep": "#071019",
-    "--facility-bg-elevated": "#0A1320",
+    "--facility-bg-deep": "#08111A",
+    "--facility-bg-elevated": "#0B1622",
     "--facility-bg-glass": "rgb(8 14 22 / 0.78)",
     "--facility-border": "#152030",
     "--facility-border-subtle": "rgb(21 32 48 / 0.55)",

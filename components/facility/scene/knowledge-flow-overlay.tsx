@@ -2,7 +2,11 @@
 
 import type { AgentId } from "@/lib/constants/agents";
 import { getAgentColor } from "@/lib/facility/facility-theme";
-import { layoutToPoint } from "@/lib/facility/graph";
+import {
+  computeConnectionPath,
+  getBrainCenter,
+  layoutToPoint,
+} from "@/lib/facility/graph";
 import { getNodeLayout } from "@/lib/facility/layout";
 import type { KnowledgeFlowSequence } from "@/lib/facility/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,47 +18,46 @@ interface KnowledgeFlowOverlayProps {
   flow: KnowledgeFlowSequence | null;
 }
 
-function curvedPath(
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-): string {
-  const mx = (from.x + to.x) / 2;
-  const my = (from.y + to.y) / 2;
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const cx = mx - dy * 0.18;
-  const cy = my + dx * 0.18;
-  return `M ${from.x.toFixed(1)} ${from.y.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${to.x.toFixed(1)} ${to.y.toFixed(1)}`;
-}
-
 export const KnowledgeFlowOverlay = memo(function KnowledgeFlowOverlay({
   width,
   height,
   flow,
 }: KnowledgeFlowOverlayProps) {
-  const points = useMemo(() => {
+  const geometry = useMemo(() => {
     if (width <= 0 || height <= 0) return null;
-    const brain = layoutToPoint("brain", width, height);
+    const brain = getBrainCenter(width, height);
     const ceo = layoutToPoint("ceo", width, height);
-    if (!brain || !ceo) return null;
+    if (!ceo) return null;
     return { brain, ceo };
   }, [width, height]);
 
-  if (!flow || !points || flow.phase === "complete") return null;
+  if (!flow || !geometry || flow.phase === "complete") return null;
 
   const agentId = flow.agentId;
   const color =
     agentId === "ceo" ? "#FFD166" : getAgentColor(agentId as AgentId);
 
-  const labPoint =
+  const labToNexusPath =
     agentId !== "ceo"
-      ? layoutToPoint(agentId, width, height)
-      : points.brain;
+      ? computeConnectionPath(
+          agentId,
+          "brain",
+          width,
+          height,
+          `${agentId}-brain`,
+        )
+      : null;
 
-  if (!labPoint) return null;
+  const nexusToCeoPath = computeConnectionPath(
+    "brain",
+    "ceo",
+    width,
+    height,
+    "ceo-brain",
+  );
 
-  const labToNexusPath = curvedPath(labPoint, points.brain);
-  const nexusToCeoPath = curvedPath(points.brain, points.ceo);
+  if (!nexusToCeoPath) return null;
+  if (agentId !== "ceo" && !labToNexusPath) return null;
 
   const showLabToNexus =
     flow.phase === "lab-to-nexus" || flow.phase === "nexus-absorb";
@@ -79,7 +82,7 @@ export const KnowledgeFlowOverlay = memo(function KnowledgeFlowOverlay({
       </defs>
 
       <AnimatePresence>
-        {showLabToNexus && (
+        {showLabToNexus && labToNexusPath && (
           <g key={`lab-${flow.id}`} filter="url(#knowledge-flow-glow)">
             <motion.path
               d={labToNexusPath}
@@ -112,8 +115,8 @@ export const KnowledgeFlowOverlay = memo(function KnowledgeFlowOverlay({
         {flow.phase === "nexus-absorb" && (
           <motion.circle
             key={`absorb-${flow.id}`}
-            cx={points.brain.x}
-            cy={points.brain.y}
+            cx={geometry.brain.x}
+            cy={geometry.brain.y}
             r={getNodeLayout("brain").size * 0.35}
             fill="none"
             stroke="#38BDF8"
@@ -157,8 +160,8 @@ export const KnowledgeFlowOverlay = memo(function KnowledgeFlowOverlay({
         {flow.phase === "nexus-to-ceo" && (
           <motion.circle
             key={`ceo-activate-${flow.id}`}
-            cx={points.ceo.x}
-            cy={points.ceo.y}
+            cx={geometry.ceo.x}
+            cy={geometry.ceo.y}
             r={28}
             fill="none"
             stroke="#FFD166"
@@ -166,15 +169,15 @@ export const KnowledgeFlowOverlay = memo(function KnowledgeFlowOverlay({
             initial={{ opacity: 0.9, scale: 0.5 }}
             animate={{ opacity: 0, scale: 2.2 }}
             transition={{ duration: 1.6, ease: "easeOut" }}
-            style={{ transformOrigin: `${points.ceo.x}px ${points.ceo.y}px` }}
+            style={{ transformOrigin: `${geometry.ceo.x}px ${geometry.ceo.y}px` }}
           />
         )}
       </AnimatePresence>
 
       {flow.label && (
         <foreignObject
-          x={points.brain.x - 80}
-          y={points.brain.y - getNodeLayout("brain").size * 0.55}
+          x={geometry.brain.x - 80}
+          y={geometry.brain.y - getNodeLayout("brain").size * 0.55}
           width={160}
           height={24}
         >

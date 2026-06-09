@@ -16,16 +16,16 @@ function seedParticles(count: number): ForegroundParticle[] {
   return Array.from({ length: count }, () => ({
     x: Math.random(),
     y: Math.random(),
-    vx: (Math.random() - 0.5) * 0.00018,
-    vy: -0.00008 - Math.random() * 0.00012,
-    size: 0.35 + Math.random() * 0.9,
-    alpha: 0.04 + Math.random() * 0.1,
+    vx: (Math.random() - 0.5) * 0.00012,
+    vy: -0.00005 - Math.random() * 0.00008,
+    size: 0.25 + Math.random() * 0.65,
+    alpha: 0.03 + Math.random() * 0.07,
   }));
 }
 
 export const FacilityForegroundField = memo(function FacilityForegroundField() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const particlesRef = useRef<ForegroundParticle[]>(seedParticles(18));
+  const particlesRef = useRef<ForegroundParticle[]>(seedParticles(34));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -70,7 +70,7 @@ export const FacilityForegroundField = memo(function FacilityForegroundField() {
           (0.7 + nearNexus * 0.3);
         ctx.beginPath();
         ctx.arc(p.x * w, p.y * h, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(40, 120, 160, ${flicker})`;
+        ctx.fillStyle = `rgba(28, 85, 115, ${flicker})`;
         ctx.fill();
       }
 

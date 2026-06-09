@@ -1,8 +1,10 @@
 export { LabIdentityVisual } from "@/components/facility/motion/lab-identity-visual";
 export { ActivityRing } from "@/components/facility/motion/activity-ring";
 export { AmbienceField } from "@/components/facility/motion/ambience-field";
+export { BrainStreamAbsorption } from "@/components/facility/motion/brain-stream-absorption";
 export { BrainPulse } from "@/components/facility/motion/brain-pulse";
 export { BrainReactor } from "@/components/facility/motion/brain-reactor";
+export { EnergyStreamPulse } from "@/components/facility/motion/energy-stream-pulse";
 export { NeuralNexus } from "@/components/facility/motion/neural-nexus";
 export { DataFlowParticle } from "@/components/facility/motion/data-flow-particle";
 export { GlowPulse } from "@/components/facility/motion/glow-pulse";

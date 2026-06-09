@@ -58,8 +58,10 @@ export const BrainCore = memo(function BrainCore({
       className={cn(
         "facility-brain-nexus-stack",
         `facility-brain-nexus-${nexusState}`,
+        "facility-brain-nexus-routing",
         isSurge && "facility-brain-nexus-surging",
         knowledgeFlow && "facility-brain-nexus-receiving",
+        networkPulse && "facility-brain-nexus-streaming",
         className,
       )}
       style={style}
