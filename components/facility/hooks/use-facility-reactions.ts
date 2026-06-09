@@ -158,6 +158,7 @@ export function useFacilityReactions(
 
       const reaction = eventToReaction(event.type);
       const ceoMatch = matchCeoDecision(event);
+      const flowMatch = matchKnowledgeFlow(event);
 
       if (ceoMatch) {
         const decision = createCeoDecision(ceoMatch);
@@ -167,7 +168,9 @@ export function useFacilityReactions(
         }, 4500);
       }
 
-      if (!reaction.pulse && !reaction.networkOnly && !ceoMatch) continue;
+      if (!reaction.pulse && !reaction.networkOnly && !ceoMatch && !flowMatch) {
+        continue;
+      }
 
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
@@ -203,6 +206,10 @@ export function useFacilityReactions(
         transmissionTimeoutRef.current = setTimeout(() => {
           setActiveTransmission(null);
         }, 2200);
+      }
+
+      if (flowMatch) {
+        scheduleKnowledgeFlow(createKnowledgeFlow(flowMatch));
       }
 
       const duration = reaction.pulse

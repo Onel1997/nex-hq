@@ -1,4 +1,5 @@
 import type { AgentId } from "@/lib/constants/agents";
+import { AGENT_IDS } from "@/lib/constants/agents";
 import type {
   FacilityEvent,
   KnowledgeFlowPhase,
@@ -12,6 +13,23 @@ const FLOW_EVENT_TYPES = new Set([
   "ceo.final_report.generated",
   "ceo.final_report.completed",
 ]);
+
+const SCENE_FLOW_AGENT_IDS = new Set(
+  AGENT_IDS.filter((id): id is Exclude<AgentId, "ceo"> => id !== "ceo"),
+);
+
+function resolveFlowAgent(event: FacilityEvent): Exclude<AgentId, "ceo"> | null {
+  if (SCENE_FLOW_AGENT_IDS.has(event.actorId as Exclude<AgentId, "ceo">)) {
+    return event.actorId as Exclude<AgentId, "ceo">;
+  }
+
+  // Human actors (e.g. workspace-user on report.approved) are not scene nodes.
+  if (event.actorType === "human" || event.actorId === "workspace-user") {
+    return null;
+  }
+
+  return null;
+}
 
 const PHASE_MS: Record<Exclude<KnowledgeFlowPhase, "complete">, number> = {
   "lab-to-nexus": 2200,
@@ -35,8 +53,8 @@ export function matchKnowledgeFlow(
     };
   }
 
-  const agentId = event.actorId as AgentId;
-  if (!agentId || agentId === "ceo") return null;
+  const agentId = resolveFlowAgent(event);
+  if (!agentId) return null;
 
   const label =
     event.type === "report.approved"

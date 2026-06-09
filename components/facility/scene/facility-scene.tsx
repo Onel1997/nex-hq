@@ -103,8 +103,17 @@ export function FacilityScene({
   const fadeIn = (from: Parameters<typeof phaseAtLeast>[1]) =>
     startup.isComplete || phaseAtLeast(startup.phase, from);
 
+  const isChamberNav = navigation.mode === "lab-focus";
+  const isCeoChamber = navigation.mode === "ceo-focus";
+
   return (
-    <div className="facility-scene facility-scene-depth">
+    <div
+      className={cn(
+        "facility-scene facility-scene-depth",
+        isChamberNav && "facility-scene-nav-chamber",
+        isCeoChamber && "facility-scene-nav-ceo-chamber",
+      )}
+    >
       <FacilityBackdrop />
 
       <FacilityStartupOverlay
@@ -115,12 +124,14 @@ export function FacilityScene({
       <motion.div
         ref={ref}
         className="facility-scene-canvas"
+        style={{ perspective: camera.perspective }}
         animate={{
           scale: camera.scale,
           x: `${camera.x}%`,
           y: `${camera.y}%`,
+          rotateX: camera.rotateX,
         }}
-        transition={{ type: "spring", damping: 28, stiffness: 180 }}
+        transition={{ type: "spring", damping: 26, stiffness: 160 }}
       >
         <motion.div
           className="facility-scene-layer"
@@ -191,19 +202,22 @@ export function FacilityScene({
           />
         </motion.div>
 
-        {SPECIALIST_AGENT_IDS.map((agentId, i) => (
+        {SPECIALIST_AGENT_IDS.map((agentId, i) => {
+          const isFocused = navigation.focusTarget === agentId;
+          return (
           <motion.div
             key={agentId}
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{
-              opacity: fadeIn("labs") ? 1 : 0,
-              scale: fadeIn("labs") ? 1 : 0.85,
+              opacity: fadeIn("labs") ? (isChamberNav && !isFocused ? 0.38 : 1) : 0,
+              scale: fadeIn("labs") ? (isFocused ? 1.08 : 1) : 0.85,
+              filter: isChamberNav && !isFocused ? "blur(1px)" : "blur(0px)",
             }}
             transition={{ duration: 0.5, delay: i * 0.06, ease: "easeOut" }}
             style={nodeStyle(agentId, labZIndex(agentId, data.labs))}
             className={cn(
               "facility-scene-node-wrap",
-              navigation.focusTarget === agentId && "facility-scene-node-focused",
+              isFocused && "facility-scene-node-focused facility-scene-chamber-active",
               ambientPulse?.agentId === agentId && "facility-scene-node-ambient",
             )}
           >
@@ -215,7 +229,8 @@ export function FacilityScene({
               onSelect={() => onLabSelect(agentId)}
             />
           </motion.div>
-        ))}
+          );
+        })}
 
         {PLACEHOLDER_LAB_IDS.map((labId, i) => (
           <motion.div

@@ -1,4 +1,4 @@
-import { getNodeLayout } from "@/lib/facility/layout";
+import { getNodeLayout, isFacilitySceneNodeId } from "@/lib/facility/layout";
 import { PLACEHOLDER_LABS } from "@/lib/facility/placeholder-labs";
 import type { FacilitySceneNodeId, FacilityLabId, LabOpsState } from "@/lib/facility/types";
 
@@ -60,10 +60,13 @@ export const SYNAPSE_EDGES: SynapseEdgeDef[] = [
 ];
 
 export function layoutToPoint(
-  id: SynapseNodeId,
+  id: SynapseNodeId | string,
   width: number,
   height: number,
-): SynapsePoint {
+): SynapsePoint | null {
+  if (!isFacilitySceneNodeId(id)) {
+    return null;
+  }
   const layout = getNodeLayout(id);
   return {
     x: (layout.left / 100) * width,
@@ -128,6 +131,9 @@ export function computeSynapseEdges(
   return SYNAPSE_EDGES.map((edge) => {
     const from = layoutToPoint(edge.from, width, height);
     const to = layoutToPoint(edge.to, width, height);
+    if (!from || !to) {
+      return null;
+    }
     const flowMode = deriveEdgeFlowMode(edge, labStates);
     return {
       id: edge.id,
@@ -138,7 +144,7 @@ export function computeSynapseEdges(
       flowMode,
       active: flowMode !== "ambient",
     };
-  });
+  }).filter((edge): edge is SynapseEdgeComputed => edge !== null);
 }
 
 export function buildLabStateMap(

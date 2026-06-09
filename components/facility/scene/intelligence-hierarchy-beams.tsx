@@ -33,18 +33,22 @@ export const IntelligenceHierarchyBeams = memo(
       if (width <= 0 || height <= 0) return null;
       const brain = layoutToPoint("brain", width, height);
       const ceo = layoutToPoint("ceo", width, height);
-      const labBeams = SPECIALIST_AGENT_IDS.map((agentId) => {
+      if (!brain || !ceo) return null;
+      const labBeams = SPECIALIST_AGENT_IDS.flatMap((agentId) => {
         const from = layoutToPoint(agentId, width, height);
+        if (!from) return [];
         const active =
           labs[agentId].opsState === "executing" ||
           labs[agentId].opsState === "review" ||
           labs[agentId].opsState === "queued";
-        return {
-          agentId,
-          path: beamPath(from, brain),
-          color: getAgentColor(agentId),
-          active,
-        };
+        return [
+          {
+            agentId,
+            path: beamPath(from, brain),
+            color: getAgentColor(agentId),
+            active,
+          },
+        ];
       });
       return {
         brain,

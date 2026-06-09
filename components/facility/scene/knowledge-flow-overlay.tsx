@@ -36,6 +36,7 @@ export const KnowledgeFlowOverlay = memo(function KnowledgeFlowOverlay({
     if (width <= 0 || height <= 0) return null;
     const brain = layoutToPoint("brain", width, height);
     const ceo = layoutToPoint("ceo", width, height);
+    if (!brain || !ceo) return null;
     return { brain, ceo };
   }, [width, height]);
 
@@ -49,6 +50,8 @@ export const KnowledgeFlowOverlay = memo(function KnowledgeFlowOverlay({
     agentId !== "ceo"
       ? layoutToPoint(agentId, width, height)
       : points.brain;
+
+  if (!labPoint) return null;
 
   const labToNexusPath = curvedPath(labPoint, points.brain);
   const nexusToCeoPath = curvedPath(points.brain, points.ceo);
@@ -127,21 +130,44 @@ export const KnowledgeFlowOverlay = memo(function KnowledgeFlowOverlay({
               d={nexusToCeoPath}
               fill="none"
               stroke="#FFD166"
-              strokeWidth={2}
+              strokeWidth={2.5}
               strokeLinecap="round"
               initial={{ pathLength: 0, opacity: 0 }}
               animate={{ pathLength: 1, opacity: [0, 1, 0.85] }}
               exit={{ opacity: 0 }}
               transition={{ duration: 1, ease: "easeOut" }}
             />
-            <circle r="4" fill="#FFD166">
+            <circle r="5" fill="#FFD166">
               <animateMotion
-                dur="1.6s"
+                dur="1.4s"
+                repeatCount="indefinite"
+                path={nexusToCeoPath}
+              />
+            </circle>
+            <circle r="14" fill="#FFD166" opacity="0.12">
+              <animateMotion
+                dur="1.4s"
                 repeatCount="indefinite"
                 path={nexusToCeoPath}
               />
             </circle>
           </g>
+        )}
+
+        {flow.phase === "nexus-to-ceo" && (
+          <motion.circle
+            key={`ceo-activate-${flow.id}`}
+            cx={points.ceo.x}
+            cy={points.ceo.y}
+            r={28}
+            fill="none"
+            stroke="#FFD166"
+            strokeWidth={2}
+            initial={{ opacity: 0.9, scale: 0.5 }}
+            animate={{ opacity: 0, scale: 2.2 }}
+            transition={{ duration: 1.6, ease: "easeOut" }}
+            style={{ transformOrigin: `${points.ceo.x}px ${points.ceo.y}px` }}
+          />
         )}
       </AnimatePresence>
 

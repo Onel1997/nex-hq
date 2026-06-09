@@ -200,7 +200,123 @@ function statePalette(state: BrainNexusState) {
   }
 }
 
-const FRAGMENT_CHARS = ["0", "1", "λ", "Σ", "◈", "▣", "◎"];
+const FRAGMENT_CHARS = [
+  "MEM",
+  "CTX",
+  "SIG",
+  "PAT",
+  "REC",
+  "DEC",
+  "λ",
+  "Σ",
+  "◈",
+];
+
+interface MemoryNode {
+  angle: number;
+  orbit: number;
+  radius: number;
+  label: string;
+  phase: number;
+  drift: number;
+}
+
+function seedMemoryNodes(count: number): MemoryNode[] {
+  const labels = ["MEM", "CTX", "SIG", "PAT", "REC", "DEC", "IDX", "REF"];
+  return Array.from({ length: count }, (_, i) => ({
+    angle: (i / count) * Math.PI * 2 + Math.random() * 0.4,
+    orbit: 22 + Math.random() * 14,
+    radius: 3 + Math.random() * 2.5,
+    label: labels[i % labels.length],
+    phase: Math.random() * Math.PI * 2,
+    drift: 0.2 + Math.random() * 0.3,
+  }));
+}
+
+function drawHolographicRings(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  scale: number,
+  tick: number,
+  palette: ReturnType<typeof statePalette>,
+  absorbBoost: boolean,
+) {
+  const rings = [32, 26, 20];
+  for (let r = 0; r < rings.length; r++) {
+    const radius = rings[r] * scale;
+    const rotation = tick * (0.15 + r * 0.08) * (r % 2 === 0 ? 1 : -1);
+    const segments = 6 + r * 2;
+    const alpha = (0.08 + r * 0.04) * (absorbBoost ? 1.5 : 1);
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rotation);
+    ctx.beginPath();
+    for (let i = 0; i <= segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      const wobble = Math.sin(tick * 1.2 + i + r) * 2 * scale;
+      const px = Math.cos(a) * (radius + wobble);
+      const py = Math.sin(a) * (radius + wobble);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = `rgba(${palette.synapse}, ${alpha})`;
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([3, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+}
+
+function drawCortexMesh(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  scale: number,
+  tick: number,
+  palette: ReturnType<typeof statePalette>,
+  absorbBoost: boolean,
+) {
+  const filaments = 18;
+  for (let i = 0; i < filaments; i++) {
+    const angle = (i / filaments) * Math.PI * 2 + tick * 0.06;
+    const len = (14 + Math.sin(tick * 0.9 + i) * 4) * scale;
+    const wave = Math.sin(tick * 1.4 + i * 0.5) * 3 * scale;
+    const ex = cx + Math.cos(angle) * len + wave;
+    const ey = cy + Math.sin(angle) * len + wave * 0.5;
+    const alpha = 0.12 + Math.sin(tick + i) * 0.08;
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.quadraticCurveTo(
+      cx + Math.cos(angle + 0.3) * len * 0.5,
+      cy + Math.sin(angle + 0.3) * len * 0.5,
+      ex,
+      ey,
+    );
+    ctx.strokeStyle = `rgba(${palette.synapse}, ${alpha * (absorbBoost ? 1.6 : 1)})`;
+    ctx.lineWidth = 0.45;
+    ctx.stroke();
+  }
+
+  const cortexGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 20 * scale);
+  cortexGrad.addColorStop(0, `rgba(${palette.particle}, ${absorbBoost ? 0.18 : 0.1})`);
+  cortexGrad.addColorStop(0.35, `rgba(${palette.synapse}, 0.05)`);
+  cortexGrad.addColorStop(0.7, `rgba(${palette.core}, 0.02)`);
+  cortexGrad.addColorStop(1, "rgba(5, 7, 10, 0)");
+  ctx.fillStyle = cortexGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 18 * scale * (1 + Math.sin(tick * 0.7) * 0.05), 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.5 + Math.sin(tick * 2) * 0.8, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(234, 242, 255, ${0.22 + Math.sin(tick * 1.5) * 0.12})`;
+  ctx.fill();
+}
 
 export const NeuralNexus = memo(function NeuralNexus({
   state,
@@ -215,6 +331,7 @@ export const NeuralNexus = memo(function NeuralNexus({
   const particlesRef = useRef<NexusParticle[]>([]);
   const fogRef = useRef<FogBlob[]>([]);
   const fragmentsRef = useRef<DataFragment[]>([]);
+  const memoryNodesRef = useRef<MemoryNode[]>([]);
   const config = STATE_CONFIG[state];
   const palette = statePalette(state);
   const streamIntensity = useMemo(() => deriveStreamIntensity(labs), [labs]);
@@ -228,7 +345,8 @@ export const NeuralNexus = memo(function NeuralNexus({
       clustersRef.current,
       config.particleCount,
     );
-    fogRef.current = seedFog(6);
+    fogRef.current = seedFog(8);
+    memoryNodesRef.current = seedMemoryNodes(8);
   }, [config.clusterCount, config.particleCount]);
 
   useEffect(() => {
@@ -292,7 +410,7 @@ export const NeuralNexus = memo(function NeuralNexus({
           cy + blob.y * scale,
           blob.radius * scale * breathe,
         );
-        grad.addColorStop(0, `rgba(${palette.fog}, ${blob.alpha * 1.8})`);
+        grad.addColorStop(0, `rgba(${palette.fog}, ${blob.alpha * 0.75})`);
         grad.addColorStop(1, "rgba(5, 7, 10, 0)");
         bgCtx.fillStyle = grad;
         bgCtx.beginPath();
@@ -349,16 +467,17 @@ export const NeuralNexus = memo(function NeuralNexus({
           0,
           cx + c.x * scale,
           cy + c.y * scale,
-          c.radius * 0.5 * scale,
+          c.radius * 0.55 * scale,
         );
-        grad.addColorStop(0, `rgba(${palette.synapse}, ${0.25 * nodePulse})`);
+        grad.addColorStop(0, `rgba(${palette.synapse}, ${0.3 * nodePulse})`);
+        grad.addColorStop(0.6, `rgba(${palette.particle}, ${0.08 * nodePulse})`);
         grad.addColorStop(1, "rgba(5, 7, 10, 0)");
         midCtx.fillStyle = grad;
         midCtx.beginPath();
         midCtx.arc(
           cx + c.x * scale,
           cy + c.y * scale,
-          c.radius * 0.45 * scale,
+          c.radius * 0.5 * scale,
           0,
           Math.PI * 2,
         );
@@ -368,30 +487,56 @@ export const NeuralNexus = memo(function NeuralNexus({
         midCtx.arc(
           cx + c.x * scale,
           cy + c.y * scale,
-          1.2 + nodePulse * 0.8,
+          1.4 + nodePulse * 0.9,
           0,
           Math.PI * 2,
         );
-        midCtx.fillStyle = `rgba(${palette.particle}, ${0.6 + nodePulse * 0.4})`;
+        midCtx.fillStyle = `rgba(${palette.particle}, ${0.65 + nodePulse * 0.35})`;
         midCtx.fill();
       }
 
-      const coreGrad = midCtx.createRadialGradient(cx, cy, 0, cx, cy, 28 * scale);
-      coreGrad.addColorStop(0, `rgba(${palette.core}, 0.85)`);
-      coreGrad.addColorStop(0.5, `rgba(${palette.synapse}, 0.12)`);
-      coreGrad.addColorStop(1, "rgba(5, 7, 10, 0)");
-      midCtx.fillStyle = coreGrad;
-      midCtx.beginPath();
-      midCtx.ellipse(
-        cx,
-        cy,
-        22 * scale * (1 + Math.sin(tick * 0.8) * 0.06),
-        18 * scale * (1 + Math.cos(tick * 0.6) * 0.05),
-        tick * 0.05,
-        0,
-        Math.PI * 2,
-      );
-      midCtx.fill();
+      drawHolographicRings(midCtx, cx, cy, scale, tick, palette, absorbBoost);
+
+      for (const mem of memoryNodesRef.current) {
+        mem.angle += mem.drift * 0.008 * synapseSpeed;
+        const mx = Math.cos(mem.angle) * mem.orbit;
+        const my = Math.sin(mem.angle) * mem.orbit * 0.85;
+        const pulse = 0.55 + Math.sin(tick * 2 + mem.phase) * 0.45;
+
+        midCtx.beginPath();
+        midCtx.moveTo(cx, cy);
+        midCtx.quadraticCurveTo(
+          cx + mx * scale * 0.4,
+          cy + my * scale * 0.4,
+          cx + mx * scale,
+          cy + my * scale,
+        );
+        midCtx.strokeStyle = `rgba(${palette.synapse}, ${0.15 * pulse})`;
+        midCtx.lineWidth = 0.4;
+        midCtx.stroke();
+
+        const memGrad = midCtx.createRadialGradient(
+          cx + mx * scale,
+          cy + my * scale,
+          0,
+          cx + mx * scale,
+          cy + my * scale,
+          mem.radius * scale * 2,
+        );
+        memGrad.addColorStop(0, `rgba(${palette.particle}, ${0.5 * pulse})`);
+        memGrad.addColorStop(1, "rgba(5, 7, 10, 0)");
+        midCtx.fillStyle = memGrad;
+        midCtx.beginPath();
+        midCtx.arc(cx + mx * scale, cy + my * scale, mem.radius * scale, 0, Math.PI * 2);
+        midCtx.fill();
+
+        midCtx.font = `${5 + pulse}px monospace`;
+        midCtx.fillStyle = `rgba(234, 242, 255, ${0.35 + pulse * 0.4})`;
+        midCtx.textAlign = "center";
+        midCtx.fillText(mem.label, cx + mx * scale, cy + my * scale + 1);
+      }
+
+      drawCortexMesh(midCtx, cx, cy, scale, tick, palette, absorbBoost);
 
       // ── FOREGROUND: particles + data fragments ──
       fgCtx.clearRect(0, 0, w, h);
@@ -441,8 +586,9 @@ export const NeuralNexus = memo(function NeuralNexus({
         f.life -= 0.012;
         if (f.life <= 0) return false;
 
-        fgCtx.font = `${6 + f.life * 3}px monospace`;
-        fgCtx.fillStyle = `rgba(${palette.particle}, ${f.life * 0.7})`;
+        fgCtx.font = `bold ${5 + f.life * 4}px monospace`;
+        fgCtx.textAlign = "center";
+        fgCtx.fillStyle = `rgba(${palette.particle}, ${f.life * 0.75})`;
         fgCtx.fillText(f.char, cx + f.x * scale, cy + f.y * scale);
         return true;
       });
@@ -465,7 +611,7 @@ export const NeuralNexus = memo(function NeuralNexus({
   return (
     <div
       className={cn(
-        "facility-neural-nexus facility-neural-nexus-v5",
+        "facility-neural-nexus facility-neural-nexus-v6",
         `facility-neural-nexus-${state}`,
         absorbBoost && "facility-neural-nexus-absorbing",
         surge && "facility-neural-nexus-surge",
@@ -478,7 +624,7 @@ export const NeuralNexus = memo(function NeuralNexus({
 
       <div
         className="facility-nexus-intake-glow"
-        style={{ opacity: 0.15 + avgIntensity * 0.35 }}
+        style={{ opacity: 0.08 + avgIntensity * 0.18 }}
       />
 
       {knowledgeFlow && knowledgeFlow.phase !== "complete" && (

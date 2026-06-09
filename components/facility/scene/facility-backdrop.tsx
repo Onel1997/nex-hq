@@ -1,4 +1,5 @@
 import { AmbienceField } from "@/components/facility/motion/ambience-field";
+import { FacilityForegroundField } from "@/components/facility/scene/facility-foreground-field";
 import { FACILITY_ZONES } from "@/lib/facility/layout";
 
 export function FacilityBackdrop() {
@@ -10,6 +11,9 @@ export function FacilityBackdrop() {
       <div className="facility-backdrop-radial" />
       <div className="facility-backdrop-brain-bloom" />
       <div className="facility-backdrop-vignette" />
+
+      <AmbienceField />
+      <FacilityForegroundField />
 
       <div className="facility-zone-labels">
         {FACILITY_ZONES.map((zone) => (
@@ -25,8 +29,6 @@ export function FacilityBackdrop() {
           </span>
         ))}
       </div>
-
-      <AmbienceField />
     </div>
   );
 }

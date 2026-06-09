@@ -1,3 +1,4 @@
+export { LabIdentityVisual } from "@/components/facility/motion/lab-identity-visual";
 export { ActivityRing } from "@/components/facility/motion/activity-ring";
 export { AmbienceField } from "@/components/facility/motion/ambience-field";
 export { BrainPulse } from "@/components/facility/motion/brain-pulse";

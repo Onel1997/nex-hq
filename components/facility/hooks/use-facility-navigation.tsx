@@ -1,6 +1,7 @@
 "use client";
 
 import type { AgentId } from "@/lib/constants/agents";
+import { FACILITY_HERO_SCALE } from "@/lib/facility/layout";
 import type { FacilityNavigationState, FacilityNavMode } from "@/lib/facility/types";
 import {
   createContext,
@@ -80,28 +81,52 @@ export function useFacilityNavigation(): FacilityNavigationContextValue {
   return ctx;
 }
 
-/** Camera transform targets per navigation mode — future fly-to animation hooks here. */
+/** Camera transform targets per navigation mode — fly-to chamber foundation. */
 export function navigationTransform(
   mode: FacilityNavMode,
   focusTarget: AgentId | null,
-): { scale: number; x: number; y: number } {
+): {
+  scale: number;
+  x: number;
+  y: number;
+  rotateX: number;
+  perspective: number;
+} {
   if (mode === "overview" || !focusTarget) {
-    return { scale: 1, x: 0, y: 0 };
+    return {
+      scale: FACILITY_HERO_SCALE,
+      x: 0,
+      y: -2,
+      rotateX: 0,
+      perspective: 1200,
+    };
   }
 
   if (focusTarget === "ceo") {
-    return { scale: 1.08, x: 0, y: 4 };
+    return {
+      scale: FACILITY_HERO_SCALE * 1.08,
+      x: 0,
+      y: 3,
+      rotateX: 4,
+      perspective: 1100,
+    };
   }
 
   const labOffsets: Partial<Record<AgentId, { x: number; y: number }>> = {
-    research: { x: 8, y: 2 },
-    designer: { x: 6, y: -6 },
-    marketing: { x: -8, y: 2 },
-    content: { x: 4, y: -8 },
-    image: { x: -6, y: 0 },
-    shopify: { x: -4, y: -6 },
+    research: { x: 6, y: 2 },
+    designer: { x: 5, y: -5 },
+    marketing: { x: -6, y: 2 },
+    content: { x: 4, y: -6 },
+    image: { x: -5, y: 0 },
+    shopify: { x: -4, y: -5 },
   };
 
   const offset = labOffsets[focusTarget] ?? { x: 0, y: 0 };
-  return { scale: 1.12, x: offset.x, y: offset.y };
+  return {
+    scale: FACILITY_HERO_SCALE * 1.14,
+    x: offset.x,
+    y: offset.y,
+    rotateX: 8,
+    perspective: 1000,
+  };
 }

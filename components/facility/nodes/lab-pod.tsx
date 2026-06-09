@@ -1,6 +1,7 @@
 "use client";
 
 import { ActivityRing, ThinkingIndicator } from "@/components/facility/motion";
+import { LabIdentityVisual } from "@/components/facility/motion/lab-identity-visual";
 import { getAgentColor, getAgentGlow } from "@/lib/facility/facility-theme";
 import type { AgentId } from "@/lib/constants/agents";
 import type { LabSnapshot } from "@/lib/facility/types";
@@ -91,8 +92,13 @@ export const LabPod = memo(function LabPod({
         } as React.CSSProperties
       }
       onClick={onSelect}
-      aria-label={`Open ${shortLabel} inspector`}
+      aria-label={`Open ${shortLabel} chamber`}
     >
+      <LabIdentityVisual
+        agentId={agentId}
+        opsState={lab.opsState}
+        color={agentColor}
+      />
       <ActivityRing
         key={`${lab.agentId}-${lab.opsState}-${lab.activeTask?.id ?? "none"}`}
         size={nodeSize}

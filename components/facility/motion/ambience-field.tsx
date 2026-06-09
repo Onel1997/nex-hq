@@ -29,8 +29,13 @@ const ARCS = Array.from({ length: 4 }, (_, i) => ({
 export const AmbienceField = memo(function AmbienceField() {
   return (
     <div className="facility-ambience" aria-hidden>
+      <div className="facility-ambience-energy-cloud facility-ambience-cloud-a" />
+      <div className="facility-ambience-energy-cloud facility-ambience-cloud-b" />
       <div className="facility-ambience-neural-fog" />
+      <div className="facility-ambience-neural-fog facility-ambience-neural-fog-b" />
       <div className="facility-ambience-energy-current" />
+      <div className="facility-ambience-facility-light facility-ambience-light-top" />
+      <div className="facility-ambience-facility-light facility-ambience-light-center" />
       <div className="facility-ambience-scanlines" />
       <div className="facility-ambience-dust">
         {PARTICLES.map((p) => (

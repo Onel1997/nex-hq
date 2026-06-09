@@ -539,6 +539,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 0;
 }
 
 .facility-backdrop-depth {
@@ -710,10 +711,10 @@
   inset: 0;
   background: radial-gradient(
     ellipse 90% 70% at 50% 55%,
-    rgb(56 189 248 / 0.03),
+    rgb(56 189 248 / 0.015),
     transparent 60%
   );
-  opacity: 0.7;
+  opacity: 0.35;
 }
 
 .facility-ambience-energy-current {
@@ -801,6 +802,103 @@
   }
 }
 
+/* V7 — atmospheric depth layers */
+.facility-ambience-energy-cloud {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(48px);
+  pointer-events: none;
+  animation: facility-cloud-drift 24s ease-in-out infinite;
+}
+
+.facility-ambience-cloud-a {
+  width: 55%;
+  height: 40%;
+  left: -8%;
+  top: 10%;
+  background: radial-gradient(circle, rgb(56 189 248 / 0.03), transparent 70%);
+  opacity: 0.45;
+}
+
+.facility-ambience-cloud-b {
+  width: 45%;
+  height: 35%;
+  right: -5%;
+  bottom: 15%;
+  background: radial-gradient(circle, rgb(255 209 102 / 0.025), transparent 70%);
+  animation-delay: -12s;
+  opacity: 0.35;
+}
+
+@keyframes facility-cloud-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate(2%, -1.5%) scale(1.04);
+    opacity: 0.5;
+  }
+}
+
+.facility-ambience-neural-fog-b {
+  background: radial-gradient(
+    ellipse 70% 55% at 30% 70%,
+    rgb(168 85 247 / 0.012),
+    transparent 65%
+  );
+  animation: facility-fog-shift 18s ease-in-out infinite;
+  opacity: 0.3;
+}
+
+@keyframes facility-fog-shift {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 0.4;
+    transform: translateX(1.5%);
+  }
+}
+
+.facility-ambience-facility-light {
+  position: absolute;
+  pointer-events: none;
+}
+
+.facility-ambience-light-top {
+  inset: 0;
+  background: radial-gradient(
+    ellipse 80% 45% at 50% 0%,
+    rgb(255 209 102 / 0.018),
+    transparent 55%
+  );
+  opacity: 0.5;
+}
+
+.facility-ambience-light-center {
+  inset: 0;
+  background: radial-gradient(
+    ellipse 50% 40% at 50% 48%,
+    rgb(56 189 248 / 0.015),
+    transparent 70%
+  );
+  animation: facility-glow-flicker 10s ease-in-out infinite;
+  opacity: 0.45;
+}
+
+.facility-foreground-field {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.22;
+  mix-blend-mode: soft-light;
+}
+
 @keyframes facility-glow-flicker {
   0%,
   100% {
@@ -819,6 +917,9 @@
   width: 100%;
   height: 100%;
   isolation: isolate;
+  transform-origin: 50% 44%;
+  transform-style: preserve-3d;
+  z-index: 1;
 }
 
 .facility-neural-graph {
@@ -923,6 +1024,23 @@
   perspective: 400px;
 }
 
+.facility-neural-nexus-v6 {
+  perspective: 520px;
+}
+
+.facility-neural-nexus-v6 .facility-nexus-mid {
+  mix-blend-mode: screen;
+  opacity: 0.55;
+}
+
+.facility-neural-nexus-v6 .facility-nexus-bg {
+  opacity: 0.5;
+}
+
+.facility-neural-nexus-v6 .facility-nexus-fg {
+  opacity: 0.7;
+}
+
 .facility-nexus-layer {
   position: absolute;
   inset: 0;
@@ -933,12 +1051,13 @@
 
 .facility-nexus-bg {
   z-index: 1;
-  opacity: 0.9;
+  opacity: 0.45;
 }
 
 .facility-nexus-mid {
   z-index: 2;
   mix-blend-mode: screen;
+  opacity: 0.5;
 }
 
 .facility-nexus-fg {
@@ -980,12 +1099,12 @@
 }
 
 .facility-neural-nexus-absorbing .facility-nexus-mid {
-  filter: brightness(1.25);
+  filter: brightness(1.08);
 }
 
 /* Knowledge panel */
 .facility-brain-knowledge {
-  width: calc(100% + 1.5rem);
+  width: 100%;
   margin-top: 0.35rem;
   padding: 0.5rem 0.65rem;
   border-radius: 0.55rem;
@@ -2379,10 +2498,18 @@
     min-height: 22rem;
   }
 
+  .facility-main-immersive .facility-scene {
+    padding: 2.5rem 0.5rem 8rem;
+  }
+
+  .facility-mission-control {
+    width: min(34rem, calc(100% - 1rem));
+  }
+
   .facility-review-dock {
     left: 0.5rem;
     top: 0.5rem;
-    width: min(12rem, calc(100% - 1rem));
+    width: min(11rem, calc(100% - 1rem));
   }
 
   .facility-zone-label {
@@ -2498,7 +2625,7 @@
 
 /* Scene depth & startup */
 .facility-scene-depth {
-  perspective: 1200px;
+  perspective: 1400px;
 }
 
 .facility-scene-brain-wrap {
@@ -2704,14 +2831,216 @@
   bottom: 30%;
 }
 
+/* Lab identity visuals — unique chamber atmospheres */
+.facility-lab-identity {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.55;
+  border-radius: inherit;
+}
+
+.facility-lab-identity-active {
+  opacity: 0.85;
+}
+
+.facility-lab-id-scanner {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 6px,
+    color-mix(in srgb, var(--lab-accent) 6%, transparent) 6px,
+    color-mix(in srgb, var(--lab-accent) 6%, transparent) 7px
+  );
+}
+
+.facility-lab-id-data-stream {
+  position: absolute;
+  left: 0;
+  width: 40%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--lab-accent),
+    transparent
+  );
+  opacity: 0.6;
+}
+
+.facility-lab-id-scan-grid {
+  position: absolute;
+  inset: 15%;
+  border: 1px solid color-mix(in srgb, var(--lab-accent) 15%, transparent);
+  border-radius: 0.25rem;
+}
+
+.facility-lab-id-moodboard {
+  position: absolute;
+  inset: 12%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+
+.facility-lab-id-swatch {
+  border-radius: 2px;
+  opacity: 0.5;
+}
+
+.facility-lab-id-reach-ring {
+  position: absolute;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--lab-accent) 35%, transparent);
+}
+
+.facility-lab-id-growth-bars {
+  position: absolute;
+  bottom: 18%;
+  left: 20%;
+  right: 20%;
+  height: 28%;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.facility-lab-id-growth-bar {
+  flex: 1;
+  height: 50%;
+  background: linear-gradient(
+    180deg,
+    var(--lab-accent),
+    color-mix(in srgb, var(--lab-accent) 30%, transparent)
+  );
+  border-radius: 1px 1px 0 0;
+  opacity: 0.5;
+}
+
+.facility-lab-id-commerce-grid {
+  position: absolute;
+  inset: 18%;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--lab-accent) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--lab-accent) 8%, transparent) 1px, transparent 1px);
+  background-size: 8px 8px;
+}
+
+.facility-lab-id-revenue-pulse {
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  height: 2px;
+  background: var(--lab-accent);
+  transform-origin: left;
+  opacity: 0.4;
+}
+
+.facility-lab-id-store-dot {
+  position: absolute;
+  top: 22%;
+  right: 22%;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--lab-accent);
+  box-shadow: 0 0 8px var(--lab-accent);
+  animation: facility-spark-flicker 2s ease-in-out infinite;
+}
+
+.facility-lab-id-pipeline {
+  position: absolute;
+  bottom: 22%;
+  left: 12%;
+  right: 12%;
+  height: 6px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.facility-lab-id-pipeline-stage {
+  flex: 1;
+  height: 100%;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--lab-accent) 40%, transparent);
+  opacity: 0.3;
+}
+
+.facility-lab-id-pipeline-flow {
+  position: absolute;
+  top: 0;
+  width: 18%;
+  height: 100%;
+  background: var(--lab-accent);
+  border-radius: 1px;
+  opacity: 0.6;
+}
+
+.facility-lab-id-gen-frame {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: var(--lab-accent);
+  border-style: solid;
+  opacity: 0.45;
+}
+
+.facility-lab-id-gen-tl {
+  top: 18%;
+  left: 18%;
+  border-width: 1px 0 0 1px;
+}
+
+.facility-lab-id-gen-tr {
+  top: 18%;
+  right: 18%;
+  border-width: 1px 1px 0 0;
+}
+
+.facility-lab-id-gen-bl {
+  bottom: 28%;
+  left: 18%;
+  border-width: 0 0 1px 1px;
+}
+
+.facility-lab-id-gen-br {
+  bottom: 28%;
+  right: 18%;
+  border-width: 0 1px 1px 0;
+}
+
+.facility-lab-id-gen-core {
+  position: absolute;
+  inset: 32%;
+  border-radius: 0.25rem;
+  border: 1px dashed color-mix(in srgb, var(--lab-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--lab-accent) 6%, transparent);
+}
+
+.facility-lab-id-render-line {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  height: 1px;
+  background: var(--lab-accent);
+  transform-origin: left;
+  opacity: 0.5;
+}
+
 /* Mission Control dock */
 .facility-mission-control {
   position: absolute;
   left: 50%;
-  bottom: 1.25rem;
+  bottom: 0.65rem;
   transform: translateX(-50%);
   z-index: 6;
-  width: min(42rem, calc(100% - 2rem));
+  width: min(34rem, calc(100% - 17rem));
+  max-width: calc(100% - 2rem);
   pointer-events: auto;
 }
 
@@ -3007,6 +3336,12 @@
   width: 100%;
 }
 
+/* Hero composition — safe viewport insets so HUD + nodes never clip */
+.facility-main-immersive .facility-scene {
+  padding: 3rem 0.85rem 8.75rem;
+  box-sizing: border-box;
+}
+
 /* Intelligence hierarchy beams */
 .facility-hierarchy-beams {
   position: absolute;
@@ -3037,7 +3372,51 @@
   text-overflow: ellipsis;
 }
 
-/* Spatial navigation focus */
+/* Spatial navigation — chamber fly-to foundation */
+.facility-scene-nav-chamber .facility-scene-brain-wrap,
+.facility-scene-nav-chamber .facility-scene-ceo-wrap {
+  transition: opacity 0.5s ease, filter 0.5s ease;
+}
+
+.facility-scene-nav-chamber .facility-scene-brain-wrap {
+  opacity: 0.45;
+  filter: blur(0.5px);
+}
+
+.facility-scene-nav-chamber .facility-scene-ceo-wrap {
+  opacity: 0.55;
+}
+
+.facility-scene-nav-ceo-chamber .facility-scene-node-wrap:not(.facility-scene-ceo-wrap) {
+  opacity: 0.4;
+  filter: blur(1px);
+}
+
+.facility-scene-chamber-active {
+  z-index: 8 !important;
+}
+
+.facility-scene-chamber-active .facility-lab-chamber {
+  box-shadow:
+    0 0 40px color-mix(in srgb, var(--agent-color) 25%, transparent),
+    var(--facility-shadow-glass),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+/* Hero cinematic polish */
+.facility-main-immersive .facility-scene-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9;
+  background: radial-gradient(
+    ellipse 95% 90% at 50% 50%,
+    transparent 55%,
+    rgb(5 7 10 / 0.35) 100%
+  );
+}
+
 .facility-scene-node-focused {
   z-index: 6 !important;
   filter: drop-shadow(0 0 24px rgb(56 189 248 / 0.35));
@@ -3062,8 +3441,8 @@
 /* Operations feed — collapsed rail */
 .facility-ops-rail {
   position: absolute;
-  right: 0.75rem;
-  top: 1rem;
+  right: 0.65rem;
+  top: 0.65rem;
   z-index: 8;
   display: flex;
   flex-direction: row-reverse;
@@ -3330,10 +3709,10 @@
 /* Compact review command dock */
 .facility-review-dock {
   position: absolute;
-  left: 1rem;
-  top: 1rem;
+  left: 0.65rem;
+  top: 0.65rem;
   z-index: 8;
-  width: min(14rem, calc(100% - 2rem));
+  width: min(12.5rem, calc(100% - 2rem));
   border-radius: 0.65rem;
   border: 1px solid var(--facility-border);
   background: var(--facility-bg-glass);
