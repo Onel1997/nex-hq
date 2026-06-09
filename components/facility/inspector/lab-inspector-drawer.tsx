@@ -1,12 +1,11 @@
 "use client";
 
-import { AgentMemoryPanel } from "@/components/facility/inspector/agent-memory-panel";
 import { ExecutionTimeline } from "@/components/facility/inspector/execution-timeline";
 import type { AgentId } from "@/lib/constants/agents";
 import type { LabInspectorData, LabSnapshot } from "@/lib/facility/types";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, X } from "lucide-react";
+import { FlaskConical, Loader2, X } from "lucide-react";
 import { memo } from "react";
 
 interface LabInspectorDrawerProps {
@@ -29,6 +28,10 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
   onClose,
 }: LabInspectorDrawerProps) {
   const displayName = data?.agentName ?? lab?.label ?? agentId;
+  const latestReport = data?.reports[0] ?? null;
+  const activeTasks =
+    data?.taskQueue.filter((t) => t.status !== "completed" && t.status !== "failed") ??
+    [];
 
   return (
     <AnimatePresence>
@@ -37,22 +40,27 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
           <motion.button
             type="button"
             className="facility-inspector-backdrop"
-            aria-label="Close inspector"
+            aria-label="Close laboratory"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
           />
           <motion.aside
-            className="facility-inspector-drawer"
+            className="facility-inspector-drawer facility-lab-room"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
           >
-            <header className="facility-inspector-header">
-              <div>
-                <p className="facility-inspector-label">Lab Inspector</p>
+            <div className="facility-lab-room-ambient" aria-hidden />
+
+            <header className="facility-inspector-header facility-lab-room-header">
+              <div className="facility-lab-room-title-block">
+                <div className="facility-lab-room-badge">
+                  <FlaskConical className="size-3.5" />
+                  <span>Laboratory Chamber</span>
+                </div>
                 <h2 className="facility-inspector-title">{displayName}</h2>
                 {data?.role ? (
                   <p className="facility-inspector-role">{data.role}</p>
@@ -72,52 +80,45 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
               {loading && !data ? (
                 <div className="facility-inspector-loading">
                   <Loader2 className="size-5 animate-spin" />
-                  <span>Loading lab data…</span>
+                  <span>Opening laboratory…</span>
                 </div>
               ) : error ? (
                 <p className="facility-inspector-error">{error}</p>
               ) : data ? (
                 <>
-                  <section className="facility-inspector-section">
-                    <h3 className="facility-inspector-section-title">Status</h3>
-                    <div className="facility-inspector-status-row">
-                      <span
-                        className={cn(
-                          "facility-inspector-status",
-                          `facility-inspector-status-${data.opsState}`,
-                        )}
-                      >
-                        {data.opsState}
-                      </span>
-                      {data.confidence != null ? (
-                        <span className="facility-inspector-confidence">
-                          Confidence {Math.round(data.confidence * 100)}%
+                  <section className="facility-inspector-section facility-lab-room-section">
+                    <h3 className="facility-inspector-section-title">
+                      Current Mission
+                    </h3>
+                    <div className="facility-lab-room-card">
+                      <p className="facility-inspector-text">
+                        {data.currentTask?.title ?? "No active mission assigned"}
+                      </p>
+                      <div className="facility-inspector-status-row">
+                        <span
+                          className={cn(
+                            "facility-inspector-status",
+                            `facility-inspector-status-${data.opsState}`,
+                          )}
+                        >
+                          {data.opsState}
                         </span>
-                      ) : null}
+                      </div>
                     </div>
                   </section>
 
-                  <section className="facility-inspector-section">
+                  <section className="facility-inspector-section facility-lab-room-section">
                     <h3 className="facility-inspector-section-title">
-                      Current Task
+                      Active Tasks
                     </h3>
-                    <p className="facility-inspector-text">
-                      {data.currentTask?.title ?? "No active task"}
-                    </p>
-                  </section>
-
-                  <section className="facility-inspector-section">
-                    <h3 className="facility-inspector-section-title">
-                      Task Queue
-                    </h3>
-                    {data.taskQueue.length === 0 ? (
-                      <p className="facility-inspector-empty">Queue empty</p>
+                    {activeTasks.length === 0 ? (
+                      <p className="facility-inspector-empty">No active tasks</p>
                     ) : (
-                      <ul className="facility-inspector-list">
-                        {data.taskQueue.map((task) => (
+                      <ul className="facility-inspector-list facility-lab-room-list">
+                        {activeTasks.map((task) => (
                           <li
                             key={task.id}
-                            className="facility-inspector-list-item"
+                            className="facility-inspector-list-item facility-lab-room-list-item"
                           >
                             <span>{task.title}</span>
                             <span className="facility-inspector-meta">
@@ -129,18 +130,87 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
                     )}
                   </section>
 
-                  <section className="facility-inspector-section">
+                  <section className="facility-inspector-section facility-lab-room-section">
+                    <h3 className="facility-inspector-section-title">
+                      Latest Report
+                    </h3>
+                    <div className="facility-lab-room-card">
+                      {latestReport ? (
+                        <>
+                          <p className="facility-inspector-text">
+                            {latestReport.title}
+                          </p>
+                          <span className="facility-inspector-meta">
+                            {latestReport.status} ·{" "}
+                            {Math.round(latestReport.confidence * 100)}%
+                          </span>
+                        </>
+                      ) : (
+                        <p className="facility-inspector-empty">
+                          No reports submitted
+                        </p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="facility-inspector-section facility-lab-room-section">
+                    <h3 className="facility-inspector-section-title">
+                      Confidence
+                    </h3>
+                    <div className="facility-lab-room-confidence">
+                      {data.confidence != null ? (
+                        <>
+                          <span className="facility-lab-room-confidence-value">
+                            {Math.round(data.confidence * 100)}%
+                          </span>
+                          <div className="facility-lab-room-confidence-bar">
+                            <div
+                              className="facility-lab-room-confidence-fill"
+                              style={{
+                                width: `${Math.round(data.confidence * 100)}%`,
+                              }}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <p className="facility-inspector-empty">
+                          Confidence not yet established
+                        </p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="facility-inspector-section facility-lab-room-section">
+                    <h3 className="facility-inspector-section-title">
+                      Knowledge References
+                    </h3>
+                    {data.knowledgeRefs.length === 0 ? (
+                      <p className="facility-inspector-empty">
+                        No knowledge linked
+                      </p>
+                    ) : (
+                      <ul className="facility-inspector-list facility-lab-room-list">
+                        {data.knowledgeRefs.slice(0, 10).map((ref) => (
+                          <li
+                            key={`${ref.domain}-${ref.id}`}
+                            className="facility-inspector-list-item facility-lab-room-list-item"
+                          >
+                            <span>{ref.title}</span>
+                            <span className="facility-inspector-meta">
+                              {ref.domain}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+
+                  <section className="facility-inspector-section facility-lab-room-section facility-lab-room-timeline">
                     <h3 className="facility-inspector-section-title">
                       Activity Timeline
                     </h3>
                     <ExecutionTimeline items={data.timeline} />
                   </section>
-
-                  <AgentMemoryPanel
-                    reports={data.reports}
-                    tasks={data.taskQueue}
-                    knowledgeRefs={data.knowledgeRefs}
-                  />
                 </>
               ) : null}
             </div>

@@ -1,77 +1,86 @@
 "use client";
 
+import { BrainPulse, NeuralNexus } from "@/components/facility/motion";
+import { BrainKnowledgePanel } from "@/components/facility/nodes/brain-knowledge-panel";
 import {
-  BrainPulse,
-  BrainReactor,
-  GlowPulse,
-} from "@/components/facility/motion";
+  deriveBrainNexusState,
+} from "@/lib/facility/derive-brain-nexus-state";
 import type {
   BrainCoreStats,
   BrainPulseKind,
+  FacilityLabId,
+  KnowledgeFlowSequence,
+  LabSnapshot,
   PulseIntensity,
 } from "@/lib/facility/types";
 import { cn } from "@/lib/utils";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 
 interface BrainCoreProps {
   stats: BrainCoreStats;
+  labs: Record<FacilityLabId, LabSnapshot>;
   pulse?: BrainPulseKind;
   pulseIntensity?: PulseIntensity;
   networkPulse?: boolean;
+  knowledgeFlow?: KnowledgeFlowSequence | null;
+  failedTasks?: number;
   className?: string;
   style?: React.CSSProperties;
 }
 
 export const BrainCore = memo(function BrainCore({
   stats,
+  labs,
   pulse = "none",
   pulseIntensity = "medium",
   networkPulse = false,
+  knowledgeFlow = null,
+  failedTasks = 0,
   className,
   style,
 }: BrainCoreProps) {
   const isSurge = pulse !== "none";
 
+  const nexusState = useMemo(
+    () =>
+      deriveBrainNexusState({
+        pulse,
+        activeExecutions: stats.activeExecutions,
+        failedTasks,
+        ceoOpsState: labs.ceo.opsState,
+        labs,
+      }),
+    [pulse, stats.activeExecutions, failedTasks, labs],
+  );
+
   return (
     <div
       className={cn(
-        "facility-node facility-brain-core facility-brain-core-v2",
-        isSurge && "facility-brain-surging",
+        "facility-brain-nexus-stack",
+        `facility-brain-nexus-${nexusState}`,
+        isSurge && "facility-brain-nexus-surging",
+        knowledgeFlow && "facility-brain-nexus-receiving",
         className,
       )}
       style={style}
     >
-      <BrainReactor intensity={pulseIntensity} surge={isSurge} />
-      <GlowPulse intensity="strong" color="rgb(234 242 255 / 0.45)" />
-      <BrainPulse
-        kind={pulse}
-        intensity={pulseIntensity}
-        networkPulse={networkPulse}
-      />
-      <div className="facility-node-inner facility-brain-inner">
-        <p className="facility-node-label">Brain Core</p>
-        <p className="facility-brain-title">Neural Reactor</p>
-        <div className="facility-brain-stats">
-          <div className="facility-stat">
-            <span className="facility-stat-value">{stats.totalTasks}</span>
-            <span className="facility-stat-label">Tasks</span>
-          </div>
-          <div className="facility-stat">
-            <span className="facility-stat-value">{stats.totalReports}</span>
-            <span className="facility-stat-label">Reports</span>
-          </div>
-          <div className="facility-stat">
-            <span className="facility-stat-value">
-              {stats.activeExecutions}
-            </span>
-            <span className="facility-stat-label">Active</span>
-          </div>
-          <div className="facility-stat">
-            <span className="facility-stat-value">{stats.completionPct}%</span>
-            <span className="facility-stat-label">Done</span>
-          </div>
+      <div className="facility-brain-nexus-chamber">
+        <div className="facility-brain-nexus-frame">
+          <NeuralNexus
+            state={nexusState}
+            labs={labs}
+            knowledgeFlow={knowledgeFlow}
+            surge={isSurge}
+          />
+          <BrainPulse
+            kind={pulse}
+            intensity={pulseIntensity}
+            networkPulse={networkPulse}
+          />
         </div>
       </div>
+
+      <BrainKnowledgePanel knowledge={stats.knowledge} />
     </div>
   );
 });

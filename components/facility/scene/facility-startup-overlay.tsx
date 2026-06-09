@@ -6,7 +6,7 @@ import { memo } from "react";
 
 const BOOT_LINES: Record<StartupPhase, string> = {
   boot: "Initializing neural facility…",
-  brain: "Brain Core reactor online",
+  brain: "Neural Nexus online",
   synapses: "Synapse network activating",
   labs: "Agent labs coming online",
   ceo: "CEO Core boot sequence",

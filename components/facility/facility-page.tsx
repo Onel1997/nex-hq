@@ -4,6 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CeoDelegationResult } from "@/agents/ceo/delegation-types";
 import { LabInspectorDrawer } from "@/components/facility/inspector/lab-inspector-drawer";
 import { useCommandHistory } from "@/components/facility/hooks/use-command-history";
+import {
+  FacilityNavigationProvider,
+  useFacilityNavigation,
+} from "@/components/facility/hooks/use-facility-navigation";
 import { useFacilityStream } from "@/components/facility/hooks/use-facility-stream";
 import { useLabInspector } from "@/components/facility/hooks/use-lab-inspector";
 import { FacilityShell } from "@/components/facility/facility-shell";
@@ -11,9 +15,10 @@ import type { DelegationStatus } from "@/components/facility/hud/command-dock";
 import type { AgentId } from "@/lib/constants/agents";
 import type { BrainPulseKind } from "@/lib/facility/types";
 
-export function FacilityPage() {
+function FacilityPageContent() {
   const { data, loading, error, connected, refresh } = useFacilityStream();
   const { history, addEntry } = useCommandHistory();
+  const { navigateToLab, navigateToOverview } = useFacilityNavigation();
   const [selectedLabId, setSelectedLabId] = useState<AgentId | null>(null);
   const [highlightedLabs, setHighlightedLabs] = useState<AgentId[]>([]);
   const [delegationStatus, setDelegationStatus] =
@@ -34,13 +39,18 @@ export function FacilityPage() {
     void refreshInspector(selectedLabId);
   }, [data?.refreshedAt, selectedLabId, refreshInspector, data]);
 
-  const handleLabSelect = useCallback((agentId: AgentId) => {
-    setSelectedLabId(agentId);
-  }, []);
+  const handleLabSelect = useCallback(
+    (agentId: AgentId) => {
+      navigateToLab(agentId);
+      setSelectedLabId(agentId);
+    },
+    [navigateToLab],
+  );
 
   const handleCloseInspector = useCallback(() => {
+    navigateToOverview();
     setSelectedLabId(null);
-  }, []);
+  }, [navigateToOverview]);
 
   const handleDelegate = useCallback(
     async (goal: string) => {
@@ -135,5 +145,13 @@ export function FacilityPage() {
         onClose={handleCloseInspector}
       />
     </>
+  );
+}
+
+export function FacilityPage() {
+  return (
+    <FacilityNavigationProvider>
+      <FacilityPageContent />
+    </FacilityNavigationProvider>
   );
 }

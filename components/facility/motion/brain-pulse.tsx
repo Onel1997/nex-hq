@@ -74,13 +74,13 @@ export const BrainPulse = memo(function BrainPulse({
           <>
             <motion.div
               key={`${kind}-inner`}
-              className="pointer-events-none absolute inset-[-20%] rounded-full"
+              className="pointer-events-none absolute inset-[-12%] rounded-full facility-brain-pulse-ring"
               style={{
                 border: `1px solid ${config.color}`,
-                boxShadow: `0 0 ${40 * multiplier}px ${config.color}`,
+                boxShadow: `0 0 ${22 * multiplier}px ${config.color}`,
               }}
-              initial={{ scale: 0.75, opacity: 0.9 }}
-              animate={{ scale: config.scale * multiplier, opacity: 0 }}
+              initial={{ scale: 0.85, opacity: 0.65 }}
+              animate={{ scale: config.scale * multiplier * 0.75, opacity: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: config.duration, ease: "easeOut" }}
             />

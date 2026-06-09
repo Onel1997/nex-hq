@@ -1,7 +1,8 @@
 import { getNodeLayout } from "@/lib/facility/layout";
-import type { FacilityLabId, LabOpsState } from "@/lib/facility/types";
+import { PLACEHOLDER_LABS } from "@/lib/facility/placeholder-labs";
+import type { FacilitySceneNodeId, FacilityLabId, LabOpsState } from "@/lib/facility/types";
 
-export type SynapseNodeId = FacilityLabId | "brain";
+export type SynapseNodeId = FacilitySceneNodeId;
 
 export type SynapseFlowMode = "to-brain" | "from-brain" | "ambient" | "error";
 
@@ -48,6 +49,14 @@ export const SYNAPSE_EDGES: SynapseEdgeDef[] = [
   { id: "designer-marketing", from: "designer", to: "marketing", kind: "pipeline" },
   { id: "marketing-content", from: "marketing", to: "content", kind: "pipeline" },
   { id: "content-image", from: "content", to: "image", kind: "pipeline" },
+  { id: "operations-brain", from: "operations", to: "brain", kind: "context" },
+  { id: "commerce-brain", from: "commerce", to: "brain", kind: "context" },
+  { id: "analytics-brain", from: "analytics", to: "brain", kind: "context" },
+  { id: "ceo-operations", from: "ceo", to: "operations", kind: "report-up" },
+  { id: "ceo-commerce", from: "ceo", to: "commerce", kind: "report-up" },
+  { id: "ceo-analytics", from: "ceo", to: "analytics", kind: "report-up" },
+  { id: "shopify-commerce", from: "shopify", to: "commerce", kind: "pipeline" },
+  { id: "research-analytics", from: "research", to: "analytics", kind: "pipeline" },
 ];
 
 export function layoutToPoint(
@@ -144,5 +153,8 @@ export function buildLabStateMap(
     content: labs.content.opsState,
     image: labs.image.opsState,
     shopify: labs.shopify.opsState,
+    operations: PLACEHOLDER_LABS.operations.opsState,
+    commerce: PLACEHOLDER_LABS.commerce.opsState,
+    analytics: PLACEHOLDER_LABS.analytics.opsState,
   };
 }

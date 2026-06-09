@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   Bot,
+  ChevronLeft,
   Crown,
   FileText,
   Radio,
@@ -17,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { memo, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 interface EventStreamPanelProps {
   events: FacilityEvent[];
@@ -90,7 +91,7 @@ const EventRow = memo(function EventRow({
   return (
     <motion.li
       layout
-      initial={{ opacity: 0, x: 20, scale: 0.94 }}
+      initial={{ opacity: 0, x: 12, scale: 0.96 }}
       animate={{ opacity: 1, x: 0, scale: 1 }}
       className={cn(
         "facility-ops-item",
@@ -125,51 +126,103 @@ export function EventStreamPanel({
   events,
   startupReady = true,
 }: EventStreamPanelProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [newEventPulse, setNewEventPulse] = useState(false);
   const seenRef = useRef<Set<string>>(new Set());
   const newIds = new Set<string>();
+  let hasNew = false;
 
   for (const event of events) {
     if (!seenRef.current.has(event.id)) {
-      if (seenRef.current.size > 0) newIds.add(event.id);
+      if (seenRef.current.size > 0) {
+        newIds.add(event.id);
+        hasNew = true;
+      }
       seenRef.current.add(event.id);
     }
   }
 
+  useEffect(() => {
+    if (!hasNew) return;
+    setNewEventPulse(true);
+    const t = setTimeout(() => setNewEventPulse(false), 1600);
+    return () => clearTimeout(t);
+  }, [hasNew, events.length]);
+
   return (
     <motion.aside
-      className="facility-side-panel facility-ops-panel"
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: startupReady ? 1 : 0, x: startupReady ? 0 : 20 }}
+      className={cn(
+        "facility-ops-rail",
+        expanded && "facility-ops-rail-expanded",
+        newEventPulse && "facility-ops-rail-pulse",
+      )}
+      initial={{ opacity: 0, x: 16 }}
+      animate={{ opacity: startupReady ? 1 : 0, x: startupReady ? 0 : 16 }}
       transition={{ duration: 0.6, delay: 0.2 }}
     >
-      <div className="facility-panel-header">
-        <div className="facility-ops-panel-title-wrap">
-          <Radio className="facility-ops-panel-icon" strokeWidth={1.75} />
-          <h2 className="facility-panel-title">Operations Feed</h2>
-        </div>
-        <span className="facility-panel-count facility-ops-live">
-          <span className="facility-ops-live-dot" />
-          LIVE
-        </span>
-      </div>
-
-      <div className="facility-panel-body">
-        {events.length === 0 ? (
-          <p className="facility-panel-empty">Scanning neural channels…</p>
+      <button
+        type="button"
+        className="facility-ops-rail-toggle"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        aria-label={expanded ? "Collapse operations feed" : "Expand operations feed"}
+      >
+        {expanded ? (
+          <ChevronLeft className="size-4" />
         ) : (
-          <ul className="facility-ops-list">
-            <AnimatePresence initial={false}>
-              {events.map((event) => (
-                <EventRow
-                  key={event.id}
-                  event={event}
-                  isNew={newIds.has(event.id)}
-                />
-              ))}
-            </AnimatePresence>
-          </ul>
+          <div className="facility-ops-rail-collapsed">
+            <span className="facility-ops-rail-live">
+              <span className="facility-ops-live-dot" />
+              LIVE
+            </span>
+            <span
+              className={cn(
+                "facility-ops-rail-count",
+                newEventPulse && "facility-ops-rail-count-pulse",
+              )}
+            >
+              {events.length}
+            </span>
+            <span className="facility-ops-rail-pulse-ring" aria-hidden />
+          </div>
         )}
-      </div>
+      </button>
+
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            className="facility-ops-rail-body"
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: "auto" }}
+            exit={{ opacity: 0, width: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <div className="facility-ops-rail-header">
+              <Radio className="facility-ops-panel-icon" strokeWidth={1.75} />
+              <h2 className="facility-panel-title">Operations</h2>
+              <span className="facility-panel-count">{events.length}</span>
+            </div>
+
+            <div className="facility-ops-rail-scroll">
+              {events.length === 0 ? (
+                <p className="facility-panel-empty">Neural channels quiet…</p>
+              ) : (
+                <ul className="facility-ops-list">
+                  <AnimatePresence initial={false}>
+                    {events.map((event) => (
+                      <EventRow
+                        key={event.id}
+                        event={event}
+                        isNew={newIds.has(event.id)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </ul>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.aside>
   );
 }

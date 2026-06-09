@@ -20,11 +20,20 @@ export interface FacilityTelemetry {
   failedTasks: number;
 }
 
+export interface BrainKnowledgeBase {
+  reports: number;
+  designs: number;
+  campaigns: number;
+  collections: number;
+  activeAgents: number;
+}
+
 export interface BrainCoreStats {
   totalTasks: number;
   totalReports: number;
   activeExecutions: number;
   completionPct: number;
+  knowledge: BrainKnowledgeBase;
 }
 
 export interface LabTaskSnapshot {
@@ -136,6 +145,28 @@ export interface TransmissionEvent {
   timestamp: number;
 }
 
+export type KnowledgeFlowPhase =
+  | "lab-to-nexus"
+  | "nexus-absorb"
+  | "nexus-to-ceo"
+  | "complete";
+
+export interface KnowledgeFlowSequence {
+  id: string;
+  agentId: AgentId;
+  label: string;
+  phase: KnowledgeFlowPhase;
+  startedAt: number;
+}
+
+/** Spatial navigation — prepares environment-based HQ movement (no page transitions). */
+export type FacilityNavMode = "overview" | "lab-focus" | "ceo-focus";
+
+export interface FacilityNavigationState {
+  mode: FacilityNavMode;
+  focusTarget: AgentId | null;
+}
+
 export type CeoVerdictMode = "approved" | "revision";
 
 export interface CeoVerdict {
@@ -211,9 +242,17 @@ export interface FacilitySnapshot {
   refreshedAt: string;
 }
 
+export type FacilitySceneNodeId =
+  | FacilityLabId
+  | "brain"
+  | "operations"
+  | "commerce"
+  | "analytics";
+
 export interface FacilityNodeLayout {
-  id: FacilityLabId | "brain";
+  id: FacilitySceneNodeId;
   left: number;
   top: number;
   size: number;
+  zone?: "command" | "research" | "commerce" | "design" | "marketing" | "operations";
 }

@@ -14,9 +14,9 @@ const theme = getFacilityTheme();
 const { coreWhite, reactorGold, neuralBlue, veinBlue } = theme.brain;
 
 const GLOW_BY_INTENSITY: Record<PulseIntensity, string> = {
-  small: `color-mix(in srgb, ${coreWhite} 55%, transparent)`,
-  medium: `color-mix(in srgb, ${coreWhite} 75%, transparent)`,
-  large: coreWhite,
+  small: `color-mix(in srgb, ${coreWhite} 36%, transparent)`,
+  medium: `color-mix(in srgb, ${coreWhite} 49%, transparent)`,
+  large: `color-mix(in srgb, ${coreWhite} 65%, transparent)`,
 };
 
 export const BrainReactor = memo(function BrainReactor({
@@ -34,7 +34,7 @@ export const BrainReactor = memo(function BrainReactor({
         }}
         animate={{
           scale: surge ? [1, 1.22, 1] : [1, 1.08, 1],
-          opacity: surge ? [0.5, 1, 0.5] : [0.35, 0.75, 0.35],
+          opacity: surge ? [0.33, 0.65, 0.33] : [0.23, 0.49, 0.23],
         }}
         transition={{
           duration: surge ? 1.2 : 4.5,
@@ -43,20 +43,20 @@ export const BrainReactor = memo(function BrainReactor({
         }}
       />
 
-      {/* Outer containment rings */}
       {[0, 1, 2, 3, 4].map((i) => (
         <motion.div
           key={`ring-${i}`}
           className="facility-brain-energy-ring"
           style={{
             inset: `${-6 - i * 9}%`,
-            borderColor: `color-mix(in srgb, ${i < 2 ? reactorGold : neuralBlue} ${12 + i * 7}%, transparent)`,
+            borderColor: `color-mix(in srgb, ${i < 2 ? reactorGold : neuralBlue} ${20 + i * 9}%, transparent)`,
             borderStyle: i % 2 === 0 ? "solid" : "dashed",
+            borderWidth: i === 0 ? "1.5px" : "1px",
             boxShadow:
               i === 0
-                ? `0 0 28px color-mix(in srgb, ${reactorGold} 25%, transparent)`
+                ? `0 0 32px color-mix(in srgb, ${reactorGold} 32%, transparent)`
                 : i === 4
-                  ? `0 0 40px color-mix(in srgb, ${neuralBlue} 15%, transparent)`
+                  ? `0 0 48px color-mix(in srgb, ${neuralBlue} 22%, transparent)`
                   : undefined,
           }}
           animate={{ rotate: i % 2 === 0 ? 360 : -360 }}
@@ -73,18 +73,18 @@ export const BrainReactor = memo(function BrainReactor({
           className="facility-brain-neural-texture"
           style={{
             background: `
-              repeating-conic-gradient(from 0deg, color-mix(in srgb, ${neuralBlue} 14%, transparent) 0deg 6deg, transparent 6deg 12deg),
-              radial-gradient(circle, color-mix(in srgb, ${coreWhite} 18%, transparent), transparent 70%)
+              repeating-conic-gradient(from 0deg, color-mix(in srgb, ${neuralBlue} 22%, transparent) 0deg 6deg, transparent 6deg 12deg),
+              radial-gradient(circle, color-mix(in srgb, ${coreWhite} 12%, transparent), transparent 70%)
             `,
           }}
         />
         <motion.div
           className="facility-brain-core-glow"
           style={{
-            background: `radial-gradient(circle, ${glow}, color-mix(in srgb, ${neuralBlue} 18%, transparent) 55%, transparent 70%)`,
+            background: `radial-gradient(circle, ${glow}, color-mix(in srgb, ${neuralBlue} 22%, transparent) 55%, transparent 70%)`,
           }}
           animate={{
-            opacity: surge ? [0.7, 1, 0.7] : [0.55, 0.95, 0.55],
+            opacity: surge ? [0.46, 0.65, 0.46] : [0.36, 0.62, 0.36],
             scale: surge ? [1, 1.14, 1] : [0.96, 1.05, 0.96],
           }}
           transition={{
@@ -96,18 +96,18 @@ export const BrainReactor = memo(function BrainReactor({
         <motion.div
           className="facility-brain-nucleus"
           style={{
-            background: `radial-gradient(circle, ${coreWhite}, color-mix(in srgb, ${neuralBlue} 50%, transparent) 40%, transparent 65%)`,
+            background: `radial-gradient(circle, color-mix(in srgb, ${coreWhite} 72%, transparent), color-mix(in srgb, ${neuralBlue} 50%, transparent) 40%, transparent 65%)`,
           }}
           animate={{
             scale: [0.92, 1.08, 0.92],
-            opacity: [0.85, 1, 0.85],
+            opacity: [0.55, 0.72, 0.55],
           }}
           transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
         />
         <div
           className="facility-brain-white-core"
           style={{
-            background: `radial-gradient(circle, ${coreWhite}, color-mix(in srgb, ${neuralBlue} 40%, transparent) 45%, transparent 70%)`,
+            background: `radial-gradient(circle, color-mix(in srgb, ${coreWhite} 65%, transparent), color-mix(in srgb, ${neuralBlue} 40%, transparent) 45%, transparent 70%)`,
           }}
         />
       </div>
@@ -121,9 +121,9 @@ export const BrainReactor = memo(function BrainReactor({
             x2={50 + 42 * Math.cos((angle * Math.PI) / 180)}
             y2={50 + 42 * Math.sin((angle * Math.PI) / 180)}
             stroke={veinBlue}
-            strokeWidth="0.7"
-            strokeOpacity={0.55}
-            animate={{ opacity: [0.1, 0.85, 0.1] }}
+            strokeWidth="1"
+            strokeOpacity={0.72}
+            animate={{ opacity: [0.25, 0.92, 0.25] }}
             transition={{
               duration: 1.5,
               repeat: Infinity,

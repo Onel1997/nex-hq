@@ -6,9 +6,13 @@ import { deriveGoalProgress } from "@/lib/facility/derive-goals";
 import { deriveLabSnapshots } from "@/lib/facility/derive-lab-state";
 import { getFacilityEvents } from "@/lib/facility/events";
 import type {
+  BrainKnowledgeBase,
+  FacilityLabId,
   FacilitySnapshot,
+  LabSnapshot,
   ReviewQueueItem,
 } from "@/lib/facility/types";
+import type { AgentId } from "@/lib/constants/agents";
 import { brainReportRecordsToListItems } from "@/lib/reports/from-brain";
 import { listTasks } from "@/lib/tasks/task-service";
 import type { TaskListItem } from "@/tasks/types";
@@ -67,10 +71,38 @@ function computeTelemetry(tasks: TaskListItem[]) {
   };
 }
 
+function computeKnowledgeBase(
+  reports: ReturnType<typeof brainReportRecordsToListItems>,
+  labs: Record<FacilityLabId, LabSnapshot>,
+): BrainKnowledgeBase {
+  const byAgent = (id: AgentId) =>
+    reports.filter((report) => report.agentId === id).length;
+
+  const collections = reports.filter((report) =>
+    /collection|lookbook|line sheet/i.test(report.title),
+  ).length;
+
+  const activeAgents = Object.values(labs).filter(
+    (lab) =>
+      lab.agentId !== "ceo" &&
+      lab.opsState !== "idle" &&
+      lab.opsState !== "approved",
+  ).length;
+
+  return {
+    reports: reports.length,
+    designs: byAgent("designer") + byAgent("image"),
+    campaigns: byAgent("marketing"),
+    collections: collections || byAgent("designer"),
+    activeAgents,
+  };
+}
+
 function computeBrainStats(
   tasks: TaskListItem[],
-  totalReports: number,
+  reports: ReturnType<typeof brainReportRecordsToListItems>,
   activeExecutions: number,
+  labs: Record<FacilityLabId, LabSnapshot>,
 ) {
   const completed = tasks.filter((task) => task.status === "completed").length;
   const totalTasks = tasks.length;
@@ -79,9 +111,10 @@ function computeBrainStats(
 
   return {
     totalTasks,
-    totalReports,
+    totalReports: reports.length,
     activeExecutions,
     completionPct,
+    knowledge: computeKnowledgeBase(reports, labs),
   };
 }
 
@@ -116,8 +149,9 @@ export async function getFacilitySnapshot(): Promise<FacilitySnapshot> {
     },
     brain: computeBrainStats(
       tasks,
-      reports.length,
+      reports,
       telemetry.activeExecutions,
+      labs,
     ),
     ceo,
     labs,

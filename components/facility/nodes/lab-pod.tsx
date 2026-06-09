@@ -69,6 +69,8 @@ export const LabPod = memo(function LabPod({
   const { presence } = lab;
   const isActive = lab.opsState === "executing" || lab.opsState === "review";
   const agentColor = getAgentColor(agentId);
+  const showProgressBar =
+    presence.progress !== null && lab.opsState === "executing";
 
   return (
     <button
@@ -145,30 +147,43 @@ export const LabPod = memo(function LabPod({
             {OPS_LABELS[lab.opsState]}
           </span>
         </div>
+
         <p className="facility-lab-name">{shortLabel}</p>
         <p className="facility-lab-activity">{presence.currentActivity}</p>
-        <div className="facility-lab-metrics">
-          {presence.progress !== null && lab.opsState === "executing" && (
-            <span className="facility-lab-metric">{presence.progress}%</span>
-          )}
-          {presence.confidence !== null && (
-            <span className="facility-lab-metric facility-lab-confidence">
-              {presence.confidence}% conf
+
+        <div className="facility-lab-progress-row">
+          {presence.progressLabel ? (
+            <span className="facility-lab-progress-label">
+              {presence.progressLabel}
+            </span>
+          ) : presence.progress !== null ? (
+            <span className="facility-lab-progress-label">
+              {presence.progress}%
+            </span>
+          ) : (
+            <span className="facility-lab-progress-label facility-lab-progress-muted">
+              —
             </span>
           )}
+          {showProgressBar && (
+            <div className="facility-lab-progress-bar">
+              <motion.div
+                className="facility-lab-progress-fill"
+                style={{
+                  background: `linear-gradient(90deg, ${agentColor}, color-mix(in srgb, ${agentColor} 60%, white))`,
+                }}
+                initial={false}
+                animate={{ width: `${presence.progress}%` }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+              />
+            </div>
+          )}
         </div>
-        {presence.progress !== null && lab.opsState === "executing" && (
-          <div className="facility-lab-progress-bar">
-            <motion.div
-              className="facility-lab-progress-fill"
-              style={{
-                background: `linear-gradient(90deg, ${agentColor}, color-mix(in srgb, ${agentColor} 60%, white))`,
-              }}
-              initial={false}
-              animate={{ width: `${presence.progress}%` }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-            />
-          </div>
+
+        {presence.confidence !== null && (
+          <p className="facility-lab-confidence-row">
+            Confidence {presence.confidence}%
+          </p>
         )}
       </div>
     </button>

@@ -71,8 +71,7 @@ export function FacilityShell({
       ) : data ? (
         <>
           <FacilityHud data={data} connected={connected} />
-          <div className="facility-main">
-            <ReviewQueuePanel items={data.reviewQueue} />
+          <div className="facility-main facility-main-immersive">
             <div className="facility-scene-wrap">
               <FacilityScene
                 data={data}
@@ -82,6 +81,11 @@ export function FacilityShell({
                 startup={startup}
                 onLabSelect={onLabSelect}
               />
+              <ReviewQueuePanel items={data.reviewQueue} />
+              <EventStreamPanel
+                events={data.events}
+                startupReady={startup.isComplete}
+              />
               <CommandDock
                 history={commandHistory}
                 status={delegationStatus}
@@ -89,10 +93,6 @@ export function FacilityShell({
                 onSubmit={onDelegate}
               />
             </div>
-            <EventStreamPanel
-              events={data.events}
-              startupReady={startup.isComplete}
-            />
           </div>
           <GoalProgressRail goal={data.goal} />
         </>

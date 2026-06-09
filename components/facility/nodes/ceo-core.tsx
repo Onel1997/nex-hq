@@ -2,7 +2,7 @@
 
 import { ThinkingIndicator } from "@/components/facility/motion";
 import { getAgentColor } from "@/lib/facility/facility-theme";
-import type { CeoCoreSnapshot, CeoVerdict } from "@/lib/facility/types";
+import type { CeoCoreSnapshot, CeoVerdict, LabOpsState } from "@/lib/facility/types";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Crown } from "lucide-react";
@@ -18,6 +18,15 @@ interface CeoCoreProps {
 }
 
 const CEO_COLOR = getAgentColor("ceo");
+
+const DECISION_STATUS: Record<LabOpsState, string> = {
+  idle: "Awaiting Directive",
+  queued: "Mission Queued",
+  executing: "Command Active",
+  review: "Reviewing Intel",
+  approved: "Directive Complete",
+  error: "Command Interrupted",
+};
 
 function VerdictBadge({ verdict }: { verdict: CeoVerdict }) {
   const isApproved = verdict.mode === "approved";
@@ -49,6 +58,9 @@ export const CeoCore = memo(function CeoCore({
 }: CeoCoreProps) {
   const { presence, opsState, verdict } = ceo;
   const showVerdict = verdict?.active && verdict.mode;
+  const decisionStatus = showVerdict
+    ? verdict!.label
+    : DECISION_STATUS[opsState];
 
   return (
     <button
@@ -70,10 +82,9 @@ export const CeoCore = memo(function CeoCore({
       onClick={onSelect}
       aria-label="Open CEO Core inspector"
     >
-      {/* Command halo */}
+      <div className="facility-ceo-executive-ring" aria-hidden />
       <div className="facility-ceo-command-halo" aria-hidden />
 
-      {/* Rotating crown ring */}
       <motion.div
         className="facility-ceo-crown-ring"
         animate={{ rotate: 360 }}
@@ -81,7 +92,6 @@ export const CeoCore = memo(function CeoCore({
         aria-hidden
       />
 
-      {/* Executive energy field */}
       <motion.div
         className="facility-ceo-energy-field"
         animate={{ opacity: [0.35, 0.7, 0.35], scale: [0.98, 1.03, 0.98] }}
@@ -116,6 +126,7 @@ export const CeoCore = memo(function CeoCore({
         </div>
         <p className="facility-ceo-label">CEO Core</p>
         <p className="facility-ceo-rank">Executive Command</p>
+        <p className="facility-ceo-decision-status">{decisionStatus}</p>
         <p className="facility-ceo-activity">{presence.currentActivity}</p>
 
         {showVerdict && verdict && <VerdictBadge verdict={verdict} />}

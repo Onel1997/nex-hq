@@ -6,6 +6,12 @@ import {
   matchCeoDecision,
 } from "@/lib/facility/ceo-decisions";
 import {
+  advanceKnowledgeFlowPhase,
+  createKnowledgeFlow,
+  matchKnowledgeFlow,
+  phaseDuration,
+} from "@/lib/facility/knowledge-flow";
+import {
   createTransmission,
   matchTransmission,
 } from "@/lib/facility/transmissions";
@@ -13,6 +19,7 @@ import type {
   BrainPulseKind,
   CeoDecision,
   FacilityEvent,
+  KnowledgeFlowSequence,
   NetworkSurgeMode,
   PulseIntensity,
   TransmissionEvent,
@@ -81,6 +88,7 @@ export interface FacilityReactions {
   networkPulse: boolean;
   networkSurge: NetworkSurgeMode;
   activeTransmission: TransmissionEvent | null;
+  activeKnowledgeFlow: KnowledgeFlowSequence | null;
   ceoDecisions: CeoDecision[];
   verdictPulse: boolean;
 }
@@ -97,6 +105,7 @@ export function useFacilityReactions(
   );
   const verdictTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const surgeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const knowledgeFlowTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [brainPulse, setBrainPulse] = useState<BrainPulseKind>("none");
   const [pulseIntensity, setPulseIntensity] = useState<PulseIntensity>("medium");
   const [networkPulse, setNetworkPulse] = useState(false);
@@ -104,7 +113,39 @@ export function useFacilityReactions(
   const [verdictPulse, setVerdictPulse] = useState(false);
   const [activeTransmission, setActiveTransmission] =
     useState<TransmissionEvent | null>(null);
+  const [activeKnowledgeFlow, setActiveKnowledgeFlow] =
+    useState<KnowledgeFlowSequence | null>(null);
   const [ceoDecisions, setCeoDecisions] = useState<CeoDecision[]>([]);
+
+  const scheduleKnowledgeFlow = (flow: KnowledgeFlowSequence) => {
+    for (const t of knowledgeFlowTimeoutsRef.current) clearTimeout(t);
+    knowledgeFlowTimeoutsRef.current = [];
+
+    setActiveKnowledgeFlow(flow);
+
+    const schedulePhase = (current: KnowledgeFlowSequence) => {
+      const duration = phaseDuration(current.phase);
+      if (duration <= 0) {
+        setActiveKnowledgeFlow(null);
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        const nextPhase = advanceKnowledgeFlowPhase(current);
+        if (nextPhase === "complete") {
+          setActiveKnowledgeFlow(null);
+          return;
+        }
+        const next = { ...current, phase: nextPhase };
+        setActiveKnowledgeFlow(next);
+        schedulePhase(next);
+      }, duration);
+
+      knowledgeFlowTimeoutsRef.current.push(timeout);
+    };
+
+    schedulePhase(flow);
+  };
 
   useEffect(() => {
     const seen = seenIdsRef.current;
@@ -183,6 +224,7 @@ export function useFacilityReactions(
       }
       if (verdictTimeoutRef.current) clearTimeout(verdictTimeoutRef.current);
       if (surgeTimeoutRef.current) clearTimeout(surgeTimeoutRef.current);
+      for (const t of knowledgeFlowTimeoutsRef.current) clearTimeout(t);
     };
   }, []);
 
@@ -218,6 +260,7 @@ export function useFacilityReactions(
     networkPulse: activeNetwork,
     networkSurge: activeSurge,
     activeTransmission,
+    activeKnowledgeFlow,
     ceoDecisions,
     verdictPulse: activeVerdictPulse,
   };
