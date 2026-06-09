@@ -39,6 +39,7 @@ export interface LabReportSnapshot {
   id: string;
   title: string;
   status: ReportListItem["status"];
+  confidence: number;
   updatedAt: string;
 }
 
@@ -48,6 +49,7 @@ export interface LabSnapshot {
   opsState: LabOpsState;
   activeTask: LabTaskSnapshot | null;
   latestReport: LabReportSnapshot | null;
+  presence: AgentPresence;
 }
 
 export interface ReviewQueueItem {
@@ -59,6 +61,15 @@ export interface ReviewQueueItem {
   submittedAt: string;
 }
 
+export type FacilityEventCategory =
+  | "task"
+  | "report"
+  | "ceo"
+  | "system"
+  | "delegation";
+
+export type FacilityEventPriority = "normal" | "high" | "critical";
+
 export interface FacilityEvent {
   id: string;
   type: string;
@@ -67,6 +78,8 @@ export interface FacilityEvent {
   actorId: string;
   domain: string | null;
   summary: string;
+  category?: FacilityEventCategory;
+  priority?: FacilityEventPriority;
 }
 
 export type GoalCheckpointStatus = "complete" | "active" | "pending";
@@ -88,10 +101,65 @@ export interface GoalProgress {
 
 export type BrainPulseKind =
   | "none"
+  | "task-started"
   | "task-complete"
   | "report-approved"
+  | "report-rejected"
   | "final-report"
   | "delegation";
+
+export type PulseIntensity = "small" | "medium" | "large";
+
+export type ThinkingState =
+  | "idle"
+  | "thinking"
+  | "reviewing"
+  | "transmitting"
+  | "synthesizing";
+
+export interface AgentPresence {
+  currentActivity: string;
+  progress: number | null;
+  progressLabel: string | null;
+  confidence: number | null;
+  thinkingState: ThinkingState;
+}
+
+export type NetworkSurgeMode = "none" | "approval" | "final-report" | "delegation";
+
+export interface TransmissionEvent {
+  id: string;
+  from: FacilityLabId;
+  to: FacilityLabId;
+  edgeId: string;
+  label: string;
+  timestamp: number;
+}
+
+export type CeoVerdictMode = "approved" | "revision";
+
+export interface CeoVerdict {
+  mode: CeoVerdictMode;
+  confidence: number;
+  label: string;
+  active: boolean;
+}
+
+export interface CeoCoreSnapshot {
+  opsState: LabOpsState;
+  presence: AgentPresence;
+  verdict: CeoVerdict | null;
+}
+
+export type CeoDecisionType = "assign" | "review" | "verdict";
+
+export interface CeoDecision {
+  id: string;
+  label: string;
+  type: CeoDecisionType;
+  targetAgentId?: FacilityLabId;
+  timestamp: number;
+}
 
 export interface KnowledgeRef {
   id: string;
@@ -135,6 +203,7 @@ export interface FacilitySnapshot {
   workspace: { id: string; name: string };
   telemetry: FacilityTelemetry;
   brain: BrainCoreStats;
+  ceo: CeoCoreSnapshot;
   labs: Record<FacilityLabId, LabSnapshot>;
   reviewQueue: ReviewQueueItem[];
   events: FacilityEvent[];

@@ -1,20 +1,22 @@
 "use client";
 
+import { getAgentColor } from "@/lib/facility/facility-theme";
 import type { GoalProgress } from "@/lib/facility/types";
-import { motion } from "framer-motion";
-import { memo } from "react";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { Crosshair } from "lucide-react";
+import { memo } from "react";
 
 interface GoalProgressRailProps {
   goal: GoalProgress | null;
 }
 
-const CHECKPOINT_LABELS = {
-  research: "Research",
-  designer: "Design",
-  marketing: "Marketing",
-  content: "Content",
-  shopify: "Shopify",
+const CHECKPOINT_META = {
+  research: { label: "Research", color: getAgentColor("research") },
+  designer: { label: "Design", color: getAgentColor("designer") },
+  marketing: { label: "Marketing", color: getAgentColor("marketing") },
+  content: { label: "Content", color: getAgentColor("content") },
+  shopify: { label: "Shopify", color: getAgentColor("shopify") },
 } as const;
 
 const CHECKPOINT_ORDER = [
@@ -25,64 +27,99 @@ const CHECKPOINT_ORDER = [
   "shopify",
 ] as const;
 
-function CheckpointChip({
+const MissionCheckpoint = memo(function MissionCheckpoint({
   label,
   status,
+  color,
 }: {
   label: string;
   status: "complete" | "active" | "pending";
+  color: string;
 }) {
   return (
-    <span
+    <motion.span
       className={cn(
-        "facility-goal-chip",
-        status === "complete" && "facility-goal-chip-complete",
-        status === "active" && "facility-goal-chip-active",
-        status === "pending" && "facility-goal-chip-pending",
+        "facility-mission-chip",
+        status === "complete" && "facility-mission-chip-complete",
+        status === "active" && "facility-mission-chip-active",
+        status === "pending" && "facility-mission-chip-pending",
       )}
+      style={{ "--chip-color": color } as React.CSSProperties}
+      layout
+      animate={
+        status === "active"
+          ? { scale: [1, 1.04, 1], opacity: [0.85, 1, 0.85] }
+          : undefined
+      }
+      transition={
+        status === "active"
+          ? { duration: 2, repeat: Infinity, ease: "easeInOut" }
+          : undefined
+      }
     >
-      {status === "complete" ? "✓" : status === "active" ? "◉" : "○"}{" "}
+      <span className="facility-mission-chip-dot" />
       {label}
-    </span>
+    </motion.span>
   );
-}
+});
 
 export const GoalProgressRail = memo(function GoalProgressRail({
   goal,
 }: GoalProgressRailProps) {
   if (!goal) {
     return (
-      <div className="facility-goal-rail facility-goal-rail-empty">
-        <span className="facility-goal-empty-label">No active founder goal</span>
+      <div className="facility-mission-rail facility-mission-rail-empty">
+        <Crosshair className="facility-mission-rail-icon" strokeWidth={1.5} />
+        <span className="facility-mission-empty-label">
+          No active mission — deploy from Mission Control
+        </span>
       </div>
     );
   }
 
+  const activeAgents = CHECKPOINT_ORDER.filter(
+    (id) => goal.checkpoints[id].status === "active",
+  );
+  const completeCount = CHECKPOINT_ORDER.filter(
+    (id) => goal.checkpoints[id].status === "complete",
+  ).length;
+  const phaseLabel =
+    completeCount === CHECKPOINT_ORDER.length
+      ? "MISSION COMPLETE"
+      : activeAgents.length > 0
+        ? `PHASE ${completeCount + 1} · ${activeAgents.length} ACTIVE`
+        : `PHASE ${completeCount + 1} · STANDBY`;
+
   return (
-    <div className="facility-goal-rail">
-      <div className="facility-goal-header">
-        <span className="facility-goal-label">Founder Goal</span>
-        <span className="facility-goal-title">{goal.founderGoal}</span>
+    <div className="facility-mission-rail">
+      <div className="facility-mission-rail-header">
+        <Crosshair className="facility-mission-rail-icon" strokeWidth={1.5} />
+        <div className="facility-mission-rail-titles">
+          <span className="facility-mission-rail-label">Mission Progress</span>
+          <span className="facility-mission-rail-title">{goal.founderGoal}</span>
+        </div>
+        <span className="facility-mission-phase">{phaseLabel}</span>
       </div>
 
-      <div className="facility-goal-progress-wrap">
-        <div className="facility-goal-progress-track">
+      <div className="facility-mission-progress-wrap">
+        <div className="facility-mission-progress-track">
           <motion.div
-            className="facility-goal-progress-fill"
+            className="facility-mission-progress-fill"
             initial={false}
             animate={{ width: `${goal.progressPct}%` }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
+            transition={{ duration: 0.7, ease: "easeOut" }}
           />
         </div>
-        <span className="facility-goal-pct">{goal.progressPct}%</span>
+        <span className="facility-mission-pct">{goal.progressPct}%</span>
       </div>
 
-      <div className="facility-goal-checkpoints">
+      <div className="facility-mission-checkpoints">
         {CHECKPOINT_ORDER.map((id) => (
-          <CheckpointChip
+          <MissionCheckpoint
             key={id}
-            label={CHECKPOINT_LABELS[id]}
+            label={CHECKPOINT_META[id].label}
             status={goal.checkpoints[id].status}
+            color={CHECKPOINT_META[id].color}
           />
         ))}
       </div>

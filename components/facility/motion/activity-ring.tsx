@@ -8,25 +8,30 @@ import { cn } from "@/lib/utils";
 interface ActivityRingProps {
   size: number;
   state: LabOpsState;
+  progress?: number | null;
+  agentColor?: string;
 }
 
-const STROKE: Record<LabOpsState, string> = {
-  idle: "oklch(0.4 0.01 55 / 0.25)",
-  queued: "oklch(0.62 0.1 240 / 0.6)",
-  executing: "oklch(0.78 0.14 75 / 0.85)",
-  review: "oklch(0.65 0.16 300 / 0.75)",
-  approved: "oklch(0.72 0.14 145 / 0.85)",
-  error: "oklch(0.62 0.18 25 / 0.85)",
+const STATE_STROKE: Record<LabOpsState, string | null> = {
+  idle: null,
+  queued: "rgb(56 189 248 / 0.6)",
+  executing: null,
+  review: "rgb(168 85 247 / 0.75)",
+  approved: "rgb(34 197 94 / 0.85)",
+  error: "rgb(248 113 113 / 0.85)",
 };
 
 export const ActivityRing = memo(function ActivityRing({
   size,
   state,
+  progress,
+  agentColor = "#7E8CA3",
 }: ActivityRingProps) {
   const r = size / 2 - 3;
   const cx = size / 2;
   const cy = size / 2;
   const circumference = useMemo(() => 2 * Math.PI * r, [r]);
+  const stroke = STATE_STROKE[state] ?? agentColor;
 
   if (state === "idle") {
     return (
@@ -41,7 +46,7 @@ export const ActivityRing = memo(function ActivityRing({
           cy={cy}
           r={r}
           fill="none"
-          stroke={STROKE.idle}
+          stroke={`color-mix(in srgb, ${agentColor} 25%, transparent)`}
           strokeWidth={1}
         />
       </svg>
@@ -49,6 +54,9 @@ export const ActivityRing = memo(function ActivityRing({
   }
 
   if (state === "executing") {
+    const pct = progress ?? 30;
+    const arcLen = circumference * (pct / 100) * 0.85;
+    const gap = circumference - arcLen;
     return (
       <motion.svg
         className="pointer-events-none absolute inset-0"
@@ -56,7 +64,7 @@ export const ActivityRing = memo(function ActivityRing({
         height={size}
         aria-hidden
         animate={{ rotate: 360 }}
-        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: "linear" }}
         style={{ originX: "50%", originY: "50%" }}
       >
         <circle
@@ -64,10 +72,19 @@ export const ActivityRing = memo(function ActivityRing({
           cy={cy}
           r={r}
           fill="none"
-          stroke={STROKE.executing}
-          strokeWidth={2}
-          strokeDasharray={`${circumference * 0.22} ${circumference * 0.78}`}
+          stroke={`color-mix(in srgb, ${agentColor} 20%, transparent)`}
+          strokeWidth={1.5}
+        />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke={agentColor}
+          strokeWidth={2.5}
+          strokeDasharray={`${arcLen} ${gap}`}
           strokeLinecap="round"
+          style={{ filter: `drop-shadow(0 0 4px color-mix(in srgb, ${agentColor} 60%, transparent))` }}
         />
       </motion.svg>
     );
@@ -86,7 +103,7 @@ export const ActivityRing = memo(function ActivityRing({
           cy={cy}
           r={r}
           fill="none"
-          stroke={STROKE.review}
+          stroke={stroke}
           strokeWidth={2}
           animate={{ opacity: [0.35, 0.9, 0.35] }}
           transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
@@ -108,7 +125,7 @@ export const ActivityRing = memo(function ActivityRing({
           cy={cy}
           r={r}
           fill="none"
-          stroke={STROKE.approved}
+          stroke={stroke}
           strokeWidth={2.5}
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: [1, 0], scale: [1, 1.12] }}
@@ -131,7 +148,7 @@ export const ActivityRing = memo(function ActivityRing({
           cy={cy}
           r={r}
           fill="none"
-          stroke={STROKE.error}
+          stroke={stroke}
           strokeWidth={2}
           animate={{ opacity: [0.4, 1, 0.4] }}
           transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
@@ -140,7 +157,6 @@ export const ActivityRing = memo(function ActivityRing({
     );
   }
 
-  // queued — dim rotating ring
   return (
     <motion.svg
       className="pointer-events-none absolute inset-0"
@@ -156,7 +172,7 @@ export const ActivityRing = memo(function ActivityRing({
         cy={cy}
         r={r}
         fill="none"
-        stroke={STROKE.queued}
+        stroke={stroke}
         strokeWidth={1.5}
         strokeDasharray={`${circumference * 0.12} ${circumference * 0.88}`}
       />

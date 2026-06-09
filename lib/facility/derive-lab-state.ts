@@ -1,4 +1,5 @@
 import { AGENT_CATALOG, AGENT_IDS, type AgentId } from "@/lib/constants/agents";
+import { deriveAgentPresence } from "@/lib/facility/derive-agent-presence";
 import type { ReportListItem } from "@/lib/mock/reports";
 import type {
   LabOpsState,
@@ -49,6 +50,7 @@ function toReportSnapshot(report: ReportListItem): LabReportSnapshot {
     id: report.id,
     title: report.title,
     status: report.status,
+    confidence: report.confidence,
     updatedAt: report.createdAt,
   };
 }
@@ -116,12 +118,21 @@ export function deriveLabSnapshots(
     const activeTask = pickActiveTask(agentTasks);
     const latestReport = pickLatestReport(agentReports);
 
+    const opsState = deriveOpsState(activeTask, latestReport);
+    const taskSnap = activeTask ? toTaskSnapshot(activeTask) : null;
+
     labs[agentId] = {
       agentId,
       label: AGENT_CATALOG[agentId].name,
-      opsState: deriveOpsState(activeTask, latestReport),
-      activeTask: activeTask ? toTaskSnapshot(activeTask) : null,
+      opsState,
+      activeTask: taskSnap,
       latestReport: latestReport ? toReportSnapshot(latestReport) : null,
+      presence: deriveAgentPresence(
+        agentId,
+        opsState,
+        taskSnap,
+        latestReport ? toReportSnapshot(latestReport) : null,
+      ),
     };
   }
 

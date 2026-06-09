@@ -1,6 +1,7 @@
 import { getBrainClient } from "@/brain/client";
 import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
 import type { BrainRecord } from "@/brain/types";
+import { deriveCeoCoreState } from "@/lib/facility/derive-ceo-state";
 import { deriveGoalProgress } from "@/lib/facility/derive-goals";
 import { deriveLabSnapshots } from "@/lib/facility/derive-lab-state";
 import { getFacilityEvents } from "@/lib/facility/events";
@@ -105,6 +106,7 @@ export async function getFacilitySnapshot(): Promise<FacilitySnapshot> {
   const reviewQueue = buildReviewQueue(reports);
   const events = await getFacilityEvents(20);
   const goal = deriveGoalProgress(tasks, reports);
+  const ceo = deriveCeoCoreState(labs.ceo, reports, events);
 
   return {
     workspace: { id: workspaceId, name: workspaceName },
@@ -117,6 +119,7 @@ export async function getFacilitySnapshot(): Promise<FacilitySnapshot> {
       reports.length,
       telemetry.activeExecutions,
     ),
+    ceo,
     labs,
     reviewQueue,
     events,

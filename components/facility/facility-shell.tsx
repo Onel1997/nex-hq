@@ -8,11 +8,19 @@ import {
   CommandDock,
   type DelegationStatus,
 } from "@/components/facility/hud/command-dock";
+import { useFacilityStartup } from "@/components/facility/hooks/use-facility-startup";
 import { FacilityHud } from "@/components/facility/facility-hud";
 import { FacilityScene } from "@/components/facility/scene/facility-scene";
 import type { AgentId } from "@/lib/constants/agents";
+import {
+  ACTIVE_FACILITY_THEME,
+  getFacilityTheme,
+  themeStyleProps,
+} from "@/lib/facility/facility-theme";
 import type { BrainPulseKind, FacilitySnapshot } from "@/lib/facility/types";
 import { Loader2 } from "lucide-react";
+
+const facilityTheme = getFacilityTheme(ACTIVE_FACILITY_THEME);
 
 interface FacilityShellProps {
   data: FacilitySnapshot | null;
@@ -43,8 +51,13 @@ export function FacilityShell({
   onLabSelect,
   onDelegate,
 }: FacilityShellProps) {
+  const startup = useFacilityStartup(Boolean(data));
+
   return (
-    <div className="facility-shell">
+    <div
+      className={`facility-shell ${facilityTheme.cssClass}`}
+      style={themeStyleProps(ACTIVE_FACILITY_THEME)}
+    >
       {loading && !data ? (
         <div className="facility-loading">
           <Loader2 className="size-8 animate-spin text-[var(--facility-glow-gold)]" />
@@ -66,6 +79,7 @@ export function FacilityShell({
                 selectedLabId={selectedLabId}
                 highlightedLabs={highlightedLabs}
                 delegationPulse={delegationPulse}
+                startup={startup}
                 onLabSelect={onLabSelect}
               />
               <CommandDock
@@ -75,7 +89,10 @@ export function FacilityShell({
                 onSubmit={onDelegate}
               />
             </div>
-            <EventStreamPanel events={data.events} />
+            <EventStreamPanel
+              events={data.events}
+              startupReady={startup.isComplete}
+            />
           </div>
           <GoalProgressRail goal={data.goal} />
         </>

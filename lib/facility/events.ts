@@ -1,6 +1,10 @@
 import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
 import type { AgentId } from "@/lib/constants/agents";
-import type { FacilityEvent } from "@/lib/facility/types";
+import type {
+  FacilityEvent,
+  FacilityEventCategory,
+  FacilityEventPriority,
+} from "@/lib/facility/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const FACILITY_EVENT_TYPES = [
@@ -69,6 +73,32 @@ function summarizeEvent(
   }
 }
 
+function categorizeEvent(eventType: string): FacilityEventCategory {
+  if (eventType.startsWith("ceo.")) return "ceo";
+  if (eventType.startsWith("report.")) return "report";
+  if (eventType === "task.created" || eventType === "task.assigned") {
+    return "delegation";
+  }
+  if (eventType.startsWith("task.")) return "task";
+  return "system";
+}
+
+function prioritizeEvent(eventType: string): FacilityEventPriority {
+  if (
+    eventType.includes("final_report") ||
+    eventType === "report.approved"
+  ) {
+    return "critical";
+  }
+  if (
+    eventType.includes("failed") ||
+    eventType === "report.rejected"
+  ) {
+    return "high";
+  }
+  return "normal";
+}
+
 function mapEventRow(row: {
   id: string;
   event_type: string;
@@ -90,6 +120,8 @@ function mapEventRow(row: {
       row.actor_id,
       row.domain,
     ),
+    category: categorizeEvent(row.event_type),
+    priority: prioritizeEvent(row.event_type),
   };
 }
 

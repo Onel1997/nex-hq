@@ -2,8 +2,8 @@ import type { FacilityNodeLayout } from "@/lib/facility/types";
 
 /** Normalized orbital positions (% of scene). Brain is always center. */
 export const FACILITY_NODE_LAYOUT: FacilityNodeLayout[] = [
-  { id: "brain", left: 50, top: 50, size: 168 },
-  { id: "ceo", left: 50, top: 20, size: 108 },
+  { id: "brain", left: 50, top: 50, size: 368 },
+  { id: "ceo", left: 50, top: 20, size: 158 },
   { id: "research", left: 16, top: 38, size: 120 },
   { id: "designer", left: 32, top: 72, size: 120 },
   { id: "marketing", left: 68, top: 72, size: 120 },

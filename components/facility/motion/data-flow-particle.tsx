@@ -8,13 +8,14 @@ interface DataFlowParticleProps {
   path: string;
   flowMode: SynapseFlowMode;
   index: number;
+  accelerated?: boolean;
 }
 
 const PARTICLE_COLORS: Record<SynapseFlowMode, string> = {
-  "to-brain": "oklch(0.78 0.14 75)",
-  "from-brain": "oklch(0.82 0.08 85)",
-  ambient: "oklch(0.62 0.04 80 / 0.5)",
-  error: "oklch(0.62 0.18 25)",
+  "to-brain": "#22D3EE",
+  "from-brain": "#EAF2FF",
+  ambient: "rgb(126 140 163 / 0.5)",
+  error: "#F87171",
 };
 
 const PARTICLE_DURATIONS: Record<SynapseFlowMode, number> = {
@@ -28,14 +29,16 @@ export const DataFlowParticle = memo(function DataFlowParticle({
   path,
   flowMode,
   index,
+  accelerated = false,
 }: DataFlowParticleProps) {
-  const duration = PARTICLE_DURATIONS[flowMode];
+  const baseDuration = PARTICLE_DURATIONS[flowMode];
+  const duration = accelerated ? baseDuration * 0.45 : baseDuration;
   const delay = index * (duration / 3);
   const reverse = flowMode === "from-brain";
 
   return (
     <motion.circle
-      r={flowMode === "ambient" ? 1.5 : 2.5}
+      r={flowMode === "ambient" ? 1.5 : accelerated ? 3.5 : 2.5}
       fill={PARTICLE_COLORS[flowMode]}
       style={{
         offsetPath: `path('${path}')`,
