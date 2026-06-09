@@ -249,10 +249,22 @@ export type FacilitySceneNodeId =
   | "commerce"
   | "analytics";
 
+/** Spatial depth plane — drives atmosphere, not just z-index. */
+export type FacilityDepthLayer = "foreground" | "midground" | "background";
+
+/** Organizational visual weight within the HQ. */
+export type FacilityHierarchyTier =
+  | "command"
+  | "primary"
+  | "support"
+  | "peripheral";
+
 export interface FacilityNodeLayout {
   id: FacilitySceneNodeId;
   left: number;
   top: number;
   size: number;
   zone?: "command" | "research" | "commerce" | "design" | "marketing" | "operations";
+  depth: FacilityDepthLayer;
+  tier: FacilityHierarchyTier;
 }

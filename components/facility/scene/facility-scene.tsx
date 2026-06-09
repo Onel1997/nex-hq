@@ -22,7 +22,12 @@ import { FacilityStartupOverlay } from "@/components/facility/scene/facility-sta
 import { IntelligenceHierarchyBeams } from "@/components/facility/scene/intelligence-hierarchy-beams";
 import { KnowledgeFlowOverlay } from "@/components/facility/scene/knowledge-flow-overlay";
 import { SPECIALIST_AGENT_IDS, type AgentId } from "@/lib/constants/agents";
-import { getNodeLayout } from "@/lib/facility/layout";
+import {
+  depthAtmosphere,
+  FACILITY_COMPOSITION_OFFSET,
+  getNodeLayout,
+} from "@/lib/facility/layout";
+import type { FacilityNodeLayout } from "@/lib/facility/types";
 import {
   PLACEHOLDER_LAB_IDS,
   PLACEHOLDER_LABS,
@@ -41,18 +46,26 @@ interface FacilitySceneProps {
   onLabSelect: (agentId: AgentId) => void;
 }
 
+function nodeDepthClasses(layout: FacilityNodeLayout) {
+  return cn(
+    `facility-depth-${layout.depth}`,
+    `facility-tier-${layout.tier}`,
+  );
+}
+
 function nodeStyle(
   id: Parameters<typeof getNodeLayout>[0],
   zIndex?: number,
 ) {
   const layout = getNodeLayout(id);
+  const atmosphere = depthAtmosphere(layout.depth);
   return {
     left: `${layout.left}%`,
     top: `${layout.top}%`,
     width: layout.size,
     height: layout.size,
-    transform: "translate(-50%, -50%)",
-    zIndex: zIndex ?? 2,
+    transform: `translate(-50%, -50%) translateZ(${atmosphere.translateZ}px) scale(${atmosphere.scale})`,
+    zIndex: (zIndex ?? 2) + atmosphere.zBias,
   } as React.CSSProperties;
 }
 
@@ -114,25 +127,28 @@ export function FacilityScene({
         isCeoChamber && "facility-scene-nav-ceo-chamber",
       )}
     >
-      <FacilityBackdrop />
-
-      <FacilityStartupOverlay
-        phase={startup.phase}
-        progress={startup.progress}
-      />
-
       <motion.div
-        ref={ref}
-        className="facility-scene-canvas"
-        style={{ perspective: camera.perspective }}
+        className="facility-composition"
         animate={{
-          scale: camera.scale,
-          x: `${camera.x}%`,
-          y: `${camera.y}%`,
-          rotateX: camera.rotateX,
+          x: `${FACILITY_COMPOSITION_OFFSET.x}%`,
+          y: `${FACILITY_COMPOSITION_OFFSET.y}%`,
         }}
         transition={{ type: "spring", damping: 26, stiffness: 160 }}
       >
+        <FacilityBackdrop />
+
+        <motion.div
+          ref={ref}
+          className="facility-scene-canvas"
+          style={{ perspective: camera.perspective }}
+          animate={{
+            scale: camera.scale,
+            x: `${camera.x}%`,
+            y: `${camera.y}%`,
+            rotateX: camera.rotateX,
+          }}
+          transition={{ type: "spring", damping: 26, stiffness: 160 }}
+        >
         <motion.div
           className="facility-scene-layer"
           initial={{ opacity: 0 }}
@@ -171,7 +187,10 @@ export function FacilityScene({
             height: "auto",
             minHeight: getNodeLayout("brain").size,
           }}
-          className="facility-scene-node-wrap facility-scene-brain-wrap"
+          className={cn(
+            "facility-scene-node-wrap facility-scene-brain-wrap",
+            nodeDepthClasses(getNodeLayout("brain")),
+          )}
         >
           <BrainCore
             stats={data.brain}
@@ -192,7 +211,10 @@ export function FacilityScene({
           }}
           transition={{ duration: 0.7, ease: "easeOut" }}
           style={nodeStyle("ceo", 4)}
-          className="facility-scene-node-wrap facility-scene-ceo-wrap"
+          className={cn(
+            "facility-scene-node-wrap facility-scene-ceo-wrap",
+            nodeDepthClasses(getNodeLayout("ceo")),
+          )}
         >
           <CeoCore
             ceo={data.ceo}
@@ -217,6 +239,7 @@ export function FacilityScene({
             style={nodeStyle(agentId, labZIndex(agentId, data.labs))}
             className={cn(
               "facility-scene-node-wrap",
+              nodeDepthClasses(getNodeLayout(agentId)),
               isFocused && "facility-scene-node-focused facility-scene-chamber-active",
               ambientPulse?.agentId === agentId && "facility-scene-node-ambient",
             )}
@@ -246,7 +269,10 @@ export function FacilityScene({
               ease: "easeOut",
             }}
             style={nodeStyle(labId, 2)}
-            className="facility-scene-node-wrap"
+            className={cn(
+              "facility-scene-node-wrap",
+              nodeDepthClasses(getNodeLayout(labId)),
+            )}
           >
             <PlaceholderLabPod
               lab={PLACEHOLDER_LABS[labId]}
@@ -256,7 +282,13 @@ export function FacilityScene({
         ))}
 
         <CeoCommandBanner decisions={ceoDecisions} />
+        </motion.div>
       </motion.div>
+
+      <FacilityStartupOverlay
+        phase={startup.phase}
+        progress={startup.progress}
+      />
     </div>
   );
 }

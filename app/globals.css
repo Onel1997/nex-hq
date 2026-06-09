@@ -250,9 +250,9 @@
 /* -------------------------------------------------------------------------- */
 
 .facility-shell {
-  --facility-bg: #020508;
-  --facility-bg-deep: #040a12;
-  --facility-bg-elevated: #0a1018;
+  --facility-bg: #05070b;
+  --facility-bg-deep: #071019;
+  --facility-bg-elevated: #0a1320;
   --facility-bg-glass: rgb(8 14 22 / 0.78);
   --facility-border: #152030;
   --facility-border-subtle: rgb(21 32 48 / 0.55);
@@ -536,268 +536,186 @@
   background: transparent;
 }
 
+.facility-composition {
+  position: absolute;
+  inset: 0;
+}
+
 .facility-backdrop {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 0;
   overflow: hidden;
-  background: #010204;
+  background: #05070b;
+  --nexus-x: 47%;
+  --nexus-y: 38%;
 }
 
-.facility-backdrop-void {
+.facility-env-layer {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse 130% 110% at 50% 38%, #061220 0%, #030810 42%, #010204 100%);
-}
-
-.facility-backdrop-horizon {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, transparent 55%, rgb(4 12 22 / 0.65) 78%, rgb(2 6 12 / 0.95) 100%),
-    radial-gradient(ellipse 80% 12% at 50% 72%, rgb(56 189 248 / 0.045), transparent 70%);
-}
-
-.facility-backdrop-depth {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(
-      ellipse 60% 50% at 50% 44%,
-      rgb(56 189 248 / 0.055),
-      transparent 58%
-    ),
-    radial-gradient(
-      ellipse 100% 90% at 50% 62%,
-      transparent 12%,
-      rgb(1 2 5 / 0.82) 100%
-    );
-}
-
-.facility-backdrop-floor {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 70% 28% at 50% 88%, rgb(56 189 248 / 0.035), transparent 65%),
-    linear-gradient(0deg, rgb(56 189 248 / 0.02) 0%, transparent 18%);
-  opacity: 0.85;
-}
-
-.facility-backdrop-volumetric {
-  position: absolute;
-  top: -10%;
-  width: 18%;
-  height: 120%;
   pointer-events: none;
-  filter: blur(28px);
-  animation: facility-volumetric-drift 22s ease-in-out infinite;
 }
 
-.facility-backdrop-volumetric-a {
-  left: 18%;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgb(56 189 248 / 0.04) 35%,
-    rgb(34 211 238 / 0.025) 55%,
-    transparent 85%
-  );
-  transform: rotate(-6deg);
-  opacity: 0.7;
+/* Base — deep facility interior */
+.facility-env-base {
+  background:
+    linear-gradient(180deg, #05070b 0%, #071019 48%, #0a1320 100%),
+    linear-gradient(135deg, #05070b 0%, #071019 100%);
 }
 
-.facility-backdrop-volumetric-b {
-  left: 41%;
-  width: 22%;
-  background: linear-gradient(
-    180deg,
-    rgb(255 209 102 / 0.015) 0%,
-    rgb(56 189 248 / 0.05) 40%,
-    rgb(168 85 247 / 0.02) 60%,
-    transparent 90%
-  );
-  animation-delay: -8s;
+/* Distant darkness — edges fall off, no center spotlight */
+.facility-env-distant-dark {
+  background:
+    linear-gradient(90deg, #030508 0%, transparent 18%, transparent 82%, #030508 100%),
+    linear-gradient(0deg, #020406 0%, transparent 14%, transparent 88%, #030508 100%);
   opacity: 0.85;
 }
 
-.facility-backdrop-volumetric-c {
-  left: 68%;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgb(168 85 247 / 0.03) 40%,
-    rgb(56 189 248 / 0.035) 58%,
-    transparent 88%
-  );
-  transform: rotate(5deg);
-  animation-delay: -14s;
-  opacity: 0.65;
+/* Subtle volumetric depth */
+.facility-env-volume {
+  background:
+    linear-gradient(
+      180deg,
+      transparent 0%,
+      rgb(7 16 28 / 0.25) 55%,
+      rgb(5 10 18 / 0.45) 100%
+    );
+  opacity: 0.6;
+  animation: facility-volume-drift 40s ease-in-out infinite;
 }
 
-@keyframes facility-volumetric-drift {
+@keyframes facility-volume-drift {
   0%,
   100% {
-    opacity: 0.55;
-    transform: translateY(0) rotate(var(--vol-rotate, 0deg));
+    opacity: 0.5;
   }
   50% {
-    opacity: 0.9;
-    transform: translateY(-1.5%) rotate(var(--vol-rotate, 0deg));
+    opacity: 0.62;
   }
 }
 
-.facility-backdrop-nebula {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 40% 30% at 22% 28%, rgb(168 85 247 / 0.025), transparent 70%),
-    radial-gradient(ellipse 35% 28% at 78% 35%, rgb(56 189 248 / 0.03), transparent 68%),
-    radial-gradient(ellipse 50% 35% at 50% 65%, rgb(34 211 238 / 0.018), transparent 72%);
-  animation: facility-nebula-shift 30s ease-in-out infinite;
+/* Faint neural grid — full bleed, no circular mask */
+.facility-env-neural-grid {
+  background-image:
+    linear-gradient(rgb(30 80 110 / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(30 80 110 / 0.06) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.18;
 }
 
-@keyframes facility-nebula-shift {
+/* Distant holographic structures */
+.facility-env-holo-structures {
+  background:
+    linear-gradient(90deg, transparent 6%, rgb(30 70 95 / 0.04) 6.1%, transparent 6.3%),
+    linear-gradient(90deg, transparent 93.5%, rgb(30 70 95 / 0.04) 93.7%, transparent 94%),
+    linear-gradient(168deg, transparent 55%, rgb(25 60 85 / 0.03) 55.4%, transparent 55.8%),
+    linear-gradient(12deg, transparent 48%, rgb(25 60 85 / 0.025) 48.3%, transparent 48.6%),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 120px,
+      rgb(20 55 75 / 0.025) 120px 121px,
+      transparent 121px 240px
+    );
+  opacity: 0.35;
+  animation: facility-holo-drift 48s ease-in-out infinite;
+}
+
+@keyframes facility-holo-drift {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  50% {
+    opacity: 0.38;
+  }
+}
+
+/* Nexus environmental light — cyan, local, never washes screen */
+.facility-env-nexus-light {
+  background:
+    radial-gradient(
+      ellipse 38% 30% at var(--nexus-x) var(--nexus-y),
+      rgb(25 90 120 / 0.09) 0%,
+      rgb(15 55 80 / 0.04) 42%,
+      transparent 68%
+    );
+  animation: facility-nexus-light-drift 12s ease-in-out infinite;
+}
+
+@keyframes facility-nexus-light-drift {
   0%,
   100% {
     opacity: 0.7;
-    transform: scale(1);
   }
   50% {
-    opacity: 1;
-    transform: scale(1.02);
+    opacity: 0.9;
   }
 }
 
-.facility-backdrop-vignette {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    ellipse 94% 86% at 50% 50%,
-    transparent 28%,
-    rgb(0 0 0 / 0.72) 100%
-  );
-}
-
-.facility-backdrop-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgb(56 189 248 / 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(56 189 248 / 0.022) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse 78% 68% at 50% 50%, black, transparent);
-  opacity: 0.85;
-}
-
-.facility-backdrop-radial {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    ellipse 38% 34% at 50% 46%,
-    rgb(56 189 248 / 0.075),
-    transparent 70%
-  );
-}
-
-.facility-backdrop-brain-bloom {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    ellipse 28% 24% at 50% 46%,
-    rgb(56 189 248 / 0.07),
-    rgb(34 211 238 / 0.035) 50%,
-    transparent 82%
-  );
-  animation: facility-bloom-breathe 8s ease-in-out infinite;
-}
-
-.facility-backdrop-sectors {
-  position: absolute;
-  inset: 0;
+/* Edge depth — linear only, no visible circular frame */
+.facility-env-edge-depth {
+  z-index: 3;
   background:
-    linear-gradient(90deg, rgb(56 189 248 / 0.025) 0%, transparent 6%, transparent 94%, rgb(56 189 248 / 0.025) 100%),
-    linear-gradient(0deg, rgb(56 189 248 / 0.015) 0%, transparent 10%, transparent 90%, rgb(168 85 247 / 0.018) 100%);
-  mask-image: radial-gradient(ellipse 82% 72% at 50% 50%, black 15%, transparent 78%);
-  opacity: 0.9;
+    linear-gradient(90deg, #020305 0%, transparent 8%, transparent 92%, #020305 100%),
+    linear-gradient(0deg, #020305 0%, transparent 6%, transparent 94%, #020305 100%);
+  opacity: 0.55;
 }
 
-.facility-zone-labels {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.facility-zone-label {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  font-size: 0.5rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgb(126 140 163 / 0.55);
-  white-space: nowrap;
-}
-
-.facility-zone-command {
-  color: rgb(255 209 102 / 0.65);
-}
-
-@keyframes facility-bloom-breathe {
-  0%,
-  100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-/* Ambience */
+/* Ambience — tiny particles + distant motion */
 .facility-ambience {
   position: absolute;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
+  z-index: 1;
 }
 
-.facility-ambience-scanlines {
+.facility-ambience-data-streams,
+.facility-ambience-particles,
+.facility-ambience-distant-flickers {
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 3px,
-    rgb(56 189 248 / 0.008) 3px,
-    rgb(56 189 248 / 0.008) 4px
+}
+
+.facility-ambience-data-stream {
+  position: absolute;
+  top: -15%;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgb(30 90 120 / 0.08) 40%,
+    rgb(20 60 85 / 0.04) 70%,
+    transparent 100%
   );
-  opacity: 0.28;
+  animation: facility-data-stream-fall linear infinite;
+  opacity: 0.2;
 }
 
-.facility-ambience-dust,
-.facility-ambience-sparks {
-  position: absolute;
-  inset: 0;
+@keyframes facility-data-stream-fall {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.18;
+  }
+  90% {
+    opacity: 0.08;
+  }
+  100% {
+    transform: translateY(130%);
+    opacity: 0;
+  }
 }
 
 .facility-ambience-particle {
   position: absolute;
   border-radius: 9999px;
-  background: rgb(56 189 248 / 0.35);
+  background: rgb(35 95 125 / 0.35);
   animation: facility-particle-drift linear infinite;
-}
-
-.facility-ambience-particle-cyan {
-  background: rgb(56 189 248 / 0.35);
-}
-
-.facility-ambience-particle-purple {
-  background: rgb(168 85 247 / 0.3);
-}
-
-.facility-ambience-particle-gold {
-  background: rgb(255 209 102 / 0.28);
 }
 
 @keyframes facility-particle-drift {
@@ -806,342 +724,49 @@
     opacity: 0;
   }
   15% {
-    opacity: 0.55;
+    opacity: 0.22;
   }
   85% {
-    opacity: 0.35;
+    opacity: 0.12;
   }
   100% {
-    transform: translateY(-40px) translateX(8px);
+    transform: translateY(-36px) translateX(4px);
     opacity: 0;
   }
 }
 
-.facility-ambience-spark {
+.facility-ambience-holo-flicker {
   position: absolute;
-  width: 2px;
-  height: 2px;
-  border-radius: 9999px;
-  background: rgb(234 242 255 / 0.55);
-  animation: facility-spark-flicker 4s ease-in-out infinite;
-}
-
-@keyframes facility-spark-flicker {
-  0%,
-  100% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.2);
-  }
-}
-
-.facility-ambience-neural-fog {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    ellipse 100% 80% at 50% 50%,
-    rgb(56 189 248 / 0.038),
-    transparent 55%
-  );
-  opacity: 0.65;
-}
-
-.facility-ambience-energy-current {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    125deg,
-    transparent 40%,
-    rgb(56 189 248 / 0.02) 50%,
-    transparent 60%
-  );
-  animation: facility-energy-drift 20s linear infinite;
-}
-
-@keyframes facility-energy-drift {
-  0% {
-    transform: translateX(-5%) translateY(0);
-  }
-  100% {
-    transform: translateX(5%) translateY(-2%);
-  }
-}
-
-.facility-ambience-arcs {
-  position: absolute;
-  inset: 0;
-}
-
-.facility-ambience-arc {
-  position: absolute;
-  width: 24px;
+  width: 22px;
   height: 1px;
   background: linear-gradient(
     90deg,
     transparent,
-    rgb(56 189 248 / 0.5),
+    rgb(30 85 115 / 0.2),
     transparent
   );
   opacity: 0;
-  animation: facility-arc-flash 6s ease-in-out infinite;
+  animation: facility-holo-flicker ease-in-out infinite;
 }
 
-@keyframes facility-arc-flash {
+@keyframes facility-holo-flicker {
   0%,
-  92%,
+  90%,
   100% {
     opacity: 0;
-    transform: scaleX(0.5);
   }
   94% {
-    opacity: 0.7;
-    transform: scaleX(1.2);
+    opacity: 0.22;
   }
 }
 
-.facility-ambience-flicker {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    ellipse 60% 50% at 50% 45%,
-    rgb(56 189 248 / 0.025),
-    transparent
-  );
-  animation: facility-glow-flicker 8s ease-in-out infinite;
-}
-
-.facility-ambience-reactor-flicker {
-  position: absolute;
-  width: 30%;
-  height: 30%;
-  left: 35%;
-  top: 35%;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgb(234 242 255 / 0.04), transparent);
-  animation: facility-reactor-flicker 5s ease-in-out infinite;
-}
-
-@keyframes facility-reactor-flicker {
-  0%,
-  100% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-/* V7 — atmospheric depth layers */
-.facility-ambience-energy-cloud {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(48px);
-  pointer-events: none;
-  animation: facility-cloud-drift 24s ease-in-out infinite;
-}
-
-.facility-ambience-cloud-a {
-  width: 55%;
-  height: 40%;
-  left: -8%;
-  top: 10%;
-  background: radial-gradient(circle, rgb(56 189 248 / 0.03), transparent 70%);
-  opacity: 0.45;
-}
-
-.facility-ambience-cloud-b {
-  width: 45%;
-  height: 35%;
-  right: -5%;
-  bottom: 15%;
-  background: radial-gradient(circle, rgb(255 209 102 / 0.03), transparent 70%);
-  animation-delay: -12s;
-  opacity: 0.4;
-}
-
-.facility-ambience-cloud-c {
-  width: 38%;
-  height: 30%;
-  left: 30%;
-  bottom: 8%;
-  background: radial-gradient(circle, rgb(168 85 247 / 0.025), transparent 72%);
-  animation-delay: -18s;
-  opacity: 0.35;
-}
-
-@keyframes facility-cloud-drift {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-    opacity: 0.35;
-  }
-  50% {
-    transform: translate(2%, -1.5%) scale(1.04);
-    opacity: 0.5;
-  }
-}
-
-.facility-ambience-neural-fog-b {
-  background: radial-gradient(
-    ellipse 75% 60% at 25% 68%,
-    rgb(168 85 247 / 0.022),
-    transparent 60%
-  );
-  animation: facility-fog-shift 18s ease-in-out infinite;
-  opacity: 0.5;
-}
-
-.facility-ambience-neural-fog-c {
-  background: radial-gradient(
-    ellipse 65% 50% at 72% 32%,
-    rgb(255 209 102 / 0.012),
-    transparent 62%
-  );
-  animation: facility-fog-shift 24s ease-in-out infinite reverse;
-  opacity: 0.4;
-}
-
-.facility-ambience-energy-current-b {
-  background: linear-gradient(
-    235deg,
-    transparent 35%,
-    rgb(168 85 247 / 0.018) 48%,
-    transparent 62%
-  );
-  animation: facility-energy-drift 28s linear infinite reverse;
-}
-
-.facility-ambience-light-shafts {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.facility-ambience-light-shaft {
-  position: absolute;
-  top: -5%;
-  width: 12%;
-  height: 110%;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgb(56 189 248 / 0.035) 30%,
-    rgb(56 189 248 / 0.02) 55%,
-    transparent 85%
-  );
-  filter: blur(18px);
-  transform-origin: top center;
-  animation: facility-shaft-pulse 12s ease-in-out infinite;
-}
-
-@keyframes facility-shaft-pulse {
-  0%,
-  100% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 0.75;
-  }
-}
-
-.facility-ambience-filaments {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.facility-ambience-filament {
-  position: absolute;
-  top: 0;
-  width: 1px;
-  height: 100%;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgb(56 189 248 / 0.08) 40%,
-    rgb(56 189 248 / 0.04) 60%,
-    transparent 100%
-  );
-  animation: facility-filament-flow linear infinite;
-  opacity: 0.35;
-}
-
-@keyframes facility-filament-flow {
-  0% {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-  10% {
-    opacity: 0.4;
-  }
-  90% {
-    opacity: 0.25;
-  }
-  100% {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-}
-
-@keyframes facility-fog-shift {
-  0%,
-  100% {
-    opacity: 0.25;
-    transform: translateX(0);
-  }
-  50% {
-    opacity: 0.4;
-    transform: translateX(1.5%);
-  }
-}
-
-.facility-ambience-facility-light {
-  position: absolute;
-  pointer-events: none;
-}
-
-.facility-ambience-light-top {
-  inset: 0;
-  background: radial-gradient(
-    ellipse 80% 45% at 50% 0%,
-    rgb(255 209 102 / 0.018),
-    transparent 55%
-  );
-  opacity: 0.5;
-}
-
-.facility-ambience-light-center {
-  inset: 0;
-  background: radial-gradient(
-    ellipse 48% 38% at 50% 46%,
-    rgb(56 189 248 / 0.022),
-    transparent 68%
-  );
-  animation: facility-glow-flicker 10s ease-in-out infinite;
-  opacity: 0.55;
-}
-
-.facility-ambience-light-nexus {
-  inset: 0;
-  background: radial-gradient(
-    ellipse 22% 18% at 50% 46%,
-    rgb(234 242 255 / 0.025),
-    transparent 75%
-  );
-  animation: facility-reactor-flicker 6s ease-in-out infinite;
-  opacity: 0.6;
-}
-
+/* Foreground — particles only, no wash */
 .facility-foreground-field {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
-  opacity: 0.2;
-  mix-blend-mode: screen;
+  opacity: 1;
 }
 
 @keyframes facility-glow-flicker {
@@ -1210,8 +835,8 @@
   height: 100%;
   overflow: visible;
   pointer-events: none;
-  gap: 1.25rem;
-  filter: drop-shadow(0 0 32px rgb(56 189 248 / 0.18));
+  gap: 1.1rem;
+  filter: drop-shadow(0 0 56px rgb(56 189 248 / 0.28));
 }
 
 .facility-brain-nexus-chamber {
@@ -1227,17 +852,18 @@
   inset: 0;
   border-radius: 42% 58% 54% 46% / 52% 44% 56% 48%;
   overflow: hidden;
-  border: 1px solid rgb(56 189 248 / 0.32);
+  border: 1.5px solid rgb(56 189 248 / 0.42);
   background: radial-gradient(
     ellipse 85% 75% at 48% 42%,
     rgb(8 14 22 / 0.98),
     rgb(3 5 8 / 1)
   );
   box-shadow:
-    0 0 48px rgb(56 189 248 / 0.16),
-    0 0 80px rgb(56 189 248 / 0.06),
+    0 0 64px rgb(56 189 248 / 0.24),
+    0 0 120px rgb(56 189 248 / 0.1),
+    0 0 180px rgb(234 242 255 / 0.04),
     inset 0 0 60px rgb(0 0 0 / 0.65),
-    inset 0 -20px 40px rgb(56 189 248 / 0.06);
+    inset 0 -20px 40px rgb(56 189 248 / 0.08);
 }
 
 .facility-brain-nexus-surging .facility-brain-nexus-frame {
@@ -1356,17 +982,17 @@
 
 /* Knowledge panel — subordinate readout, clear of nexus chamber */
 .facility-brain-knowledge {
-  width: 88%;
-  max-width: 14rem;
-  margin-top: 0.25rem;
-  padding: 0.4rem 0.55rem;
+  width: 82%;
+  max-width: 13rem;
+  margin-top: 0.2rem;
+  padding: 0.35rem 0.5rem;
   border-radius: 0.45rem;
-  border: 1px solid rgb(26 35 48 / 0.55);
-  background: rgb(8 11 16 / 0.62);
+  border: 1px solid rgb(26 35 48 / 0.45);
+  background: rgb(8 11 16 / 0.52);
   backdrop-filter: blur(8px);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.22);
-  opacity: 0.68;
-  transform: scale(0.94);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+  opacity: 0.55;
+  transform: scale(0.86);
   transform-origin: top center;
 }
 
@@ -1416,8 +1042,8 @@
 .facility-scene-brain-wrap {
   overflow: visible !important;
   align-items: flex-start;
-  z-index: 6;
-  filter: drop-shadow(0 0 40px rgb(56 189 248 / 0.12));
+  z-index: 8;
+  filter: drop-shadow(0 0 72px rgb(56 189 248 / 0.22));
 }
 
 .facility-scene-ceo-wrap {
@@ -2775,9 +2401,6 @@
     top: 0.5rem;
   }
 
-  .facility-zone-label {
-    display: none;
-  }
 }
 
 /* Facility app layout — icon rail */
@@ -2786,7 +2409,7 @@
   width: 100%;
   height: 100dvh;
   overflow: hidden;
-  background: #020508;
+  background: #05070b;
 }
 
 .facility-app-main {
@@ -2888,11 +2511,11 @@
 
 /* Scene depth & startup */
 .facility-scene-depth {
-  perspective: 1400px;
+  perspective: 1600px;
 }
 
 .facility-scene-brain-wrap {
-  z-index: 6;
+  z-index: 8;
 }
 
 .facility-scene-ceo-wrap {
@@ -2913,6 +2536,101 @@
 .facility-scene-node-wrap > * {
   width: 100%;
   height: 100%;
+}
+
+/* Depth planes — foreground / midground / background atmosphere */
+.facility-depth-foreground {
+  filter: drop-shadow(0 4px 18px rgb(0 0 0 / 0.35));
+}
+
+.facility-depth-midground {
+  filter: drop-shadow(0 6px 22px rgb(0 0 0 / 0.42));
+}
+
+.facility-depth-background {
+  filter: drop-shadow(0 2px 12px rgb(0 0 0 / 0.28));
+}
+
+.facility-depth-background .facility-lab-chamber,
+.facility-depth-background .facility-placeholder-lab {
+  filter: saturate(0.72) brightness(0.86);
+}
+
+.facility-depth-background .facility-lab-selected,
+.facility-depth-background .facility-lab-active,
+.facility-depth-background .facility-lab-highlighted,
+.facility-depth-background.facility-scene-chamber-active .facility-lab-chamber {
+  filter: saturate(0.92) brightness(0.96);
+}
+
+.facility-depth-foreground .facility-lab-chamber,
+.facility-depth-foreground .facility-placeholder-lab {
+  filter: saturate(0.94) brightness(0.98);
+}
+
+/* Hierarchy tiers — organizational visual weight */
+.facility-tier-primary .facility-lab-chamber,
+.facility-tier-primary .facility-placeholder-lab {
+  border-width: 1.5px;
+  border-color: color-mix(in srgb, var(--agent-color) 28%, var(--facility-border));
+  box-shadow:
+    0 0 32px color-mix(in srgb, var(--agent-color) 12%, transparent),
+    0 10px 36px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    inset 0 -24px 48px rgb(0 0 0 / 0.4);
+  filter: saturate(0.96) brightness(0.98);
+}
+
+.facility-tier-primary .facility-lab-containment-field {
+  opacity: 0.72;
+  inset: -18%;
+}
+
+.facility-tier-support .facility-lab-chamber,
+.facility-tier-support .facility-placeholder-lab {
+  filter: saturate(0.82) brightness(0.9);
+}
+
+.facility-tier-support .facility-lab-containment-field {
+  opacity: 0.42;
+  inset: -10%;
+}
+
+.facility-tier-support .facility-lab-chamber-inner {
+  width: 90%;
+  height: 90%;
+  padding: 0.45rem 0.35rem 0.4rem;
+}
+
+.facility-tier-support .facility-lab-name {
+  font-size: 0.58rem;
+}
+
+.facility-tier-peripheral .facility-lab-chamber,
+.facility-tier-peripheral .facility-placeholder-lab {
+  filter: saturate(0.68) brightness(0.84);
+  opacity: 0.88;
+}
+
+.facility-tier-peripheral .facility-lab-containment-field,
+.facility-tier-peripheral .facility-lab-containment-ring {
+  opacity: 0.3;
+}
+
+.facility-tier-peripheral .facility-lab-glow {
+  opacity: 0.35;
+}
+
+.facility-tier-command.facility-scene-brain-wrap {
+  z-index: 8 !important;
+}
+
+.facility-scene-node-focused.facility-tier-primary {
+  filter: drop-shadow(0 0 32px rgb(56 189 248 / 0.28));
+}
+
+.facility-scene-node-focused.facility-tier-support {
+  filter: drop-shadow(0 0 22px rgb(56 189 248 / 0.2));
 }
 
 .facility-startup-overlay {
@@ -3195,7 +2913,15 @@
 
 .facility-placeholder-lab {
   cursor: default;
-  opacity: 0.92;
+  opacity: 0.88;
+}
+
+.facility-tier-support .facility-placeholder-lab {
+  opacity: 0.84;
+}
+
+.facility-tier-peripheral .facility-placeholder-lab {
+  opacity: 0.76;
 }
 
 .facility-lab-particles {
@@ -3789,18 +3515,16 @@
     inset 0 -24px 48px rgb(0 0 0 / 0.4);
 }
 
-/* Hero cinematic polish */
+/* Edge depth only — no circular spotlight frame */
 .facility-main-immersive .facility-scene-wrap::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 9;
-  background: radial-gradient(
-    ellipse 96% 92% at 50% 50%,
-    transparent 48%,
-    rgb(1 3 6 / 0.55) 100%
-  );
+  background:
+    linear-gradient(90deg, rgb(2 4 8 / 0.45) 0%, transparent 6%, transparent 94%, rgb(2 4 8 / 0.45) 100%),
+    linear-gradient(0deg, rgb(2 4 8 / 0.35) 0%, transparent 5%, transparent 95%, rgb(2 4 8 / 0.4) 100%);
 }
 
 .facility-scene-node-focused {
@@ -4397,20 +4121,16 @@
   .facility-nexus-flow-absorb,
   .facility-scene-node-ambient,
   .facility-ambience-particle,
-  .facility-ambience-spark,
-  .facility-ambience-flicker,
-  .facility-backdrop-brain-bloom,
+  .facility-ambience-data-stream,
+  .facility-ambience-holo-flicker,
+  .facility-env-nexus-light,
+  .facility-env-volume,
+  .facility-env-holo-structures,
+  .facility-env-neural-grid,
   .facility-event-pulse-ring,
   .facility-event-live-count,
   .facility-lab-containment-ring,
-  .facility-lab-chamber::before,
-  .facility-backdrop-volumetric,
-  .facility-backdrop-nebula,
-  .facility-ambience-light-shaft,
-  .facility-ambience-filament,
-  .facility-ambience-cloud-a,
-  .facility-ambience-cloud-b,
-  .facility-ambience-cloud-c {
+  .facility-lab-chamber::before {
     animation: none;
   }
 
