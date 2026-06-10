@@ -1,6 +1,19 @@
 import { getNodeLayout, isFacilitySceneNodeId } from "@/lib/facility/layout";
+import {
+  getBrainNexusCenter,
+  getProjectedBrainPortPoint,
+  getProjectedPerimeterPoint,
+  getSceneNodeFrame,
+} from "@/lib/facility/scene-coordinates";
 import { PLACEHOLDER_LABS } from "@/lib/facility/placeholder-labs";
-import type { FacilitySceneNodeId, FacilityLabId, LabOpsState } from "@/lib/facility/types";
+import type {
+  FacilityDepthLayer,
+  FacilitySceneNodeId,
+  FacilityLabId,
+  LabOpsState,
+} from "@/lib/facility/types";
+
+export { getSceneNodeFrame, parseCubicPath } from "@/lib/facility/scene-coordinates";
 
 export type SynapseNodeId = FacilitySceneNodeId;
 
@@ -26,14 +39,30 @@ export interface SynapseEdgeComputed {
   to: SynapseNodeId;
   kind: SynapseEdgeKind;
   path: string;
+  start: SynapsePoint;
+  end: SynapsePoint;
+  depthLayer: FacilityDepthLayer;
   flowMode: SynapseFlowMode;
   active: boolean;
-  /** Particle travel direction along the visual path. */
-  flowTowardLab: boolean;
+  flowTowardBrain: boolean;
 }
 
+/** Every facility node with a dedicated Brain Core data conduit. */
+export const FACILITY_CONDUIT_NODES: SynapseNodeId[] = [
+  "ceo",
+  "research",
+  "analytics",
+  "image",
+  "marketing",
+  "shopify",
+  "commerce",
+  "operations",
+  "content",
+  "designer",
+];
+
 /**
- * Brain Core connection ports — each route terminates at a dedicated perimeter point.
+ * Brain intake ports — each conduit feeds into the Brain glow region.
  * Angles: 0° = right, 90° = down, 180° = left, -90° = up.
  */
 export const BRAIN_PORT_DEGREES: Partial<Record<SynapseNodeId, number>> = {
@@ -49,42 +78,48 @@ export const BRAIN_PORT_DEGREES: Partial<Record<SynapseNodeId, number>> = {
   operations: 90,
 };
 
-/** Per-edge corridor spread — independent approach before convergence. */
-const EDGE_APPROACH_SPREAD: Partial<Record<string, number>> = {
-  "research-brain": 1.15,
-  "analytics-brain": 0.85,
-  "ceo-brain": 0.65,
-  "image-brain": 1.05,
-  "marketing-brain": 1.2,
-  "shopify-brain": 1.1,
-  "commerce-brain": 0.95,
-  "content-brain": 1.15,
-  "designer-brain": 1.25,
-  "operations-brain": 0.9,
+export interface EdgeCorridorConfig {
+  spread: number;
+  lane: number;
+  sweep: number;
+}
+
+/** Shopify Lab — visual reference for all conduits. */
+const SHOPIFY_CORRIDOR: EdgeCorridorConfig = {
+  spread: 1.1,
+  lane: 0,
+  sweep: 1,
 };
 
-/** Meaningful knowledge streams only — lab↔Nexus and CEO command spine. */
-export const SYNAPSE_EDGES: SynapseEdgeDef[] = [
-  { id: "ceo-brain", from: "ceo", to: "brain", kind: "report-up" },
-  { id: "research-brain", from: "research", to: "brain", kind: "context" },
-  { id: "analytics-brain", from: "analytics", to: "brain", kind: "context" },
-  { id: "designer-brain", from: "designer", to: "brain", kind: "context" },
-  { id: "content-brain", from: "content", to: "brain", kind: "context" },
-  { id: "marketing-brain", from: "marketing", to: "brain", kind: "context" },
-  { id: "image-brain", from: "image", to: "brain", kind: "context" },
-  { id: "shopify-brain", from: "shopify", to: "brain", kind: "context" },
-  { id: "operations-brain", from: "operations", to: "brain", kind: "context" },
-  { id: "commerce-brain", from: "commerce", to: "brain", kind: "context" },
-];
+/** Per-conduit lane offsets only — prevents path crossings, same curve language. */
+const CONDUIT_CORRIDORS: Partial<Record<string, EdgeCorridorConfig>> = {
+  "shopify-brain": SHOPIFY_CORRIDOR,
+  "research-brain": { ...SHOPIFY_CORRIDOR, lane: -0.06 },
+  "analytics-brain": { ...SHOPIFY_CORRIDOR, lane: 0.05 },
+  "ceo-brain": { ...SHOPIFY_CORRIDOR, lane: 0, sweep: 0.95 },
+  "image-brain": { ...SHOPIFY_CORRIDOR, lane: -0.03 },
+  "marketing-brain": { ...SHOPIFY_CORRIDOR, lane: 0.04 },
+  "commerce-brain": { ...SHOPIFY_CORRIDOR, lane: 0.03 },
+  "operations-brain": { ...SHOPIFY_CORRIDOR, lane: 0.06 },
+  "content-brain": { ...SHOPIFY_CORRIDOR, lane: -0.04 },
+  "designer-brain": { ...SHOPIFY_CORRIDOR, lane: -0.05 },
+};
+
+export const SYNAPSE_EDGES: SynapseEdgeDef[] = FACILITY_CONDUIT_NODES.map(
+  (nodeId) => ({
+    id: `${nodeId}-brain`,
+    from: nodeId,
+    to: "brain" as const,
+    kind: nodeId === "ceo" ? ("report-up" as const) : ("context" as const),
+  }),
+);
 
 export function layoutToPoint(
   id: SynapseNodeId | string,
   width: number,
   height: number,
 ): SynapsePoint | null {
-  if (!isFacilitySceneNodeId(id)) {
-    return null;
-  }
+  if (!isFacilitySceneNodeId(id)) return null;
   const layout = getNodeLayout(id);
   return {
     x: (layout.left / 100) * width,
@@ -92,45 +127,56 @@ export function layoutToPoint(
   };
 }
 
-export function getBrainCenter(
-  width: number,
-  height: number,
-): SynapsePoint {
-  const layout = getNodeLayout("brain");
-  return {
-    x: (layout.left / 100) * width,
-    y: (layout.top / 100) * height,
-  };
+export function getBrainCenter(width: number, height: number): SynapsePoint {
+  return getBrainNexusCenter(width, height);
 }
 
-/** Hidden routing hub — single convergence point behind the Brain surface. */
-export function getBrainHiddenHub(
-  width: number,
-  height: number,
-): SynapsePoint {
-  return getBrainCenter(width, height);
-}
-
-/** Dedicated Brain Core port for the node that connects to it. */
+/** Outer port on the Brain Nexus perimeter — corridor direction only. */
 export function getBrainPortPoint(
   connectingNodeId: SynapseNodeId | string,
   width: number,
   height: number,
 ): SynapsePoint {
-  const layout = getNodeLayout("brain");
-  const cx = (layout.left / 100) * width;
-  const cy = (layout.top / 100) * height;
-  const angleDeg = BRAIN_PORT_DEGREES[connectingNodeId as SynapseNodeId] ?? -90;
-  const angle = (angleDeg * Math.PI) / 180;
-  const rx = layout.size * 0.44;
-  const ry = layout.size * 0.4;
+  return getProjectedBrainPortPoint(
+    connectingNodeId as FacilitySceneNodeId,
+    width,
+    height,
+    BRAIN_PORT_DEGREES,
+  );
+}
+
+/**
+ * Intake inside the Brain Core glow — feeds into the Nexus, not the outer halo.
+ */
+export function getBrainIntakePoint(
+  connectingNodeId: SynapseNodeId | string,
+  width: number,
+  height: number,
+): SynapsePoint {
+  const nexus = getBrainNexusCenter(width, height);
+  const port = getBrainPortPoint(connectingNodeId, width, height);
+  const depth = 0.82;
   return {
-    x: cx + rx * Math.cos(angle),
-    y: cy + ry * Math.sin(angle),
+    x: nexus.x + (port.x - nexus.x) * depth,
+    y: nexus.y + (port.y - nexus.y) * depth,
   };
 }
 
-/** Exit/entry point on a node perimeter facing a target. */
+/** Lab egress — projected node perimeter facing the Brain Nexus. */
+export function getLabAnchoredPoint(
+  nodeId: SynapseNodeId,
+  width: number,
+  height: number,
+): SynapsePoint {
+  const brain = getBrainNexusCenter(width, height);
+  return getProjectedPerimeterPoint(
+    nodeId as FacilitySceneNodeId,
+    brain,
+    width,
+    height,
+  );
+}
+
 export function getNodePerimeterPoint(
   nodeId: SynapseNodeId,
   toward: SynapsePoint,
@@ -148,102 +194,69 @@ export function getNodePerimeterPoint(
   };
 }
 
-/** Visual endpoints — streams emerge from the hidden hub toward each node. */
-export function resolveConnectionPoints(
-  fromId: SynapseNodeId,
-  toId: SynapseNodeId,
+export function getConduitCorridorConfig(edgeId?: string): EdgeCorridorConfig {
+  if (edgeId && CONDUIT_CORRIDORS[edgeId]) {
+    return CONDUIT_CORRIDORS[edgeId]!;
+  }
+  return SHOPIFY_CORRIDOR;
+}
+
+/** True conduit endpoints — lab node → Brain Core intake. */
+export function resolveConduitEndpoints(
+  agentId: SynapseNodeId,
   width: number,
   height: number,
-): { from: SynapsePoint; to: SynapsePoint; approachId?: SynapseNodeId } | null {
+): { from: SynapsePoint; to: SynapsePoint } | null {
   if (width <= 0 || height <= 0) return null;
-
-  const hub = getBrainHiddenHub(width, height);
-
-  if (toId === "brain") {
-    return {
-      from: hub,
-      to: getNodePerimeterPoint(fromId, hub, width, height),
-      approachId: fromId,
-    };
-  }
-
-  if (fromId === "brain") {
-    return {
-      from: hub,
-      to: getNodePerimeterPoint(toId, hub, width, height),
-      approachId: toId,
-    };
-  }
-
-  const from = layoutToPoint(fromId, width, height);
-  const to = layoutToPoint(toId, width, height);
-  if (!from || !to) return null;
-  return { from, to };
+  return {
+    from: getLabAnchoredPoint(agentId, width, height),
+    to: getBrainIntakePoint(agentId, width, height),
+  };
 }
 
 /**
- * Curved emergence path — independent corridors radiating from the hidden hub
- * behind the Brain toward each destination.
+ * Orbital conduit spline — Shopify-style curved trajectory.
+ * Lab-anchored start, Brain intake end, elegant orbital bow.
  */
-export function computeEmergenceRoutePath(
+export function computeOrbitalConduitPath(
   from: SynapsePoint,
   to: SynapsePoint,
   approachAngleDeg: number,
-  spread = 1,
+  config: EdgeCorridorConfig = SHOPIFY_CORRIDOR,
 ): string {
+  const { spread, lane, sweep } = config;
   const angle = (approachAngleDeg * Math.PI) / 180;
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const dist = Math.hypot(dx, dy) || 1;
+  const perpX = -dy / dist;
+  const perpY = dx / dist;
+  const laneShift = lane * dist * 0.13;
+  const orbit = spread * 0.26 * sweep;
 
-  const c1x = from.x + Math.cos(angle) * dist * 0.12 * spread + dx * 0.1;
-  const c1y = from.y + Math.sin(angle) * dist * 0.12 * spread + dy * 0.1;
+  const c1x =
+    from.x +
+    dx * 0.22 +
+    perpX * (orbit + laneShift) +
+    Math.cos(angle) * dist * 0.04;
+  const c1y =
+    from.y +
+    dy * 0.22 +
+    perpY * (orbit + laneShift) +
+    Math.sin(angle) * dist * 0.04;
 
-  const c2x = to.x - dx * 0.3 - Math.cos(angle) * dist * 0.08 * spread;
-  const c2y = to.y - dy * 0.3 - Math.sin(angle) * dist * 0.08 * spread;
+  const c2x =
+    to.x -
+    dx * 0.14 -
+    perpX * orbit * 0.38 +
+    Math.cos(angle) * dist * 0.03;
+  const c2y =
+    to.y -
+    dy * 0.14 -
+    perpY * orbit * 0.38 +
+    Math.sin(angle) * dist * 0.03;
 
   return `M ${from.x.toFixed(1)} ${from.y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${to.x.toFixed(1)} ${to.y.toFixed(1)}`;
-}
-
-/** @deprecated Alias for emergence paths. */
-export function computeConvergenceRoutePath(
-  from: SynapsePoint,
-  to: SynapsePoint,
-  approachAngleDeg: number,
-  spread = 1,
-): string {
-  return computeEmergenceRoutePath(from, to, approachAngleDeg, spread);
-}
-
-/** Quadratic fallback for non-brain connections. */
-export function computeFacilityRoutePath(
-  from: SynapsePoint,
-  to: SynapsePoint,
-  _brainCenter?: SynapsePoint,
-  curvature = 0.1,
-): string {
-  const mx = (from.x + to.x) / 2;
-  const my = (from.y + to.y) / 2;
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const cx = mx - dy * curvature;
-  const cy = my + dx * curvature;
-  return `M ${from.x.toFixed(1)} ${from.y.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${to.x.toFixed(1)} ${to.y.toFixed(1)}`;
-}
-
-/** @deprecated Use computeFacilityRoutePath for brain connections. */
-export function computeCurvedPath(
-  from: SynapsePoint,
-  to: SynapsePoint,
-  curvature = 0.22,
-): string {
-  const mx = (from.x + to.x) / 2;
-  const my = (from.y + to.y) / 2;
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const cx = mx - dy * curvature;
-  const cy = my + dx * curvature;
-  return `M ${from.x.toFixed(1)} ${from.y.toFixed(1)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${to.x.toFixed(1)} ${to.y.toFixed(1)}`;
 }
 
 export function computeConnectionPath(
@@ -253,29 +266,67 @@ export function computeConnectionPath(
   height: number,
   edgeId?: string,
 ): string | null {
-  const endpoints = resolveConnectionPoints(fromId, toId, width, height);
+  const agentId =
+    toId === "brain" ? fromId : fromId === "brain" ? toId : null;
+  if (!agentId || agentId === "brain") return null;
+
+  const endpoints = resolveConduitEndpoints(agentId, width, height);
   if (!endpoints) return null;
 
-  const involvesBrain = fromId === "brain" || toId === "brain";
-  if (involvesBrain && endpoints.approachId) {
-    const approachDeg =
-      BRAIN_PORT_DEGREES[endpoints.approachId] ?? -90;
-    const spread =
-      (edgeId ? EDGE_APPROACH_SPREAD[edgeId] : undefined) ?? 1;
-    return computeEmergenceRoutePath(
-      endpoints.from,
-      endpoints.to,
-      approachDeg,
-      spread,
-    );
-  }
+  const approachDeg = BRAIN_PORT_DEGREES[agentId] ?? -90;
+  const corridor = getConduitCorridorConfig(edgeId ?? `${agentId}-brain`);
 
-  return computeFacilityRoutePath(
+  return computeOrbitalConduitPath(
     endpoints.from,
     endpoints.to,
-    undefined,
-    0.18,
+    approachDeg,
+    corridor,
   );
+}
+
+/** @deprecated Use computeOrbitalConduitPath. */
+export function computeNeuralSplinePath(
+  from: SynapsePoint,
+  to: SynapsePoint,
+  approachAngleDeg: number,
+  config?: EdgeCorridorConfig,
+): string {
+  return computeOrbitalConduitPath(from, to, approachAngleDeg, config);
+}
+
+/** @deprecated Use resolveConduitEndpoints. */
+export function resolveConnectionPoints(
+  fromId: SynapseNodeId,
+  toId: SynapseNodeId,
+  width: number,
+  height: number,
+): { from: SynapsePoint; to: SynapsePoint; approachId?: SynapseNodeId } | null {
+  const agentId =
+    toId === "brain" ? fromId : fromId === "brain" ? toId : null;
+  if (!agentId || agentId === "brain") return null;
+  const endpoints = resolveConduitEndpoints(agentId, width, height);
+  if (!endpoints) return null;
+  return { ...endpoints, approachId: agentId };
+}
+
+/** @deprecated */
+export function getBrainEmergenceMask(
+  width: number,
+  height: number,
+): { cx: number; cy: number; rx: number; ry: number } {
+  const center = getBrainCenter(width, height);
+  const layout = getNodeLayout("brain");
+  return {
+    cx: center.x,
+    cy: center.y,
+    rx: layout.size * 0.32,
+    ry: layout.size * 0.28,
+  };
+}
+
+/** @deprecated */
+export function getBrainHiddenHub(width: number, height: number): SynapsePoint {
+  return getBrainCenter(width, height);
 }
 
 function deriveLabFlowMode(opsState: LabOpsState): SynapseFlowMode {
@@ -293,19 +344,11 @@ function deriveEdgeFlowMode(
     return deriveLabFlowMode(labStates[edge.from] ?? "idle");
   }
 
-  if (edge.kind === "report-up") {
-    const fromState = labStates[edge.from] ?? "idle";
-    const toState = labStates[edge.to] ?? "idle";
-    if (fromState === "error" || toState === "error") return "error";
-    if (fromState === "executing" || toState === "executing") return "to-brain";
-    if (fromState === "approved" || toState === "approved") return "from-brain";
-    return "ambient";
-  }
-
-  const upstream = labStates[edge.from] ?? "idle";
-  if (upstream === "error") return "error";
-  if (upstream === "executing") return "to-brain";
-  if (upstream === "approved") return "from-brain";
+  const fromState = labStates[edge.from] ?? "idle";
+  const toState = labStates[edge.to] ?? "idle";
+  if (fromState === "error" || toState === "error") return "error";
+  if (fromState === "executing" || toState === "executing") return "to-brain";
+  if (fromState === "approved" || toState === "approved") return "from-brain";
   return "ambient";
 }
 
@@ -319,12 +362,19 @@ export function computeSynapseEdges(
   const edges: SynapseEdgeComputed[] = [];
 
   for (const edge of SYNAPSE_EDGES) {
-    const path = computeConnectionPath(edge.from, edge.to, width, height, edge.id);
-    if (!path) continue;
+    const endpoints = resolveConduitEndpoints(edge.from, width, height);
+    if (!endpoints) continue;
+
+    const approachDeg = BRAIN_PORT_DEGREES[edge.from] ?? -90;
+    const corridor = getConduitCorridorConfig(edge.id);
+    const path = computeOrbitalConduitPath(
+      endpoints.from,
+      endpoints.to,
+      approachDeg,
+      corridor,
+    );
 
     const flowMode = deriveEdgeFlowMode(edge, labStates);
-    const flowTowardLab =
-      flowMode === "ambient" || flowMode === "from-brain";
 
     edges.push({
       id: edge.id,
@@ -332,9 +382,12 @@ export function computeSynapseEdges(
       to: edge.to,
       kind: edge.kind,
       path,
+      start: endpoints.from,
+      end: endpoints.to,
+      depthLayer: getNodeLayout(edge.from).depth,
       flowMode,
       active: flowMode !== "ambient",
-      flowTowardLab,
+      flowTowardBrain: flowMode !== "from-brain",
     });
   }
 

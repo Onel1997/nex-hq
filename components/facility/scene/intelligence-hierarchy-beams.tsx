@@ -1,8 +1,6 @@
 "use client";
 
-import { SPECIALIST_AGENT_IDS } from "@/lib/constants/agents";
-import { getAgentColor } from "@/lib/facility/facility-theme";
-import { computeConnectionPath } from "@/lib/facility/graph";
+import { computeConnectionPath, getBrainEmergenceMask } from "@/lib/facility/graph";
 import type { FacilityLabId, LabSnapshot } from "@/lib/facility/types";
 import { memo, useMemo } from "react";
 
@@ -12,6 +10,10 @@ interface IntelligenceHierarchyBeamsProps {
   labs: Record<FacilityLabId, LabSnapshot>;
 }
 
+/**
+ * CEO command spine only — lab streams are rendered exclusively via NeuralGraph
+ * so every agent connection shares the same organic emergence behavior.
+ */
 export const IntelligenceHierarchyBeams = memo(
   function IntelligenceHierarchyBeams({
     width,
@@ -24,33 +26,11 @@ export const IntelligenceHierarchyBeams = memo(
       const ceoPath = computeConnectionPath("brain", "ceo", width, height, "ceo-brain");
       if (!ceoPath) return null;
 
-      const labBeams = SPECIALIST_AGENT_IDS.flatMap((agentId) => {
-        const path = computeConnectionPath(
-          agentId,
-          "brain",
-          width,
-          height,
-          `${agentId}-brain`,
-        );
-        if (!path) return [];
-
-        const active =
-          labs[agentId].opsState === "executing" ||
-          labs[agentId].opsState === "review" ||
-          labs[agentId].opsState === "queued";
-
-        return [
-          {
-            agentId,
-            path,
-            color: getAgentColor(agentId),
-            active,
-          },
-        ];
-      });
-
-      return { ceoPath, labBeams };
-    }, [width, height, labs]);
+      return {
+        ceoPath,
+        brainMask: getBrainEmergenceMask(width, height),
+      };
+    }, [width, height]);
 
     if (!geometry) return null;
 
@@ -64,44 +44,39 @@ export const IntelligenceHierarchyBeams = memo(
         height={height}
         aria-hidden
       >
-        {geometry.labBeams
-          .filter(({ active }) => active)
-          .map(({ agentId, path, color }) => (
-            <g key={agentId} className="facility-hierarchy-lab-beam">
-              <path
-                d={path}
-                fill="none"
-                stroke={color}
-                strokeWidth={1.2}
-                strokeLinecap="round"
-                opacity={0.4}
-              />
-              <circle r="2.5" fill={color} opacity="0.85">
-                <animateMotion
-                  dur="3.5s"
-                  repeatCount="indefinite"
-                  path={path}
-                />
-              </circle>
-            </g>
-          ))}
+        <defs>
+          <mask id="facility-hierarchy-emergence-mask">
+            <rect width="100%" height="100%" fill="white" />
+            <ellipse
+              cx={geometry.brainMask.cx}
+              cy={geometry.brainMask.cy}
+              rx={geometry.brainMask.rx}
+              ry={geometry.brainMask.ry}
+              fill="black"
+            />
+          </mask>
+        </defs>
 
-        <path
-          d={geometry.ceoPath}
-          fill="none"
-          stroke="#FFD166"
-          strokeWidth={ceoActive ? 1.5 : 0.7}
-          strokeLinecap="round"
-          opacity={ceoActive ? 0.5 : 0.15}
-          strokeDasharray={ceoActive ? undefined : "4 8"}
-        />
-        <circle r="3" fill="#FFD166" opacity={ceoActive ? 0.9 : 0.35}>
-          <animateMotion
-            dur={ceoActive ? "2s" : "4.5s"}
-            repeatCount="indefinite"
-            path={geometry.ceoPath}
+        <g mask="url(#facility-hierarchy-emergence-mask)">
+          <path
+            d={geometry.ceoPath}
+            fill="none"
+            stroke="#FFD166"
+            strokeWidth={ceoActive ? 1.1 : 0.65}
+            strokeLinecap="round"
+            opacity={ceoActive ? 0.28 : 0.1}
+            strokeDasharray={ceoActive ? "3 20" : "2 24"}
           />
-        </circle>
+          {ceoActive && (
+            <circle r="2" fill="#FFD166" opacity="0.55">
+              <animateMotion
+                dur="3.8s"
+                repeatCount="indefinite"
+                path={geometry.ceoPath}
+              />
+            </circle>
+          )}
+        </g>
       </svg>
     );
   },

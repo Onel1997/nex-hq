@@ -5,6 +5,7 @@ import {
   type FacilityStartup,
 } from "@/components/facility/hooks/use-facility-startup";
 import { useCanvasSize } from "@/components/facility/hooks/use-canvas-size";
+import { useFacilityNodeMeasurements } from "@/components/facility/hooks/use-facility-node-measurements";
 import { useFacilityAmbience } from "@/components/facility/hooks/use-facility-ambience";
 import { useFacilityReactions } from "@/components/facility/hooks/use-facility-reactions";
 import {
@@ -19,7 +20,6 @@ import { LabPod } from "@/components/facility/nodes/lab-pod";
 import { PlaceholderLabPod } from "@/components/facility/nodes/placeholder-lab-pod";
 import { FacilityBackdrop } from "@/components/facility/scene/facility-backdrop";
 import { FacilityStartupOverlay } from "@/components/facility/scene/facility-startup-overlay";
-import { IntelligenceHierarchyBeams } from "@/components/facility/scene/intelligence-hierarchy-beams";
 import { KnowledgeFlowOverlay } from "@/components/facility/scene/knowledge-flow-overlay";
 import { SPECIALIST_AGENT_IDS, type AgentId } from "@/lib/constants/agents";
 import {
@@ -116,6 +116,12 @@ export function FacilityScene({
   const fadeIn = (from: Parameters<typeof phaseAtLeast>[1]) =>
     startup.isComplete || phaseAtLeast(startup.phase, from);
 
+  const measuredGeometry = useFacilityNodeMeasurements(
+    ref,
+    size,
+    size.width > 0 && fadeIn("brain"),
+  );
+
   const isChamberNav = navigation.mode === "lab-focus";
   const isCeoChamber = navigation.mode === "ceo-focus";
 
@@ -155,15 +161,11 @@ export function FacilityScene({
           animate={{ opacity: fadeIn("synapses") ? 1 : 0 }}
           transition={{ duration: 0.8 }}
         >
-          <IntelligenceHierarchyBeams
-            width={size.width}
-            height={size.height}
-            labs={data.labs}
-          />
           <NeuralGraph
             width={size.width}
             height={size.height}
             labs={data.labs}
+            measuredGeometry={measuredGeometry}
             networkPulse={networkPulse || Boolean(ambientPulse)}
             networkSurge={networkSurge}
             activeTransmission={activeTransmission}
@@ -191,6 +193,7 @@ export function FacilityScene({
             "facility-scene-node-wrap facility-scene-brain-wrap",
             nodeDepthClasses(getNodeLayout("brain")),
           )}
+          data-facility-node="brain"
         >
           <BrainCore
             stats={data.brain}
@@ -215,6 +218,7 @@ export function FacilityScene({
             "facility-scene-node-wrap facility-scene-ceo-wrap",
             nodeDepthClasses(getNodeLayout("ceo")),
           )}
+          data-facility-node="ceo"
         >
           <CeoCore
             ceo={data.ceo}
@@ -243,6 +247,7 @@ export function FacilityScene({
               isFocused && "facility-scene-node-focused facility-scene-chamber-active",
               ambientPulse?.agentId === agentId && "facility-scene-node-ambient",
             )}
+            data-facility-node={agentId}
           >
             <LabPod
               lab={data.labs[agentId]}
@@ -273,6 +278,7 @@ export function FacilityScene({
               "facility-scene-node-wrap",
               nodeDepthClasses(getNodeLayout(labId)),
             )}
+            data-facility-node={labId}
           >
             <PlaceholderLabPod
               lab={PLACEHOLDER_LABS[labId]}

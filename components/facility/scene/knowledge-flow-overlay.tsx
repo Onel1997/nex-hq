@@ -84,29 +84,33 @@ export const KnowledgeFlowOverlay = memo(function KnowledgeFlowOverlay({
       <AnimatePresence>
         {showLabToNexus && labToNexusPath && (
           <g key={`lab-${flow.id}`} filter="url(#knowledge-flow-glow)">
+            <path
+              d={labToNexusPath}
+              fill="none"
+              stroke={color}
+              strokeWidth={1.2}
+              strokeLinecap="round"
+              opacity={0.35}
+            />
             <motion.path
               d={labToNexusPath}
               fill="none"
               stroke={color}
-              strokeWidth={2.5}
+              strokeWidth={1.8}
               strokeLinecap="round"
               initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: 1, opacity: [0, 0.9, 0.7] }}
+              animate={{ pathLength: 1, opacity: [0, 0.9, 0.75] }}
               exit={{ opacity: 0 }}
               transition={{ duration: 1.2, ease: "easeOut" }}
             />
-            <circle r="5" fill={color}>
+            <circle r="1.5" fill={color} opacity={0.8}>
               <animateMotion
-                dur="2s"
+                dur="2.4s"
                 repeatCount="indefinite"
                 path={labToNexusPath}
-              />
-            </circle>
-            <circle r="12" fill={color} opacity="0.15">
-              <animateMotion
-                dur="2s"
-                repeatCount="indefinite"
-                path={labToNexusPath}
+                keyPoints="0;1"
+                keyTimes="0;1"
+                calcMode="linear"
               />
             </circle>
           </g>
@@ -129,29 +133,33 @@ export const KnowledgeFlowOverlay = memo(function KnowledgeFlowOverlay({
 
         {showNexusToCeo && (
           <g key={`ceo-${flow.id}`} filter="url(#knowledge-flow-glow)">
+            <path
+              d={nexusToCeoPath}
+              fill="none"
+              stroke="#FFD166"
+              strokeWidth={1.2}
+              strokeLinecap="round"
+              opacity={0.35}
+            />
             <motion.path
               d={nexusToCeoPath}
               fill="none"
               stroke="#FFD166"
-              strokeWidth={2.5}
+              strokeWidth={1.8}
               strokeLinecap="round"
               initial={{ pathLength: 0, opacity: 0 }}
               animate={{ pathLength: 1, opacity: [0, 1, 0.85] }}
               exit={{ opacity: 0 }}
               transition={{ duration: 1, ease: "easeOut" }}
             />
-            <circle r="5" fill="#FFD166">
+            <circle r="1.5" fill="#FFD166" opacity={0.8}>
               <animateMotion
-                dur="1.4s"
+                dur="1.8s"
                 repeatCount="indefinite"
                 path={nexusToCeoPath}
-              />
-            </circle>
-            <circle r="14" fill="#FFD166" opacity="0.12">
-              <animateMotion
-                dur="1.4s"
-                repeatCount="indefinite"
-                path={nexusToCeoPath}
+                keyPoints="1;0"
+                keyTimes="0;1"
+                calcMode="linear"
               />
             </circle>
           </g>

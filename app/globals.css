@@ -866,6 +866,14 @@
   pointer-events: none;
 }
 
+.facility-neural-pathway {
+  pointer-events: none;
+}
+
+.facility-conduit-network {
+  z-index: 0;
+}
+
 /* Nodes */
 .facility-node {
   position: absolute;

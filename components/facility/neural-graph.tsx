@@ -1,15 +1,13 @@
 "use client";
 
-import { DataFlowParticle } from "@/components/facility/motion/data-flow-particle";
-import { EnergyStreamPulse } from "@/components/facility/motion/energy-stream-pulse";
+import { NeuralPathway } from "@/components/facility/motion/neural-pathway";
 import { TransmissionPacket } from "@/components/facility/motion/transmission-packet";
+import { buildLabStateMap, type SynapseEdgeComputed } from "@/lib/facility/graph";
 import {
-  buildLabStateMap,
-  computeSynapseEdges,
-  getBrainCenter,
-  type SynapseEdgeComputed,
-} from "@/lib/facility/graph";
-import { getNodeLayout } from "@/lib/facility/layout";
+  computeSynapseEdgesFromMeasured,
+  type MeasuredSceneGeometry,
+} from "@/lib/facility/measured-conduits";
+import type { FacilityDepthLayer } from "@/lib/facility/types";
 import type {
   FacilityLabId,
   LabSnapshot,
@@ -23,19 +21,11 @@ interface NeuralGraphProps {
   width: number;
   height: number;
   labs: Record<FacilityLabId, LabSnapshot>;
+  measuredGeometry: MeasuredSceneGeometry | null;
   networkPulse?: boolean;
   networkSurge?: NetworkSurgeMode;
   activeTransmission?: TransmissionEvent | null;
 }
-
-const STROKE_COLORS = {
-  ambient: "rgb(56 189 248 / 0.14)",
-  active: "rgb(56 189 248 / 0.38)",
-  executing: "rgb(34 211 238 / 0.55)",
-  error: "rgb(248 113 113 / 0.55)",
-  pulse: "rgb(234 242 255 / 0.6)",
-  command: "rgb(255 209 102 / 0.22)",
-} as const;
 
 const EDGE_PHASE: Record<string, number> = {
   "research-brain": 0,
@@ -50,17 +40,11 @@ const EDGE_PHASE: Record<string, number> = {
   "operations-brain": 9,
 };
 
-function streamParticleCount(
-  edge: SynapseEdgeComputed,
-  active: boolean,
-  surge: boolean,
-): number {
-  const isBrainEdge = edge.to === "brain" || edge.from === "brain";
-  if (!isBrainEdge) return 0;
-  if (edge.flowMode === "error") return 2;
-  if (active) return surge ? 4 : 2;
-  return 1;
-}
+const DEPTH_RENDER_ORDER: FacilityDepthLayer[] = [
+  "background",
+  "midground",
+  "foreground",
+];
 
 function labState(
   id: SynapseEdgeComputed["from"],
@@ -80,174 +64,38 @@ function isExecutingEdge(
   );
 }
 
-const SynapsePath = memo(function SynapsePath({
-  edge,
-  networkPulse,
-  networkSurge,
-  accelerated,
-  phase,
-}: {
-  edge: SynapseEdgeComputed;
-  networkPulse?: boolean;
-  networkSurge?: NetworkSurgeMode;
-  accelerated?: boolean;
-  phase: number;
-}) {
-  const isError = edge.flowMode === "error";
-  const isExecuting = edge.flowMode === "to-brain" && accelerated;
-  const isCommand = edge.id === "ceo-brain";
-  const isBrainEdge = edge.to === "brain" || edge.from === "brain";
-  const isSurge = networkSurge !== "none" && networkSurge !== undefined;
-  const stroke =
-    isSurge && edge.active
-      ? networkSurge === "final-report"
-        ? "rgb(234 242 255 / 0.75)"
-        : STROKE_COLORS.pulse
-      : networkPulse && edge.active
-        ? STROKE_COLORS.pulse
-        : isError
-          ? STROKE_COLORS.error
-          : isExecuting
-            ? STROKE_COLORS.executing
-            : isCommand
-              ? STROKE_COLORS.command
-              : edge.active
-                ? STROKE_COLORS.active
-                : STROKE_COLORS.ambient;
-
-  const count = streamParticleCount(edge, edge.active, isSurge);
-  const isAmbient = !edge.active && !isCommand;
-  const flowColor = isCommand
-    ? "#FFD166"
-    : isError
-      ? "#F87171"
-      : isExecuting
-        ? "#22D3EE"
-        : "#38BDF8";
-
-  const dashDirection = edge.flowTowardLab ? -40 : 40;
-
-  return (
-    <g>
-      <path
-        d={edge.path}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={edge.active ? (isExecuting ? 4 : 3) : isAmbient ? 2.5 : 2}
-        strokeLinecap="round"
-        opacity={edge.active ? 0.12 : isAmbient ? 0.05 : 0.08}
-        style={{ filter: "blur(3px)" }}
-      />
-      <motion.path
-        d={edge.path}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={
-          edge.active
-            ? isExecuting
-              ? 2
-              : 1.5
-            : isCommand
-              ? 0.85
-              : isAmbient
-                ? 0.9
-                : 0.75
-        }
-        strokeLinecap="round"
-        strokeDasharray={
-          edge.active ? "6 10" : isAmbient ? "3 16" : isCommand ? "3 12" : "2 14"
-        }
-        animate={
-          isError
-            ? { strokeDashoffset: [0, dashDirection] }
-            : networkPulse && edge.active
-              ? { strokeDashoffset: [0, dashDirection] }
-              : edge.active || isAmbient || isCommand
-                ? { strokeDashoffset: [0, dashDirection] }
-                : undefined
-        }
-        transition={
-          isError
-            ? {
-                strokeDashoffset: {
-                  duration: 1.2,
-                  repeat: Infinity,
-                  ease: "linear",
-                },
-              }
-            : edge.active
-              ? {
-                  strokeDashoffset: {
-                    duration: accelerated ? 0.8 : 2.5,
-                    repeat: Infinity,
-                    ease: "linear",
-                  },
-                }
-              : isAmbient
-                ? {
-                    strokeDashoffset: {
-                      duration: 5.5,
-                      repeat: Infinity,
-                      ease: "linear",
-                    },
-                  }
-                : isCommand
-                  ? {
-                      strokeDashoffset: {
-                        duration: 4.5,
-                        repeat: Infinity,
-                        ease: "linear",
-                      },
-                    }
-                  : undefined
-        }
-      />
-      {isBrainEdge && (
-        <EnergyStreamPulse
-          path={edge.path}
-          phase={phase}
-          active={edge.active || isCommand}
-          color={flowColor}
-          reverse={!edge.flowTowardLab}
-        />
-      )}
-      {Array.from({ length: count }, (_, i) => (
-        <DataFlowParticle
-          key={`${edge.id}-p-${i}`}
-          path={edge.path}
-          flowMode={edge.active ? edge.flowMode : "ambient"}
-          index={i}
-          accelerated={accelerated}
-          reverse={!edge.flowTowardLab}
-        />
-      ))}
-    </g>
-  );
-});
-
 export const NeuralGraph = memo(function NeuralGraph({
   width,
   height,
   labs,
+  measuredGeometry,
   networkPulse,
   networkSurge = "none",
   activeTransmission,
 }: NeuralGraphProps) {
   const edges = useMemo(() => {
+    if (!measuredGeometry?.ready) return [];
     const labStates = buildLabStateMap(labs);
-    return computeSynapseEdges(width, height, labStates);
-  }, [width, height, labs]);
+    return computeSynapseEdgesFromMeasured(measuredGeometry, labStates);
+  }, [measuredGeometry, labs]);
 
-  const brainMask = useMemo(() => {
-    const center = getBrainCenter(width, height);
-    const layout = getNodeLayout("brain");
-    return {
-      cx: center.x,
-      cy: center.y,
-      rx: layout.size * 0.5,
-      ry: layout.size * 0.46,
+  const edgesByDepth = useMemo(() => {
+    const grouped: Record<
+      FacilityDepthLayer,
+      Array<{ edge: SynapseEdgeComputed; phase: number }>
+    > = {
+      background: [],
+      midground: [],
+      foreground: [],
     };
-  }, [width, height]);
+    for (const edge of edges) {
+      grouped[edge.depthLayer].push({
+        edge,
+        phase: EDGE_PHASE[edge.id] ?? 0,
+      });
+    }
+    return grouped;
+  }, [edges]);
 
   const transmissionPath = useMemo(() => {
     if (!activeTransmission) return null;
@@ -255,34 +103,24 @@ export const NeuralGraph = memo(function NeuralGraph({
     return edge?.path ?? null;
   }, [edges, activeTransmission]);
 
-  const brainCenter = useMemo(
-    () => getBrainCenter(width, height),
-    [width, height],
-  );
+  const brainCenter = measuredGeometry?.brainNexus.center ?? {
+    x: width * 0.47,
+    y: height * 0.36,
+  };
   const surgeRadius = Math.min(width, height) * 0.45;
 
-  if (width <= 0 || height <= 0) return null;
+  if (width <= 0 || height <= 0 || edges.length === 0) return null;
 
   return (
     <svg
-      className="facility-neural-graph"
+      className="facility-neural-graph facility-conduit-network"
       width={width}
       height={height}
       aria-hidden
     >
       <defs>
-        <mask id="facility-brain-convergence-mask">
-          <rect width="100%" height="100%" fill="white" />
-          <ellipse
-            cx={brainMask.cx}
-            cy={brainMask.cy}
-            rx={brainMask.rx}
-            ry={brainMask.ry}
-            fill="black"
-          />
-        </mask>
-        <filter id="synapse-glow">
-          <feGaussianBlur stdDeviation="2" result="blur" />
+        <filter id="conduit-glow">
+          <feGaussianBlur stdDeviation="1.8" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
@@ -296,6 +134,7 @@ export const NeuralGraph = memo(function NeuralGraph({
           </feMerge>
         </filter>
       </defs>
+
       {networkSurge !== "none" && (
         <motion.circle
           cx={brainCenter.x}
@@ -316,23 +155,32 @@ export const NeuralGraph = memo(function NeuralGraph({
           }}
         />
       )}
-      <g filter="url(#synapse-glow)" mask="url(#facility-brain-convergence-mask)">
-        {edges.map((edge) => (
-          <SynapsePath
-            key={edge.id}
-            edge={edge}
-            networkPulse={networkPulse}
-            networkSurge={networkSurge}
-            accelerated={isExecutingEdge(edge, labs) || networkSurge !== "none"}
-            phase={EDGE_PHASE[edge.id] ?? 0}
-          />
-        ))}
+
+      <g filter="url(#conduit-glow)">
+        {DEPTH_RENDER_ORDER.map((layer) =>
+          edgesByDepth[layer].map(({ edge, phase }) => (
+            <NeuralPathway
+              key={edge.id}
+              path={edge.path}
+              start={edge.start}
+              end={edge.end}
+              flowMode={
+                networkPulse && edge.active ? "to-brain" : edge.flowMode
+              }
+              phase={phase}
+              depthLayer={edge.depthLayer}
+              active={edge.active || networkPulse}
+              accelerated={
+                isExecutingEdge(edge, labs) || networkSurge !== "none"
+              }
+              isCommand={edge.id === "ceo-brain"}
+            />
+          )),
+        )}
       </g>
+
       {transmissionPath && activeTransmission && (
-        <g
-          filter="url(#synapse-glow-strong)"
-          mask="url(#facility-brain-convergence-mask)"
-        >
+        <g filter="url(#synapse-glow-strong)">
           <TransmissionPacket
             transmission={activeTransmission}
             path={transmissionPath}

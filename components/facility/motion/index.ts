@@ -7,6 +7,7 @@ export { BrainReactor } from "@/components/facility/motion/brain-reactor";
 export { EnergyStreamPulse } from "@/components/facility/motion/energy-stream-pulse";
 export { NeuralNexus } from "@/components/facility/motion/neural-nexus";
 export { DataFlowParticle } from "@/components/facility/motion/data-flow-particle";
+export { NeuralPathway } from "@/components/facility/motion/neural-pathway";
 export { GlowPulse } from "@/components/facility/motion/glow-pulse";
 export { ThinkingIndicator } from "@/components/facility/motion/thinking-indicator";
 export { TransmissionPacket } from "@/components/facility/motion/transmission-packet";

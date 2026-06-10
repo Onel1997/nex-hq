@@ -66,7 +66,7 @@ export const BrainCore = memo(function BrainCore({
       )}
       style={style}
     >
-      <div className="facility-brain-nexus-chamber">
+      <div className="facility-brain-nexus-chamber" data-facility-nexus="chamber">
         <div className="facility-brain-nexus-frame">
           <NeuralNexus
             state={nexusState}
