@@ -26,6 +26,7 @@ interface WorkspaceShellProps {
   runDisabled?: boolean;
   className?: string;
   hideHeader?: boolean;
+  contextPanel?: React.ReactNode;
 }
 
 export function WorkspaceShell({
@@ -37,6 +38,7 @@ export function WorkspaceShell({
   runDisabled = false,
   className,
   hideHeader = false,
+  contextPanel,
 }: WorkspaceShellProps) {
   const { data, loading } = useWorkspaceContext(agentId);
   const accent = getAgentColor(agentId);
@@ -106,7 +108,9 @@ export function WorkspaceShell({
 
         <div className="workspace-body">
           <main className="workspace-center">{children}</main>
-          <WorkspaceContextPanel data={data} loading={loading} />
+          {contextPanel ?? (
+            <WorkspaceContextPanel data={data} loading={loading} />
+          )}
         </div>
 
         <WorkspaceTimeline agentId={agentId} data={data} />

@@ -1,5 +1,17 @@
 import { MILAENE_PROFILE } from "@/lib/business/business-profile";
+import {
+  buildDesignIntelligenceDashboard,
+  scoreCollectionOpportunities,
+  type CollectionOpportunityScore,
+  type DesignIntelligenceDashboard,
+  type ProductIntelligence,
+} from "@/lib/design/product-intelligence";
 import { MARKETPRINT_PROFILE } from "@/lib/marketprint/marketprint-profile";
+import type { ShopifyPerformanceIntelligence } from "@/lib/shopify/performance";
+import {
+  mergeHistoricalProducts,
+  type CommerceIntelligence,
+} from "@/lib/shopify/commerce-intelligence";
 import {
   getCampaignProducts,
   getEmbroideryProducts,
@@ -119,6 +131,7 @@ export interface DesignOpportunityCard {
   description: string;
   tags?: string[];
   marketPrintSuitability?: number;
+  confidence?: number;
 }
 
 export interface DesignExistingProductCard {
@@ -133,7 +146,11 @@ export interface DesignExistingProductCard {
   marketPrintSuitability: number;
   premiumScore: number;
   embroidery: boolean;
+  intelligence?: ProductIntelligence;
 }
+
+export type { CollectionOpportunityScore, DesignIntelligenceDashboard, ProductIntelligence };
+export type { CommerceIntelligence } from "@/lib/shopify/commerce-intelligence";
 
 export interface DesignStudioIntelligence {
   productEcosystem: DesignProductBaseRow[];
@@ -154,6 +171,10 @@ export interface DesignStudioIntelligence {
   };
   productOpportunities: DesignOpportunityCard[];
   existingProducts: DesignExistingProductCard[];
+  designIntelligence: DesignIntelligenceDashboard;
+  performanceIntelligence: ShopifyPerformanceIntelligence | null;
+  commerceIntelligence: CommerceIntelligence | null;
+  scoredOpportunities: CollectionOpportunityScore[];
   marketPrintCategories: string[];
   summary: {
     totalProducts: number;
@@ -161,6 +182,13 @@ export interface DesignStudioIntelligence {
     categories: number;
     collections: number;
     averageSuitability: number;
+    averageCompositeScore: number;
+    heroProductCount: number;
+    totalRevenue: number;
+    totalUnitsSold: number;
+    averageOrderValue: number;
+    performancePeriodDays: number;
+    commerceOrderCount: number;
   };
 }
 
@@ -215,10 +243,13 @@ function buildProductEcosystem(
   });
 }
 
+
 function buildExistingProducts(
   products: ShopifyProductSummary[],
+  intelligenceById: Map<string, ProductIntelligence>,
 ): DesignExistingProductCard[] {
   return products.slice(0, 12).map((product) => {
+    const intel = intelligenceById.get(product.id);
     const match = matchProductToMarketPrint({
       title: product.title,
       productType: product.productType,
@@ -234,9 +265,12 @@ function buildExistingProducts(
       collections: product.collections,
       colors: product.colors,
       materials: product.materials,
-      marketPrintSuitability: match.suitability,
-      premiumScore: match.capability.premiumScore,
-      embroidery: match.capability.embroidery,
+      marketPrintSuitability: intel?.marketPrintSuitability ?? match.suitability,
+      premiumScore: intel?.premiumScore ?? match.capability.premiumScore * 10,
+      embroidery: intel?.embroideryPotential !== "None" && intel?.embroideryPotential !== "Low"
+        ? true
+        : match.capability.embroidery,
+      intelligence: intel,
     };
   });
 }
@@ -299,25 +333,40 @@ function mergeColors(catalogColors: string[]): DesignStudioIntelligence["colorIn
 
 export function buildDesignStudioIntelligence(
   knowledge: ShopifyKnowledge,
+  performanceIntelligence?: ShopifyPerformanceIntelligence | null,
+  commerceIntelligence?: CommerceIntelligence | null,
 ): DesignStudioIntelligence {
   const productKnowledge = buildProductKnowledge(knowledge);
   const activeProducts = productKnowledge.availableProducts.filter(
     (p) => p.status === "ACTIVE",
   );
 
-  const existingProducts = buildExistingProducts(
-    productKnowledge.bestsellerCandidates.length > 0
-      ? productKnowledge.bestsellerCandidates
-      : activeProducts.slice(0, 12),
+  const mergedProducts = commerceIntelligence
+    ? mergeHistoricalProducts(knowledge, commerceIntelligence)
+    : knowledge.products;
+
+  const designIntelligence = buildDesignIntelligenceDashboard(
+    mergedProducts,
+    performanceIntelligence ?? undefined,
+    commerceIntelligence ?? undefined,
+  );
+  const intelligenceById = new Map(
+    designIntelligence.scoredProducts.map((p) => [p.productId, p]),
+  );
+  const scoredOpportunities = scoreCollectionOpportunities(
+    designIntelligence.scoredProducts,
+    commerceIntelligence ?? undefined,
   );
 
-  const suitabilityScores = activeProducts.map(
-    (p) =>
-      matchProductToMarketPrint({
-        title: p.title,
-        productType: p.productType,
-        materials: p.materials,
-      }).suitability,
+  const cardSource =
+    productKnowledge.bestsellerCandidates.length > 0
+      ? productKnowledge.bestsellerCandidates
+      : activeProducts.slice(0, 12);
+
+  const existingProducts = buildExistingProducts(cardSource, intelligenceById);
+
+  const suitabilityScores = designIntelligence.scoredProducts.map(
+    (p) => p.marketPrintSuitability,
   );
   const averageSuitability =
     suitabilityScores.length > 0
@@ -325,6 +374,19 @@ export function buildDesignStudioIntelligence(
           suitabilityScores.reduce((a, b) => a + b, 0) / suitabilityScores.length,
         )
       : 0;
+  const averageCompositeScore =
+    designIntelligence.scoredProducts.length > 0
+      ? Math.round(
+          designIntelligence.scoredProducts.reduce(
+            (sum, p) => sum + p.heroProductScore,
+            0,
+          ) / designIntelligence.scoredProducts.length,
+        )
+      : 0;
+  const heroProductCount = designIntelligence.scoredProducts.filter(
+    (p) => p.heroPotential === "High",
+  ).length;
+  const perfSummary = performanceIntelligence?.summary ?? commerceIntelligence?.summary;
 
   const marketPrintPremium = getPremiumProducts().map((p) => p.name);
   const marketPrintEmbroidery = getEmbroideryProducts().map((p) => p.name);
@@ -358,18 +420,23 @@ export function buildDesignStudioIntelligence(
       title: c.title,
       productCount: c.productCount,
     })),
-    collectionOpportunities: COLLECTION_OPPORTUNITY_TEMPLATES.map((item) => ({
+    collectionOpportunities: scoredOpportunities.map((item) => ({
       id: item.id,
       title: item.title,
       description: item.description,
-      tags: [...item.tags],
-      marketPrintSuitability: 88,
+      tags: item.tags,
+      confidence: item.confidence,
+      marketPrintSuitability: item.confidence,
     })),
     productGaps: productKnowledge.categoryGaps,
     capsuleIdeas: buildCapsuleIdeas(productKnowledge.categoryGaps),
     colorIntelligence: mergeColors(productKnowledge.availableColors),
     productOpportunities: buildProductOpportunities(),
     existingProducts,
+    designIntelligence,
+    performanceIntelligence: performanceIntelligence ?? null,
+    commerceIntelligence: commerceIntelligence ?? null,
+    scoredOpportunities,
     marketPrintCategories: [...MARKETPRINT_CATEGORIES],
     summary: {
       totalProducts: productKnowledge.productCount,
@@ -377,6 +444,16 @@ export function buildDesignStudioIntelligence(
       categories: productKnowledge.availableCategories.length,
       collections: productKnowledge.collections.length,
       averageSuitability,
+      averageCompositeScore,
+      heroProductCount,
+      totalRevenue: perfSummary?.totalRevenue ?? 0,
+      totalUnitsSold: perfSummary?.totalUnits ?? 0,
+      averageOrderValue:
+        performanceIntelligence?.summary.averageOrderValue ??
+        commerceIntelligence?.summary.averageOrderValue ??
+        0,
+      performancePeriodDays: 0,
+      commerceOrderCount: commerceIntelligence?.summary.totalOrders ?? 0,
     },
   };
 }
@@ -384,9 +461,15 @@ export function buildDesignStudioIntelligence(
 export function buildDesignStudioFromProductKnowledge(
   productKnowledge: ProductKnowledge,
   knowledge?: ShopifyKnowledge,
+  performanceIntelligence?: ShopifyPerformanceIntelligence | null,
+  commerceIntelligence?: CommerceIntelligence | null,
 ): DesignStudioIntelligence {
   if (knowledge) {
-    return buildDesignStudioIntelligence(knowledge);
+    return buildDesignStudioIntelligence(
+      knowledge,
+      performanceIntelligence,
+      commerceIntelligence,
+    );
   }
 
   const mockKnowledge: ShopifyKnowledge = {
@@ -417,7 +500,11 @@ export function buildDesignStudioFromProductKnowledge(
     inventorySummary: productKnowledge.inventoryState,
   };
 
-  return buildDesignStudioIntelligence(mockKnowledge);
+  return buildDesignStudioIntelligence(
+    mockKnowledge,
+    performanceIntelligence,
+    commerceIntelligence,
+  );
 }
 
 /** Campaign-ready MarketPrint product names for agent reference. */

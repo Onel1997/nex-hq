@@ -1,11 +1,20 @@
 "use client";
 
 import { DesignInterface } from "@/components/design/design-interface";
+import { DesignStudioSidebar } from "@/components/design/design-studio-sidebar";
 import { useDesignStudio } from "@/components/design/use-design-studio";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import type { DesignStudioIntelligence } from "@/lib/design/studio-intelligence";
+import type { ProductIntelligence } from "@/lib/design/product-intelligence";
+import { formatCommerceCurrency } from "@/lib/shopify/commerce-intelligence";
+import { formatPerformanceCurrency } from "@/lib/shopify/performance";
 import { cn } from "@/lib/utils";
 import {
+  ArrowDownRight,
+  ArrowUpRight,
+  BarChart3,
+  Brain,
+  DollarSign,
   Factory,
   Home,
   Layers,
@@ -13,28 +22,14 @@ import {
   Palette,
   RefreshCw,
   Sparkles,
+  Star,
+  TrendingUp,
+  Trophy,
 } from "lucide-react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
 const PRIMARY_BASES = ["T-Shirts", "Hoodies", "Beanies", "Accessories"] as const;
-
-const FEATURED_OPPORTUNITY_IDS = [
-  "winter-essentials",
-  "essentials-2",
-  "premium-embroidery",
-  "heavyweight-oversized",
-] as const;
-
-const FEATURED_OPPORTUNITY_LABELS: Record<
-  (typeof FEATURED_OPPORTUNITY_IDS)[number],
-  string
-> = {
-  "winter-essentials": "Winter Capsule",
-  "essentials-2": "Essentials 2.0",
-  "premium-embroidery": "Premium Embroidery",
-  "heavyweight-oversized": "Heavyweight Collection",
-};
 
 const SUPPLIER_CAPABILITY_CHIPS = [
   "DTG",
@@ -48,7 +43,12 @@ export function DesignStudioCenter() {
   const { data, loading, error, refresh } = useDesignStudio();
 
   return (
-    <WorkspaceShell agentId="designer" className="design-studio-shell" hideHeader>
+    <WorkspaceShell
+      agentId="designer"
+      className="design-studio-shell"
+      hideHeader
+      contextPanel={data ? <DesignStudioSidebar studio={data.studio} /> : undefined}
+    >
       <div className="design-studio">
         <header className="design-studio-topbar">
           <nav className="design-studio-breadcrumbs" aria-label="Breadcrumb">
@@ -78,6 +78,26 @@ export function DesignStudioCenter() {
                   value={`${data.studio.summary.averageSuitability}%`}
                 />
                 <TopBarStat
+                  label="Units Sold"
+                  value={
+                    data.studio.summary.totalUnitsSold > 0
+                      ? String(data.studio.summary.totalUnitsSold)
+                      : "—"
+                  }
+                />
+                <TopBarStat
+                  label="AOV"
+                  value={
+                    data.studio.summary.averageOrderValue > 0
+                      ? formatPerformanceCurrency(
+                          data.studio.summary.averageOrderValue,
+                          data.studio.commerceIntelligence?.summary.currency ??
+                            "EUR",
+                        )
+                      : "—"
+                  }
+                />
+                <TopBarStat
                   label="Products"
                   value={String(data.studio.summary.activeProducts)}
                 />
@@ -85,7 +105,7 @@ export function DesignStudioCenter() {
             ) : null}
             <span className="design-studio-live">
               <span className="design-studio-live-dot" />
-              Live commerce
+              Live Commerce
             </span>
             <button
               type="button"
@@ -112,17 +132,23 @@ export function DesignStudioCenter() {
             </button>
           </div>
         ) : data ? (
-          <>
+          <div className="design-studio-body">
             <div className="design-studio-row-1">
               <ProductEcosystemColumn studio={data.studio} />
               <CollectionOpportunitiesColumn studio={data.studio} />
               <SupplierCapabilitiesColumn studio={data.studio} />
             </div>
 
+            <CommerceIntelligenceSection studio={data.studio} />
+
+            <DesignIntelligenceSection studio={data.studio} />
+
+            <ProductIntelligenceGrid studio={data.studio} />
+
             <section className="design-studio-mission" aria-label="Creative Director">
               <DesignInterface variant="compact" />
             </section>
-          </>
+          </div>
         ) : null}
       </div>
     </WorkspaceShell>
@@ -198,19 +224,7 @@ function CollectionOpportunitiesColumn({
 }: {
   studio: DesignStudioIntelligence;
 }) {
-  const featured = FEATURED_OPPORTUNITY_IDS.map((id) => {
-    const item = studio.collectionOpportunities.find((o) => o.id === id);
-    if (!item) return null;
-    return {
-      ...item,
-      title: FEATURED_OPPORTUNITY_LABELS[id],
-    };
-  }).filter(Boolean) as Array<{
-    id: string;
-    title: string;
-    description: string;
-    marketPrintSuitability?: number;
-  }>;
+  const featured = studio.scoredOpportunities.slice(0, 4);
 
   return (
     <section className="design-studio-panel design-studio-panel-opportunities">
@@ -220,11 +234,7 @@ function CollectionOpportunitiesColumn({
           <article key={item.id} className="design-studio-opportunity-row">
             <div className="design-studio-opportunity-row-head">
               <h3>{item.title}</h3>
-              {item.marketPrintSuitability ? (
-                <span className="design-studio-suitability-badge">
-                  {item.marketPrintSuitability}%
-                </span>
-              ) : null}
+              <ScorePill score={item.confidence} />
             </div>
             <p>{item.description}</p>
           </article>
@@ -258,5 +268,405 @@ function SupplierCapabilitiesColumn({
         ))}
       </ul>
     </section>
+  );
+}
+
+function CommerceIntelligenceSection({ studio }: { studio: DesignStudioIntelligence }) {
+  const commerce = studio.commerceIntelligence;
+  if (!commerce) return null;
+
+  return (
+    <section className="design-studio-commerce" aria-label="Commerce Intelligence">
+      <header className="design-studio-intelligence-header">
+        <BarChart3 className="size-4 text-[#22d3ee]" />
+        <h2>Commerce Intelligence</h2>
+        <span className="design-studio-intelligence-meta">
+          {commerce.summary.totalOrders} orders · all-time history
+        </span>
+      </header>
+
+      <div className="design-studio-commerce-summary">
+        <CommerceStat
+          label="Revenue"
+          value={formatCommerceCurrency(
+            commerce.summary.totalRevenue,
+            commerce.summary.currency,
+          )}
+        />
+        <CommerceStat label="Units" value={String(commerce.summary.totalUnits)} />
+        <CommerceStat
+          label="AOV"
+          value={formatCommerceCurrency(
+            commerce.summary.averageOrderValue,
+            commerce.summary.currency,
+          )}
+        />
+        <CommerceStat
+          label="Repeat SKUs"
+          value={String(commerce.summary.repeatPurchaseProductCount)}
+        />
+      </div>
+
+      <div className="design-studio-intelligence-grid design-studio-intelligence-grid-performance">
+        <CommerceLeaderColumn
+          title="Top Units"
+          icon={Trophy}
+          rows={commerce.topUnits.slice(0, 5).map((p) => ({
+            id: p.productId,
+            name: p.title,
+            primary: `${p.unitsSold} units`,
+            secondary: formatCommerceCurrency(p.revenue, p.currency),
+          }))}
+        />
+        <CommerceLeaderColumn
+          title="Top Revenue"
+          icon={DollarSign}
+          rows={commerce.topRevenue.slice(0, 5).map((p) => ({
+            id: p.productId,
+            name: p.title,
+            primary: formatCommerceCurrency(p.revenue, p.currency),
+            secondary: `${p.unitsSold} units`,
+          }))}
+        />
+        <CommerceLeaderColumn
+          title="Top Categories"
+          icon={Layers}
+          rows={commerce.topCategories.slice(0, 5).map((c) => ({
+            id: c.category,
+            name: c.category,
+            primary: `${c.unitsSold} units`,
+            secondary: formatCommerceCurrency(c.revenue, commerce.summary.currency),
+          }))}
+        />
+        <CommerceLeaderColumn
+          title="Strongest Collections"
+          icon={Sparkles}
+          rows={commerce.topCollections.slice(0, 5).map((c) => ({
+            id: c.title,
+            name: c.title,
+            primary: `${c.unitsSold} units`,
+            secondary: formatCommerceCurrency(c.revenue, commerce.summary.currency),
+          }))}
+        />
+        <CommerceLeaderColumn
+          title="Seasonality"
+          icon={TrendingUp}
+          rows={commerce.seasonality.slice(0, 5).map((s) => ({
+            id: String(s.month),
+            name: s.monthLabel,
+            primary: `${s.unitsSold} units`,
+            secondary: `${s.orderCount} orders`,
+          }))}
+        />
+      </div>
+    </section>
+  );
+}
+
+function CommerceStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="design-studio-commerce-stat">
+      <span className="design-studio-commerce-stat-label">{label}</span>
+      <span className="design-studio-commerce-stat-value">{value}</span>
+    </div>
+  );
+}
+
+function CommerceLeaderColumn({
+  title,
+  icon: Icon,
+  rows,
+}: {
+  title: string;
+  icon: typeof Trophy;
+  rows: Array<{ id: string; name: string; primary: string; secondary: string }>;
+}) {
+  return (
+    <article className="design-studio-intel-column">
+      <header className="design-studio-intel-column-head">
+        <Icon className="size-3 text-[#22d3ee]" />
+        <h3>{title}</h3>
+      </header>
+      <ul className="design-studio-intel-list">
+        {rows.length > 0 ? (
+          rows.map((row) => (
+            <li key={row.id}>
+              <span className="design-studio-intel-name">{row.name}</span>
+              <span className="design-studio-intel-meta">
+                <span className="design-studio-intel-primary">{row.primary}</span>
+                <span className="design-studio-intel-suffix">{row.secondary}</span>
+              </span>
+            </li>
+          ))
+        ) : (
+          <li className="design-studio-empty">No data</li>
+        )}
+      </ul>
+    </article>
+  );
+}
+
+function DesignIntelligenceSection({ studio }: { studio: DesignStudioIntelligence }) {
+  const { designIntelligence } = studio;
+
+  return (
+    <section className="design-studio-intelligence" aria-label="Design Intelligence">
+      <header className="design-studio-intelligence-header">
+        <Brain className="size-4 text-[#22d3ee]" />
+        <h2>Design Intelligence</h2>
+        <span className="design-studio-intelligence-meta">
+          {designIntelligence.scoredProducts.length} products
+          {designIntelligence.hasCommerceHistory ? " · commerce-weighted" : ""}
+        </span>
+      </header>
+
+      <div className="design-studio-intelligence-grid design-studio-intelligence-grid-performance">
+        <IntelligenceLeaderColumn
+          title="Top Sellers"
+          icon={Trophy}
+          products={designIntelligence.topSellers}
+          metric="heroProductScore"
+          suffix={(p) =>
+            p.commerce
+              ? `${p.commerce.unitsSold} units`
+              : p.performance
+                ? `${p.performance.unitsSold} units`
+                : "No sales"
+          }
+        />
+        <IntelligenceLeaderColumn
+          title="Most Revenue"
+          icon={DollarSign}
+          products={designIntelligence.mostRevenue}
+          metric="heroProductScore"
+          suffix={(p) =>
+            p.commerce
+              ? formatCommerceCurrency(p.commerce.revenue, p.commerce.currency)
+              : p.performance
+                ? formatPerformanceCurrency(p.performance.revenue, p.performance.currency)
+                : "—"
+          }
+        />
+        <IntelligenceLeaderColumn
+          title="Fastest Growing"
+          icon={ArrowUpRight}
+          products={designIntelligence.fastestGrowing}
+          metric="heroProductScore"
+          suffix={(p) =>
+            p.performance ? `trend ${p.performance.trendScore}%` : "—"
+          }
+        />
+        <IntelligenceLeaderColumn
+          title="Lowest Performing"
+          icon={ArrowDownRight}
+          products={designIntelligence.lowestPerforming}
+          metric="heroProductScore"
+          suffix={(p) =>
+            p.performance ? `#${p.performance.salesRank}` : "—"
+          }
+        />
+        <IntelligenceLeaderColumn
+          title="Highest Potential"
+          icon={Sparkles}
+          products={designIntelligence.highestPotential}
+          metric="launchPotential"
+        />
+      </div>
+
+      <div className="design-studio-intelligence-grid design-studio-intelligence-grid-design">
+        <IntelligenceLeaderColumn
+          title="Top Hero Products"
+          icon={Star}
+          products={designIntelligence.topHeroProducts}
+          metric="heroProductScore"
+        />
+        <IntelligenceLeaderColumn
+          title="Campaign Potential"
+          icon={TrendingUp}
+          products={designIntelligence.highestCampaignPotential}
+          metric="campaignScore"
+        />
+        <IntelligenceLeaderColumn
+          title="Embroidery Candidates"
+          icon={Factory}
+          products={designIntelligence.bestEmbroideryCandidates}
+          metric="heroProductScore"
+          suffix={(p) => p.embroideryPotential}
+        />
+      </div>
+    </section>
+  );
+}
+
+
+function IntelligenceLeaderColumn({
+  title,
+  icon: Icon,
+  products,
+  metric,
+  suffix,
+}: {
+  title: string;
+  icon: typeof Star;
+  products: ProductIntelligence[];
+  metric: "compositeScore" | "premiumScore" | "campaignScore" | "streetwearScore" | "heroProductScore" | "launchPotential";
+  suffix?: (product: ProductIntelligence) => string;
+}) {
+  return (
+    <article className="design-studio-intel-column">
+      <header className="design-studio-intel-column-head">
+        <Icon className="size-3 text-[#22d3ee]" />
+        <h3>{title}</h3>
+      </header>
+      <ul className="design-studio-intel-list">
+        {products.length > 0 ? (
+          products.map((product) => (
+            <li key={product.productId}>
+              <span className="design-studio-intel-name">{product.title}</span>
+              <span className="design-studio-intel-meta">
+                <ScorePill score={product[metric]} />
+                {suffix ? (
+                  <span className="design-studio-intel-suffix">{suffix(product)}</span>
+                ) : null}
+              </span>
+            </li>
+          ))
+        ) : (
+          <li className="design-studio-empty">No matches</li>
+        )}
+      </ul>
+    </article>
+  );
+}
+
+function ProductIntelligenceGrid({ studio }: { studio: DesignStudioIntelligence }) {
+  const products = studio.designIntelligence.scoredProducts.slice(0, 12);
+
+  return (
+    <section className="design-studio-products" aria-label="Product intelligence cards">
+      <header className="design-studio-products-header">
+        <h2>Catalog Intelligence</h2>
+        <span>{products.length} scored products</span>
+      </header>
+      <div className="design-studio-product-grid">
+        {products.map((product) => (
+          <ProductIntelligenceCard key={product.productId} product={product} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ProductIntelligenceCard({ product }: { product: ProductIntelligence }) {
+  const perf = product.performance;
+  const commerce = product.commerce;
+
+  return (
+    <article className="design-studio-product-card">
+      <div className="design-studio-product-card-head">
+        <h3>{product.title}</h3>
+        <ScorePill score={product.heroProductScore} />
+      </div>
+      <p className="design-studio-product-card-category">
+        {product.category}
+        {(commerce?.unitsRank ?? product.productRank) > 0
+          ? ` · Rank #${commerce?.unitsRank ?? product.productRank}`
+          : ""}
+        {commerce && !commerce.inActiveCatalog ? " · historical" : ""}
+      </p>
+
+      {commerce ? (
+        <dl className="design-studio-product-scores design-studio-product-scores-performance">
+          <div>
+            <dt>Revenue</dt>
+            <dd>{formatCommerceCurrency(commerce.revenue, commerce.currency)}</dd>
+          </div>
+          <div>
+            <dt>Units</dt>
+            <dd>{commerce.unitsSold}</dd>
+          </div>
+          <div>
+            <dt>Rank</dt>
+            <dd>#{commerce.unitsRank}</dd>
+          </div>
+        </dl>
+      ) : perf ? (
+        <dl className="design-studio-product-scores design-studio-product-scores-performance">
+          <div>
+            <dt>Revenue</dt>
+            <dd>{formatPerformanceCurrency(perf.revenue, perf.currency)}</dd>
+          </div>
+          <div>
+            <dt>Units</dt>
+            <dd>{perf.unitsSold}</dd>
+          </div>
+          <div>
+            <dt>Rank</dt>
+            <dd>#{perf.salesRank}</dd>
+          </div>
+        </dl>
+      ) : null}
+
+      <dl className="design-studio-product-scores">
+        <div>
+          <dt>Campaign</dt>
+          <dd>{product.campaignScore}%</dd>
+        </div>
+        <div>
+          <dt>Launch</dt>
+          <dd>{product.launchPotential}%</dd>
+        </div>
+        <div>
+          <dt>Hero</dt>
+          <dd>{product.heroProductScore}%</dd>
+        </div>
+      </dl>
+
+      <div className="design-studio-product-meta">
+        {perf ? (
+          <>
+            <span>Conversion {perf.conversionScore}%</span>
+            <span>Trend {perf.trendScore}%</span>
+          </>
+        ) : null}
+        <span>{product.capsuleFit}</span>
+      </div>
+
+      {product.badges.length > 0 ? (
+        <div className="design-studio-badge-row">
+          {product.badges.map((badge) => (
+            <ProductBadge key={badge} badge={badge} score={product.heroProductScore} />
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function ProductBadge({
+  badge,
+  score,
+}: {
+  badge: ProductIntelligence["badges"][number];
+  score: number;
+}) {
+  const tier =
+    score >= 90 ? "green" : score >= 80 ? "blue" : score >= 70 ? "orange" : "muted";
+
+  return (
+    <span className={cn("design-studio-product-badge", `design-intel-tier-${tier}`)}>
+      {badge}
+    </span>
+  );
+}
+
+function ScorePill({ score }: { score: number }) {
+  const tier =
+    score >= 90 ? "green" : score >= 80 ? "blue" : score >= 70 ? "orange" : "muted";
+
+  return (
+    <span className={cn("design-studio-score-pill", `design-intel-tier-${tier}`)}>
+      {score}%
+    </span>
   );
 }

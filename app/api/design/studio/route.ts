@@ -5,6 +5,10 @@ import {
   ShopifyConfigError,
 } from "@/lib/shopify/client";
 import { fetchShopifyKnowledge } from "@/lib/shopify/knowledge";
+import { loadCommerceIntelligenceSafe } from "@/lib/shopify/commerce-intelligence";
+import {
+  buildShopifyPerformanceIntelligence,
+} from "@/lib/shopify/performance";
 import { buildProductKnowledge } from "@/lib/shopify/product-knowledge";
 import { loadBusinessContext } from "@/lib/business/load-business-context";
 import { loadMarketPrintContext } from "@/lib/marketprint/load-marketprint-context";
@@ -16,14 +20,25 @@ export async function GET() {
       loadBusinessContext(""),
     ]);
 
+    const commerceIntelligence = await loadCommerceIntelligenceSafe(knowledge);
+    const performanceIntelligence = buildShopifyPerformanceIntelligence(
+      knowledge,
+      commerceIntelligence,
+    );
     const productKnowledge = buildProductKnowledge(knowledge);
-    const studio = buildDesignStudioIntelligence(knowledge);
+    const studio = buildDesignStudioIntelligence(
+      knowledge,
+      performanceIntelligence,
+      commerceIntelligence,
+    );
     const marketPrint = loadMarketPrintContext(knowledge.products);
 
     return NextResponse.json({
       ok: true,
       studio,
       productKnowledge,
+      performanceIntelligence,
+      commerceIntelligence,
       businessMeta: businessContext.operationsMeta,
       marketPrintSummary: marketPrint.intelligence.summary,
     });

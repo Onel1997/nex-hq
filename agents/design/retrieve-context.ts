@@ -11,6 +11,8 @@ import { loadBusinessProfile } from "@/lib/business/load-profile";
 import { buildDesignStudioIntelligence } from "@/lib/design/studio-intelligence";
 import { formatDesignStudioPrompt } from "@/lib/design/studio-prompt";
 import { loadShopifyAgentContext } from "@/lib/shopify/agent-context";
+import { loadCommerceIntelligenceSafe } from "@/lib/shopify/commerce-intelligence";
+import { buildShopifyPerformanceIntelligence } from "@/lib/shopify/performance";
 import type { ProductKnowledge } from "@/lib/shopify/types";
 import type { BrainRecord } from "@/brain/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
@@ -272,7 +274,16 @@ export async function retrieveDesignKnowledge(input: {
   const { knowledge, productKnowledge: shopifyKnowledge } =
     await loadShopifyAgentContext();
   const businessProfile = await loadBusinessProfile(input.workspaceId);
-  const studio = buildDesignStudioIntelligence(knowledge);
+  const commerceIntelligence = await loadCommerceIntelligenceSafe(knowledge);
+  const performanceIntelligence = buildShopifyPerformanceIntelligence(
+    knowledge,
+    commerceIntelligence,
+  );
+  const studio = buildDesignStudioIntelligence(
+    knowledge,
+    performanceIntelligence,
+    commerceIntelligence,
+  );
   const promptContext =
     buildPromptContext(
       slices,
