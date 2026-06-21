@@ -8,6 +8,7 @@ interface BrainPulseProps {
   kind: BrainPulseKind;
   intensity?: PulseIntensity;
   networkPulse?: boolean;
+  synthesisMode?: boolean;
 }
 
 const PULSE_CONFIG: Record<
@@ -62,6 +63,7 @@ export const BrainPulse = memo(function BrainPulse({
   kind,
   intensity: overrideIntensity,
   networkPulse,
+  synthesisMode = false,
 }: BrainPulseProps) {
   const config = kind !== "none" ? PULSE_CONFIG[kind] : null;
   const intensity = overrideIntensity ?? config?.intensity ?? "medium";
@@ -112,13 +114,34 @@ export const BrainPulse = memo(function BrainPulse({
             key="network"
             className="pointer-events-none absolute inset-[-55%] rounded-full facility-neural-wave"
             style={{
-              border: "1px solid rgb(234 242 255 / 0.35)",
-              boxShadow: "0 0 60px rgb(56 189 248 / 0.2)",
+              border: synthesisMode
+                ? "1.5px solid rgb(255 209 102 / 0.55)"
+                : "1px solid rgb(234 242 255 / 0.35)",
+              boxShadow: synthesisMode
+                ? "0 0 80px rgb(255 209 102 / 0.35), 0 0 120px rgb(56 189 248 / 0.25)"
+                : "0 0 60px rgb(56 189 248 / 0.2)",
             }}
-            initial={{ scale: 0.5, opacity: 0.7 }}
-            animate={{ scale: 2.6 * multiplier, opacity: 0 }}
+            initial={{ scale: 0.5, opacity: synthesisMode ? 0.85 : 0.7 }}
+            animate={{ scale: synthesisMode ? 3.2 * multiplier : 2.6 * multiplier, opacity: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 1.6, ease: "easeOut" }}
+            transition={{ duration: synthesisMode ? 2.4 : 1.6, ease: "easeOut" }}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {synthesisMode ? (
+          <motion.div
+            key="synthesis-surge"
+            className="pointer-events-none absolute inset-[-30%] rounded-full facility-brain-synthesis-wave"
+            style={{
+              border: "1px solid rgb(34 211 238 / 0.45)",
+              boxShadow: "0 0 48px rgb(56 189 248 / 0.3)",
+            }}
+            initial={{ scale: 0.7, opacity: 0.8 }}
+            animate={{ scale: 2.4, opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 2.8, ease: "easeOut" }}
           />
         ) : null}
       </AnimatePresence>

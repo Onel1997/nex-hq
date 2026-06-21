@@ -1,6 +1,5 @@
 "use client";
 
-import { ThinkingIndicator } from "@/components/facility/motion";
 import { getAgentColor } from "@/lib/facility/facility-theme";
 import type { CeoCoreSnapshot, CeoVerdict, LabOpsState } from "@/lib/facility/types";
 import { cn } from "@/lib/utils";
@@ -61,43 +60,57 @@ export const CeoCore = memo(function CeoCore({
   const decisionStatus = showVerdict
     ? verdict!.label
     : DECISION_STATUS[opsState];
+  const isActive = opsState === "executing" || opsState === "review";
 
   return (
     <button
       type="button"
       className={cn(
-        "facility-node facility-ceo-core-node",
-        `facility-ceo-${opsState}`,
+        "facility-node facility-ceo-chamber",
+        `facility-chamber-${opsState}`,
+        isActive && "facility-chamber-active",
         showVerdict && "facility-ceo-verdict-mode",
         verdictPulse && "facility-ceo-verdict-pulse",
-        selected && "facility-ceo-selected",
+        selected && "facility-chamber-selected",
         className,
       )}
       style={
         {
           ...style,
-          "--agent-color": CEO_COLOR,
+          "--chamber-accent": CEO_COLOR,
+          "--chamber-glow": "rgb(255 209 102 / 0.45)",
         } as React.CSSProperties
       }
       onClick={onSelect}
       aria-label="Open CEO Core inspector"
     >
-      <div className="facility-ceo-executive-ring" aria-hidden />
-      <div className="facility-ceo-command-halo" aria-hidden />
+      <div className="facility-chamber-frame facility-ceo-chamber-frame" aria-hidden>
+        <div className="facility-chamber-frame-edge facility-chamber-frame-top" />
+        <div className="facility-chamber-frame-edge facility-chamber-frame-left" />
+        <div className="facility-chamber-frame-edge facility-chamber-frame-right" />
+        <div className="facility-chamber-frame-edge facility-chamber-frame-bottom" />
+      </div>
 
-      <motion.div
-        className="facility-ceo-crown-ring"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-        aria-hidden
-      />
-
-      <motion.div
-        className="facility-ceo-energy-field"
-        animate={{ opacity: [0.35, 0.7, 0.35], scale: [0.98, 1.03, 0.98] }}
-        transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
-        aria-hidden
-      />
+      <div className="facility-ceo-chamber-viewport">
+        <div className="facility-ceo-command-grid" aria-hidden />
+        <motion.div
+          className="facility-ceo-orbit-ring"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          aria-hidden
+        />
+        <motion.div
+          className="facility-ceo-energy-core"
+          animate={
+            isActive
+              ? { opacity: [0.4, 0.85, 0.4], scale: [0.95, 1.05, 0.95] }
+              : { opacity: 0.25 }
+          }
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          aria-hidden
+        />
+        <div className="facility-ch-env-atmo facility-ch-env-atmo-gold" />
+      </div>
 
       <AnimatePresence>
         {verdictPulse && (
@@ -113,22 +126,21 @@ export const CeoCore = memo(function CeoCore({
         )}
       </AnimatePresence>
 
-      <ThinkingIndicator
-        opsState={opsState}
-        thinkingState={presence.thinkingState}
-        size="md"
-        accentColor={CEO_COLOR}
-      />
-
-      <div className="facility-node-inner facility-ceo-inner">
-        <div className="facility-ceo-crown-wrap">
+      <div className="facility-chamber-hud facility-ceo-chamber-hud">
+        <div className="facility-chamber-hud-top">
           <Crown className="facility-ceo-crown-icon" strokeWidth={1.5} />
+          <span className="facility-chamber-callsign">CEO Core</span>
+          <span
+            className={cn(
+              "facility-chamber-state",
+              `facility-chamber-state-${opsState}`,
+            )}
+          >
+            {decisionStatus}
+          </span>
         </div>
-        <p className="facility-ceo-label">CEO Core</p>
+        <p className="facility-chamber-thought">{presence.currentActivity}</p>
         <p className="facility-ceo-rank">Executive Command</p>
-        <p className="facility-ceo-decision-status">{decisionStatus}</p>
-        <p className="facility-ceo-activity">{presence.currentActivity}</p>
-
         {showVerdict && verdict && <VerdictBadge verdict={verdict} />}
       </div>
     </button>

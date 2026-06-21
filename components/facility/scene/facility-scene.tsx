@@ -4,8 +4,6 @@ import {
   phaseAtLeast,
   type FacilityStartup,
 } from "@/components/facility/hooks/use-facility-startup";
-import { useCanvasSize } from "@/components/facility/hooks/use-canvas-size";
-import { useFacilityNodeMeasurements } from "@/components/facility/hooks/use-facility-node-measurements";
 import { useFacilityAmbience } from "@/components/facility/hooks/use-facility-ambience";
 import { useFacilityReactions } from "@/components/facility/hooks/use-facility-reactions";
 import {
@@ -13,20 +11,19 @@ import {
   useFacilityNavigation,
 } from "@/components/facility/hooks/use-facility-navigation";
 import { CeoCommandBanner } from "@/components/facility/hud/ceo-command-banner";
-import { NeuralGraph } from "@/components/facility/neural-graph";
 import { BrainCore } from "@/components/facility/nodes/brain-core";
 import { CeoCore } from "@/components/facility/nodes/ceo-core";
 import { LabPod } from "@/components/facility/nodes/lab-pod";
 import { PlaceholderLabPod } from "@/components/facility/nodes/placeholder-lab-pod";
 import { FacilityBackdrop } from "@/components/facility/scene/facility-backdrop";
 import { FacilityStartupOverlay } from "@/components/facility/scene/facility-startup-overlay";
-import { KnowledgeFlowOverlay } from "@/components/facility/scene/knowledge-flow-overlay";
 import { SPECIALIST_AGENT_IDS, type AgentId } from "@/lib/constants/agents";
 import {
   depthAtmosphere,
   FACILITY_COMPOSITION_OFFSET,
   getNodeLayout,
 } from "@/lib/facility/layout";
+import { FACILITY_SILENT_CORE } from "@/lib/facility/silent-core";
 import type { FacilityNodeLayout } from "@/lib/facility/types";
 import {
   PLACEHOLDER_LAB_IDS,
@@ -86,7 +83,6 @@ export function FacilityScene({
   startup,
   onLabSelect,
 }: FacilitySceneProps) {
-  const { ref, size } = useCanvasSize<HTMLDivElement>();
   const { navigation } = useFacilityNavigation();
   const camera = navigationTransform(
     navigation.mode,
@@ -102,7 +98,6 @@ export function FacilityScene({
     pulseIntensity,
     networkPulse,
     networkSurge,
-    activeTransmission,
     activeKnowledgeFlow,
     ceoDecisions,
     verdictPulse,
@@ -116,12 +111,6 @@ export function FacilityScene({
   const fadeIn = (from: Parameters<typeof phaseAtLeast>[1]) =>
     startup.isComplete || phaseAtLeast(startup.phase, from);
 
-  const measuredGeometry = useFacilityNodeMeasurements(
-    ref,
-    size,
-    size.width > 0 && fadeIn("brain"),
-  );
-
   const isChamberNav = navigation.mode === "lab-focus";
   const isCeoChamber = navigation.mode === "ceo-focus";
 
@@ -129,6 +118,7 @@ export function FacilityScene({
     <div
       className={cn(
         "facility-scene facility-scene-depth",
+        FACILITY_SILENT_CORE && "facility-scene-silent-core",
         isChamberNav && "facility-scene-nav-chamber",
         isCeoChamber && "facility-scene-nav-ceo-chamber",
       )}
@@ -144,7 +134,6 @@ export function FacilityScene({
         <FacilityBackdrop />
 
         <motion.div
-          ref={ref}
           className="facility-scene-canvas"
           style={{ perspective: camera.perspective }}
           animate={{
@@ -155,28 +144,6 @@ export function FacilityScene({
           }}
           transition={{ type: "spring", damping: 26, stiffness: 160 }}
         >
-        <motion.div
-          className="facility-scene-layer"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: fadeIn("synapses") ? 1 : 0 }}
-          transition={{ duration: 0.8 }}
-        >
-          <NeuralGraph
-            width={size.width}
-            height={size.height}
-            labs={data.labs}
-            measuredGeometry={measuredGeometry}
-            networkPulse={networkPulse || Boolean(ambientPulse)}
-            networkSurge={networkSurge}
-            activeTransmission={activeTransmission}
-          />
-          <KnowledgeFlowOverlay
-            width={size.width}
-            height={size.height}
-            flow={activeKnowledgeFlow}
-          />
-        </motion.div>
-
         <motion.div
           initial={{ opacity: 0, scale: 0.7 }}
           animate={{
@@ -201,6 +168,7 @@ export function FacilityScene({
             pulse={brainPulse}
             pulseIntensity={pulseIntensity}
             networkPulse={networkPulse}
+            networkSurge={networkSurge}
             knowledgeFlow={activeKnowledgeFlow}
             failedTasks={data.telemetry.failedTasks}
           />

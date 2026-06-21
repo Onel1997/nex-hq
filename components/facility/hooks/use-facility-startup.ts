@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 export type StartupPhase =
   | "boot"
   | "brain"
-  | "synapses"
+  | "silent-core"
   | "labs"
   | "ceo"
   | "telemetry"
@@ -14,7 +14,7 @@ export type StartupPhase =
 const PHASE_ORDER: StartupPhase[] = [
   "boot",
   "brain",
-  "synapses",
+  "silent-core",
   "labs",
   "ceo",
   "telemetry",
@@ -24,7 +24,7 @@ const PHASE_ORDER: StartupPhase[] = [
 const PHASE_MS: Record<Exclude<StartupPhase, "complete">, number> = {
   boot: 600,
   brain: 900,
-  synapses: 700,
+  "silent-core": 550,
   labs: 650,
   ceo: 550,
   telemetry: 500,

@@ -4,43 +4,52 @@ import type {
   FacilitySceneNodeId,
 } from "@/lib/facility/types";
 
+/** Reference canvas for converting orbital px → layout %. */
+const ORBIT_REF = { width: 1000, height: 720 } as const;
+
+/** Brain-center to chamber-center distance (px). Target: 220–280. */
+export const FACILITY_ORBIT_RADIUS_PX = 250;
+
+/** Command stack — Brain (sun) + CEO (north pole). */
+const BRAIN_CENTER = { left: 50, top: 41 } as const;
+
+function orbitPercent(
+  angleDeg: number,
+  radiusPx = FACILITY_ORBIT_RADIUS_PX,
+): { left: number; top: number } {
+  const rad = (angleDeg * Math.PI) / 180;
+  const cx = (BRAIN_CENTER.left / 100) * ORBIT_REF.width;
+  const cy = (BRAIN_CENTER.top / 100) * ORBIT_REF.height;
+  const x = cx + radiusPx * Math.cos(rad);
+  const y = cy + radiusPx * Math.sin(rad);
+  return {
+    left: Math.round((x / ORBIT_REF.width) * 1000) / 10,
+    top: Math.round((y / ORBIT_REF.height) * 1000) / 10,
+  };
+}
+
 /**
- * Facility distribution — layered HQ with depth, hierarchy, and scale variation.
+ * Planetary AI layout — Brain at center, CEO above, labs on balanced orbits.
  *
- * Depth planes (environment design):
- * - foreground: chambers orbiting close to the Neural Nexus
- * - midground: command core + major departments
- * - background: distant peripheral wings
+ *                    CEO (50, 16)
+ *                        │
+ *         Analytics    Brain    Image
+ *            ╲         (50,41)      ╱
+ *     Research ─────────┼───────── Marketing
+ *                        │
+ *          Design    Operations    Shopify
+ *            ╲         │           ╱
+ *           Content ──┴── Commerce
  *
- * Hierarchy tiers:
- * - command: CEO + Brain (centerpiece)
- * - primary: Research, Marketing (major divisions)
- * - support: Analytics, Content, Image (adjacent specialists)
- * - peripheral: Design, Commerce, Operations (distant wings)
- *
- *              CEO (50, -2)
- *           NEXUS (47, 36)  ← intelligence engine
- *         ═══ protected void ═══
- *
- *  Research (5,10)     Analytics (25,8)
- *       [primary]         [support · bridge]
- *
- *                    Marketing (97,9)
- *                         [primary]
- *              Image (77,14)
- *              [support · marketing wing]
- *
- *    Content (30,70)              Shopify (88,68)
- *    [support · far]              [peripheral · far]
- *
- *  Design (4,90)         Commerce (73,88)    Operations (98,93)
+ * Upper orbit (205°→335°): Research · Analytics · Image · Marketing
+ * Lower orbit (155°→25°):  Design · Content · Operations · Commerce · Shopify
  */
 export const FACILITY_NODE_LAYOUT: FacilityNodeLayout[] = [
   {
     id: "brain",
-    left: 47,
-    top: 36,
-    size: 318,
+    left: BRAIN_CENTER.left,
+    top: BRAIN_CENTER.top,
+    size: 328,
     zone: "command",
     depth: "midground",
     tier: "command",
@@ -48,92 +57,84 @@ export const FACILITY_NODE_LAYOUT: FacilityNodeLayout[] = [
   {
     id: "ceo",
     left: 50,
-    top: -2,
-    size: 156,
+    top: 16,
+    size: 220,
     zone: "command",
     depth: "midground",
     tier: "command",
   },
 
+  /* Upper orbit */
   {
     id: "research",
-    left: 5,
-    top: 10,
-    size: 186,
+    ...orbitPercent(205),
+    size: 180,
     zone: "research",
     depth: "midground",
     tier: "primary",
+  },
+  {
+    id: "analytics",
+    ...orbitPercent(235),
+    size: 155,
+    zone: "research",
+    depth: "foreground",
+    tier: "support",
+  },
+  {
+    id: "image",
+    ...orbitPercent(305),
+    size: 165,
+    zone: "marketing",
+    depth: "foreground",
+    tier: "support",
   },
   {
     id: "marketing",
-    left: 97,
-    top: 9,
-    size: 186,
+    ...orbitPercent(335),
+    size: 180,
     zone: "marketing",
     depth: "midground",
     tier: "primary",
   },
 
+  /* Lower orbit */
   {
-    id: "analytics",
-    left: 25,
-    top: 8,
-    size: 124,
-    zone: "research",
-    depth: "foreground",
-    tier: "support",
+    id: "designer",
+    ...orbitPercent(155),
+    size: 170,
+    zone: "design",
+    depth: "background",
+    tier: "peripheral",
   },
   {
     id: "content",
-    left: 30,
-    top: 70,
-    size: 128,
+    ...orbitPercent(125),
+    size: 160,
     zone: "design",
     depth: "background",
     tier: "support",
-  },
-  {
-    id: "designer",
-    left: 4,
-    top: 90,
-    size: 138,
-    zone: "design",
-    depth: "background",
-    tier: "peripheral",
-  },
-
-  {
-    id: "image",
-    left: 77,
-    top: 14,
-    size: 148,
-    zone: "marketing",
-    depth: "foreground",
-    tier: "support",
-  },
-  {
-    id: "shopify",
-    left: 88,
-    top: 68,
-    size: 134,
-    zone: "commerce",
-    depth: "background",
-    tier: "peripheral",
   },
   {
     id: "operations",
-    left: 98,
-    top: 93,
-    size: 126,
+    ...orbitPercent(88),
+    size: 145,
     zone: "operations",
     depth: "background",
     tier: "peripheral",
   },
   {
     id: "commerce",
-    left: 73,
-    top: 88,
-    size: 130,
+    ...orbitPercent(55),
+    size: 145,
+    zone: "commerce",
+    depth: "background",
+    tier: "peripheral",
+  },
+  {
+    id: "shopify",
+    ...orbitPercent(25),
+    size: 160,
     zone: "commerce",
     depth: "background",
     tier: "peripheral",
@@ -141,22 +142,25 @@ export const FACILITY_NODE_LAYOUT: FacilityNodeLayout[] = [
 ];
 
 /** Environment illumination anchor — matches Neural Nexus layout position. */
-export const NEXUS_ENVIRONMENT_ANCHOR = { left: 47, top: 38 } as const;
+export const NEXUS_ENVIRONMENT_ANCHOR = {
+  left: BRAIN_CENTER.left,
+  top: BRAIN_CENTER.top,
+} as const;
 
-/** Default overview camera — zoomed out for expansive HQ hero shot. */
-export const FACILITY_HERO_SCALE = 0.71;
+/** Overview camera — tighter framing for orbital composition. */
+export const FACILITY_HERO_SCALE = 0.74;
 
-/** Global composition pan — shifts the HQ as a whole without moving individual nodes. */
-export const FACILITY_COMPOSITION_OFFSET = { x: -4, y: 0 } as const;
+/** Global composition pan — centers the planetary system in viewport. */
+export const FACILITY_COMPOSITION_OFFSET = { x: 0, y: -2.5 } as const;
 
 /** 3D atmosphere offsets per depth plane. */
 export const DEPTH_ATMOSPHERE: Record<
   FacilityDepthLayer,
   { translateZ: number; scale: number; zBias: number }
 > = {
-  foreground: { translateZ: 52, scale: 1.03, zBias: 4 },
+  foreground: { translateZ: 40, scale: 1.02, zBias: 3 },
   midground: { translateZ: 0, scale: 1, zBias: 2 },
-  background: { translateZ: -78, scale: 0.9, zBias: 0 },
+  background: { translateZ: -56, scale: 0.93, zBias: 0 },
 };
 
 const FALLBACK_NODE_LAYOUT: FacilityNodeLayout = {
@@ -190,4 +194,13 @@ export function getNodeLayout(id: string): FacilityNodeLayout {
 
 export function depthAtmosphere(depth: FacilityDepthLayer) {
   return DEPTH_ATMOSPHERE[depth];
+}
+
+/** Orbital positions for debug / future ring visuals. */
+export function getOrbitRingPositions(
+  radiusPx = FACILITY_ORBIT_RADIUS_PX,
+): Array<{ left: number; top: number }> {
+  return Array.from({ length: 12 }, (_, i) =>
+    orbitPercent((i / 12) * 360, radiusPx),
+  );
 }
