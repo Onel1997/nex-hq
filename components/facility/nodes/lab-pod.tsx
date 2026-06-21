@@ -21,6 +21,7 @@ interface LabPodProps {
   selected?: boolean;
   highlighted?: boolean;
   onSelect?: () => void;
+  onEnter?: () => void;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -31,6 +32,7 @@ export const LabPod = memo(function LabPod({
   selected = false,
   highlighted = false,
   onSelect,
+  onEnter,
   className,
   style,
 }: LabPodProps) {
@@ -51,6 +53,7 @@ export const LabPod = memo(function LabPod({
       selected={selected}
       highlighted={highlighted}
       onSelect={onSelect}
+      onEnter={onEnter}
       className={className}
       style={style}
     />

@@ -9,17 +9,19 @@ import { memo } from "react";
 interface AgentTimelineProps {
   items: TimelineItem[];
   agentId: AgentId;
+  compact?: boolean;
 }
 
 export const AgentTimeline = memo(function AgentTimeline({
   items,
   agentId,
+  compact = false,
 }: AgentTimelineProps) {
   const accent = getAgentColor(agentId);
 
   return (
     <div
-      className="facility-agent-timeline"
+      className={compact ? "workspace-timeline-track" : "facility-agent-timeline"}
       style={{ "--agent-accent": accent } as React.CSSProperties}
     >
       <ExecutionTimeline items={items} />

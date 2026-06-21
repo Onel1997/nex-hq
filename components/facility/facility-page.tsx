@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { CeoDelegationResult } from "@/agents/ceo/delegation-types";
 import { LabInspectorDrawer } from "@/components/facility/inspector/lab-inspector-drawer";
 import { useCommandHistory } from "@/components/facility/hooks/use-command-history";
@@ -14,8 +15,10 @@ import { FacilityShell } from "@/components/facility/facility-shell";
 import type { DelegationStatus } from "@/components/facility/hud/command-dock";
 import type { AgentId } from "@/lib/constants/agents";
 import type { BrainPulseKind } from "@/lib/facility/types";
+import { getAgentWorkspaceRoute } from "@/lib/workspace/agent-routes";
 
 function FacilityPageContent() {
+  const router = useRouter();
   const { data, loading, error, connected, refresh } = useFacilityStream();
   const { history, addEntry } = useCommandHistory();
   const { navigateToLab, navigateToOverview } = useFacilityNavigation();
@@ -51,6 +54,13 @@ function FacilityPageContent() {
     navigateToOverview();
     setSelectedLabId(null);
   }, [navigateToOverview]);
+
+  const handleLabEnter = useCallback(
+    (agentId: AgentId) => {
+      router.push(getAgentWorkspaceRoute(agentId));
+    },
+    [router],
+  );
 
   const handleDelegate = useCallback(
     async (goal: string) => {
@@ -133,6 +143,7 @@ function FacilityPageContent() {
         delegationStatus={delegationStatus}
         delegationMessage={delegationMessage}
         onLabSelect={handleLabSelect}
+        onLabEnter={handleLabEnter}
         onDelegate={handleDelegate}
       />
       <LabInspectorDrawer
@@ -143,6 +154,7 @@ function FacilityPageContent() {
         loading={inspectorLoading}
         error={inspectorError}
         onClose={handleCloseInspector}
+        onEnterWorkspace={handleLabEnter}
       />
     </>
   );

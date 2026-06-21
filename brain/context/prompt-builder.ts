@@ -5,6 +5,11 @@ import { getDictionary } from "@/lib/i18n/get-dictionary";
 import type { BrainContextSlice } from "./assembly";
 import { formatBulletList, truncateText } from "./text-utils";
 import { formatDesignCreativeBrief } from "@/lib/design/creative-brief";
+import {
+  formatBusinessProfilePrompt,
+  isPrintOnDemand,
+  type BusinessProfile,
+} from "@/lib/business";
 import type { ProductKnowledge } from "@/lib/shopify/types";
 
 const ANALYSIS_EXCERPT_CHARS = 900;
@@ -460,10 +465,13 @@ function formatProductLine(product: ProductKnowledge["availableProducts"][number
   return `- ${parts.join(" · ")}`;
 }
 
-/** Format live Shopify catalog for agent system prompts — injected before Brain context. */
+/** Format live Shopify catalog for agent system prompts — injected after BUSINESS PROFILE. */
 export function formatShopifyKnowledgePrompt(
   productKnowledge: ProductKnowledge,
+  businessProfile?: BusinessProfile | null,
 ): string {
+  const pod = businessProfile ? isPrintOnDemand(businessProfile) : false;
+
   if (productKnowledge.productCount === 0) {
     return [
       "## SHOPIFY KNOWLEDGE",
@@ -471,7 +479,12 @@ export function formatShopifyKnowledgePrompt(
       "Kein Live-Katalog verfügbar.",
       "VERBOTEN: Produkte, Preise, Kategorien oder Kollektionen erfinden.",
       "Alle Katalogdaten müssen aus Shopify stammen.",
-    ].join("\n");
+      pod
+        ? "HINWEIS: Print-on-Demand — kein physisches Lager. Keine Restock-Empfehlungen."
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
   }
 
   const activeProducts = productKnowledge.availableProducts.filter(
@@ -516,7 +529,9 @@ export function formatShopifyKnowledgePrompt(
     priceLines || "- (none)",
     "",
     "Inventory:",
-    `- Total products: ${inv.totalProducts} · Active: ${inv.activeProducts} · In stock: ${inv.inStock} · Out of stock: ${inv.outOfStock} · Low stock: ${inv.lowStock}`,
+    pod
+      ? `- Catalog SKUs: ${inv.totalProducts} · Active: ${inv.activeProducts} · Available: ${inv.inStock} · Unavailable: ${inv.outOfStock} · Supplier flags: ${inv.lowStock}`
+      : `- Total products: ${inv.totalProducts} · Active: ${inv.activeProducts} · In stock: ${inv.inStock} · Out of stock: ${inv.outOfStock} · Low stock: ${inv.lowStock}`,
     "",
     "Bestseller candidates:",
     bestsellers || "- (none)",
@@ -525,7 +540,9 @@ export function formatShopifyKnowledgePrompt(
     productKnowledge.categoryGaps.map((g) => `- ${g}`).join("\n") ||
       "- (none detected)",
     "",
-    "REGEL: Keine Mock-Produkte. Keine erfundenen Preise. Alles stammt aus Shopify.",
+    pod
+      ? "REGEL: POD/Virtual Inventory — keine Lager- oder Restock-Empfehlungen. Fokus: Supplier-Status, Katalog-Chancen, POD-Produktion."
+      : "REGEL: Keine Mock-Produkte. Keine erfundenen Preise. Alles stammt aus Shopify.",
   ].join("\n");
 }
 
@@ -533,11 +550,18 @@ export function buildPromptContext(
   slices: BrainContextSlice[],
   locale: Locale = DEFAULT_LOCALE,
   shopifyKnowledge?: ProductKnowledge | null,
+  businessProfile?: BusinessProfile | null,
 ): string {
   const sections: string[] = [];
 
+  if (businessProfile) {
+    sections.push(formatBusinessProfilePrompt(businessProfile));
+  }
+
   if (shopifyKnowledge) {
-    sections.push(formatShopifyKnowledgePrompt(shopifyKnowledge));
+    sections.push(
+      formatShopifyKnowledgePrompt(shopifyKnowledge, businessProfile),
+    );
   }
 
   for (const slice of slices) {

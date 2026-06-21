@@ -8,6 +8,7 @@ import {
   getBrainContextAssembler,
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
+import { loadBusinessProfile } from "@/lib/business/load-profile";
 import { loadShopifyAgentContext } from "@/lib/shopify/agent-context";
 import type { BrainReportContent } from "@/brain/domains/reports";
 import {
@@ -443,7 +444,13 @@ export async function retrieveImageKnowledge(input: {
   ];
 
   const { productKnowledge: shopifyKnowledge } = await loadShopifyAgentContext();
-  const promptContext = buildPromptContext(slices, locale, shopifyKnowledge);
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+  const promptContext = buildPromptContext(
+    slices,
+    locale,
+    shopifyKnowledge,
+    businessProfile,
+  );
   const reportTitles = extractReportTitles(slices);
   const collectionIdentity = extractCollectionIdentity({
     slices,

@@ -4,7 +4,7 @@ import { ChamberEnvironment, type ChamberEnvironmentId } from "@/components/faci
 import { ChamberReactor } from "@/components/facility/chambers/chamber-reactor";
 import type { LabOpsState, ThinkingState } from "@/lib/facility/types";
 import { cn } from "@/lib/utils";
-import { memo } from "react";
+import { memo, useRef } from "react";
 
 const OPS_LABELS: Record<LabOpsState, string> = {
   idle: "Standby",
@@ -14,6 +14,8 @@ const OPS_LABELS: Record<LabOpsState, string> = {
   approved: "Complete",
   error: "Error",
 };
+
+const SINGLE_CLICK_DELAY_MS = 260;
 
 interface AgentChamberProps {
   agentId: ChamberEnvironmentId;
@@ -29,6 +31,7 @@ interface AgentChamberProps {
   highlighted?: boolean;
   interactive?: boolean;
   onSelect?: () => void;
+  onEnter?: () => void;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -47,11 +50,36 @@ export const AgentChamber = memo(function AgentChamber({
   highlighted = false,
   interactive = true,
   onSelect,
+  onEnter,
   className,
   style,
 }: AgentChamberProps) {
+  const clickTimerRef = useRef<number | null>(null);
   const isActive = opsState === "executing" || opsState === "review";
   const isThinking = thinkingState !== "idle" && opsState !== "idle";
+  const workspaceActive = isActive || opsState === "queued";
+
+  const handleClick = () => {
+    if (!onSelect) return;
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      return;
+    }
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null;
+      onSelect();
+    }, SINGLE_CLICK_DELAY_MS);
+  };
+
+  const handleDoubleClick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    onEnter?.();
+  };
 
   const shell = (
     <>
@@ -69,6 +97,16 @@ export const AgentChamber = memo(function AgentChamber({
       </div>
 
       <ChamberReactor state={opsState} progress={progress} color={color} />
+
+      <span
+        className={cn(
+          "facility-chamber-workspace-badge",
+          workspaceActive && "facility-chamber-workspace-badge-active",
+        )}
+      >
+        <span className="facility-chamber-workspace-dot" aria-hidden />
+        Studio
+      </span>
 
       {isActive && (
         <div className="facility-chamber-particles" aria-hidden>
@@ -150,8 +188,9 @@ export const AgentChamber = memo(function AgentChamber({
       type="button"
       className={cn(chamberClass, "facility-node")}
       style={chamberStyle}
-      onClick={onSelect}
-      aria-label={`Open ${label} chamber`}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      aria-label={`Open ${label} chamber — double-click to enter studio`}
     >
       {shell}
     </button>

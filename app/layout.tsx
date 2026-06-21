@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 import "./globals.css";
+import "./workspace.css";
+import "./shopify-operations.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 

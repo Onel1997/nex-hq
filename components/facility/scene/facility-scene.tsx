@@ -46,6 +46,7 @@ interface FacilitySceneProps {
   delegationPulse: BrainPulseKind;
   startup: FacilityStartup;
   onLabSelect: (agentId: AgentId) => void;
+  onLabEnter: (agentId: AgentId) => void;
 }
 
 function nodeDepthClasses(layout: FacilityNodeLayout) {
@@ -93,6 +94,7 @@ export function FacilityScene({
   delegationPulse,
   startup,
   onLabSelect,
+  onLabEnter,
 }: FacilitySceneProps) {
   const { navigation } = useFacilityNavigation();
   const camera = navigationTransform(
@@ -241,6 +243,7 @@ export function FacilityScene({
                       selected={selectedLabId === agentId}
                       highlighted={highlightedSet.has(agentId)}
                       onSelect={() => onLabSelect(agentId)}
+                      onEnter={() => onLabEnter(agentId)}
                     />
                   </motion.div>
                 );
@@ -294,6 +297,7 @@ export function FacilityScene({
             verdictPulse={verdictPulse}
             selected={selectedLabId === "ceo"}
             onSelect={() => onLabSelect("ceo")}
+            onEnter={() => onLabEnter("ceo")}
           />
         </motion.div>
 

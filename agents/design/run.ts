@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { DesignParseError, parseDesignOutput } from "./parse-output";
 import {
@@ -33,6 +34,7 @@ function buildDesignSystemPrompt(
 - Verwende NUR existierende Kategorien, Farben, Materialien und Preisbänder aus SHOPIFY KNOWLEDGE
 - Du DARFST vorschlagen: neue Kombinationen, Capsule-Konzepte, neue Kollektionen innerhalb des Milaene-Universums
 - Du DARFST NICHT: zufällige Produkte, erfundene Preise, fiktive Kategorien oder Kollektionen außerhalb des Milaene-Ökosystems
+- Designs müssen POD-realistisch sein — produzierbar über konfigurierte Supplier (Printful etc.)
 - Keine Mock-Produkte. Keine erfundenen Preise. Alles muss aus Shopify oder Intelligence stammen.
 - Schreibe AUSSCHLIESSLICH auf Deutsch
 - Dein Output wird direkt vom Image Agent für Moodboards, Prompts und Campaign Visuals genutzt
@@ -133,6 +135,8 @@ export async function runDesign(
     locale: DEFAULT_LOCALE,
   });
 
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+
   const openai = getOpenAIClient();
 
   const completion = await openai.chat.completions.create({
@@ -149,6 +153,8 @@ export async function runDesign(
             knowledge.reportTitles,
             knowledge.loadedTags,
           ) +
+          "\n\n" +
+          formatAgentBusinessRules("designer", businessProfile) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },

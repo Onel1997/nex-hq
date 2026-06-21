@@ -34,6 +34,7 @@ interface FacilityShellProps {
   delegationStatus: DelegationStatus;
   delegationMessage?: string;
   onLabSelect: (agentId: AgentId) => void;
+  onLabEnter: (agentId: AgentId) => void;
   onDelegate: (goal: string) => void;
 }
 
@@ -49,6 +50,7 @@ export function FacilityShell({
   delegationStatus,
   delegationMessage,
   onLabSelect,
+  onLabEnter,
   onDelegate,
 }: FacilityShellProps) {
   const startup = useFacilityStartup(Boolean(data));
@@ -82,6 +84,7 @@ export function FacilityShell({
                 delegationPulse={delegationPulse}
                 startup={startup}
                 onLabSelect={onLabSelect}
+                onLabEnter={onLabEnter}
               />
               <ReviewQueuePanel
                 items={data.reviewQueue}

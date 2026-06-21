@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { ImageParseError, parseImageOutput } from "./parse-output";
 import {
@@ -68,7 +69,8 @@ Jeder Prompt liest sich wie ein Shot Brief vom Creative Director:
 - Licht: Studio key/fill, overcast urban, golden hour rim
 - Location: Studio cyclorama, urban rooftop, concrete architecture
 - Mood: editorial streetwear, urban luxury, scarcity drop
-- Referenzen: Tyrone LeBon, Mert Alas, SSENSE campaign aesthetic
+- Visual quality bar: premium fashion brands, realistic commercial photography
+- Campaigns müssen Premium Streetwear Positionierung widerspiegeln — editorial, urban luxury
 
 Beispiel: "Faith Oversized Tee · Cream cotton · Love Story collection · Editorial streetwear campaign · 35mm full-frame 50mm f/1.4 · soft studio key with urban rim light · concrete rooftop at dusk"
 
@@ -130,6 +132,8 @@ export async function runImage(
     locale: DEFAULT_LOCALE,
   });
 
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+
   const openai = getOpenAIClient();
 
   const completion = await openai.chat.completions.create({
@@ -165,6 +169,8 @@ export async function runImage(
                     .join("\n")
                 : "")
             : "") +
+          "\n\n" +
+          formatAgentBusinessRules("image", businessProfile) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },

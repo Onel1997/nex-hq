@@ -1,4 +1,5 @@
 import { getBrainContextAssembler } from "@/brain/context/assembler-impl";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 import { getOpenAIClient } from "@/lib/openai/client";
@@ -124,6 +125,8 @@ export async function runResearch(
     locale: DEFAULT_LOCALE,
   });
 
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+
   console.info("[Research Run] Brain context assembled", {
     sourceRecordCount: brainContext.sourceRecordIds.length,
     tokenEstimate: brainContext.tokenEstimate,
@@ -142,6 +145,8 @@ export async function runResearch(
         role: "system",
         content:
           buildResearchSystemPrompt(input.workspaceName) +
+          "\n\n" +
+          formatAgentBusinessRules("research", businessProfile) +
           "\n\n## Workspace-Kontext\n\n" +
           brainContext.promptContext,
       },

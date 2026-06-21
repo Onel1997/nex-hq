@@ -7,6 +7,7 @@ import {
   getBrainContextAssembler,
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
+import { loadBusinessProfile } from "@/lib/business/load-profile";
 import { loadShopifyAgentContext } from "@/lib/shopify/agent-context";
 import type { BrainRecord } from "@/brain/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
@@ -323,7 +324,13 @@ export async function retrieveShopifyKnowledge(input: {
   ];
 
   const { productKnowledge: shopifyKnowledge } = await loadShopifyAgentContext();
-  const promptContext = buildPromptContext(slices, locale, shopifyKnowledge);
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+  const promptContext = buildPromptContext(
+    slices,
+    locale,
+    shopifyKnowledge,
+    businessProfile,
+  );
   const reportTitles = extractReportTitles(slices);
 
   const brainContext: BrainAgentContext = {

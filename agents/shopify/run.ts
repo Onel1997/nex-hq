@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { createProductDraft, updateCollection } from "./operations";
 import { ShopifyParseError, parseShopifyOutput } from "./parse-output";
@@ -26,6 +27,7 @@ function buildShopifySystemPrompt(
 - Wandle Design-Konzepte und Marketing-Pläne in Shopify-Storefront-Entwürfe um
 - Nutze AUSSCHLIESSLICH den bereitgestellten Wissensspeicher-Kontext und SHOPIFY KNOWLEDGE
 - Der Live-Shopify-Katalog ist die Single Source of Truth — bestehende Produkte, Preise und Kollektionen haben Vorrang
+- Print-on-Demand: Fokus auf Supplier-Status, POD-Produktionsbereitschaft, Katalog-Chancen — KEINE Lager- oder Restock-Empfehlungen
 - Design- und Marketing-Berichte ergänzen neue Entwürfe — Produkte MÜSSEN im Milaene-Universum bleiben
 - Du darfst NIEMALS generische oder erfundene Produkte erstellen — nur SKUs aus Design-Produktlinie oder Live-Katalog
 - Keine Mock-Produkte. Keine erfundenen Preise. Keine fiktiven Kollektionen.
@@ -108,6 +110,8 @@ export async function runShopify(
     locale: DEFAULT_LOCALE,
   });
 
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+
   const openai = getOpenAIClient();
 
   const completion = await openai.chat.completions.create({
@@ -124,6 +128,8 @@ export async function runShopify(
             knowledge.reportTitles,
             knowledge.loadedTags,
           ) +
+          "\n\n" +
+          formatAgentBusinessRules("shopify", businessProfile) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },

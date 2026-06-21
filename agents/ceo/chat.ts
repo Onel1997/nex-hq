@@ -1,5 +1,6 @@
 import { getBrainContextAssembler } from "@/brain/context/assembler-impl";
 import type { BrainAgentContext } from "@/brain/context";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 import { createTranslator } from "@/lib/i18n/translate";
@@ -48,6 +49,8 @@ export async function runCeoChat(input: CeoChatInput): Promise<CeoChatOutput> {
     locale,
   });
 
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+
   console.info("[CEO Chat] Context ready", {
     workspaceId: input.workspaceId,
     workspaceName: input.workspaceName,
@@ -74,6 +77,9 @@ export async function runCeoChat(input: CeoChatInput): Promise<CeoChatOutput> {
         role: "system",
         content:
           buildCeoSystemPrompt(input.workspaceName, locale) +
+          "\n\n" +
+          formatAgentBusinessRules("ceo", businessProfile) +
+          "\n\n## Wissensspeicher-Kontext\n\n" +
           brainContext.promptContext,
       },
       {

@@ -8,6 +8,7 @@ import {
   getBrainContextAssembler,
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
+import { loadBusinessProfile } from "@/lib/business/load-profile";
 import { loadShopifyAgentContext } from "@/lib/shopify/agent-context";
 import type { ProductKnowledge } from "@/lib/shopify/types";
 import { estimateTokens } from "@/brain/client/utils";
@@ -173,7 +174,13 @@ export async function retrieveCeoKnowledge(input: {
   }
 
   const { productKnowledge: shopifyKnowledge } = await loadShopifyAgentContext();
-  const promptContext = buildPromptContext(slices, locale, shopifyKnowledge);
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+  const promptContext = buildPromptContext(
+    slices,
+    locale,
+    shopifyKnowledge,
+    businessProfile,
+  );
   const reportTitles = extractReportTitles(slices);
 
   const brainContext: BrainAgentContext = {

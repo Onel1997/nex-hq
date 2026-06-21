@@ -5,13 +5,16 @@ import type { CeoCoreSnapshot, CeoVerdict, LabOpsState } from "@/lib/facility/ty
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Crown } from "lucide-react";
-import { memo } from "react";
+import { memo, useRef } from "react";
+
+const SINGLE_CLICK_DELAY_MS = 260;
 
 interface CeoCoreProps {
   ceo: CeoCoreSnapshot;
   verdictPulse?: boolean;
   selected?: boolean;
   onSelect?: () => void;
+  onEnter?: () => void;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -52,15 +55,40 @@ export const CeoCore = memo(function CeoCore({
   verdictPulse = false,
   selected = false,
   onSelect,
+  onEnter,
   className,
   style,
 }: CeoCoreProps) {
+  const clickTimerRef = useRef<number | null>(null);
   const { presence, opsState, verdict } = ceo;
   const showVerdict = verdict?.active && verdict.mode;
   const decisionStatus = showVerdict
     ? verdict!.label
     : DECISION_STATUS[opsState];
   const isActive = opsState === "executing" || opsState === "review";
+  const workspaceActive = isActive || opsState === "queued";
+
+  const handleClick = () => {
+    if (!onSelect) return;
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      return;
+    }
+    clickTimerRef.current = window.setTimeout(() => {
+      clickTimerRef.current = null;
+      onSelect();
+    }, SINGLE_CLICK_DELAY_MS);
+  };
+
+  const handleDoubleClick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    if (clickTimerRef.current !== null) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    onEnter?.();
+  };
 
   return (
     <button
@@ -81,8 +109,9 @@ export const CeoCore = memo(function CeoCore({
           "--chamber-glow": "rgb(255 209 102 / 0.45)",
         } as React.CSSProperties
       }
-      onClick={onSelect}
-      aria-label="Open CEO Core inspector"
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      aria-label="Open CEO Core inspector — double-click to enter command"
     >
       <div className="facility-chamber-frame facility-ceo-chamber-frame" aria-hidden>
         <div className="facility-chamber-frame-edge facility-chamber-frame-top" />
@@ -133,6 +162,16 @@ export const CeoCore = memo(function CeoCore({
         />
         <div className="facility-ch-env-atmo facility-ch-env-atmo-gold" />
       </div>
+
+      <span
+        className={cn(
+          "facility-chamber-workspace-badge",
+          workspaceActive && "facility-chamber-workspace-badge-active",
+        )}
+      >
+        <span className="facility-chamber-workspace-dot" aria-hidden />
+        Studio
+      </span>
 
       <AnimatePresence>
         {verdictPulse && (

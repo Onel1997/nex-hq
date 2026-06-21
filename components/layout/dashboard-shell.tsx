@@ -5,6 +5,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { DashboardHeader } from "@/components/layout/dashboard-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { I18nProvider } from "@/lib/i18n";
+import { isAgentWorkspacePath } from "@/lib/workspace/agent-routes";
 import { usePathname } from "next/navigation";
 
 interface DashboardShellProps {
@@ -14,8 +15,9 @@ interface DashboardShellProps {
 export function DashboardShell({ children }: DashboardShellProps) {
   const pathname = usePathname();
   const isFacilityHome = pathname === "/";
+  const isAgentWorkspace = isAgentWorkspacePath(pathname);
 
-  if (isFacilityHome) {
+  if (isFacilityHome || isAgentWorkspace) {
     return (
       <I18nProvider>
         <div className="facility-app-layout">

@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { ContentParseError, parseContentOutput } from "./parse-output";
 import {
@@ -33,7 +34,7 @@ function buildContentSystemPrompt(
 - Du darfst NIEMALS generische Marketingtexte erfinden — keine Platzhalter-Floskeln, keine erfundenen Produkte
 - Produktinformationen (Name, Kollektion, Preis, Kategorie, Zielgruppe) kommen aus SHOPIFY KNOWLEDGE
 - Outputs: Instagram Captions, TikTok Hooks, Product Storytelling, Launch Posts — basierend auf echten Produkten
-- Halte die Milaene-Markenstimme konsistent: Urban Luxury Streetwear, selbstbewusst, knapp, premium
+- Halte die Milaene-Markenstimme konsistent: Premium Fashion Brand, selbstbewusst, knapp, minimalist streetwear
 - Zitiere explizit Berichtstitel in sourceReportTitles
 - Keine Mock-Produkte. Keine erfundenen Preise. Alles stammt aus Shopify.
 - Schreibe AUSSCHLIESSLICH auf Deutsch
@@ -100,6 +101,8 @@ export async function runContent(
     locale: DEFAULT_LOCALE,
   });
 
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+
   const openai = getOpenAIClient();
 
   const completion = await openai.chat.completions.create({
@@ -116,6 +119,8 @@ export async function runContent(
             knowledge.reportTitles,
             knowledge.loadedTags,
           ) +
+          "\n\n" +
+          formatAgentBusinessRules("content", businessProfile) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },

@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { MarketingParseError, parseMarketingOutput } from "./parse-output";
 import {
@@ -22,7 +23,8 @@ function buildMarketingSystemPrompt(
   return `Du bist der Marketing-Agent von NexHQ — Growth-Stratege für den Workspace "${workspaceName}".
 
 ## Deine Rolle
-- Erstelle vollständige Launch- und Kampagnenpläne für Streetwear/Luxury-Streetwear Drops
+- Erstelle vollständige Launch- und Kampagnenpläne für Premium Streetwear Drops
+- Positioniere die Marke als Premium Fashion Brand — minimalist streetwear, nicht Discount-Marketing
 - Nutze AUSSCHLIESSLICH den bereitgestellten Wissensspeicher-Kontext und SHOPIFY KNOWLEDGE
 - Aktive Produkte, Inventar, Kollektionen und Preise aus SHOPIFY KNOWLEDGE sind Pflichtgrundlage
 - Du DARFST empfehlen: Launch-Empfehlungen, Produktfokus, Kampagnenvorschläge — basierend auf echtem Katalog
@@ -101,6 +103,8 @@ export async function runMarketing(
     locale: DEFAULT_LOCALE,
   });
 
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+
   const openai = getOpenAIClient();
 
   const completion = await openai.chat.completions.create({
@@ -117,6 +121,8 @@ export async function runMarketing(
             knowledge.reportTitles,
             knowledge.loadedTags,
           ) +
+          "\n\n" +
+          formatAgentBusinessRules("marketing", businessProfile) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },

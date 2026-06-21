@@ -19,8 +19,13 @@ import { getAgentColor } from "@/lib/facility/facility-theme";
 import type { LabInspectorData, LabSnapshot } from "@/lib/facility/types";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
-import { FlaskConical, Loader2, X } from "lucide-react";
+import { ExternalLink, FlaskConical, Loader2, X } from "lucide-react";
+import Link from "next/link";
 import { memo, type ReactNode } from "react";
+import {
+  getAgentStudioName,
+  getAgentWorkspaceRoute,
+} from "@/lib/workspace/agent-routes";
 
 const LAB_INTEL_SECTIONS: Partial<
   Record<
@@ -99,6 +104,7 @@ interface LabInspectorDrawerProps {
   loading: boolean;
   error: string | null;
   onClose: () => void;
+  onEnterWorkspace?: (agentId: AgentId) => void;
 }
 
 export const LabInspectorDrawer = memo(function LabInspectorDrawer({
@@ -109,8 +115,11 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
   loading,
   error,
   onClose,
+  onEnterWorkspace,
 }: LabInspectorDrawerProps) {
   const displayName = data?.agentName ?? lab?.label ?? agentId;
+  const studioName = agentId ? getAgentStudioName(agentId) : null;
+  const workspaceRoute = agentId ? getAgentWorkspaceRoute(agentId) : null;
   const activeTasks =
     data?.taskQueue.filter((t) => t.status !== "completed" && t.status !== "failed") ??
     [];
@@ -296,6 +305,33 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
                 </>
               ) : null}
             </div>
+
+            {agentId && workspaceRoute ? (
+              <footer className="facility-inspector-workspace-actions">
+                <div className="facility-inspector-workspace-status">
+                  <span className="facility-inspector-workspace-status-dot" />
+                  <span>
+                    {data?.opsState === "executing"
+                      ? "Workspace active"
+                      : "Workspace ready"}
+                  </span>
+                </div>
+                <Link
+                  href={workspaceRoute}
+                  className="facility-inspector-studio-button"
+                >
+                  <ExternalLink className="size-3.5" />
+                  Open Studio
+                </Link>
+                <button
+                  type="button"
+                  className="facility-inspector-enter-lab"
+                  onClick={() => onEnterWorkspace?.(agentId)}
+                >
+                  Enter {studioName ?? "Lab"}
+                </button>
+              </footer>
+            ) : null}
           </motion.aside>
         </>
       ) : null}
