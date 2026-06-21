@@ -15,7 +15,7 @@ export const EXPECTED_DESIGN_SCHEMA = {
   silhouettes: "string[] (required, 3–10)",
   fits: "string[] (required, 2–8)",
   products:
-    '{ name, category, fit, material, color, details, pricePosition, priority }[] (required, 4–14)',
+    '{ name, category, fit, material, color, details, pricePosition, priority, marketPrintSuitability }[] (required, 4–14)',
   stylingDirection: "string (required, min 100 chars)",
   visualKeywords: "string[] (required, 3–12)",
   mockupIdeas: "string[] (required, 3–10)",

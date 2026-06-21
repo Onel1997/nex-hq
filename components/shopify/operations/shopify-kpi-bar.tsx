@@ -16,7 +16,11 @@ const KPI_ITEMS: Array<{
   { key: "collections", label: "Collections", format: (k) => String(k.collections) },
   { key: "categories", label: "Categories", format: (k) => String(k.categories) },
   { key: "activeProducts", label: "Active", format: (k) => String(k.activeProducts) },
-  { key: "lowStock", label: "Supplier Flags", format: (k) => String(k.lowStock) },
+  {
+    key: "supplierStatus",
+    label: "Supplier Status",
+    format: (k) => String(k.supplierStatus),
+  },
   {
     key: "averagePrice",
     label: "Avg Price",

@@ -4,6 +4,7 @@ import { ShopifyActivityFeed } from "@/components/shopify/operations/shopify-act
 import { ShopifyAiPanel } from "@/components/shopify/operations/shopify-ai-panel";
 import { ShopifyFilterPanel } from "@/components/shopify/operations/shopify-filter-panel";
 import { ShopifyKpiBar } from "@/components/shopify/operations/shopify-kpi-bar";
+import { ShopifyMarketPrintPanel } from "@/components/shopify/operations/shopify-marketprint-panel";
 import { ShopifyProductDrawer } from "@/components/shopify/operations/shopify-product-drawer";
 import { ShopifyProductGrid } from "@/components/shopify/operations/shopify-product-grid";
 import { useShopifyOperations } from "@/components/shopify/use-shopify-operations";
@@ -150,6 +151,27 @@ export function ShopifyOperationsCenter() {
         </div>
       ) : data ? (
         <>
+          <div className="shopify-operations-meta" aria-label="Business model">
+            <span className="shopify-operations-meta-item">
+              <span className="shopify-operations-meta-label">Primary Supplier</span>
+              <span className="shopify-operations-meta-value">
+                {data.businessMeta.primarySupplier}
+              </span>
+            </span>
+            <span className="shopify-operations-meta-item">
+              <span className="shopify-operations-meta-label">Business Model</span>
+              <span className="shopify-operations-meta-value">
+                {data.businessMeta.businessModel}
+              </span>
+            </span>
+            <span className="shopify-operations-meta-item">
+              <span className="shopify-operations-meta-label">Fulfillment</span>
+              <span className="shopify-operations-meta-value">
+                {data.businessMeta.fulfillment}
+              </span>
+            </span>
+          </div>
+
           <div className="shopify-operations-kpi-wrap">
             <ShopifyKpiBar kpis={data.kpis} />
           </div>
@@ -186,10 +208,13 @@ export function ShopifyOperationsCenter() {
               />
             </main>
 
-            <ShopifyAiPanel
-              insights={data.insights}
-              agentConnections={data.agentConnections}
-            />
+            <aside className="shopify-operations-sidebar">
+              <ShopifyAiPanel
+                insights={data.insights}
+                agentConnections={data.agentConnections}
+              />
+              <ShopifyMarketPrintPanel intelligence={data.marketPrintIntelligence} />
+            </aside>
           </div>
 
           <ShopifyActivityFeed events={data.activity} />

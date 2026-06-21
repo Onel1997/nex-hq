@@ -22,6 +22,7 @@ export const designProductV2Schema = z.object({
   details: z.string().min(20),
   pricePosition: z.string().min(8),
   priority: z.enum(["hero", "core", "support"]),
+  marketPrintSuitability: z.number().min(0).max(100),
   description: z.string().min(30).optional(),
 });
 

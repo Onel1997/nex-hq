@@ -5,6 +5,7 @@ import {
   getProductStockStatus,
   getShopifyAdminProductUrl,
   getStorefrontProductUrl,
+  SUPPLIER_STATUS_LABELS,
 } from "@/lib/shopify/operations";
 import type { ShopifyKnowledgeProduct } from "@/lib/shopify/types";
 import { cn } from "@/lib/utils";
@@ -17,11 +18,7 @@ interface ShopifyProductCardProps {
   onOpen: (product: ShopifyKnowledgeProduct) => void;
 }
 
-const STATUS_LABELS = {
-  active: "Active",
-  low_stock: "Supplier Flag",
-  sold_out: "Unavailable",
-} as const;
+const STATUS_LABELS = SUPPLIER_STATUS_LABELS;
 
 export function ShopifyProductCard({
   product,
@@ -74,7 +71,9 @@ export function ShopifyProductCard({
           <span className="shopify-product-price">
             {formatPrice(product.price, product.currency)}
           </span>
-          <span className="shopify-product-inventory">{product.inventory} units</span>
+          <span className="shopify-product-inventory">
+            {product.inventory} virtual
+          </span>
         </div>
 
         <div className="shopify-product-card-tags">

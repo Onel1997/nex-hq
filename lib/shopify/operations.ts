@@ -5,18 +5,32 @@ import type {
 } from "@/lib/shopify/types";
 import {
   isPrintOnDemand,
-  MILAENE_BUSINESS_PROFILE,
+  MILAENE_PROFILE,
   type BusinessProfile,
-} from "@/lib/business/profile";
+} from "@/lib/business/business-profile";
+import {
+  formatSupplierCheckMessage,
+  formatSupplierStatusMessage,
+  formatSupplierUnavailableMessage,
+  resolveSupplierAvailabilityStatus,
+  SUPPLIER_STATUS_LABELS,
+  type SupplierAvailabilityStatus,
+} from "@/lib/business/supplier-intelligence";
+import {
+  buildMarketPrintIntelligence,
+  formatSuitabilityLabel,
+  matchProductToMarketPrint,
+} from "@/lib/marketprint";
 
-const LOW_STOCK_THRESHOLD = 5;
+const SUPPLIER_STATUS_THRESHOLD = 5;
 
 export interface ShopifyOperationsKpis {
   products: number;
   collections: number;
   categories: number;
   activeProducts: number;
-  lowStock: number;
+  /** Products flagged for supplier verification (Shopify virtual inventory signal). */
+  supplierStatus: number;
   averagePrice: number;
   averagePriceCurrency: string;
   highestPriceProduct: { title: string; price: number; currency: string } | null;
@@ -28,6 +42,7 @@ export type CommerceInsightKind =
   | "pricing"
   | "inventory"
   | "supplier"
+  | "marketprint"
   | "category"
   | "expansion"
   | "ceo";
@@ -71,14 +86,19 @@ export interface ProductAgentInsights {
   connections: AgentConnectionStatus;
 }
 
-export type ProductStockStatus = "active" | "low_stock" | "sold_out";
+export type ProductStockStatus = SupplierAvailabilityStatus;
 
-export function getProductStockStatus(product: ShopifyKnowledgeProduct): ProductStockStatus {
-  if (product.status !== "ACTIVE") return "sold_out";
-  if (product.inventory <= 0) return "sold_out";
-  if (product.inventory <= LOW_STOCK_THRESHOLD) return "low_stock";
-  return "active";
+export function getProductStockStatus(
+  product: ShopifyKnowledgeProduct,
+): ProductStockStatus {
+  return resolveSupplierAvailabilityStatus({
+    status: product.status,
+    inventory: product.inventory,
+    lowThreshold: SUPPLIER_STATUS_THRESHOLD,
+  });
 }
+
+export { SUPPLIER_STATUS_LABELS };
 
 export function buildOperationsKpis(
   knowledge: ShopifyKnowledge,
@@ -110,7 +130,7 @@ export function buildOperationsKpis(
     collections: knowledge.collections.length,
     categories: knowledge.categories.length,
     activeProducts: knowledge.inventorySummary.activeProducts,
-    lowStock: knowledge.inventorySummary.lowStock,
+    supplierStatus: knowledge.inventorySummary.lowStock,
     averagePrice,
     averagePriceCurrency: currency,
     highestPriceProduct: highest,
@@ -123,7 +143,7 @@ export function buildOperationsKpis(
 export function buildCommerceInsights(
   knowledge: ShopifyKnowledge,
   productKnowledge: ProductKnowledge,
-  businessProfile: BusinessProfile = MILAENE_BUSINESS_PROFILE,
+  businessProfile: BusinessProfile = MILAENE_PROFILE,
 ): CommerceInsight[] {
   const insights: CommerceInsight[] = [];
   const pod = isPrintOnDemand(businessProfile);
@@ -145,35 +165,42 @@ export function buildCommerceInsights(
       kind: "bestseller",
       message: pod
         ? `${candidate.title} — top catalog performer (POD-ready, ${candidate.inventory} virtual units).`
-        : `${candidate.title} — strong inventory depth (${candidate.inventory} units).`,
+        : `${candidate.title} — strong catalog signal (${candidate.inventory} virtual units).`,
       priority: "medium",
     });
   }
 
-  const supplierFlagProducts = knowledge.products.filter(
-    (p) => p.inventory > 0 && p.inventory <= LOW_STOCK_THRESHOLD,
+  const supplierStatusProducts = knowledge.products.filter(
+    (p) =>
+      getProductStockStatus(p) === "supplier_status",
   );
-  for (const product of supplierFlagProducts.slice(0, 4)) {
+  for (const product of supplierStatusProducts.slice(0, 4)) {
     insights.push({
       id: nextId(),
-      kind: pod ? "supplier" : "inventory",
+      kind: "supplier",
       message: pod
-        ? `Supplier flag: ${product.title} — verify POD availability with ${businessProfile.suppliers.join(", ") || "supplier"}.`
-        : `Low stock: ${product.title} (${product.inventory} left).`,
+        ? formatSupplierStatusMessage(
+            product.title,
+            product.inventory,
+            businessProfile,
+          )
+        : formatSupplierStatusMessage(
+            product.title,
+            product.inventory,
+            businessProfile,
+          ),
       priority: "high",
     });
   }
 
   const unavailable = knowledge.products.filter(
-    (p) => p.status === "ACTIVE" && p.inventory <= 0,
+    (p) => getProductStockStatus(p) === "supplier_unavailable" && p.status === "ACTIVE",
   );
   for (const product of unavailable.slice(0, 3)) {
     insights.push({
       id: nextId(),
-      kind: pod ? "supplier" : "inventory",
-      message: pod
-        ? `POD unavailable: ${product.title} — check supplier catalog sync or disable listing.`
-        : `Sold out: ${product.title} needs restock.`,
+      kind: "supplier",
+      message: formatSupplierUnavailableMessage(product.title),
       priority: "high",
     });
   }
@@ -229,24 +256,53 @@ export function buildCommerceInsights(
   if (knowledge.inventorySummary.outOfStock > knowledge.inventorySummary.inStock * 0.3) {
     insights.push({
       id: nextId(),
-      kind: pod ? "supplier" : "ceo",
+      kind: "supplier",
       message: pod
-        ? "Catalog gap — review supplier POD mappings and enable missing product variants."
-        : "Inventory imbalance — prioritize restock before new launches.",
+        ? `Supplier Check — review ${businessProfile.primarySupplier} POD mappings and enable missing variants.`
+        : "Supplier Check — review catalog availability before new launches.",
       priority: "high",
     });
   }
 
-  if (pod && businessProfile.suppliers.length > 0) {
+  if (pod) {
     insights.push({
       id: nextId(),
       kind: "supplier",
-      message: `Production via ${businessProfile.suppliers.join(", ")} — ${businessProfile.productionModel} fulfillment active.`,
+      message: `Production via ${businessProfile.primarySupplier} — ${businessProfile.businessModel}, ${businessProfile.fulfillment}.`,
       priority: "low",
     });
   }
 
-  return insights.slice(0, 12);
+  const marketPrint = buildMarketPrintIntelligence(knowledge.products);
+
+  for (const item of marketPrint.topStreetwear.slice(0, 3)) {
+    insights.push({
+      id: nextId(),
+      kind: "marketprint",
+      message: `${item.title}: ${formatSuitabilityLabel(item.match.suitability)} · streetwear ${item.match.capability.streetwearScore}/10`,
+      priority: item.fit.campaignReady ? "high" : "medium",
+    });
+  }
+
+  for (const item of marketPrint.externalSupplierRecommended.slice(0, 2)) {
+    insights.push({
+      id: nextId(),
+      kind: "marketprint",
+      message: `${item.title}: External supplier recommended.`,
+      priority: "medium",
+    });
+  }
+
+  if (marketPrint.summary.premiumCount > 0) {
+    insights.push({
+      id: nextId(),
+      kind: "marketprint",
+      message: `MarketPrint: ${marketPrint.summary.premiumCount} premium · ${marketPrint.summary.embroideryCount} embroidery · ${marketPrint.summary.campaignCount} campaign-ready products.`,
+      priority: "low",
+    });
+  }
+
+  return insights.slice(0, 14);
 }
 
 export function buildActivityFeed(
@@ -284,6 +340,7 @@ export function buildActivityFeed(
       pricing: "price_signal",
       inventory: "inventory",
       supplier: "inventory",
+      marketprint: "campaign",
       category: "collection",
       expansion: "campaign",
       ceo: "ceo",
@@ -325,12 +382,20 @@ export function buildProductAgentInsights(
     ceo: number;
   },
   productKnowledge: ProductKnowledge,
-  businessProfile: BusinessProfile = MILAENE_BUSINESS_PROFILE,
+  businessProfile: BusinessProfile = MILAENE_PROFILE,
 ): ProductAgentInsights {
   const connections = buildGlobalAgentConnections(reportCounts);
   const pod = isPrintOnDemand(businessProfile);
   const titleLower = product.title.toLowerCase();
   const collectionHint = product.collections[0] ?? "the collection";
+  const availability = getProductStockStatus(product);
+  const mpMatch = matchProductToMarketPrint({
+    title: product.title,
+    productType: product.productType,
+    tags: product.tags,
+    materials: product.materials,
+  });
+  const cap = mpMatch.capability;
 
   const design: string[] = [];
   const image: string[] = [];
@@ -351,6 +416,12 @@ export function buildProductAgentInsights(
   if (product.tags.some((t) => /oversized|boxy/i.test(t))) {
     design.push("Oversized silhouette — show layered styling with wide-leg bottoms.");
   }
+  design.push(
+    `${formatSuitabilityLabel(mpMatch.suitability)} — ${cap.category}, ${cap.material}.`,
+  );
+  if (mpMatch.externalSupplierRecommended) {
+    design.push("External supplier recommended — not a core MarketPrint category.");
+  }
 
   if (product.imageUrl) {
     image.push("Featured image available — generate on-model and flat-lay mockups.");
@@ -360,26 +431,33 @@ export function buildProductAgentInsights(
   image.push(
     `Create ${product.productType.toLowerCase()} assets for IG feed, story, and PDP gallery.`,
   );
+  image.push(
+    `Material: ${cap.material} · Print: ${cap.printing ? "DTG/screen" : "n/a"} · Embroidery: ${cap.embroidery ? "yes" : "no"} · Category: ${cap.category}.`,
+  );
 
   if (product.collections.length > 0) {
     marketing.push(
       `Feature in ${product.collections.join(", ")} campaign carousel.`,
     );
   }
-  if (getProductStockStatus(product) === "low_stock") {
+  if (availability === "supplier_status") {
     marketing.push(
       pod
-        ? "Limited POD availability — urgency messaging without restock narrative."
-        : "Urgency campaign: low inventory — limited drop messaging.",
+        ? "Supplier Status flagged — verify listing before urgency messaging; no fake scarcity."
+        : "Supplier Status — confirm availability before campaign push.",
     );
-  } else if (getProductStockStatus(product) === "sold_out") {
+  } else if (availability === "supplier_unavailable") {
     marketing.push(
-      pod
-        ? "Listing unavailable — recommend waitlist or supplier catalog re-sync."
-        : "Waitlist / restock alert campaign recommended.",
+      "Supplier Unavailable — pause campaigns; recommend waitlist or catalog re-sync.",
     );
   } else {
-    marketing.push("Include in weekly organic content rotation.");
+    marketing.push("Include in weekly organic content rotation — capsule storytelling.");
+  }
+  if (mpMatch.suitability >= 85 && cap.campaignSuitability) {
+    marketing.push(`Hero product candidate — ${formatSuitabilityLabel(mpMatch.suitability)}.`);
+  }
+  if (cap.premiumScore >= 8) {
+    marketing.push(`Premium MarketPrint product (score ${cap.premiumScore}/10).`);
   }
 
   content.push(
@@ -394,13 +472,17 @@ export function buildProductAgentInsights(
   );
   if (isBestseller) {
     ceo.push(
-      pod
-        ? "Bestseller candidate — prioritize visibility and POD supplier readiness."
-        : "Bestseller candidate — protect inventory and prioritize visibility.",
+      "Bestseller candidate — prioritize visibility and MarketPrint production readiness.",
     );
   }
+  ceo.push(
+    `${formatSuitabilityLabel(mpMatch.suitability)} · premium ${cap.premiumScore}/10 · streetwear ${cap.streetwearScore}/10.`,
+  );
   if (parseFloat(product.price) >= 80) {
-    ceo.push("Premium price point — maintain scarcity and quality narrative.");
+    ceo.push("Premium price point — maintain quality narrative, not warehouse scarcity.");
+  }
+  if (availability === "supplier_unavailable") {
+    ceo.push(formatSupplierCheckMessage(product.title, businessProfile));
   }
   ceo.push(
     `${titleLower.includes("hoodie") ? "Core category performer" : "Assortment anchor"} for ${collectionHint}.`,

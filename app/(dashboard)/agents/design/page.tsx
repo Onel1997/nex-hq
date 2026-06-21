@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { DesignInterface } from "@/components/design/design-interface";
-import { AgentWorkspacePage } from "@/components/workspace/agent-workspace-page";
+import { DesignStudioCenter } from "@/components/design/design-studio-center";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 
@@ -11,9 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function DesignAgentPage() {
-  return (
-    <AgentWorkspacePage agentId="designer">
-      <DesignInterface />
-    </AgentWorkspacePage>
-  );
+  return <DesignStudioCenter />;
 }

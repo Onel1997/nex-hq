@@ -7,9 +7,11 @@ import { formatBulletList, truncateText } from "./text-utils";
 import { formatDesignCreativeBrief } from "@/lib/design/creative-brief";
 import {
   formatBusinessProfilePrompt,
+  formatSupplierIntelligencePrompt,
   isPrintOnDemand,
   type BusinessProfile,
 } from "@/lib/business";
+import { formatMarketPrintPrompt } from "@/lib/marketprint/production-rules";
 import type { ProductKnowledge } from "@/lib/shopify/types";
 
 const ANALYSIS_EXCERPT_CHARS = 900;
@@ -530,8 +532,8 @@ export function formatShopifyKnowledgePrompt(
     "",
     "Inventory:",
     pod
-      ? `- Catalog SKUs: ${inv.totalProducts} · Active: ${inv.activeProducts} · Available: ${inv.inStock} · Unavailable: ${inv.outOfStock} · Supplier flags: ${inv.lowStock}`
-      : `- Total products: ${inv.totalProducts} · Active: ${inv.activeProducts} · In stock: ${inv.inStock} · Out of stock: ${inv.outOfStock} · Low stock: ${inv.lowStock}`,
+      ? `- Catalog SKUs: ${inv.totalProducts} · Active: ${inv.activeProducts} · Available: ${inv.inStock} · Supplier Unavailable: ${inv.outOfStock} · Supplier Status: ${inv.lowStock}`
+      : `- Total products: ${inv.totalProducts} · Active: ${inv.activeProducts} · Available: ${inv.inStock} · Unavailable: ${inv.outOfStock} · Supplier Status: ${inv.lowStock}`,
     "",
     "Bestseller candidates:",
     bestsellers || "- (none)",
@@ -541,7 +543,7 @@ export function formatShopifyKnowledgePrompt(
       "- (none detected)",
     "",
     pod
-      ? "REGEL: POD/Virtual Inventory — keine Lager- oder Restock-Empfehlungen. Fokus: Supplier-Status, Katalog-Chancen, POD-Produktion."
+      ? "REGEL: Print On Demand — kein Lager. Keine Restock-Empfehlungen. Terminologie: SUPPLIER STATUS, SUPPLIER UNAVAILABLE, SUPPLIER CHECK."
       : "REGEL: Keine Mock-Produkte. Keine erfundenen Preise. Alles stammt aus Shopify.",
   ].join("\n");
 }
@@ -556,6 +558,8 @@ export function buildPromptContext(
 
   if (businessProfile) {
     sections.push(formatBusinessProfilePrompt(businessProfile));
+    sections.push(formatSupplierIntelligencePrompt(businessProfile));
+    sections.push(formatMarketPrintPrompt());
   }
 
   if (shopifyKnowledge) {

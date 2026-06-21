@@ -9,7 +9,7 @@ import type {
   BrainContextSlice,
 } from "./assembly";
 import { buildPromptContext } from "./prompt-builder";
-import { loadBusinessProfile } from "@/lib/business/load-profile";
+import { loadBusinessContext } from "@/lib/business/load-business-context";
 
 /** Domains loaded for CEO Agent context assembly. */
 export const CEO_CONTEXT_DOMAINS: BrainDomain[] = [
@@ -132,7 +132,9 @@ export class SupabaseBrainContextAssembler implements BrainContextAssembler {
       }
     }
 
-    const businessProfile = await loadBusinessProfile(request.workspaceId);
+    const { profile: businessProfile } = await loadBusinessContext(
+      request.workspaceId,
+    );
     const promptContext = buildPromptContext(
       slices,
       request.locale,

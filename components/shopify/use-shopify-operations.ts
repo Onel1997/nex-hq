@@ -1,5 +1,6 @@
 "use client";
 
+import type { MarketPrintIntelligence } from "@/lib/marketprint";
 import type {
   AgentConnectionStatus,
   CommerceActivityEvent,
@@ -17,6 +18,12 @@ export interface ShopifyOperationsData {
   insights: CommerceInsight[];
   activity: CommerceActivityEvent[];
   agentConnections: AgentConnectionStatus;
+  businessMeta: {
+    primarySupplier: string;
+    businessModel: string;
+    fulfillment: string;
+  };
+  marketPrintIntelligence: MarketPrintIntelligence;
 }
 
 interface OperationsResponse {
@@ -29,6 +36,12 @@ interface OperationsResponse {
   insights?: CommerceInsight[];
   activity?: CommerceActivityEvent[];
   agentConnections?: AgentConnectionStatus;
+  businessMeta?: {
+    primarySupplier: string;
+    businessModel: string;
+    fulfillment: string;
+  };
+  marketPrintIntelligence?: MarketPrintIntelligence;
 }
 
 export function useShopifyOperations() {
@@ -44,7 +57,7 @@ export function useShopifyOperations() {
       const response = await fetch("/api/shopify/operations");
       const body = (await response.json()) as OperationsResponse;
 
-      if (!response.ok || !body.ok || !body.knowledge || !body.kpis) {
+      if (!response.ok || !body.ok || !body.knowledge || !body.kpis || !body.marketPrintIntelligence) {
         throw new Error(body.error ?? "Failed to load Shopify operations");
       }
 
@@ -62,6 +75,12 @@ export function useShopifyOperations() {
           content: false,
           ceo: false,
         },
+        businessMeta: body.businessMeta ?? {
+          primarySupplier: "MarketPrint Print On Demand",
+          businessModel: "Print On Demand",
+          fulfillment: "Supplier Managed",
+        },
+        marketPrintIntelligence: body.marketPrintIntelligence,
       });
     } catch (err) {
       setData(null);

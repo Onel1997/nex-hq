@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
   Crown,
+  Factory,
   Sparkles,
   Tag,
   TrendingUp,
@@ -16,6 +17,7 @@ const KIND_ICONS = {
   pricing: Tag,
   inventory: AlertTriangle,
   supplier: Zap,
+  marketprint: Factory,
   category: Tag,
   expansion: Zap,
   ceo: Crown,

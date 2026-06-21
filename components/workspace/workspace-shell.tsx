@@ -25,6 +25,7 @@ interface WorkspaceShellProps {
   runLoading?: boolean;
   runDisabled?: boolean;
   className?: string;
+  hideHeader?: boolean;
 }
 
 export function WorkspaceShell({
@@ -35,6 +36,7 @@ export function WorkspaceShell({
   runLoading = false,
   runDisabled = false,
   className,
+  hideHeader = false,
 }: WorkspaceShellProps) {
   const { data, loading } = useWorkspaceContext(agentId);
   const accent = getAgentColor(agentId);
@@ -49,56 +51,58 @@ export function WorkspaceShell({
       <WorkspaceNav activeAgentId={agentId} />
 
       <div className="workspace-main">
-        <header className="workspace-header">
-          <nav className="workspace-breadcrumbs" aria-label="Breadcrumb">
-            <Link href="/" className="workspace-breadcrumb-link">
-              <Home className="size-3.5" />
-              <span>Facility</span>
-            </Link>
-            <ChevronRight className="size-3.5 opacity-40" />
-            <Link
-              href={getAgentWorkspaceRoute(agentId)}
-              className="workspace-breadcrumb-link workspace-breadcrumb-current"
-            >
-              {studioName}
-            </Link>
-          </nav>
+        {!hideHeader ? (
+          <header className="workspace-header">
+            <nav className="workspace-breadcrumbs" aria-label="Breadcrumb">
+              <Link href="/" className="workspace-breadcrumb-link">
+                <Home className="size-3.5" />
+                <span>Facility</span>
+              </Link>
+              <ChevronRight className="size-3.5 opacity-40" />
+              <Link
+                href={getAgentWorkspaceRoute(agentId)}
+                className="workspace-breadcrumb-link workspace-breadcrumb-current"
+              >
+                {studioName}
+              </Link>
+            </nav>
 
-          <div className="workspace-header-meta">
-            <div className="workspace-header-status">
-              <AgentStatusBadge
-                status={agent.status}
-                showPulse={agent.status === "active"}
-              />
-              {data ? (
-                <span
-                  className={cn(
-                    "workspace-ops-badge",
-                    `workspace-ops-badge-${data.opsState}`,
-                  )}
+            <div className="workspace-header-meta">
+              <div className="workspace-header-status">
+                <AgentStatusBadge
+                  status={agent.status}
+                  showPulse={agent.status === "active"}
+                />
+                {data ? (
+                  <span
+                    className={cn(
+                      "workspace-ops-badge",
+                      `workspace-ops-badge-${data.opsState}`,
+                    )}
+                  >
+                    {data.opsState}
+                  </span>
+                ) : null}
+              </div>
+
+              {onRun ? (
+                <button
+                  type="button"
+                  className="workspace-run-button"
+                  onClick={onRun}
+                  disabled={runDisabled || runLoading}
                 >
-                  {data.opsState}
-                </span>
+                  {runLoading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Play className="size-4" />
+                  )}
+                  {runLabel}
+                </button>
               ) : null}
             </div>
-
-            {onRun ? (
-              <button
-                type="button"
-                className="workspace-run-button"
-                onClick={onRun}
-                disabled={runDisabled || runLoading}
-              >
-                {runLoading ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Play className="size-4" />
-                )}
-                {runLabel}
-              </button>
-            ) : null}
-          </div>
-        </header>
+          </header>
+        ) : null}
 
         <div className="workspace-body">
           <main className="workspace-center">{children}</main>

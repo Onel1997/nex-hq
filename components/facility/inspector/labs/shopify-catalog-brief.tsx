@@ -1,5 +1,9 @@
 "use client";
 
+import { MILAENE_PROFILE } from "@/lib/business/business-profile";
+import { getFacilitySupplierSections } from "@/lib/business/supplier-intelligence";
+import { getFacilityMarketPrintSections } from "@/lib/marketprint/production-rules";
+import type { AgentId } from "@/lib/constants/agents";
 import {
   mapShopifyCatalogIntelligence,
   type ShopifyIntelligence,
@@ -12,11 +16,50 @@ export type ShopifyCatalogBriefVariant =
   | "shopify"
   | "ceo"
   | "designer"
-  | "marketing";
+  | "marketing"
+  | "image";
 
 interface ShopifyCatalogBriefProps {
   open: boolean;
   variant: ShopifyCatalogBriefVariant;
+}
+
+const FACILITY_SUPPLIER_SECTIONS = getFacilitySupplierSections(MILAENE_PROFILE);
+const FACILITY_MARKETPRINT_SECTIONS = getFacilityMarketPrintSections();
+
+function renderMarketPrintSections(variant: ShopifyCatalogBriefVariant) {
+  const agentId = variant as AgentId;
+  const sections = FACILITY_MARKETPRINT_SECTIONS[agentId];
+  if (!sections?.length) return null;
+
+  return sections.map((section) => (
+    <IntelSubsection key={section.title} label={section.title}>
+      <ul className="facility-intel-list">
+        {section.lines.map((line) => (
+          <li key={line} className="facility-intel-list-item">
+            {line}
+          </li>
+        ))}
+      </ul>
+    </IntelSubsection>
+  ));
+}
+
+function renderSupplierSections(variant: ShopifyCatalogBriefVariant) {
+  const sections = FACILITY_SUPPLIER_SECTIONS[variant];
+  if (!sections?.length) return null;
+
+  return sections.map((section) => (
+    <IntelSubsection key={section.title} label={section.title}>
+      <ul className="facility-intel-list">
+        {section.lines.map((line) => (
+          <li key={line} className="facility-intel-list-item">
+            {line}
+          </li>
+        ))}
+      </ul>
+    </IntelSubsection>
+  ));
 }
 
 function renderShopifyOverview(intel: ShopifyIntelligence) {
@@ -30,12 +73,14 @@ function renderShopifyOverview(intel: ShopifyIntelligence) {
         </span>
       </div>
 
-      <IntelSubsection label="Inventory">
+      {renderSupplierSections("shopify")}
+      {renderMarketPrintSections("shopify")}
+
+      <IntelSubsection label="Supplier Availability">
         <p className="facility-inspector-text">
-          Active: {intel.inventory.activeProducts} · In stock:{" "}
-          {intel.inventory.inStock} · Out of stock: {intel.inventory.outOfStock} ·
-          Low stock: {intel.inventory.lowStock} · Total units:{" "}
-          {intel.inventory.totalInventory}
+          Active: {intel.inventory.activeProducts} · Available:{" "}
+          {intel.inventory.inStock} · Supplier Unavailable:{" "}
+          {intel.inventory.outOfStock} · Supplier Status: {intel.inventory.lowStock}
         </p>
       </IntelSubsection>
 
@@ -94,6 +139,9 @@ function renderCeoOverview(intel: ShopifyIntelligence) {
         </span>
       </div>
 
+      {renderSupplierSections("ceo")}
+      {renderMarketPrintSections("ceo")}
+
       {intel.collections.length > 0 ? (
         <IntelSubsection label="Collections">
           <IntelList items={intel.collections} limit={6} />
@@ -107,13 +155,13 @@ function renderCeoOverview(intel: ShopifyIntelligence) {
       ) : null}
 
       {intel.bestsellerCandidates.length > 0 ? (
-        <IntelSubsection label="Top Inventory">
+        <IntelSubsection label="Top Performers">
           <ul className="facility-intel-list">
             {intel.bestsellerCandidates.slice(0, 5).map((product) => (
               <li key={product.title} className="facility-intel-list-item">
                 {product.title}
                 <span className="facility-inspector-meta">
-                  {product.inventory} units
+                  {product.inventory} virtual units
                 </span>
               </li>
             ))}
@@ -127,6 +175,8 @@ function renderCeoOverview(intel: ShopifyIntelligence) {
 function renderDesignerOverview(intel: ShopifyIntelligence) {
   return (
     <>
+      {renderMarketPrintSections("designer")}
+
       {intel.colors.length > 0 ? (
         <IntelSubsection label="Available Colors">
           <IntelList items={intel.colors} />
@@ -151,11 +201,13 @@ function renderDesignerOverview(intel: ShopifyIntelligence) {
 function renderMarketingOverview(intel: ShopifyIntelligence) {
   return (
     <>
+      {renderSupplierSections("marketing")}
+      {renderMarketPrintSections("marketing")}
+
       <div className="facility-intel-highlight">
         <span className="facility-intel-highlight-label">Catalog Focus</span>
         <span className="facility-intel-highlight-value">
-          {intel.inventory.activeProducts} active · {intel.inventory.inStock} in
-          stock
+          {intel.inventory.activeProducts} active · {intel.inventory.inStock} available
         </span>
       </div>
 
@@ -183,6 +235,10 @@ function renderMarketingOverview(intel: ShopifyIntelligence) {
   );
 }
 
+function renderImageOverview() {
+  return <>{renderMarketPrintSections("image")}</>;
+}
+
 export const ShopifyCatalogBrief = memo(function ShopifyCatalogBrief({
   open,
   variant,
@@ -202,7 +258,7 @@ export const ShopifyCatalogBrief = memo(function ShopifyCatalogBrief({
     return <p className="facility-inspector-error">{error}</p>;
   }
 
-  if (!intel) {
+  if (!intel && variant !== "image") {
     return (
       <p className="facility-inspector-empty">
         No live Shopify catalog — configure store credentials to enable product
@@ -213,10 +269,11 @@ export const ShopifyCatalogBrief = memo(function ShopifyCatalogBrief({
 
   return (
     <div className="facility-intel-panel facility-intel-panel-compact">
-      {variant === "shopify" ? renderShopifyOverview(intel) : null}
-      {variant === "ceo" ? renderCeoOverview(intel) : null}
-      {variant === "designer" ? renderDesignerOverview(intel) : null}
-      {variant === "marketing" ? renderMarketingOverview(intel) : null}
+      {variant === "shopify" && intel ? renderShopifyOverview(intel) : null}
+      {variant === "ceo" && intel ? renderCeoOverview(intel) : null}
+      {variant === "designer" && intel ? renderDesignerOverview(intel) : null}
+      {variant === "marketing" && intel ? renderMarketingOverview(intel) : null}
+      {variant === "image" ? renderImageOverview() : null}
     </div>
   );
 });

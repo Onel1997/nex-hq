@@ -5,6 +5,7 @@ import {
   formatPrice,
   getProductStockStatus,
   getStorefrontProductUrl,
+  SUPPLIER_STATUS_LABELS,
 } from "@/lib/shopify/operations";
 import type { ShopifyProductDetail } from "@/lib/shopify/fetch-product-detail";
 import type { ShopifyKnowledgeProduct } from "@/lib/shopify/types";
@@ -146,20 +147,20 @@ export function ShopifyProductDrawer({
                       </span>
                     </div>
                     <div>
-                      <span className="shopify-drawer-stat-label">Inventory</span>
+                      <span className="shopify-drawer-stat-label">Catalog Signal</span>
                       <span className="shopify-drawer-stat-value">
-                        {detail.totalInventory} units
+                        {detail.totalInventory} virtual
                       </span>
                     </div>
                     <div>
-                      <span className="shopify-drawer-stat-label">Status</span>
+                      <span className="shopify-drawer-stat-label">Availability</span>
                       <span
                         className={cn(
                           "shopify-product-status shopify-product-status-inline",
                           stockStatus && `shopify-product-status-${stockStatus}`,
                         )}
                       >
-                        {detail.status}
+                        {stockStatus ? SUPPLIER_STATUS_LABELS[stockStatus] : detail.status}
                       </span>
                     </div>
                   </div>
@@ -201,7 +202,7 @@ export function ShopifyProductDrawer({
                             <span>{variant.title}</span>
                             <span className="shopify-drawer-variant-meta">
                               {formatPrice(variant.price, variant.currency)} ·{" "}
-                              {variant.inventory} in stock
+                              {variant.inventory} virtual
                             </span>
                           </li>
                         ))}

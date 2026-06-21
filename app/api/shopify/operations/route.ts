@@ -7,7 +7,8 @@ import {
 } from "@/lib/shopify/client";
 import { fetchShopifyKnowledge } from "@/lib/shopify/knowledge";
 import { buildProductKnowledge } from "@/lib/shopify/product-knowledge";
-import { loadBusinessProfile } from "@/lib/business/load-profile";
+import { loadBusinessContext } from "@/lib/business/load-business-context";
+import { buildMarketPrintIntelligence } from "@/lib/marketprint";
 import {
   buildActivityFeed,
   buildCommerceInsights,
@@ -60,11 +61,13 @@ async function countAgentReports() {
 
 export async function GET() {
   try {
-    const [knowledge, reportCounts, businessProfile] = await Promise.all([
+    const [knowledge, reportCounts, businessContext] = await Promise.all([
       fetchShopifyKnowledge(),
       countAgentReports(),
-      loadBusinessProfile(""),
+      loadBusinessContext(""),
     ]);
+
+    const { profile: businessProfile, operationsMeta } = businessContext;
 
     const productKnowledge = buildProductKnowledge(knowledge);
     const kpis = buildOperationsKpis(knowledge, productKnowledge);
@@ -75,6 +78,7 @@ export async function GET() {
     );
     const activity = buildActivityFeed(knowledge, insights);
     const agentConnections = buildGlobalAgentConnections(reportCounts);
+    const marketPrintIntelligence = buildMarketPrintIntelligence(knowledge.products);
 
     return NextResponse.json({
       ok: true,
@@ -86,6 +90,8 @@ export async function GET() {
       activity,
       agentConnections,
       reportCounts,
+      businessMeta: operationsMeta,
+      marketPrintIntelligence,
     });
   } catch (error) {
     const message =

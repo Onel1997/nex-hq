@@ -1,0 +1,524 @@
+/* Design Studio V2 — Fashion department dashboard layout */
+
+.design-studio-shell .workspace-center {
+  padding: 0;
+  overflow: hidden;
+}
+
+.design-studio-shell .workspace-body {
+  min-height: 0;
+}
+
+.design-studio {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #030506;
+  color: #eaf2ff;
+  --design-accent: #22d3ee;
+}
+
+/* ── Top bar ── */
+.design-studio-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+  padding: 0.65rem 1.25rem;
+  border-bottom: 1px solid rgb(21 32 48 / 0.6);
+  background: rgb(6 10 16 / 0.92);
+  backdrop-filter: blur(12px);
+}
+
+.design-studio-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+}
+
+.design-studio-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgb(148 163 184 / 0.9);
+  text-decoration: none;
+}
+
+.design-studio-crumb-current {
+  color: #eaf2ff;
+}
+
+.design-studio-topbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem 1.1rem;
+}
+
+.design-studio-topbar-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+}
+
+.design-studio-topbar-stat-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: rgb(100 116 139 / 0.9);
+}
+
+.design-studio-topbar-stat-value {
+  color: #cbd5e1;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.design-studio-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--design-accent);
+}
+
+.design-studio-live-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--design-accent);
+  box-shadow: 0 0 8px var(--design-accent);
+}
+
+.design-studio-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgb(34 211 238 / 0.25);
+  background: rgb(34 211 238 / 0.08);
+  color: var(--design-accent);
+  font-size: 0.72rem;
+}
+
+/* ── Row 1 — always visible commerce grid ── */
+.design-studio-row-1 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.95fr);
+  gap: 0.75rem;
+  flex-shrink: 0;
+  padding: 0.75rem 1.25rem 0.65rem;
+  min-height: 0;
+}
+
+.design-studio-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgb(21 32 48 / 0.65);
+  background: rgb(8 14 22 / 0.78);
+  min-height: 0;
+}
+
+.design-studio-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgb(21 32 48 / 0.45);
+}
+
+.design-studio-panel-header h2 {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+/* Product Ecosystem */
+.design-studio-ecosystem-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.design-studio-ecosystem-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 0.4rem;
+  background: rgb(10 15 24 / 0.55);
+}
+
+.design-studio-ecosystem-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.design-studio-ecosystem-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #eaf2ff;
+}
+
+.design-studio-ecosystem-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--design-accent);
+}
+
+.design-studio-ecosystem-meta {
+  font-size: 0.62rem;
+  color: #64748b;
+}
+
+.design-studio-ecosystem-collections {
+  margin-top: 0.25rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgb(21 32 48 / 0.4);
+}
+
+.design-studio-ecosystem-collections-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.design-studio-collection-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.design-studio-collection-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.68rem;
+  color: #94a3b8;
+}
+
+.design-studio-collection-list li span:last-child {
+  color: #64748b;
+}
+
+/* Collection Opportunities */
+.design-studio-opportunity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.design-studio-opportunity-row {
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.4rem;
+  background: rgb(10 15 24 / 0.55);
+}
+
+.design-studio-opportunity-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.15rem;
+}
+
+.design-studio-opportunity-row h3 {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #eaf2ff;
+}
+
+.design-studio-opportunity-row p {
+  margin: 0;
+  font-size: 0.65rem;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+
+/* Supplier Capabilities */
+.design-studio-supplier-name {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.design-studio-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.design-studio-chip {
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  background: rgb(15 23 42 / 0.8);
+  border: 1px solid rgb(30 41 59 / 0.7);
+  color: #cbd5e1;
+}
+
+.design-studio-chip-cap {
+  border-color: rgb(34 211 238 / 0.25);
+  color: #a5f3fc;
+}
+
+.design-studio-supplier-notes {
+  margin: 0.25rem 0 0;
+  padding-left: 0.9rem;
+  font-size: 0.62rem;
+  color: #64748b;
+}
+
+.design-studio-suitability-badge {
+  display: inline-block;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: rgb(34 211 238 / 0.12);
+  border: 1px solid rgb(34 211 238 / 0.25);
+  color: var(--design-accent);
+  white-space: nowrap;
+}
+
+.design-studio-empty {
+  margin: 0;
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+/* ── Row 2 — Creative Director mission (max 320px / 40vh) ── */
+.design-studio-mission {
+  flex: 1;
+  min-height: 0;
+  max-height: min(320px, 40vh);
+  margin: 0 1.25rem 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgb(21 32 48 / 0.65);
+  background: rgb(5 8 12 / 0.95);
+  overflow-y: auto;
+}
+
+.design-mission-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+}
+
+.design-mission-title {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+.design-mission-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.design-mission-input {
+  width: 100%;
+  resize: none;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(21 32 48 / 0.7);
+  background: rgb(8 14 22 / 0.85);
+  padding: 0.55rem 0.65rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #eaf2ff;
+}
+
+.design-mission-input::placeholder {
+  color: rgb(100 116 139 / 0.85);
+}
+
+.design-mission-input:focus {
+  outline: none;
+  border-color: rgb(34 211 238 / 0.35);
+  box-shadow: 0 0 0 2px rgb(34 211 238 / 0.12);
+}
+
+.design-mission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.design-mission-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgb(34 211 238 / 0.35);
+  background: rgb(34 211 238 / 0.15);
+  color: #a5f3fc;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.design-mission-submit:disabled {
+  opacity: 0.45;
+}
+
+.design-mission-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.design-mission-example {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgb(21 32 48 / 0.65);
+  background: rgb(10 15 24 / 0.6);
+  font-size: 0.62rem;
+  color: #94a3b8;
+}
+
+.design-mission-example:hover:not(:disabled) {
+  border-color: rgb(34 211 238 / 0.25);
+  color: #cbd5e1;
+}
+
+.design-mission-error {
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgb(239 68 68 / 0.3);
+  background: rgb(239 68 68 / 0.08);
+  font-size: 0.72rem;
+  color: #fca5a5;
+}
+
+.design-mission-result {
+  padding-top: 0.45rem;
+  border-top: 1px solid rgb(21 32 48 / 0.45);
+}
+
+.design-mission-result-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.design-mission-result-title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #eaf2ff;
+}
+
+.design-mission-result-meta {
+  margin: 0.1rem 0 0;
+  font-size: 0.62rem;
+  color: #64748b;
+}
+
+.design-mission-result-link {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.62rem;
+  color: var(--design-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.design-mission-result-story {
+  margin: 0.35rem 0 0;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: #94a3b8;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.design-mission-result-products {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.design-mission-result-products li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.62rem;
+  color: #94a3b8;
+}
+
+.design-mission-result-products li span:last-child {
+  color: #64748b;
+  text-transform: capitalize;
+}
+
+.design-studio-loading,
+.design-studio-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  color: #94a3b8;
+  flex: 1;
+}
+
+@media (max-width: 1100px) {
+  .design-studio-row-1 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .design-studio-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .design-studio-topbar-meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

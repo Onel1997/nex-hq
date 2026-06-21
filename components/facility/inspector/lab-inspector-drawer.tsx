@@ -68,8 +68,11 @@ const LAB_INTEL_SECTIONS: Partial<
   },
   image: {
     title: "Visual Assets",
-    render: (data) => (
-      <ImageIntelligencePanel reports={data.fullReports} />
+    render: (data, open) => (
+      <>
+        <ShopifyCatalogBrief open={open} variant="image" />
+        <ImageIntelligencePanel reports={data.fullReports} />
+      </>
     ),
   },
   shopify: {

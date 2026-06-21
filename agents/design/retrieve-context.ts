@@ -8,6 +8,8 @@ import {
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
 import { loadBusinessProfile } from "@/lib/business/load-profile";
+import { buildDesignStudioIntelligence } from "@/lib/design/studio-intelligence";
+import { formatDesignStudioPrompt } from "@/lib/design/studio-prompt";
 import { loadShopifyAgentContext } from "@/lib/shopify/agent-context";
 import type { ProductKnowledge } from "@/lib/shopify/types";
 import type { BrainRecord } from "@/brain/types";
@@ -267,14 +269,19 @@ export async function retrieveDesignKnowledge(input: {
     ...new Set(slices.flatMap((s) => s.records.map((r) => r.id))),
   ];
 
-  const { productKnowledge: shopifyKnowledge } = await loadShopifyAgentContext();
+  const { knowledge, productKnowledge: shopifyKnowledge } =
+    await loadShopifyAgentContext();
   const businessProfile = await loadBusinessProfile(input.workspaceId);
-  const promptContext = buildPromptContext(
-    slices,
-    locale,
-    shopifyKnowledge,
-    businessProfile,
-  );
+  const studio = buildDesignStudioIntelligence(knowledge);
+  const promptContext =
+    buildPromptContext(
+      slices,
+      locale,
+      shopifyKnowledge,
+      businessProfile,
+    ) +
+    "\n\n" +
+    formatDesignStudioPrompt(studio);
   const reportTitles = extractReportTitles(slices);
 
   const brainContext: BrainAgentContext = {

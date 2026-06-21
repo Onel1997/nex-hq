@@ -1,4 +1,5 @@
 import { DESIGN_REPORT_TYPE } from "@/brain/domains/reports";
+import { matchProductToMarketPrint } from "@/lib/marketprint/product-capabilities";
 
 const MIN_STORY_CHARS = 120;
 const MIN_DIRECTION_CHARS = 100;
@@ -159,6 +160,17 @@ function normalizeProductsV2(value: unknown, collectionName: string) {
             ? "hero"
             : "core";
 
+      const match = matchProductToMarketPrint({
+        title: name,
+        productType: category,
+        materials: [asString(obj.material) || "Premium Baumwoll-Mix"],
+      });
+      const suitabilityRaw = obj.marketPrintSuitability;
+      const marketPrintSuitability =
+        typeof suitabilityRaw === "number" && !Number.isNaN(suitabilityRaw)
+          ? Math.min(100, Math.max(0, Math.round(suitabilityRaw)))
+          : match.suitability;
+
       return {
         name,
         category,
@@ -180,6 +192,7 @@ function normalizeProductsV2(value: unknown, collectionName: string) {
           "Positionierung",
         ),
         priority: priority as "hero" | "core" | "support",
+        marketPrintSuitability,
         description: asString(obj.description) || details,
       };
     })
@@ -196,6 +209,7 @@ function normalizeProductsV2(value: unknown, collectionName: string) {
         "Schwerer Hoodie als Kernstück mit strukturierter Silhouette, Premium-Finish und urbanem Fall.",
       pricePosition: "Premium positioning",
       priority: "hero" as const,
+      marketPrintSuitability: 95,
       description:
         "Schwerer Hoodie als Kernstück mit strukturierter Silhouette, Premium-Finish und urbanem Fall.",
     },
@@ -208,6 +222,7 @@ function normalizeProductsV2(value: unknown, collectionName: string) {
       details: "Boxy Tee mit verstärkten Nähten — Layering-Base für den Drop.",
       pricePosition: "Core tier",
       priority: "core" as const,
+      marketPrintSuitability: 88,
       description: "Boxy Tee mit verstärkten Nähten — Layering-Base für den Drop.",
     },
     {
@@ -219,6 +234,7 @@ function normalizeProductsV2(value: unknown, collectionName: string) {
       details: "Wide-Leg Cargo mit funktionalen Taschen und urbanem Fall.",
       pricePosition: "Core tier",
       priority: "core" as const,
+      marketPrintSuitability: 72,
       description: "Wide-Leg Cargo mit funktionalen Taschen und urbanem Fall.",
     },
     {
@@ -230,6 +246,7 @@ function normalizeProductsV2(value: unknown, collectionName: string) {
       details: "Coach Jacket als Transitional Piece mit Kontrast-Piping.",
       pricePosition: "Premium positioning",
       priority: "support" as const,
+      marketPrintSuitability: 35,
       description: "Coach Jacket als Transitional Piece mit Kontrast-Piping.",
     },
   ];

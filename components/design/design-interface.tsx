@@ -32,7 +32,11 @@ interface DesignResult {
   contextRecordCount: number;
 }
 
-export function DesignInterface() {
+interface DesignInterfaceProps {
+  variant?: "default" | "compact";
+}
+
+export function DesignInterface({ variant = "default" }: DesignInterfaceProps) {
   const t = useT();
   const workspace = useWorkspace();
   const [brief, setBrief] = useState("");
@@ -88,6 +92,92 @@ export function DesignInterface() {
   };
 
   const heroProducts = result?.products.filter((p) => p.priority === "hero") ?? [];
+  const isCompact = variant === "compact";
+
+  if (isCompact) {
+    return (
+      <div className="design-mission-panel">
+        <h2 className="design-mission-title">Creative Director Mission</h2>
+
+        <form onSubmit={handleSubmit} className="design-mission-form">
+          <textarea
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            placeholder={t("design.interface.placeholder")}
+            rows={2}
+            disabled={isLoading}
+            className="design-mission-input"
+          />
+          <div className="design-mission-actions">
+            <button
+              type="submit"
+              disabled={isLoading || !brief.trim()}
+              className="design-mission-submit"
+            >
+              {isLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Palette className="size-4" />
+              )}
+              {isLoading
+                ? t("design.interface.running")
+                : t("design.interface.submit")}
+            </button>
+            <div className="design-mission-examples">
+              {examples.slice(0, 3).map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => runDesign(label)}
+                  disabled={isLoading}
+                  className="design-mission-example"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </form>
+
+        {error ? <p className="design-mission-error">{error}</p> : null}
+
+        {result ? (
+          <div className="design-mission-result">
+            <div className="design-mission-result-head">
+              <CheckCircle2 className="size-4 shrink-0 text-[#22d3ee]" />
+              <div>
+                <p className="design-mission-result-title">{result.title}</p>
+                <p className="design-mission-result-meta">
+                  {result.collectionName}
+                  {result.season ? ` · ${result.season}` : ""} ·{" "}
+                  {Math.round(result.confidence * 100)}% confidence
+                </p>
+              </div>
+              <Link href="/reports" className="design-mission-result-link">
+                Reports
+                <ArrowRight className="size-3" />
+              </Link>
+            </div>
+            <p className="design-mission-result-story">{result.story}</p>
+            <ul className="design-mission-result-products">
+              {result.products.slice(0, 4).map((product) => (
+                <li key={product.name}>
+                  <span>{product.name}</span>
+                  <span>
+                    {product.priority}
+                    {"marketPrintSuitability" in product &&
+                    product.marketPrintSuitability != null
+                      ? ` · MP ${product.marketPrintSuitability}%`
+                      : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <section className="space-y-10">
@@ -288,6 +378,10 @@ export function DesignInterface() {
                   <p className="mt-2 text-sm text-muted-foreground">
                     {product.fit} · {product.material} · {product.color} ·{" "}
                     {product.pricePosition}
+                    {"marketPrintSuitability" in product &&
+                    product.marketPrintSuitability != null
+                      ? ` · MP ${product.marketPrintSuitability}%`
+                      : null}
                   </p>
                   <p className="mt-2 text-base text-muted-foreground">
                     {product.details}

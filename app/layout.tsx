@@ -6,6 +6,7 @@ import { getDictionary } from "@/lib/i18n/get-dictionary";
 import "./globals.css";
 import "./workspace.css";
 import "./shopify-operations.css";
+import "./design-studio.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 
