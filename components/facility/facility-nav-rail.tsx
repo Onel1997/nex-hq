@@ -2,28 +2,45 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { FACILITY_ROUTES } from "@/lib/facility/facility-routes";
+import { cn } from "@/lib/utils";
 import {
-  Brain,
+  Archive,
   ClipboardList,
+  FileText,
   LayoutDashboard,
   Settings,
   Users,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 const RAIL_ITEMS = [
-  { href: "/", icon: LayoutDashboard, label: "Facility" },
-  { href: "/agents", icon: Users, label: "Agents" },
-  { href: "/brain", icon: Brain, label: "Brain" },
-  { href: "/tasks", icon: ClipboardList, label: "Tasks" },
-  { href: "/settings", icon: Settings, label: "Settings" },
+  { href: FACILITY_ROUTES.home, icon: LayoutDashboard, label: "Facility" },
+  { href: FACILITY_ROUTES.agents, icon: Users, label: "Agents" },
+  { href: FACILITY_ROUTES.missions, icon: ClipboardList, label: "Mission Control" },
+  { href: FACILITY_ROUTES.reports, icon: FileText, label: "Reports" },
+  { href: FACILITY_ROUTES.knowledge, icon: Archive, label: "Knowledge Vault" },
+  { href: FACILITY_ROUTES.settings, icon: Settings, label: "Settings" },
 ] as const;
 
 export function FacilityNavRail() {
   const pathname = usePathname();
 
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const isActive = (href: string) => {
+    if (href === FACILITY_ROUTES.home) return pathname === "/";
+    if (href === FACILITY_ROUTES.missions) {
+      return (
+        pathname.startsWith("/facility/missions") ||
+        pathname.startsWith("/facility/tasks")
+      );
+    }
+    if (href === FACILITY_ROUTES.agents) {
+      return (
+        pathname.startsWith("/facility/agents") ||
+        (pathname.startsWith("/agents") && pathname !== "/agents")
+      );
+    }
+    return pathname.startsWith(href);
+  };
 
   return (
     <nav className="facility-nav-rail" aria-label="Facility navigation">

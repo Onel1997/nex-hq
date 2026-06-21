@@ -6,10 +6,12 @@ import { AGENT_IDS, type AgentId } from "@/lib/constants/agents";
 import {
   AGENT_WORKSPACE_ROUTES,
   AGENT_STUDIO_NAMES,
+  COMMERCE_LAB_ROUTE,
 } from "@/lib/workspace/agent-routes";
 import { getAgentColor } from "@/lib/facility/facility-theme";
 import { cn } from "@/lib/utils";
 import {
+  BarChart3,
   Crown,
   Megaphone,
   Palette,
@@ -30,12 +32,18 @@ const AGENT_ICONS: Record<AgentId, LucideIcon> = {
   shopify: ShoppingBag,
 };
 
+const COMMERCE_LAB_COLOR = "#F97316";
+
+export type WorkspaceNavActiveId = AgentId | "commerce";
+
 interface WorkspaceNavProps {
-  activeAgentId: AgentId;
+  activeId: WorkspaceNavActiveId;
 }
 
-export function WorkspaceNav({ activeAgentId }: WorkspaceNavProps) {
+export function WorkspaceNav({ activeId }: WorkspaceNavProps) {
   const pathname = usePathname();
+  const commerceActive =
+    activeId === "commerce" || pathname === COMMERCE_LAB_ROUTE;
 
   return (
     <nav className="workspace-nav" aria-label="Agent workspaces">
@@ -47,7 +55,7 @@ export function WorkspaceNav({ activeAgentId }: WorkspaceNavProps) {
         {AGENT_IDS.map((id) => {
           const Icon = AGENT_ICONS[id];
           const href = AGENT_WORKSPACE_ROUTES[id];
-          const active = id === activeAgentId || pathname === href;
+          const active = id === activeId || pathname === href;
           const color = getAgentColor(id);
 
           return (
@@ -82,6 +90,34 @@ export function WorkspaceNav({ activeAgentId }: WorkspaceNavProps) {
             </li>
           );
         })}
+
+        <li>
+          <Link
+            href={COMMERCE_LAB_ROUTE}
+            className={cn(
+              "workspace-nav-item",
+              commerceActive && "workspace-nav-item-active",
+            )}
+            style={
+              commerceActive
+                ? ({ "--workspace-accent": COMMERCE_LAB_COLOR } as React.CSSProperties)
+                : undefined
+            }
+          >
+            <span
+              className="workspace-nav-icon-wrap"
+              style={{ color: commerceActive ? COMMERCE_LAB_COLOR : undefined }}
+            >
+              <BarChart3 className="size-4" strokeWidth={1.75} />
+            </span>
+            <span className="workspace-nav-text">
+              <span className="workspace-nav-name">Commerce Lab</span>
+            </span>
+            {commerceActive ? (
+              <span className="workspace-nav-active-bar" aria-hidden />
+            ) : null}
+          </Link>
+        </li>
       </ul>
     </nav>
   );

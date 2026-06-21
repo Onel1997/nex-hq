@@ -186,7 +186,7 @@ export function ImageInterface() {
               <ArrowRight className="size-4" />
             </Link>
             <Link
-              href="/reports"
+              href="/facility/reports"
               className="inline-flex items-center gap-2 text-base text-muted-foreground hover:text-foreground"
             >
               {t("image.interface.viewReports")}

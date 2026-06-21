@@ -7,6 +7,8 @@ import { memo } from "react";
 interface PlaceholderLabPodProps {
   lab: PlaceholderLabSnapshot;
   nodeSize: number;
+  interactive?: boolean;
+  onEnter?: () => void;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -14,6 +16,8 @@ interface PlaceholderLabPodProps {
 /** @deprecated Use AgentChamber — retained as scene adapter. */
 export const PlaceholderLabPod = memo(function PlaceholderLabPod({
   lab,
+  interactive = false,
+  onEnter,
   className,
   style,
 }: PlaceholderLabPodProps) {
@@ -27,7 +31,8 @@ export const PlaceholderLabPod = memo(function PlaceholderLabPod({
       progressLabel={lab.progressLabel}
       confidence={lab.confidence}
       color={lab.color}
-      interactive={false}
+      interactive={interactive}
+      onEnter={onEnter}
       className={className}
       style={style}
     />

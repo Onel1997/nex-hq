@@ -60,7 +60,7 @@ export default function ImageProjectDetailPage({
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-3 text-muted-foreground">
+      <div className="facility-dept-content facility-wing-loading">
         <Loader2 className="size-5 animate-spin" />
         {t("image.interface.loadingProject")}
       </div>
@@ -69,9 +69,9 @@ export default function ImageProjectDetailPage({
 
   if (error || !project || !reportId || !brainRecordId) {
     return (
-      <div className="space-y-4">
-        <p className="text-destructive">{error ?? t("image.errors.unexpected")}</p>
-        <Link href="/reports" className="text-primary hover:underline">
+      <div className="facility-dept-content space-y-4">
+        <p className="text-red-400">{error ?? t("image.errors.unexpected")}</p>
+        <Link href="/facility/reports" className="text-sky-400 hover:underline">
           {t("image.interface.backToReports")}
         </Link>
       </div>
@@ -79,10 +79,11 @@ export default function ImageProjectDetailPage({
   }
 
   return (
-    <section className="space-y-8">
+    <div className="facility-dept-content">
+    <section className="space-y-8 max-w-6xl">
       <Link
-        href="/reports"
-        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        href="/facility/reports"
+        className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200"
       >
         <ArrowLeft className="size-4" />
         {t("image.interface.backToReports")}
@@ -111,5 +112,6 @@ export default function ImageProjectDetailPage({
         />
       </div>
     </section>
+    </div>
   );
 }

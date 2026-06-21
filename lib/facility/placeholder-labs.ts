@@ -34,11 +34,11 @@ export const PLACEHOLDER_LABS: Record<PlaceholderLabId, PlaceholderLabSnapshot> 
   commerce: {
     id: "commerce",
     label: "Commerce Lab",
-    opsState: "queued",
-    activity: "Preparing catalog sync",
-    progress: null,
-    progressLabel: "Queued",
-    confidence: 78,
+    opsState: "executing",
+    activity: "Analyzing historical commerce data",
+    progress: 88,
+    progressLabel: "BI active",
+    confidence: 92,
     color: "#F97316",
   },
   analytics: {

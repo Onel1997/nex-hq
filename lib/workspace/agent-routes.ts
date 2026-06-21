@@ -98,8 +98,14 @@ export function getAgentFromWorkspacePath(pathname: string): AgentId | null {
   return null;
 }
 
+export const COMMERCE_LAB_ROUTE = "/agents/commerce";
+
+export function isCommerceLabPath(pathname: string): boolean {
+  return pathname === COMMERCE_LAB_ROUTE || pathname.startsWith(`${COMMERCE_LAB_ROUTE}/`);
+}
+
 export function isAgentWorkspacePath(pathname: string): boolean {
-  return getAgentFromWorkspacePath(pathname) !== null;
+  return getAgentFromWorkspacePath(pathname) !== null || isCommerceLabPath(pathname);
 }
 
 export function getAgentLabel(agentId: AgentId): string {

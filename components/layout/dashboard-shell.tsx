@@ -1,42 +1,24 @@
 "use client";
 
 import { FacilityNavRail } from "@/components/facility/facility-nav-rail";
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { DashboardHeader } from "@/components/layout/dashboard-header";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { FacilityPageTransition } from "@/components/facility/facility-page-transition";
 import { I18nProvider } from "@/lib/i18n";
-import { isAgentWorkspacePath } from "@/lib/workspace/agent-routes";
-import { usePathname } from "next/navigation";
 
 interface DashboardShellProps {
   children: React.ReactNode;
 }
 
 export function DashboardShell({ children }: DashboardShellProps) {
-  const pathname = usePathname();
-  const isFacilityHome = pathname === "/";
-  const isAgentWorkspace = isAgentWorkspacePath(pathname);
-
-  if (isFacilityHome || isAgentWorkspace) {
-    return (
-      <I18nProvider>
-        <div className="facility-app-layout">
-          <FacilityNavRail />
-          <main className="facility-app-main">{children}</main>
-        </div>
-      </I18nProvider>
-    );
-  }
-
   return (
     <I18nProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset className="overflow-hidden">
-          <DashboardHeader />
-          {children}
-        </SidebarInset>
-      </SidebarProvider>
+      <div className="facility-app-layout">
+        <FacilityNavRail />
+        <main className="facility-app-main">
+          <FacilityPageTransition className="facility-app-transition">
+            {children}
+          </FacilityPageTransition>
+        </main>
+      </div>
     </I18nProvider>
   );
 }

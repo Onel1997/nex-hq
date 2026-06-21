@@ -17,6 +17,7 @@ import {
   getFacilityTheme,
   themeStyleProps,
 } from "@/lib/facility/facility-theme";
+import type { PlaceholderLabId } from "@/lib/facility/placeholder-labs";
 import type { BrainPulseKind, FacilitySnapshot } from "@/lib/facility/types";
 import { Loader2 } from "lucide-react";
 
@@ -35,6 +36,7 @@ interface FacilityShellProps {
   delegationMessage?: string;
   onLabSelect: (agentId: AgentId) => void;
   onLabEnter: (agentId: AgentId) => void;
+  onPlaceholderEnter?: (labId: PlaceholderLabId) => void;
   onDelegate: (goal: string) => void;
 }
 
@@ -51,6 +53,7 @@ export function FacilityShell({
   delegationMessage,
   onLabSelect,
   onLabEnter,
+  onPlaceholderEnter,
   onDelegate,
 }: FacilityShellProps) {
   const startup = useFacilityStartup(Boolean(data));
@@ -85,6 +88,7 @@ export function FacilityShell({
                 startup={startup}
                 onLabSelect={onLabSelect}
                 onLabEnter={onLabEnter}
+                onPlaceholderEnter={onPlaceholderEnter}
               />
               <ReviewQueuePanel
                 items={data.reviewQueue}

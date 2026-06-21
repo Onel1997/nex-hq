@@ -459,7 +459,7 @@ export function CeoInterface() {
                       </p>
                       {task.linkedReportId && (
                         <Link
-                          href="/reports"
+                          href="/facility/reports"
                           className="text-xs text-primary hover:underline"
                         >
                           Report: {task.linkedReportId.slice(0, 8)}…
@@ -486,7 +486,7 @@ export function CeoInterface() {
               </span>
             </div>
             <Link
-              href="/tasks"
+              href="/facility/missions"
               className="inline-flex items-center gap-2 text-base text-primary hover:underline"
             >
               {t("ceo.delegation.viewTasks")}
@@ -638,7 +638,7 @@ export function CeoInterface() {
               </span>
             </div>
             <Link
-              href="/reports"
+              href="/facility/reports"
               className="inline-flex items-center gap-2 text-base text-primary hover:underline"
             >
               {t("ceo.interface.viewReports")}

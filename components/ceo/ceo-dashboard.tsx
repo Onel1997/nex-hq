@@ -250,7 +250,7 @@ export function CeoDashboard({ refreshKey = 0 }: CeoDashboardProps) {
                 {new Date(data.latestFinalReport.createdAt).toLocaleString()}
               </p>
               <Link
-                href="/reports"
+                href="/facility/reports"
                 className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
               >
                 {t("ceo.executiveSummary.viewReport")}
@@ -388,7 +388,7 @@ export function CeoDashboard({ refreshKey = 0 }: CeoDashboardProps) {
               {t("ceo.dashboard.delegatedTasks")}
             </p>
             <Link
-              href="/tasks"
+              href="/facility/missions"
               className="text-sm text-primary hover:underline"
             >
               {t("ceo.dashboard.viewTaskBoard")}
@@ -438,7 +438,7 @@ export function CeoDashboard({ refreshKey = 0 }: CeoDashboardProps) {
                         {task.linkedReports.map((report) => (
                           <li key={report.reportId}>
                             <Link
-                              href="/reports"
+                              href="/facility/reports"
                               className="text-sm text-primary hover:underline"
                             >
                               {report.title}

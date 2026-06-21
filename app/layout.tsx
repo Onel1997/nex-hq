@@ -7,6 +7,9 @@ import "./globals.css";
 import "./workspace.css";
 import "./shopify-operations.css";
 import "./design-studio.css";
+import "./commerce-lab.css";
+import "./facility-wings.css";
+import "./mission-control.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 

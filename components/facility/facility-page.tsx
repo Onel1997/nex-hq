@@ -15,7 +15,7 @@ import { FacilityShell } from "@/components/facility/facility-shell";
 import type { DelegationStatus } from "@/components/facility/hud/command-dock";
 import type { AgentId } from "@/lib/constants/agents";
 import type { BrainPulseKind } from "@/lib/facility/types";
-import { getAgentWorkspaceRoute } from "@/lib/workspace/agent-routes";
+import { getAgentWorkspaceRoute, COMMERCE_LAB_ROUTE } from "@/lib/workspace/agent-routes";
 
 function FacilityPageContent() {
   const router = useRouter();
@@ -58,6 +58,15 @@ function FacilityPageContent() {
   const handleLabEnter = useCallback(
     (agentId: AgentId) => {
       router.push(getAgentWorkspaceRoute(agentId));
+    },
+    [router],
+  );
+
+  const handlePlaceholderEnter = useCallback(
+    (labId: "commerce" | "operations" | "analytics") => {
+      if (labId === "commerce") {
+        router.push(COMMERCE_LAB_ROUTE);
+      }
     },
     [router],
   );
@@ -144,6 +153,7 @@ function FacilityPageContent() {
         delegationMessage={delegationMessage}
         onLabSelect={handleLabSelect}
         onLabEnter={handleLabEnter}
+        onPlaceholderEnter={handlePlaceholderEnter}
         onDelegate={handleDelegate}
       />
       <LabInspectorDrawer

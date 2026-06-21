@@ -50,7 +50,7 @@ export function WorkspaceShell({
       className={cn("workspace-shell", className)}
       style={{ "--workspace-accent": accent } as React.CSSProperties}
     >
-      <WorkspaceNav activeAgentId={agentId} />
+      <WorkspaceNav activeId={agentId} />
 
       <div className="workspace-main">
         {!hideHeader ? (

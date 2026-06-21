@@ -9,6 +9,7 @@ import { ShopifyMarketPrintPanel } from "@/components/shopify/operations/shopify
 import { ShopifyProductDrawer } from "@/components/shopify/operations/shopify-product-drawer";
 import { ShopifyProductGrid } from "@/components/shopify/operations/shopify-product-grid";
 import { useShopifyOperations } from "@/components/shopify/use-shopify-operations";
+import { WorkspaceNav } from "@/components/workspace/workspace-nav";
 import type { ShopifyKnowledgeProduct } from "@/lib/shopify/types";
 import { cn } from "@/lib/utils";
 import { ChevronRight, Home, Loader2, RefreshCw, ShoppingBag } from "lucide-react";
@@ -107,7 +108,9 @@ export function ShopifyOperationsCenter() {
   }, []);
 
   return (
-    <div className="shopify-operations">
+    <div className="shopify-operations-shell">
+      <WorkspaceNav activeId="shopify" />
+      <div className="shopify-operations">
       <header className="shopify-operations-header">
         <nav className="shopify-operations-breadcrumbs" aria-label="Breadcrumb">
           <Link href="/" className="shopify-operations-crumb">
@@ -229,6 +232,7 @@ export function ShopifyOperationsCenter() {
         storeDomain={data?.storeDomain ?? ""}
         onClose={() => setSelectedProduct(null)}
       />
+    </div>
     </div>
   );
 }

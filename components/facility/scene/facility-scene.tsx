@@ -33,6 +33,7 @@ import type { FacilityNodeLayout, FacilitySceneNodeId } from "@/lib/facility/typ
 import {
   PLACEHOLDER_LAB_IDS,
   PLACEHOLDER_LABS,
+  type PlaceholderLabId,
 } from "@/lib/facility/placeholder-labs";
 import type { BrainPulseKind, FacilitySnapshot } from "@/lib/facility/types";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ interface FacilitySceneProps {
   startup: FacilityStartup;
   onLabSelect: (agentId: AgentId) => void;
   onLabEnter: (agentId: AgentId) => void;
+  onPlaceholderEnter?: (labId: PlaceholderLabId) => void;
 }
 
 function nodeDepthClasses(layout: FacilityNodeLayout) {
@@ -95,6 +97,7 @@ export function FacilityScene({
   startup,
   onLabSelect,
   onLabEnter,
+  onPlaceholderEnter,
 }: FacilitySceneProps) {
   const { navigation } = useFacilityNavigation();
   const camera = navigationTransform(
@@ -271,6 +274,12 @@ export function FacilityScene({
                   <PlaceholderLabPod
                     lab={PLACEHOLDER_LABS[labId]}
                     nodeSize={getNodeLayout(labId).size}
+                    interactive={labId === "commerce"}
+                    onEnter={
+                      labId === "commerce"
+                        ? () => onPlaceholderEnter?.("commerce")
+                        : undefined
+                    }
                   />
                 </motion.div>
               )),
