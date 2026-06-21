@@ -8,7 +8,7 @@ import {
   type CommerceIntelligence,
   type CommerceProductRecord,
 } from "@/lib/shopify/commerce-intelligence";
-import type { HistoricalProductPerformance } from "@/lib/commerce/product-performance";
+import type { HistoricalProductPerformance } from "@/lib/commerce/historical-intelligence-types";
 import { matchHistoricalProduct } from "@/lib/commerce/product-performance";
 
 export type EmbroideryPotential = "High" | "Medium" | "Low" | "None";

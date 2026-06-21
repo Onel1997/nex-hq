@@ -1,23 +1,21 @@
+import "server-only";
+
 import {
   fetchShopifyTokenMetadata,
   getShopifyAppAccessScopes,
   shopifyGraphQL,
   type ShopifyGraphQLResponse,
 } from "@/lib/shopify/client";
-import {
-  commerceHistoryProvider,
-  HISTORICAL_READ_ALL_ORDERS_WARNING,
-  type CommerceHistoricalStatus,
-} from "@/lib/shopify/commerce-history-provider";
-import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
+import { commerceHistoryProvider } from "@/lib/shopify/commerce-history-provider";
+import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence-types";
 
-export type { CommerceHistoricalStatus } from "@/lib/shopify/commerce-history-provider";
+export type { CommerceHistoricalStatus } from "@/lib/shopify/commerce-shared";
 export {
-  commerceHistoryProvider,
+  formatCommerceCurrency,
+  formatHistoricalPlaceholder,
   HISTORICAL_READ_ALL_ORDERS_WARNING,
   isCommerceHistoryActive,
-  formatHistoricalPlaceholder,
-} from "@/lib/shopify/commerce-history-provider";
+} from "@/lib/shopify/commerce-shared";
 
 const RECENT_WINDOW_DAYS = 30;
 const PRIOR_WINDOW_DAYS = 30;
@@ -915,7 +913,3 @@ export function getCommerceAggregateForProduct(
 }
 
 export type { InternalProductAggregate };
-
-export function formatCommerceCurrency(amount: number, currency: string): string {
-  return `${amount.toFixed(amount % 1 === 0 ? 0 : 2)} ${currency}`;
-}

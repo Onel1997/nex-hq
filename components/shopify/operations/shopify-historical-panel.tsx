@@ -1,15 +1,15 @@
 "use client";
 
-import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
+import type { CommerceHistoryResponse } from "@/lib/commerce/history-api-types";
 import { formatPrice } from "@/lib/shopify/operations";
 import { History, Trophy } from "lucide-react";
 
 interface ShopifyHistoricalPanelProps {
-  historical: HistoricalIntelligence | null;
+  historical: CommerceHistoryResponse | null;
 }
 
 export function ShopifyHistoricalPanel({ historical }: ShopifyHistoricalPanelProps) {
-  if (!historical || historical.summary.totalOrders === 0) {
+  if (!historical || historical.orders === 0) {
     return (
       <section className="shopify-historical-panel shopify-historical-panel-empty">
         <header className="shopify-historical-header">
@@ -18,14 +18,12 @@ export function ShopifyHistoricalPanel({ historical }: ShopifyHistoricalPanelPro
         </header>
         <p className="shopify-historical-empty">
           Place a Shopify orders export at{" "}
-          <code>data/commerce/shopify-orders-export.csv</code> or set{" "}
+          <code>data/commerce/orders_export_1_2.csv</code> or set{" "}
           <code>COMMERCE_HISTORY_CSV_PATH</code>.
         </p>
       </section>
     );
   }
-
-  const { summary } = historical;
 
   return (
     <section className="shopify-historical-panel" aria-label="Historical sales">
@@ -38,31 +36,31 @@ export function ShopifyHistoricalPanel({ historical }: ShopifyHistoricalPanelPro
       <div className="shopify-historical-kpis">
         <div>
           <span className="shopify-historical-kpi-label">Orders</span>
-          <span className="shopify-historical-kpi-value">{summary.totalOrders}</span>
+          <span className="shopify-historical-kpi-value">{historical.orders}</span>
         </div>
         <div>
           <span className="shopify-historical-kpi-label">Units</span>
-          <span className="shopify-historical-kpi-value">{summary.totalUnits}</span>
+          <span className="shopify-historical-kpi-value">{historical.units}</span>
         </div>
         <div>
           <span className="shopify-historical-kpi-label">Revenue</span>
           <span className="shopify-historical-kpi-value">
-            {formatPrice(summary.totalRevenue, summary.currency)}
+            {formatPrice(historical.revenue, historical.currency)}
           </span>
         </div>
         <div>
           <span className="shopify-historical-kpi-label">First Sale</span>
           <span className="shopify-historical-kpi-value shopify-historical-kpi-date">
-            {summary.firstSaleDate
-              ? new Date(summary.firstSaleDate).toLocaleDateString()
+            {historical.firstSale
+              ? new Date(historical.firstSale).toLocaleDateString()
               : "—"}
           </span>
         </div>
         <div>
           <span className="shopify-historical-kpi-label">Last Sale</span>
           <span className="shopify-historical-kpi-value shopify-historical-kpi-date">
-            {summary.lastSaleDate
-              ? new Date(summary.lastSaleDate).toLocaleDateString()
+            {historical.lastSale
+              ? new Date(historical.lastSale).toLocaleDateString()
               : "—"}
           </span>
         </div>
@@ -92,7 +90,7 @@ export function ShopifyHistoricalPanel({ historical }: ShopifyHistoricalPanelPro
             <li key={`${product.productKey}-detail`}>
               <span>{product.title}</span>
               <span>
-                {formatPrice(product.revenue, summary.currency)} · {product.orderCount}{" "}
+                {formatPrice(product.revenue, historical.currency)} · {product.orderCount}{" "}
                 orders
               </span>
             </li>

@@ -1,36 +1,15 @@
-import type { ShopifyOrderLineRow } from "@/lib/commerce/import-shopify-orders";
+import type { ShopifyOrderLineRow } from "@/lib/commerce/order-line-types";
+import type {
+  HistoricalCategoryPerformance,
+  HistoricalProductPerformance,
+  HistoricalVendorPerformance,
+} from "@/lib/commerce/historical-intelligence-types";
 
-export interface HistoricalProductPerformance {
-  productKey: string;
-  title: string;
-  vendor: string;
-  category: string;
-  unitsSold: number;
-  revenue: number;
-  orderCount: number;
-  firstSale: string | null;
-  lastSale: string | null;
-  bestsellerRank: number;
-  trendScore: number;
-  /** 0–99 score for Design Studio — derived from units + revenue rank. */
-  historicalScore: number;
-}
-
-export interface HistoricalVendorPerformance {
-  vendor: string;
-  unitsSold: number;
-  revenue: number;
-  productCount: number;
-  rank: number;
-}
-
-export interface HistoricalCategoryPerformance {
-  category: string;
-  unitsSold: number;
-  revenue: number;
-  productCount: number;
-  rank: number;
-}
+export type {
+  HistoricalCategoryPerformance,
+  HistoricalProductPerformance,
+  HistoricalVendorPerformance,
+} from "@/lib/commerce/historical-intelligence-types";
 
 const RECENT_WINDOW_DAYS = 90;
 const PRIOR_WINDOW_DAYS = 90;
@@ -144,7 +123,7 @@ export function buildHistoricalProductPerformance(
   for (const line of lineItems) {
     const productKey = normalizeKey(line.lineitemName);
     const category = normalizeCategory(line.vendor, line.lineitemName);
-    const window = classifyWindow(line.createdAt, recentCutoff, priorCutoff);
+    const window = classifyWindow(line.paidAt || line.createdAt, recentCutoff, priorCutoff);
 
     const existing = aggregates.get(productKey) ?? {
       productKey,
@@ -163,8 +142,16 @@ export function buildHistoricalProductPerformance(
     existing.unitsSold += line.lineitemQuantity;
     existing.revenue += line.lineRevenue;
     if (line.orderName) existing.orderNames.add(line.orderName);
-    existing.firstSale = updateDateBounds(existing.firstSale, line.createdAt, "min");
-    existing.lastSale = updateDateBounds(existing.lastSale, line.createdAt, "max");
+    existing.firstSale = updateDateBounds(
+      existing.firstSale,
+      line.paidAt || line.createdAt,
+      "min",
+    );
+    existing.lastSale = updateDateBounds(
+      existing.lastSale,
+      line.paidAt || line.createdAt,
+      "max",
+    );
     if (line.vendor && !existing.vendor) existing.vendor = line.vendor.trim();
     if (window === "recent") existing.recentUnits += line.lineitemQuantity;
     if (window === "prior") existing.priorUnits += line.lineitemQuantity;

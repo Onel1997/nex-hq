@@ -4,8 +4,7 @@ import {
   formatHistoricalPlaceholder,
   HISTORICAL_READ_ALL_ORDERS_WARNING,
   isCommerceHistoryActive,
-} from "@/lib/shopify/commerce-intelligence";
-import { formatPerformanceCurrency } from "@/lib/shopify/performance";
+} from "@/lib/shopify/commerce-shared";
 
 function joinList(values: string[]): string {
   return values.length > 0 ? values.join(", ") : "(none)";
@@ -26,7 +25,7 @@ function formatPerformanceProductLine(
   if (!perf) {
     return `- ${p.title}: hero ${p.heroProductScore}% · catalog + supplier scored`;
   }
-  return `- ${p.title}: ${formatPerformanceCurrency(perf.revenue, perf.currency)} · ${perf.unitsSold} units · rank #${perf.salesRank} · hero ${p.heroProductScore}%`;
+  return `- ${p.title}: ${formatCommerceCurrency(perf.revenue, perf.currency)} · ${perf.unitsSold} units · rank #${perf.salesRank} · hero ${p.heroProductScore}%`;
 }
 
 /** Format live Design Studio commerce context for the Design Agent system prompt. */

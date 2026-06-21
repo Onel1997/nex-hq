@@ -16,7 +16,7 @@ import {
   SUPPLIER_STATUS_LABELS,
   type SupplierAvailabilityStatus,
 } from "@/lib/business/supplier-intelligence";
-import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
+import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence-types";
 import { matchHistoricalProduct } from "@/lib/commerce/product-performance";
 
 const SUPPLIER_STATUS_THRESHOLD = 5;

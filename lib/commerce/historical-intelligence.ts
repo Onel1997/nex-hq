@@ -1,72 +1,62 @@
+import "server-only";
+
+import type { CommerceHistoryResponse } from "@/lib/commerce/history-api-types";
 import {
   loadShopifyOrdersExport,
   parseShopifyOrdersExport,
   resolveCommerceHistoryCsvPath,
   type ParsedShopifyOrdersExport,
 } from "@/lib/commerce/import-shopify-orders";
+import type {
+  HistoricalIntelligence,
+  HistoricalProductPerformance,
+} from "@/lib/commerce/historical-intelligence-types";
 import {
   buildHistoricalCategoryPerformance,
   buildHistoricalProductPerformance,
   buildHistoricalVendorPerformance,
   matchHistoricalProduct,
-  type HistoricalCategoryPerformance,
-  type HistoricalProductPerformance,
-  type HistoricalVendorPerformance,
 } from "@/lib/commerce/product-performance";
 import type { CommerceOrderRollup } from "@/lib/shopify/commerce-intelligence";
 import type { ShopifyKnowledge, ShopifyKnowledgeProduct } from "@/lib/shopify/types";
 
 export type {
+  HistoricalCategoryPerformance,
+  HistoricalIntelligence,
+  HistoricalIntelligenceSummary,
   HistoricalProductPerformance,
   HistoricalVendorPerformance,
-  HistoricalCategoryPerformance,
-} from "@/lib/commerce/product-performance";
-
-export interface HistoricalIntelligenceSummary {
-  totalRevenue: number;
-  totalUnits: number;
-  totalOrders: number;
-  currency: string;
-  firstSaleDate: string | null;
-  lastSaleDate: string | null;
-  productsWithSales: number;
-  sourcePath: string | null;
-}
-
-export interface HistoricalIntelligence {
-  summary: HistoricalIntelligenceSummary;
-  products: HistoricalProductPerformance[];
-  byProductKey: Record<string, HistoricalProductPerformance>;
-  byCatalogProductId: Record<string, HistoricalProductPerformance>;
-  topProducts: HistoricalProductPerformance[];
-  topVendors: HistoricalVendorPerformance[];
-  topCategories: HistoricalCategoryPerformance[];
-  allTimeBestseller: HistoricalProductPerformance | null;
-}
+} from "@/lib/commerce/historical-intelligence-types";
 
 let cachedIntelligence: HistoricalIntelligence | null = null;
 let cachedSourcePath: string | null = null;
 
-function uniqueOrderCount(lineItems: ParsedShopifyOrdersExport["lineItems"]): number {
-  return new Set(lineItems.map((line) => line.orderName).filter(Boolean)).size;
-}
-
-function dateBounds(lineItems: ParsedShopifyOrdersExport["lineItems"]): {
-  first: string | null;
-  last: string | null;
-} {
-  let first: string | null = null;
-  let last: string | null = null;
+function buildMonthlyOrders(
+  lineItems: ParsedShopifyOrdersExport["lineItems"],
+): CommerceOrderRollup["monthlyOrders"] {
+  const monthly = new Map<number, { units: number; revenue: number; orders: number }>();
+  const ordersByMonth = new Map<number, Set<string>>();
 
   for (const line of lineItems) {
-    if (!line.createdAt) continue;
-    const time = new Date(line.createdAt).getTime();
-    if (Number.isNaN(time)) continue;
-    if (!first || time < new Date(first).getTime()) first = line.createdAt;
-    if (!last || time > new Date(last).getTime()) last = line.createdAt;
+    const date = new Date(line.paidAt || line.createdAt);
+    if (Number.isNaN(date.getTime())) continue;
+    const month = date.getUTCMonth() + 1;
+    const bucket = monthly.get(month) ?? { units: 0, revenue: 0, orders: 0 };
+    bucket.units += line.lineitemQuantity;
+    bucket.revenue += line.lineRevenue;
+    monthly.set(month, bucket);
+
+    const orderSet = ordersByMonth.get(month) ?? new Set<string>();
+    if (line.orderName) orderSet.add(line.orderName);
+    ordersByMonth.set(month, orderSet);
   }
 
-  return { first, last };
+  for (const [month, orderSet] of ordersByMonth) {
+    const bucket = monthly.get(month);
+    if (bucket) bucket.orders = orderSet.size;
+  }
+
+  return monthly;
 }
 
 function matchCatalogProductId(
@@ -108,34 +98,6 @@ function matchCatalogProductId(
   }
 
   return `import:${lineitemName.trim().toLowerCase().replace(/\s+/g, "-")}`;
-}
-
-function buildMonthlyOrders(
-  lineItems: ParsedShopifyOrdersExport["lineItems"],
-): CommerceOrderRollup["monthlyOrders"] {
-  const monthly = new Map<number, { units: number; revenue: number; orders: number }>();
-  const ordersByMonth = new Map<number, Set<string>>();
-
-  for (const line of lineItems) {
-    const date = new Date(line.createdAt);
-    if (Number.isNaN(date.getTime())) continue;
-    const month = date.getUTCMonth() + 1;
-    const bucket = monthly.get(month) ?? { units: 0, revenue: 0, orders: 0 };
-    bucket.units += line.lineitemQuantity;
-    bucket.revenue += line.lineRevenue;
-    monthly.set(month, bucket);
-
-    const orderSet = ordersByMonth.get(month) ?? new Set<string>();
-    if (line.orderName) orderSet.add(line.orderName);
-    ordersByMonth.set(month, orderSet);
-  }
-
-  for (const [month, orderSet] of ordersByMonth) {
-    const bucket = monthly.get(month);
-    if (bucket) bucket.orders = orderSet.size;
-  }
-
-  return monthly;
 }
 
 /** Convert parsed export + catalog into a CommerceOrderRollup for existing intelligence builders. */
@@ -223,7 +185,7 @@ export function buildHistoricalIntelligenceFromExport(
   const products = buildHistoricalProductPerformance(parsed.lineItems);
   const topVendors = buildHistoricalVendorPerformance(products);
   const topCategories = buildHistoricalCategoryPerformance(products);
-  const bounds = dateBounds(parsed.lineItems);
+  const { summary, diagnostics } = parsed;
 
   const byProductKey = Object.fromEntries(products.map((p) => [p.productKey, p]));
   const byCatalogProductId: Record<string, HistoricalProductPerformance> = {};
@@ -239,21 +201,18 @@ export function buildHistoricalIntelligenceFromExport(
     }
   }
 
-  const totalUnits = products.reduce((sum, p) => sum + p.unitsSold, 0);
-  const totalRevenue = Math.round(
-    products.reduce((sum, p) => sum + p.revenue, 0) * 100,
-  ) / 100;
-
   return {
     summary: {
-      totalRevenue,
-      totalUnits,
-      totalOrders: uniqueOrderCount(parsed.lineItems),
+      totalRevenue: summary.totalRevenue,
+      totalUnits: summary.totalUnits,
+      totalOrders: summary.totalOrders,
+      averageOrderValue: summary.averageOrderValue,
       currency: parsed.currency,
-      firstSaleDate: bounds.first,
-      lastSaleDate: bounds.last,
+      firstSaleDate: summary.firstOrderDate,
+      lastSaleDate: summary.lastOrderDate,
       productsWithSales: products.length,
       sourcePath: parsed.sourcePath,
+      diagnostics,
     },
     products,
     byProductKey,
@@ -282,7 +241,7 @@ export async function loadHistoricalIntelligence(
   }
 
   const parsed = await loadShopifyOrdersExport();
-  if (!parsed || parsed.lineItems.length === 0) return null;
+  if (!parsed || parsed.summary.totalOrders === 0) return null;
 
   cachedSourcePath = sourcePath;
   cachedIntelligence = buildHistoricalIntelligenceFromExport(parsed, knowledge);
@@ -335,6 +294,7 @@ export function formatHistoricalIntelligencePrompt(
     `Total revenue: ${intelligence.summary.totalRevenue.toFixed(2)} ${intelligence.summary.currency}`,
     `Units sold: ${intelligence.summary.totalUnits}`,
     `Orders: ${intelligence.summary.totalOrders}`,
+    `Average order value: ${intelligence.summary.averageOrderValue.toFixed(2)} ${intelligence.summary.currency}`,
     `First sale: ${intelligence.summary.firstSaleDate ?? "—"}`,
     `Last sale: ${intelligence.summary.lastSaleDate ?? "—"}`,
     `Source: ${intelligence.summary.sourcePath ?? "csv-import"}`,
@@ -358,6 +318,44 @@ export function formatHistoricalIntelligencePrompt(
 export function clearHistoricalIntelligenceCache(): void {
   cachedIntelligence = null;
   cachedSourcePath = null;
+}
+
+/** Build the `/api/commerce/history` response from loaded intelligence. */
+export function buildCommerceHistoryResponse(
+  intelligence: HistoricalIntelligence,
+): CommerceHistoryResponse {
+  return {
+    revenue: intelligence.summary.totalRevenue,
+    orders: intelligence.summary.totalOrders,
+    units: intelligence.summary.totalUnits,
+    currency: intelligence.summary.currency,
+    averageOrderValue: intelligence.summary.averageOrderValue,
+    topProducts: intelligence.topProducts.map((product) => ({
+      title: product.title,
+      unitsSold: product.unitsSold,
+      revenue: product.revenue,
+      orderCount: product.orderCount,
+      historicalScore: product.historicalScore,
+      bestsellerRank: product.bestsellerRank,
+      productKey: product.productKey,
+    })),
+    topCategories: intelligence.topCategories.map((category) => ({
+      category: category.category,
+      unitsSold: category.unitsSold,
+      revenue: category.revenue,
+    })),
+    firstSale: intelligence.summary.firstSaleDate,
+    lastSale: intelligence.summary.lastSaleDate,
+    diagnostics: intelligence.summary.diagnostics,
+  };
+}
+
+export async function loadCommerceHistoryResponse(
+  knowledge?: ShopifyKnowledge,
+): Promise<CommerceHistoryResponse | null> {
+  const intelligence = await loadHistoricalIntelligence(knowledge);
+  if (!intelligence || intelligence.summary.totalOrders === 0) return null;
+  return buildCommerceHistoryResponse(intelligence);
 }
 
 export { matchHistoricalProduct, resolveCommerceHistoryCsvPath };

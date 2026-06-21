@@ -1,7 +1,7 @@
 "use client";
 
+import type { CommerceHistoryResponse } from "@/lib/commerce/history-api-types";
 import type { MarketPrintIntelligence } from "@/lib/marketprint";
-import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
 import type {
   AgentConnectionStatus,
   CommerceActivityEvent,
@@ -25,7 +25,7 @@ export interface ShopifyOperationsData {
     fulfillment: string;
   };
   marketPrintIntelligence: MarketPrintIntelligence;
-  historicalIntelligence: HistoricalIntelligence | null;
+  commerceHistory: CommerceHistoryResponse | null;
 }
 
 interface OperationsResponse {
@@ -44,7 +44,6 @@ interface OperationsResponse {
     fulfillment: string;
   };
   marketPrintIntelligence?: MarketPrintIntelligence;
-  historicalIntelligence?: HistoricalIntelligence | null;
 }
 
 export function useShopifyOperations() {
@@ -57,11 +56,28 @@ export function useShopifyOperations() {
     setError(null);
 
     try {
-      const response = await fetch("/api/shopify/operations");
-      const body = (await response.json()) as OperationsResponse;
+      const [operationsResponse, historyResponse] = await Promise.all([
+        fetch("/api/shopify/operations"),
+        fetch("/api/commerce/history"),
+      ]);
 
-      if (!response.ok || !body.ok || !body.knowledge || !body.kpis || !body.marketPrintIntelligence) {
+      const body = (await operationsResponse.json()) as OperationsResponse;
+      const historyBody = (await historyResponse.json()) as CommerceHistoryResponse & {
+        error?: string;
+      };
+
+      if (
+        !operationsResponse.ok ||
+        !body.ok ||
+        !body.knowledge ||
+        !body.kpis ||
+        !body.marketPrintIntelligence
+      ) {
         throw new Error(body.error ?? "Failed to load Shopify operations");
+      }
+
+      if (!historyResponse.ok) {
+        throw new Error(historyBody.error ?? "Failed to load commerce history");
       }
 
       setData({
@@ -84,7 +100,10 @@ export function useShopifyOperations() {
           fulfillment: "Supplier Managed",
         },
         marketPrintIntelligence: body.marketPrintIntelligence,
-        historicalIntelligence: body.historicalIntelligence ?? null,
+        commerceHistory:
+          historyBody.orders > 0 || historyBody.topProducts.length > 0
+            ? historyBody
+            : null,
       });
     } catch (err) {
       setData(null);

@@ -1,12 +1,12 @@
 "use client";
 
-import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
+import type { CommerceHistoryResponse } from "@/lib/commerce/history-api-types";
 import type { ShopifyOperationsKpis } from "@/lib/shopify/operations";
 import { formatPrice } from "@/lib/shopify/operations";
 
 interface ShopifyKpiBarProps {
   kpis: ShopifyOperationsKpis;
-  historical?: HistoricalIntelligence | null;
+  historical?: CommerceHistoryResponse | null;
 }
 
 const KPI_ITEMS: Array<{
@@ -48,30 +48,27 @@ export function ShopifyKpiBar({ kpis, historical }: ShopifyKpiBarProps) {
     ? [
         {
           label: "Historical Orders",
-          value: String(historical.summary.totalOrders),
+          value: String(historical.orders),
         },
         {
           label: "All Time Bestseller",
-          value: historical.allTimeBestseller?.title ?? "—",
+          value: historical.topProducts[0]?.title ?? "—",
         },
         {
           label: "First Sale",
-          value: historical.summary.firstSaleDate
-            ? new Date(historical.summary.firstSaleDate).toLocaleDateString()
+          value: historical.firstSale
+            ? new Date(historical.firstSale).toLocaleDateString()
             : "—",
         },
         {
           label: "Last Sale",
-          value: historical.summary.lastSaleDate
-            ? new Date(historical.summary.lastSaleDate).toLocaleDateString()
+          value: historical.lastSale
+            ? new Date(historical.lastSale).toLocaleDateString()
             : "—",
         },
         {
           label: "Historical Revenue",
-          value: formatPrice(
-            historical.summary.totalRevenue,
-            historical.summary.currency,
-          ),
+          value: formatPrice(historical.revenue, historical.currency),
         },
       ]
     : [];

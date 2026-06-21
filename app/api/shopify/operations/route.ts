@@ -95,7 +95,6 @@ export async function GET() {
       reportCounts,
       businessMeta: operationsMeta,
       marketPrintIntelligence,
-      historicalIntelligence,
     });
   } catch (error) {
     const message =

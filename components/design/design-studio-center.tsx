@@ -6,8 +6,7 @@ import { useDesignStudio } from "@/components/design/use-design-studio";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import type { DesignStudioIntelligence } from "@/lib/design/studio-intelligence";
 import type { ProductIntelligence } from "@/lib/design/product-intelligence";
-import { formatCommerceCurrency, formatHistoricalPlaceholder, isCommerceHistoryActive } from "@/lib/shopify/commerce-intelligence";
-import { formatPerformanceCurrency } from "@/lib/shopify/performance";
+import { formatCommerceCurrency, formatHistoricalPlaceholder, isCommerceHistoryActive } from "@/lib/shopify/commerce-shared";
 import { cn } from "@/lib/utils";
 import {
   ArrowDownRight,
@@ -89,7 +88,7 @@ export function DesignStudioCenter() {
                   label="AOV"
                   value={
                     data.studio.summary.averageOrderValue > 0
-                      ? formatPerformanceCurrency(
+                      ? formatCommerceCurrency(
                           data.studio.summary.averageOrderValue,
                           data.studio.commerceIntelligence?.summary.currency ??
                             "EUR",
@@ -537,7 +536,7 @@ function DesignIntelligenceSection({ studio }: { studio: DesignStudioIntelligenc
             p.commerce
               ? formatCommerceCurrency(p.commerce.revenue, p.commerce.currency)
               : p.performance
-                ? formatPerformanceCurrency(p.performance.revenue, p.performance.currency)
+                ? formatCommerceCurrency(p.performance.revenue, p.performance.currency)
                 : "—"
           }
         />
@@ -704,7 +703,7 @@ function ProductIntelligenceCard({ product }: { product: ProductIntelligence }) 
         <dl className="design-studio-product-scores design-studio-product-scores-performance">
           <div>
             <dt>Revenue</dt>
-            <dd>{formatPerformanceCurrency(perf.revenue, perf.currency)}</dd>
+            <dd>{formatCommerceCurrency(perf.revenue, perf.currency)}</dd>
           </div>
           <div>
             <dt>Units</dt>

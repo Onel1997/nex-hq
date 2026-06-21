@@ -1,56 +1,40 @@
+import "server-only";
+
 import type { ShopifyKnowledge } from "@/lib/shopify/types";
 import type {
   CommerceIntelligenceDebug,
   CommerceOrderRollup,
 } from "@/lib/shopify/commerce-intelligence";
+import {
+  loadHistoricalIntelligence,
+  loadHistoricalIntelligenceRollup,
+  resolveCommerceHistoryCsvPath,
+} from "@/lib/commerce/historical-intelligence";
+import {
+  HISTORICAL_READ_ALL_ORDERS_WARNING,
+  type CommerceHistoricalPlaceholders,
+  type CommerceHistoricalStatus,
+  type CommerceHistoryAccessStatus,
+  type CommerceHistoryProviderDescriptor,
+  type CommerceHistoryResolution,
+  type CommerceHistorySourceType,
+} from "@/lib/shopify/commerce-shared";
 
-/** Shown when Shopify historical orders cannot be loaded. */
-export const HISTORICAL_READ_ALL_ORDERS_WARNING =
-  "Historical sales data requires Shopify read_all_orders access.";
+export type {
+  CommerceHistoricalMode,
+  CommerceHistoricalPlaceholders,
+  CommerceHistoricalStatus,
+  CommerceHistoryAccessStatus,
+  CommerceHistoryProviderDescriptor,
+  CommerceHistoryResolution,
+  CommerceHistorySourceType,
+} from "@/lib/shopify/commerce-shared";
 
-export type CommerceHistorySourceType =
-  | "shopify-orders"
-  | "csv-import"
-  | "manual-import"
-  | "analytics";
-
-export type CommerceHistoricalMode = "active" | "recent-only" | "catalog-only";
-
-export interface CommerceHistoryProviderDescriptor {
-  id: string;
-  label: string;
-  sourceType: CommerceHistorySourceType;
-  /** True when the provider has a working loader in this codebase. */
-  implemented: boolean;
-}
-
-export interface CommerceHistoryAccessStatus {
-  hasReadOrders: boolean;
-  hasReadAllOrders: boolean;
-  tokenScopes: string[];
-  appAccessScopes: string[];
-}
-
-export interface CommerceHistoricalPlaceholders {
-  historicalRevenue: number | "unavailable";
-  historicalUnits: number | "unavailable";
-  historicalBestseller: string | "unavailable";
-}
-
-export interface CommerceHistoricalStatus {
-  mode: CommerceHistoricalMode;
-  available: boolean;
-  source: CommerceHistorySourceType | null;
-  warning: string | null;
-  placeholders: CommerceHistoricalPlaceholders;
-}
-
-export interface CommerceHistoryResolution {
-  status: CommerceHistoricalStatus;
-  access: CommerceHistoryAccessStatus;
-  shouldLoadOrders: boolean;
-  debug?: CommerceIntelligenceDebug;
-}
+export {
+  formatHistoricalPlaceholder,
+  HISTORICAL_READ_ALL_ORDERS_WARNING,
+  isCommerceHistoryActive,
+} from "@/lib/shopify/commerce-shared";
 
 const UNAVAILABLE_PLACEHOLDERS: CommerceHistoricalPlaceholders = {
   historicalRevenue: "unavailable",
@@ -179,10 +163,6 @@ async function probeShopifyAccess(): Promise<CommerceIntelligenceDebug> {
 async function resolveCsvImport(
   knowledge: ShopifyKnowledge,
 ): Promise<CommerceHistoryResolution | null> {
-  const { resolveCommerceHistoryCsvPath, loadHistoricalIntelligence } = await import(
-    "@/lib/commerce/historical-intelligence"
-  );
-
   const csvPath = await resolveCommerceHistoryCsvPath();
   if (!csvPath) return null;
 
@@ -346,9 +326,6 @@ export const commerceHistoryProvider = {
         rollup = await loadShopifyOrdersRollup();
         break;
       case "csv-import": {
-        const { loadHistoricalIntelligenceRollup } = await import(
-          "@/lib/commerce/historical-intelligence"
-        );
         const imported = await loadHistoricalIntelligenceRollup(knowledge);
         rollup = imported?.rollup ?? emptyRollup(currency);
         break;
@@ -387,19 +364,3 @@ export const commerceHistoryProvider = {
   },
 };
 
-export function isCommerceHistoryActive(
-  historical?: CommerceHistoricalStatus | null,
-): boolean {
-  return Boolean(historical?.available && historical.mode !== "catalog-only");
-}
-
-export function formatHistoricalPlaceholder(
-  value: number | "unavailable",
-  currency?: string,
-): string {
-  if (value === "unavailable") return "unavailable";
-  if (typeof value === "number" && currency) {
-    return `${value.toFixed(value % 1 === 0 ? 0 : 2)} ${currency}`;
-  }
-  return String(value);
-}
