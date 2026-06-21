@@ -12,6 +12,10 @@ import {
   type BusinessProfile,
 } from "@/lib/business";
 import { formatMarketPrintPrompt } from "@/lib/marketprint/production-rules";
+import {
+  formatHistoricalIntelligencePrompt,
+  type HistoricalIntelligence,
+} from "@/lib/commerce/historical-intelligence";
 import type { ProductKnowledge } from "@/lib/shopify/types";
 
 const ANALYSIS_EXCERPT_CHARS = 900;
@@ -553,6 +557,7 @@ export function buildPromptContext(
   locale: Locale = DEFAULT_LOCALE,
   shopifyKnowledge?: ProductKnowledge | null,
   businessProfile?: BusinessProfile | null,
+  historicalIntelligence?: HistoricalIntelligence | null,
 ): string {
   const sections: string[] = [];
 
@@ -560,6 +565,10 @@ export function buildPromptContext(
     sections.push(formatBusinessProfilePrompt(businessProfile));
     sections.push(formatSupplierIntelligencePrompt(businessProfile));
     sections.push(formatMarketPrintPrompt());
+  }
+
+  if (historicalIntelligence && historicalIntelligence.summary.totalOrders > 0) {
+    sections.push(formatHistoricalIntelligencePrompt(historicalIntelligence));
   }
 
   if (shopifyKnowledge) {

@@ -9,6 +9,7 @@ import {
 import { MARKETPRINT_PROFILE } from "@/lib/marketprint/marketprint-profile";
 import type { ShopifyPerformanceIntelligence } from "@/lib/shopify/performance";
 import {
+  isCommerceHistoryActive,
   mergeHistoricalProducts,
   type CommerceIntelligence,
 } from "@/lib/shopify/commerce-intelligence";
@@ -341,21 +342,26 @@ export function buildDesignStudioIntelligence(
     (p) => p.status === "ACTIVE",
   );
 
-  const mergedProducts = commerceIntelligence
-    ? mergeHistoricalProducts(knowledge, commerceIntelligence)
-    : knowledge.products;
+  const historyActive =
+    isCommerceHistoryActive(commerceIntelligence?.historical) ||
+    Boolean(commerceIntelligence?.import?.products.length);
+
+  const mergedProducts =
+    historyActive && commerceIntelligence
+      ? mergeHistoricalProducts(knowledge, commerceIntelligence)
+      : knowledge.products;
 
   const designIntelligence = buildDesignIntelligenceDashboard(
     mergedProducts,
     performanceIntelligence ?? undefined,
-    commerceIntelligence ?? undefined,
+    historyActive ? commerceIntelligence ?? undefined : undefined,
   );
   const intelligenceById = new Map(
     designIntelligence.scoredProducts.map((p) => [p.productId, p]),
   );
   const scoredOpportunities = scoreCollectionOpportunities(
     designIntelligence.scoredProducts,
-    commerceIntelligence ?? undefined,
+    historyActive ? commerceIntelligence ?? undefined : undefined,
   );
 
   const cardSource =
@@ -386,7 +392,11 @@ export function buildDesignStudioIntelligence(
   const heroProductCount = designIntelligence.scoredProducts.filter(
     (p) => p.heroPotential === "High",
   ).length;
-  const perfSummary = performanceIntelligence?.summary ?? commerceIntelligence?.summary;
+  const perfSummary =
+    performanceIntelligence?.summary ??
+    (historyActive
+      ? commerceIntelligence?.import?.summary ?? commerceIntelligence?.summary
+      : undefined);
 
   const marketPrintPremium = getPremiumProducts().map((p) => p.name);
   const marketPrintEmbroidery = getEmbroideryProducts().map((p) => p.name);

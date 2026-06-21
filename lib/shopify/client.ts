@@ -7,6 +7,12 @@ interface ShopifyTokenResponse {
   expires_in: number;
 }
 
+export interface ShopifyTokenMetadata {
+  accessToken: string;
+  scopes: string[];
+  expiresIn: number;
+}
+
 interface TokenCache {
   accessToken: string;
   expiresAt: number;
@@ -60,11 +66,7 @@ function isTokenValid(cache: TokenCache | null): cache is TokenCache {
  * Fetch a Shopify Admin API access token via Client Credentials Grant.
  * Tokens are cached in memory until shortly before expiry.
  */
-export async function getShopifyAccessToken(): Promise<string> {
-  if (isTokenValid(tokenCache)) {
-    return tokenCache.accessToken;
-  }
-
+export async function fetchShopifyTokenMetadata(): Promise<ShopifyTokenMetadata> {
   const clientId = requireShopifyEnv("SHOPIFY_CLIENT_ID");
   const clientSecret = requireShopifyEnv("SHOPIFY_CLIENT_SECRET");
   const tokenUrl = `${getShopifyAdminBaseUrl()}/oauth/access_token`;
@@ -106,12 +108,55 @@ export async function getShopifyAccessToken(): Promise<string> {
       ? body.expires_in
       : 86_400;
 
-  tokenCache = {
+  const scopes = (body.scope ?? "")
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+
+  return {
     accessToken: body.access_token,
-    expiresAt: Date.now() + expiresInSeconds * 1000,
+    scopes,
+    expiresIn: expiresInSeconds,
+  };
+}
+
+export async function getShopifyAccessToken(): Promise<string> {
+  if (isTokenValid(tokenCache)) {
+    return tokenCache.accessToken;
+  }
+
+  const metadata = await fetchShopifyTokenMetadata();
+  tokenCache = {
+    accessToken: metadata.accessToken,
+    expiresAt: Date.now() + metadata.expiresIn * 1000,
   };
 
   return tokenCache.accessToken;
+}
+
+const APP_ACCESS_SCOPES_QUERY = `
+  query ShopifyAppAccessScopes {
+    currentAppInstallation {
+      accessScopes {
+        handle
+      }
+    }
+  }
+`;
+
+interface AppAccessScopesData {
+  currentAppInstallation: {
+    accessScopes: Array<{ handle: string }>;
+  };
+}
+
+/** Live access scopes granted to this app installation (may differ from token response). */
+export async function getShopifyAppAccessScopes(): Promise<string[]> {
+  const result = await shopifyGraphQL<AppAccessScopesData>(APP_ACCESS_SCOPES_QUERY);
+  return (
+    result.data?.currentAppInstallation.accessScopes.map((scope) => scope.handle) ??
+    []
+  );
 }
 
 export interface ShopifyGraphQLResponse<TData = Record<string, unknown>> {

@@ -6,7 +6,7 @@ import { useDesignStudio } from "@/components/design/use-design-studio";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import type { DesignStudioIntelligence } from "@/lib/design/studio-intelligence";
 import type { ProductIntelligence } from "@/lib/design/product-intelligence";
-import { formatCommerceCurrency } from "@/lib/shopify/commerce-intelligence";
+import { formatCommerceCurrency, formatHistoricalPlaceholder, isCommerceHistoryActive } from "@/lib/shopify/commerce-intelligence";
 import { formatPerformanceCurrency } from "@/lib/shopify/performance";
 import { cn } from "@/lib/utils";
 import {
@@ -275,99 +275,191 @@ function CommerceIntelligenceSection({ studio }: { studio: DesignStudioIntellige
   const commerce = studio.commerceIntelligence;
   if (!commerce) return null;
 
+  const historyActive =
+    isCommerceHistoryActive(commerce.historical) ||
+    Boolean(commerce.import?.summary.totalOrders);
+  const placeholders = commerce.historical?.placeholders;
+  const debug = commerce.debug;
+
   return (
     <section className="design-studio-commerce" aria-label="Commerce Intelligence">
       <header className="design-studio-intelligence-header">
         <BarChart3 className="size-4 text-[#22d3ee]" />
         <h2>Commerce Intelligence</h2>
         <span className="design-studio-intelligence-meta">
-          {commerce.summary.totalOrders} orders · all-time history
+          {historyActive
+            ? `${commerce.summary.totalOrders} orders · all-time history`
+            : "Catalog mode · products & collections active"}
         </span>
       </header>
 
-      <div className="design-studio-commerce-summary">
-        <CommerceStat
-          label="Revenue"
-          value={formatCommerceCurrency(
-            commerce.summary.totalRevenue,
-            commerce.summary.currency,
-          )}
-        />
-        <CommerceStat label="Units" value={String(commerce.summary.totalUnits)} />
-        <CommerceStat
-          label="AOV"
-          value={formatCommerceCurrency(
-            commerce.summary.averageOrderValue,
-            commerce.summary.currency,
-          )}
-        />
-        <CommerceStat
-          label="Repeat SKUs"
-          value={String(commerce.summary.repeatPurchaseProductCount)}
-        />
-      </div>
+      {!historyActive ? (
+        <div className="design-studio-commerce-historical-mode">
+          <p className="design-studio-commerce-mode-label">Historical Commerce Mode</p>
+          {commerce.loadError ? (
+            <p className="design-studio-commerce-error">
+              <strong>Orders API error:</strong> {commerce.loadError}
+            </p>
+          ) : null}
+          {commerce.historical?.warning ? (
+            <p className="design-studio-commerce-warning">{commerce.historical.warning}</p>
+          ) : null}
+          <div className="design-studio-commerce-summary design-studio-commerce-summary-historical">
+            <CommerceStat
+              label="Historical Revenue"
+              value={formatHistoricalPlaceholder(
+                placeholders?.historicalRevenue ?? "unavailable",
+                commerce.summary.currency,
+              )}
+              muted={placeholders?.historicalRevenue === "unavailable"}
+            />
+            <CommerceStat
+              label="Historical Units"
+              value={formatHistoricalPlaceholder(
+                placeholders?.historicalUnits ?? "unavailable",
+              )}
+              muted={placeholders?.historicalUnits === "unavailable"}
+            />
+            <CommerceStat
+              label="Historical Bestseller"
+              value={placeholders?.historicalBestseller ?? "unavailable"}
+              muted={placeholders?.historicalBestseller === "unavailable"}
+            />
+            <CommerceStat
+              label="Catalog Products"
+              value={String(studio.summary.activeProducts)}
+            />
+          </div>
+          <p className="design-studio-commerce-mode-note">
+            Live catalog, collections, and supplier capabilities remain active. Historical
+            intelligence activates automatically when Shopify read_all_orders or an import
+            provider connects.
+          </p>
+          {debug ? (
+            <details className="design-studio-commerce-raw">
+              <summary>Integration diagnostics</summary>
+              <dl className="design-studio-commerce-debug">
+                <div>
+                  <dt>read_orders</dt>
+                  <dd>{debug.hasReadOrders ? "yes" : "no"}</dd>
+                </div>
+                <div>
+                  <dt>read_all_orders</dt>
+                  <dd>{debug.hasReadAllOrders ? "yes" : "no"}</dd>
+                </div>
+                <div>
+                  <dt>Shopify ordersCount</dt>
+                  <dd>{debug.ordersCountFromApi ?? "—"}</dd>
+                </div>
+              </dl>
+            </details>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <div className="design-studio-commerce-summary">
+            <CommerceStat
+              label="Historical Revenue"
+              value={formatCommerceCurrency(
+                commerce.summary.totalRevenue,
+                commerce.summary.currency,
+              )}
+            />
+            <CommerceStat
+              label="Historical Units"
+              value={String(commerce.summary.totalUnits)}
+            />
+            <CommerceStat
+              label="Historical Bestseller"
+              value={commerce.allTimeBestseller?.title ?? "—"}
+            />
+            <CommerceStat
+              label="AOV"
+              value={formatCommerceCurrency(
+                commerce.summary.averageOrderValue,
+                commerce.summary.currency,
+              )}
+            />
+          </div>
 
-      <div className="design-studio-intelligence-grid design-studio-intelligence-grid-performance">
-        <CommerceLeaderColumn
-          title="Top Units"
-          icon={Trophy}
-          rows={commerce.topUnits.slice(0, 5).map((p) => ({
-            id: p.productId,
-            name: p.title,
-            primary: `${p.unitsSold} units`,
-            secondary: formatCommerceCurrency(p.revenue, p.currency),
-          }))}
-        />
-        <CommerceLeaderColumn
-          title="Top Revenue"
-          icon={DollarSign}
-          rows={commerce.topRevenue.slice(0, 5).map((p) => ({
-            id: p.productId,
-            name: p.title,
-            primary: formatCommerceCurrency(p.revenue, p.currency),
-            secondary: `${p.unitsSold} units`,
-          }))}
-        />
-        <CommerceLeaderColumn
-          title="Top Categories"
-          icon={Layers}
-          rows={commerce.topCategories.slice(0, 5).map((c) => ({
-            id: c.category,
-            name: c.category,
-            primary: `${c.unitsSold} units`,
-            secondary: formatCommerceCurrency(c.revenue, commerce.summary.currency),
-          }))}
-        />
-        <CommerceLeaderColumn
-          title="Strongest Collections"
-          icon={Sparkles}
-          rows={commerce.topCollections.slice(0, 5).map((c) => ({
-            id: c.title,
-            name: c.title,
-            primary: `${c.unitsSold} units`,
-            secondary: formatCommerceCurrency(c.revenue, commerce.summary.currency),
-          }))}
-        />
-        <CommerceLeaderColumn
-          title="Seasonality"
-          icon={TrendingUp}
-          rows={commerce.seasonality.slice(0, 5).map((s) => ({
-            id: String(s.month),
-            name: s.monthLabel,
-            primary: `${s.unitsSold} units`,
-            secondary: `${s.orderCount} orders`,
-          }))}
-        />
-      </div>
+          <div className="design-studio-intelligence-grid design-studio-intelligence-grid-performance">
+            <CommerceLeaderColumn
+              title="Top Units"
+              icon={Trophy}
+              rows={commerce.topUnits.slice(0, 5).map((p) => ({
+                id: p.productId,
+                name: p.title,
+                primary: `${p.unitsSold} units`,
+                secondary: formatCommerceCurrency(p.revenue, p.currency),
+              }))}
+            />
+            <CommerceLeaderColumn
+              title="Top Revenue"
+              icon={DollarSign}
+              rows={commerce.topRevenue.slice(0, 5).map((p) => ({
+                id: p.productId,
+                name: p.title,
+                primary: formatCommerceCurrency(p.revenue, p.currency),
+                secondary: `${p.unitsSold} units`,
+              }))}
+            />
+            <CommerceLeaderColumn
+              title="Top Categories"
+              icon={Layers}
+              rows={commerce.topCategories.slice(0, 5).map((c) => ({
+                id: c.category,
+                name: c.category,
+                primary: `${c.unitsSold} units`,
+                secondary: formatCommerceCurrency(c.revenue, commerce.summary.currency),
+              }))}
+            />
+            <CommerceLeaderColumn
+              title="Strongest Collections"
+              icon={Sparkles}
+              rows={commerce.topCollections.slice(0, 5).map((c) => ({
+                id: c.title,
+                name: c.title,
+                primary: `${c.unitsSold} units`,
+                secondary: formatCommerceCurrency(c.revenue, commerce.summary.currency),
+              }))}
+            />
+            <CommerceLeaderColumn
+              title="Seasonality"
+              icon={TrendingUp}
+              rows={commerce.seasonality.slice(0, 5).map((s) => ({
+                id: String(s.month),
+                name: s.monthLabel,
+                primary: `${s.unitsSold} units`,
+                secondary: `${s.orderCount} orders`,
+              }))}
+            />
+          </div>
+        </>
+      )}
     </section>
   );
 }
 
-function CommerceStat({ label, value }: { label: string; value: string }) {
+function CommerceStat({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+}) {
   return (
     <div className="design-studio-commerce-stat">
       <span className="design-studio-commerce-stat-label">{label}</span>
-      <span className="design-studio-commerce-stat-value">{value}</span>
+      <span
+        className={cn(
+          "design-studio-commerce-stat-value",
+          muted && "design-studio-commerce-stat-unavailable",
+        )}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -427,11 +519,13 @@ function DesignIntelligenceSection({ studio }: { studio: DesignStudioIntelligenc
           products={designIntelligence.topSellers}
           metric="heroProductScore"
           suffix={(p) =>
-            p.commerce
-              ? `${p.commerce.unitsSold} units`
-              : p.performance
-                ? `${p.performance.unitsSold} units`
-                : "No sales"
+            p.historical
+              ? `${p.historical.unitsSold} units · score ${p.historical.historicalScore}`
+              : p.commerce
+                ? `${p.commerce.unitsSold} units`
+                : p.performance
+                  ? `${p.performance.unitsSold} units`
+                  : "No sales"
           }
         />
         <IntelligenceLeaderColumn
@@ -560,6 +654,7 @@ function ProductIntelligenceGrid({ studio }: { studio: DesignStudioIntelligence 
 function ProductIntelligenceCard({ product }: { product: ProductIntelligence }) {
   const perf = product.performance;
   const commerce = product.commerce;
+  const historical = product.historical;
 
   return (
     <article className="design-studio-product-card">
@@ -569,13 +664,28 @@ function ProductIntelligenceCard({ product }: { product: ProductIntelligence }) 
       </div>
       <p className="design-studio-product-card-category">
         {product.category}
-        {(commerce?.unitsRank ?? product.productRank) > 0
-          ? ` · Rank #${commerce?.unitsRank ?? product.productRank}`
+        {(historical?.bestsellerRank ?? commerce?.unitsRank ?? product.productRank) > 0
+          ? ` · Rank #${historical?.bestsellerRank ?? commerce?.unitsRank ?? product.productRank}`
           : ""}
-        {commerce && !commerce.inActiveCatalog ? " · historical" : ""}
+        {historical ? " · export history" : commerce && !commerce.inActiveCatalog ? " · historical" : ""}
       </p>
 
-      {commerce ? (
+      {historical ? (
+        <dl className="design-studio-product-scores design-studio-product-scores-performance">
+          <div>
+            <dt>Units Sold</dt>
+            <dd>{historical.unitsSold}</dd>
+          </div>
+          <div>
+            <dt>Historical Score</dt>
+            <dd>{historical.historicalScore}</dd>
+          </div>
+          <div>
+            <dt>Orders</dt>
+            <dd>{historical.orderCount}</dd>
+          </div>
+        </dl>
+      ) : commerce ? (
         <dl className="design-studio-product-scores design-studio-product-scores-performance">
           <div>
             <dt>Revenue</dt>

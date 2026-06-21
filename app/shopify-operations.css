@@ -1073,6 +1073,136 @@
   font-weight: 600;
 }
 
+.shopify-historical-panel {
+  margin: 0 1.25rem 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgb(34 197 94 / 0.22);
+  background: rgb(8 18 12 / 0.82);
+}
+
+.shopify-historical-panel-empty {
+  border-color: rgb(21 32 48 / 0.65);
+  background: rgb(8 14 22 / 0.78);
+}
+
+.shopify-historical-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.shopify-historical-header h2 {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #cbd5e1;
+}
+
+.shopify-historical-meta {
+  margin-left: auto;
+  font-size: 0.62rem;
+  color: #64748b;
+}
+
+.shopify-historical-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.shopify-historical-kpi-label {
+  display: block;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.shopify-historical-kpi-value {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #eaf2ff;
+}
+
+.shopify-historical-kpi-date {
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.shopify-historical-block {
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgb(21 32 48 / 0.45);
+}
+
+.shopify-historical-block header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.45rem;
+}
+
+.shopify-historical-block h3 {
+  margin: 0;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.shopify-historical-block ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.shopify-historical-block li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.65rem;
+  font-size: 0.65rem;
+  color: #cbd5e1;
+}
+
+.shopify-historical-block li span:last-child {
+  color: #86efac;
+  white-space: nowrap;
+}
+
+.shopify-historical-empty {
+  margin: 0;
+  font-size: 0.65rem;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.shopify-historical-empty code {
+  font-size: 0.6rem;
+  color: #cbd5e1;
+}
+
+.shopify-kpi-item-historical {
+  border-color: rgb(34 197 94 / 0.18);
+  background: rgb(8 18 12 / 0.55);
+}
+
+.shopify-drawer-block-historical {
+  border: 1px solid rgb(34 197 94 / 0.18);
+  border-radius: 0.45rem;
+  padding: 0.55rem;
+  background: rgb(8 18 12 / 0.45);
+}
+
 @media (max-width: 1100px) {
   .shopify-operations-sidebar {
     display: none;

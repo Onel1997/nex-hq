@@ -1,10 +1,12 @@
 "use client";
 
+import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
 import type { ShopifyOperationsKpis } from "@/lib/shopify/operations";
 import { formatPrice } from "@/lib/shopify/operations";
 
 interface ShopifyKpiBarProps {
   kpis: ShopifyOperationsKpis;
+  historical?: HistoricalIntelligence | null;
 }
 
 const KPI_ITEMS: Array<{
@@ -41,9 +43,47 @@ const KPI_ITEMS: Array<{
   },
 ];
 
-export function ShopifyKpiBar({ kpis }: ShopifyKpiBarProps) {
+export function ShopifyKpiBar({ kpis, historical }: ShopifyKpiBarProps) {
+  const historicalItems = historical
+    ? [
+        {
+          label: "Historical Orders",
+          value: String(historical.summary.totalOrders),
+        },
+        {
+          label: "All Time Bestseller",
+          value: historical.allTimeBestseller?.title ?? "—",
+        },
+        {
+          label: "First Sale",
+          value: historical.summary.firstSaleDate
+            ? new Date(historical.summary.firstSaleDate).toLocaleDateString()
+            : "—",
+        },
+        {
+          label: "Last Sale",
+          value: historical.summary.lastSaleDate
+            ? new Date(historical.summary.lastSaleDate).toLocaleDateString()
+            : "—",
+        },
+        {
+          label: "Historical Revenue",
+          value: formatPrice(
+            historical.summary.totalRevenue,
+            historical.summary.currency,
+          ),
+        },
+      ]
+    : [];
+
   return (
     <div className="shopify-kpi-bar">
+      {historicalItems.map((item) => (
+        <div key={item.label} className="shopify-kpi-item shopify-kpi-item-historical">
+          <span className="shopify-kpi-value">{item.value}</span>
+          <span className="shopify-kpi-label">{item.label}</span>
+        </div>
+      ))}
       {KPI_ITEMS.map((item) => (
         <div key={item.key} className="shopify-kpi-item">
           <span className="shopify-kpi-value">

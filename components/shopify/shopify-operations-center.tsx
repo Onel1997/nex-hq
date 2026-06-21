@@ -2,7 +2,7 @@
 
 import { ShopifyActivityFeed } from "@/components/shopify/operations/shopify-activity-feed";
 import { ShopifyAiPanel } from "@/components/shopify/operations/shopify-ai-panel";
-import { ShopifyFilterPanel } from "@/components/shopify/operations/shopify-filter-panel";
+import { ShopifyHistoricalPanel } from "@/components/shopify/operations/shopify-historical-panel";
 import { ShopifyKpiBar } from "@/components/shopify/operations/shopify-kpi-bar";
 import { ShopifyMarketPrintPanel } from "@/components/shopify/operations/shopify-marketprint-panel";
 import { ShopifyProductDrawer } from "@/components/shopify/operations/shopify-product-drawer";
@@ -173,8 +173,13 @@ export function ShopifyOperationsCenter() {
           </div>
 
           <div className="shopify-operations-kpi-wrap">
-            <ShopifyKpiBar kpis={data.kpis} />
+            <ShopifyKpiBar
+              kpis={data.kpis}
+              historical={data.historicalIntelligence}
+            />
           </div>
+
+          <ShopifyHistoricalPanel historical={data.historicalIntelligence} />
 
           <div className="shopify-operations-body">
             <ShopifyFilterPanel

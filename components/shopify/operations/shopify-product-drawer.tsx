@@ -25,6 +25,16 @@ interface DetailResponse {
   ok?: boolean;
   product?: ShopifyProductDetail;
   agentInsights?: ProductAgentInsights;
+  historicalPerformance?: {
+    unitsSold: number;
+    revenue: number;
+    orderCount: number;
+    firstSale: string | null;
+    lastSale: string | null;
+    bestsellerRank: number;
+    historicalScore: number;
+    title: string;
+  } | null;
   error?: string;
 }
 
@@ -35,6 +45,8 @@ export function ShopifyProductDrawer({
 }: ShopifyProductDrawerProps) {
   const [detail, setDetail] = useState<ShopifyProductDetail | null>(null);
   const [insights, setInsights] = useState<ProductAgentInsights | null>(null);
+  const [historical, setHistorical] =
+    useState<DetailResponse["historicalPerformance"]>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +54,7 @@ export function ShopifyProductDrawer({
     if (!product) {
       setDetail(null);
       setInsights(null);
+      setHistorical(null);
       setError(null);
       return;
     }
@@ -59,6 +72,7 @@ export function ShopifyProductDrawer({
         if (!cancelled) {
           setDetail(body.product);
           setInsights(body.agentInsights ?? null);
+          setHistorical(body.historicalPerformance ?? null);
         }
       })
       .catch((err) => {
@@ -164,6 +178,48 @@ export function ShopifyProductDrawer({
                       </span>
                     </div>
                   </div>
+
+                  {historical ? (
+                    <div className="shopify-drawer-block shopify-drawer-block-historical">
+                      <p className="shopify-drawer-block-label">Historical Sales</p>
+                      <div className="shopify-drawer-stats">
+                        <div>
+                          <span className="shopify-drawer-stat-label">Units Sold</span>
+                          <span className="shopify-drawer-stat-value">
+                            {historical.unitsSold}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="shopify-drawer-stat-label">Orders</span>
+                          <span className="shopify-drawer-stat-value">
+                            {historical.orderCount}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="shopify-drawer-stat-label">Historical Score</span>
+                          <span className="shopify-drawer-stat-value">
+                            {historical.historicalScore}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="shopify-drawer-stat-label">First Sale</span>
+                          <span className="shopify-drawer-stat-value">
+                            {historical.firstSale
+                              ? new Date(historical.firstSale).toLocaleDateString()
+                              : "—"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="shopify-drawer-stat-label">Last Sale</span>
+                          <span className="shopify-drawer-stat-value">
+                            {historical.lastSale
+                              ? new Date(historical.lastSale).toLocaleDateString()
+                              : "—"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {detail.collections.length > 0 ? (
                     <div className="shopify-drawer-block">

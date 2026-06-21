@@ -1,5 +1,23 @@
-import { shopifyGraphQL, type ShopifyGraphQLResponse } from "@/lib/shopify/client";
-import type { ShopifyKnowledge, ShopifyKnowledgeProduct } from "@/lib/shopify/types";
+import {
+  fetchShopifyTokenMetadata,
+  getShopifyAppAccessScopes,
+  shopifyGraphQL,
+  type ShopifyGraphQLResponse,
+} from "@/lib/shopify/client";
+import {
+  commerceHistoryProvider,
+  HISTORICAL_READ_ALL_ORDERS_WARNING,
+  type CommerceHistoricalStatus,
+} from "@/lib/shopify/commerce-history-provider";
+import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
+
+export type { CommerceHistoricalStatus } from "@/lib/shopify/commerce-history-provider";
+export {
+  commerceHistoryProvider,
+  HISTORICAL_READ_ALL_ORDERS_WARNING,
+  isCommerceHistoryActive,
+  formatHistoricalPlaceholder,
+} from "@/lib/shopify/commerce-history-provider";
 
 const RECENT_WINDOW_DAYS = 30;
 const PRIOR_WINDOW_DAYS = 30;
@@ -74,6 +92,20 @@ export interface CommerceIntelligenceSummary {
   historicalProductCount: number;
 }
 
+export interface CommerceIntelligenceDebug {
+  ordersCount: number;
+  lineItemsCount: number;
+  totalRevenue: number;
+  firstOrderDate: string | null;
+  lastOrderDate: string | null;
+  tokenScopes: string[];
+  appAccessScopes: string[];
+  hasReadOrders: boolean;
+  hasReadAllOrders: boolean;
+  ordersCountFromApi: number | null;
+  rawOrdersResponse?: unknown;
+}
+
 export interface CommerceIntelligence {
   summary: CommerceIntelligenceSummary;
   products: CommerceProductRecord[];
@@ -90,6 +122,16 @@ export interface CommerceIntelligence {
   highestRevenueProduct: CommerceProductRecord | null;
   mostSoldCategory: CommerceCategoryRecord | null;
   strongestCollection: CommerceCollectionRecord | null;
+  /** Temporary debug output for Shopify orders integration. */
+  debug?: CommerceIntelligenceDebug;
+  /** Load-time error surfaced in the Commerce Intelligence panel. */
+  loadError?: string | null;
+  /** Non-fatal warnings (e.g. missing read_all_orders scope). */
+  warnings?: string[];
+  /** Historical commerce mode — catalog-only when Shopify history unavailable. */
+  historical?: CommerceHistoricalStatus;
+  /** Parsed Shopify export intelligence when CSV import is active. */
+  import?: HistoricalIntelligence | null;
 }
 
 export interface CommerceOrderRollup {
@@ -146,6 +188,48 @@ interface OrdersPageData {
       };
     }>;
   };
+}
+
+const ORDERS_PROBE_QUERY = `
+  query ShopifyOrdersProbe {
+    ordersCount {
+      count
+      precision
+    }
+    orders(first: 50, sortKey: CREATED_AT, reverse: true) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        node {
+          id
+          createdAt
+          lineItems(first: 100) {
+            edges {
+              node {
+                quantity
+                originalTotalSet {
+                  shopMoney {
+                    amount
+                    currencyCode
+                  }
+                }
+                product {
+                  id
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+interface OrdersProbeData {
+  ordersCount: { count: number; precision: string };
+  orders: OrdersPageData["orders"];
 }
 
 const ORDERS_PAGE_QUERY = `
@@ -241,6 +325,147 @@ function normalizeCategory(productType: string, title: string): string {
   if (/cap|hat/.test(haystack)) return "Accessories";
   if (/sweatshirt|crewneck/.test(haystack)) return "Sweatshirts";
   return productType.trim() || "Uncategorized";
+}
+
+function summarizeOrdersProbe(
+  orders: OrdersPageData["orders"] | undefined,
+): Pick<
+  CommerceIntelligenceDebug,
+  "ordersCount" | "lineItemsCount" | "totalRevenue" | "firstOrderDate" | "lastOrderDate"
+> {
+  const edges = orders?.edges ?? [];
+  let lineItemsCount = 0;
+  let totalRevenue = 0;
+  let firstOrderDate: string | null = null;
+  let lastOrderDate: string | null = null;
+
+  for (const edge of edges) {
+    firstOrderDate = updateDateBounds(firstOrderDate, edge.node.createdAt, "min");
+    lastOrderDate = updateDateBounds(lastOrderDate, edge.node.createdAt, "max");
+
+    for (const lineEdge of edge.node.lineItems.edges) {
+      lineItemsCount += 1;
+      totalRevenue += parseAmount(lineEdge.node.originalTotalSet.shopMoney.amount);
+    }
+  }
+
+  return {
+    ordersCount: edges.length,
+    lineItemsCount,
+    totalRevenue: Math.round(totalRevenue * 100) / 100,
+    firstOrderDate,
+    lastOrderDate,
+  };
+}
+
+/** Probe Shopify orders access — logs orders(first: 50) and scope metadata. */
+export async function probeShopifyOrdersAccess(): Promise<CommerceIntelligenceDebug> {
+  const [tokenMetadata, appAccessScopes] = await Promise.all([
+    fetchShopifyTokenMetadata(),
+    getShopifyAppAccessScopes().catch(() => [] as string[]),
+  ]);
+
+  const tokenScopes = tokenMetadata.scopes;
+  const hasReadOrders =
+    tokenScopes.includes("read_orders") || appAccessScopes.includes("read_orders");
+  const hasReadAllOrders =
+    tokenScopes.includes("read_all_orders") ||
+    appAccessScopes.includes("read_all_orders");
+
+  console.log("[Commerce Intelligence] Token scopes:", tokenScopes.join(", ") || "(none)");
+  console.log("[Commerce Intelligence] App access scopes:", appAccessScopes.join(", ") || "(none)");
+  console.log("[Commerce Intelligence] read_orders:", hasReadOrders);
+  console.log("[Commerce Intelligence] read_all_orders:", hasReadAllOrders);
+
+  let rawOrdersResponse: ShopifyGraphQLResponse<OrdersProbeData> | null = null;
+  let probeError: string | null = null;
+
+  try {
+    rawOrdersResponse = await shopifyGraphQL<OrdersProbeData>(ORDERS_PROBE_QUERY);
+    console.log(
+      "[Commerce Intelligence] orders(first: 50) response:",
+      JSON.stringify(rawOrdersResponse, null, 2),
+    );
+  } catch (error) {
+    probeError =
+      error instanceof Error ? error.message : "Shopify orders probe failed";
+    console.error("[Commerce Intelligence] orders(first: 50) error:", probeError, error);
+  }
+
+  const summary = summarizeOrdersProbe(rawOrdersResponse?.data?.orders);
+  const ordersCountFromApi = rawOrdersResponse?.data?.ordersCount?.count ?? null;
+
+  console.log("[Commerce Intelligence] Probe summary:", {
+    ordersCount: summary.ordersCount,
+    lineItemsCount: summary.lineItemsCount,
+    totalRevenue: summary.totalRevenue,
+    firstOrderDate: summary.firstOrderDate,
+    lastOrderDate: summary.lastOrderDate,
+    ordersCountFromApi,
+  });
+
+  if (summary.ordersCount === 0 && rawOrdersResponse) {
+    console.log(
+      "[Commerce Intelligence] No orders returned — exact API response:",
+      JSON.stringify(rawOrdersResponse, null, 2),
+    );
+  }
+
+  if (probeError) {
+    return {
+      ...summary,
+      tokenScopes,
+      appAccessScopes,
+      hasReadOrders,
+      hasReadAllOrders,
+      ordersCountFromApi,
+      rawOrdersResponse: probeError,
+    };
+  }
+
+  return {
+    ...summary,
+    tokenScopes,
+    appAccessScopes,
+    hasReadOrders,
+    hasReadAllOrders,
+    ordersCountFromApi,
+    rawOrdersResponse: summary.ordersCount === 0 ? rawOrdersResponse : undefined,
+  };
+}
+
+function buildCommerceWarnings(
+  debug: CommerceIntelligenceDebug,
+  historical?: CommerceHistoricalStatus,
+): string[] {
+  const warnings: string[] = [];
+
+  if (historical?.warning) {
+    warnings.push(historical.warning);
+  }
+
+  if (!debug.hasReadOrders) {
+    warnings.push(
+      "Missing read_orders scope — add it to the NexHQ Shopify app and reinstall.",
+    );
+  }
+
+  if (
+    debug.hasReadOrders &&
+    !debug.hasReadAllOrders &&
+    debug.ordersCount === 0 &&
+    !historical?.warning
+  ) {
+    warnings.push(HISTORICAL_READ_ALL_ORDERS_WARNING);
+  }
+
+  if (debug.ordersCount === 0 && debug.ordersCountFromApi === 0 && debug.hasReadAllOrders) {
+    warnings.push(
+      "Shopify ordersCount is 0 — the store may have no orders accessible to this app, or sales may live on a different store domain.",
+    );
+  }
+
+  return [...new Set(warnings)];
 }
 
 /** Fetch complete Shopify order history and roll up line-item performance. */
@@ -358,9 +583,31 @@ export async function fetchCommerceOrderRollup(): Promise<CommerceOrderRollup> {
   };
 }
 
+/** Alias for buildCommerceIntelligence — verifies orders rollup is applied. */
+export function calculateCommerceIntelligence(
+  knowledge: ShopifyKnowledge,
+  rollup: CommerceOrderRollup,
+  options?: {
+    debug?: CommerceIntelligenceDebug;
+    loadError?: string | null;
+    warnings?: string[];
+    historical?: CommerceHistoricalStatus;
+    import?: HistoricalIntelligence | null;
+  },
+): CommerceIntelligence {
+  return buildCommerceIntelligence(knowledge, rollup, options);
+}
+
 export function buildCommerceIntelligence(
   knowledge: ShopifyKnowledge,
   rollup: CommerceOrderRollup,
+  options?: {
+    debug?: CommerceIntelligenceDebug;
+    loadError?: string | null;
+    warnings?: string[];
+    historical?: CommerceHistoricalStatus;
+    import?: HistoricalIntelligence | null;
+  },
 ): CommerceIntelligence {
   const catalogById = new Map(knowledge.products.map((p) => [p.id, p]));
   const activeIds = new Set(
@@ -526,35 +773,109 @@ export function buildCommerceIntelligence(
     highestRevenueProduct: topRevenue[0] ?? null,
     mostSoldCategory: topCategories[0] ?? null,
     strongestCollection: topCollections[0] ?? null,
+    debug: options?.debug,
+    loadError: options?.loadError ?? null,
+    warnings: options?.warnings,
+    historical: options?.historical,
+    import: options?.import ?? null,
   };
 }
 
 export async function fetchCommerceIntelligence(
   knowledge: ShopifyKnowledge,
 ): Promise<CommerceIntelligence> {
-  const rollup = await fetchCommerceOrderRollup();
-  return buildCommerceIntelligence(knowledge, rollup);
+  const resolution = await commerceHistoryProvider.resolve(knowledge);
+  const debug = resolution.debug ?? (await probeShopifyOrdersAccess());
+  const { rollup, status } = await commerceHistoryProvider.loadRollup(
+    knowledge,
+    resolution,
+  );
+  const warnings = buildCommerceWarnings(debug, status);
+
+  return calculateCommerceIntelligence(knowledge, rollup, {
+    debug,
+    warnings,
+    historical: status,
+  });
 }
 
 export async function loadCommerceIntelligenceSafe(
   knowledge: ShopifyKnowledge,
 ): Promise<CommerceIntelligence> {
+  const currency = knowledge.products[0]?.currency ?? "EUR";
+  const emptyRollup: CommerceOrderRollup = {
+    productAggregates: new Map(),
+    orderCount: 0,
+    totalRevenue: 0,
+    totalUnits: 0,
+    currency,
+    firstOrderDate: null,
+    lastOrderDate: null,
+    monthlyOrders: new Map(),
+  };
+
   try {
-    return await fetchCommerceIntelligence(knowledge);
-  } catch (error) {
-    console.warn(
-      "[Commerce Intelligence] Failed to load order history",
-      error instanceof Error ? error.message : error,
+    const resolution = await commerceHistoryProvider.resolve(knowledge);
+    const debug = resolution.debug;
+
+    let historicalImport: HistoricalIntelligence | null = null;
+    if (resolution.status.source === "csv-import") {
+      const { loadHistoricalIntelligence } = await import(
+        "@/lib/commerce/historical-intelligence"
+      );
+      historicalImport = await loadHistoricalIntelligence(knowledge);
+    }
+
+    if (!resolution.shouldLoadOrders) {
+      const warnings = debug
+        ? buildCommerceWarnings(debug, resolution.status)
+        : resolution.status.warning
+          ? [resolution.status.warning]
+          : [];
+
+      return calculateCommerceIntelligence(knowledge, emptyRollup, {
+        debug,
+        warnings,
+        historical: resolution.status,
+        import: historicalImport,
+      });
+    }
+
+    const { rollup, status } = await commerceHistoryProvider.loadRollup(
+      knowledge,
+      resolution,
     );
-    return buildCommerceIntelligence(knowledge, {
-      productAggregates: new Map(),
-      orderCount: 0,
-      totalRevenue: 0,
-      totalUnits: 0,
-      currency: knowledge.products[0]?.currency ?? "EUR",
-      firstOrderDate: null,
-      lastOrderDate: null,
-      monthlyOrders: new Map(),
+    const warnings = debug
+      ? buildCommerceWarnings(debug, status)
+      : status.warning
+        ? [status.warning]
+        : [];
+
+    return calculateCommerceIntelligence(knowledge, rollup, {
+      debug,
+      warnings,
+      historical: status,
+      import: historicalImport,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to load order history";
+    console.warn("[Commerce Intelligence] Failed to load order history", message, error);
+
+    return calculateCommerceIntelligence(knowledge, emptyRollup, {
+      loadError: message,
+      warnings: [HISTORICAL_READ_ALL_ORDERS_WARNING],
+      historical: {
+        mode: "catalog-only",
+        available: false,
+        source: null,
+        warning: message,
+        placeholders: {
+          historicalRevenue: "unavailable",
+          historicalUnits: "unavailable",
+          historicalBestseller: "unavailable",
+        },
+      },
     });
   }
 }

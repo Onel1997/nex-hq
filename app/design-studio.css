@@ -626,6 +626,111 @@
   color: #eaf2ff;
 }
 
+.design-studio-commerce-diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgb(248 113 113 / 0.25);
+  background: rgb(40 10 10 / 0.35);
+}
+
+.design-studio-commerce-historical-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.design-studio-commerce-mode-label {
+  margin: 0;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fde68a;
+}
+
+.design-studio-commerce-mode-note {
+  margin: 0;
+  font-size: 0.62rem;
+  line-height: 1.45;
+  color: #94a3b8;
+}
+
+.design-studio-commerce-summary-historical {
+  margin-bottom: 0;
+}
+
+.design-studio-commerce-stat-unavailable {
+  color: #94a3b8 !important;
+  font-style: italic;
+  font-weight: 500 !important;
+}
+
+.design-studio-commerce-error {
+  margin: 0;
+  font-size: 0.68rem;
+  color: #fecaca;
+}
+
+.design-studio-commerce-warning {
+  margin: 0;
+  font-size: 0.65rem;
+  line-height: 1.45;
+  color: #fde68a;
+}
+
+.design-studio-commerce-debug {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem 0.65rem;
+  margin: 0;
+}
+
+.design-studio-commerce-debug div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+}
+
+.design-studio-commerce-debug dt {
+  font-size: 0.52rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+
+.design-studio-commerce-debug dd {
+  margin: 0;
+  font-size: 0.62rem;
+  color: #e2e8f0;
+  word-break: break-word;
+}
+
+.design-studio-commerce-raw {
+  font-size: 0.62rem;
+  color: #cbd5e1;
+}
+
+.design-studio-commerce-raw summary {
+  cursor: pointer;
+  color: #67e8f9;
+}
+
+.design-studio-commerce-raw pre {
+  margin: 0.45rem 0 0;
+  max-height: 12rem;
+  overflow: auto;
+  padding: 0.45rem;
+  border-radius: 0.35rem;
+  background: rgb(2 6 12 / 0.85);
+  font-size: 0.58rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .design-studio-intel-primary {
   font-size: 0.62rem;
   font-weight: 700;

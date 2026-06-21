@@ -10,6 +10,7 @@ import {
 import { buildPromptContext } from "@/brain/context/prompt-builder";
 import { loadBusinessProfile } from "@/lib/business/load-profile";
 import { loadShopifyAgentContext } from "@/lib/shopify/agent-context";
+import { loadHistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
 import type { ProductKnowledge } from "@/lib/shopify/types";
 import { estimateTokens } from "@/brain/client/utils";
 import type { BrainRecord } from "@/brain/types";
@@ -173,13 +174,15 @@ export async function retrieveCeoKnowledge(input: {
     throw new CeoKnowledgeError(dict.ceo.errors.noKnowledge);
   }
 
-  const { productKnowledge: shopifyKnowledge } = await loadShopifyAgentContext();
+  const { knowledge, productKnowledge: shopifyKnowledge } = await loadShopifyAgentContext();
+  const historicalIntelligence = await loadHistoricalIntelligence(knowledge);
   const businessProfile = await loadBusinessProfile(input.workspaceId);
   const promptContext = buildPromptContext(
     slices,
     locale,
     shopifyKnowledge,
     businessProfile,
+    historicalIntelligence,
   );
   const reportTitles = extractReportTitles(slices);
 

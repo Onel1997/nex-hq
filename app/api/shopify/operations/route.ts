@@ -9,6 +9,7 @@ import { fetchShopifyKnowledge } from "@/lib/shopify/knowledge";
 import { buildProductKnowledge } from "@/lib/shopify/product-knowledge";
 import { loadBusinessContext } from "@/lib/business/load-business-context";
 import { buildMarketPrintIntelligence } from "@/lib/marketprint";
+import { loadHistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
 import {
   buildActivityFeed,
   buildCommerceInsights,
@@ -61,10 +62,11 @@ async function countAgentReports() {
 
 export async function GET() {
   try {
-    const [knowledge, reportCounts, businessContext] = await Promise.all([
-      fetchShopifyKnowledge(),
+    const knowledge = await fetchShopifyKnowledge();
+    const [reportCounts, businessContext, historicalIntelligence] = await Promise.all([
       countAgentReports(),
       loadBusinessContext(""),
+      loadHistoricalIntelligence(knowledge),
     ]);
 
     const { profile: businessProfile, operationsMeta } = businessContext;
@@ -75,6 +77,7 @@ export async function GET() {
       knowledge,
       productKnowledge,
       businessProfile,
+      historicalIntelligence,
     );
     const activity = buildActivityFeed(knowledge, insights);
     const agentConnections = buildGlobalAgentConnections(reportCounts);
@@ -92,6 +95,7 @@ export async function GET() {
       reportCounts,
       businessMeta: operationsMeta,
       marketPrintIntelligence,
+      historicalIntelligence,
     });
   } catch (error) {
     const message =

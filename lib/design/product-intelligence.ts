@@ -3,8 +3,13 @@ import type {
   ProductPerformanceMetrics,
   ShopifyPerformanceIntelligence,
 } from "@/lib/shopify/performance";
-import type { CommerceIntelligence, CommerceProductRecord } from "@/lib/shopify/commerce-intelligence";
-import type { ShopifyKnowledgeProduct } from "@/lib/shopify/types";
+import {
+  isCommerceHistoryActive,
+  type CommerceIntelligence,
+  type CommerceProductRecord,
+} from "@/lib/shopify/commerce-intelligence";
+import type { HistoricalProductPerformance } from "@/lib/commerce/product-performance";
+import { matchHistoricalProduct } from "@/lib/commerce/product-performance";
 
 export type EmbroideryPotential = "High" | "Medium" | "Low" | "None";
 export type CollectionPotential =
@@ -65,6 +70,7 @@ export interface ProductIntelligence {
   launchPotential: number;
   performance: ProductPerformanceMetrics | null;
   commerce: CommerceProductRecord | null;
+  historical: HistoricalProductPerformance | null;
   badges: ProductIntelligenceBadge[];
   scoreTier: ScoreTier;
 }
@@ -310,7 +316,11 @@ function computeHeroProductScore(
 function computeSalesScore(
   performance: ProductPerformanceMetrics | null,
   commerce: CommerceProductRecord | null,
+  historical: HistoricalProductPerformance | null,
 ): number {
+  if (historical && historical.unitsSold > 0) {
+    return historical.historicalScore;
+  }
   if (commerce && commerce.unitsSold > 0) {
     return commerce.commerceScore;
   }
@@ -348,7 +358,10 @@ function deriveBadges(
     }
   }
 
-  if (intel.commerce && intel.commerce.unitsSold > 0) {
+  if (intel.historical && intel.historical.unitsSold > 0) {
+    if (intel.historical.bestsellerRank <= 5) badges.push("BESTSELLER");
+    if (intel.historical.orderCount >= 2) badges.push("HIGH CONVERSION");
+  } else if (intel.commerce && intel.commerce.unitsSold > 0) {
     if (intel.commerce.unitsRank <= 5) badges.push("BESTSELLER");
     if (intel.commerce.repeatPurchase) badges.push("HIGH CONVERSION");
   } else if (perf) {
@@ -370,6 +383,7 @@ export function analyzeProductIntelligence(
   input: ProductIntelligenceInput,
   performance?: ProductPerformanceMetrics | null,
   commerce?: CommerceProductRecord | null,
+  historical?: HistoricalProductPerformance | null,
 ): ProductIntelligence {
   const text = haystack(input);
   const match = matchProductToMarketPrint({
@@ -399,9 +413,15 @@ export function analyzeProductIntelligence(
   const trendFit = computeTrendFit(text);
   const collectionPotential = computeCollectionPotential(text, capsuleFit);
   const designFitScore = computeDesignFitScore(streetwearScore, premiumScore);
-  const salesScore = computeSalesScore(performance ?? null, commerce ?? null);
+  const salesScore = computeSalesScore(
+    performance ?? null,
+    commerce ?? null,
+    historical ?? null,
+  );
   const hasCommerceSignal = Boolean(
-    (commerce && commerce.unitsSold > 0) || (performance && performance.unitsSold > 0),
+    (historical && historical.unitsSold > 0) ||
+      (commerce && commerce.unitsSold > 0) ||
+      (performance && performance.unitsSold > 0),
   );
   const heroProductScore = hasCommerceSignal
     ? computeHeroProductScore(
@@ -419,7 +439,8 @@ export function analyzeProductIntelligence(
 
   const compositeScore = heroProductScore;
   const heroPotential = computeHeroPotential(heroProductScore);
-  const productRank = commerce?.unitsRank ?? performance?.salesRank ?? 0;
+  const productRank =
+    historical?.bestsellerRank ?? commerce?.unitsRank ?? performance?.salesRank ?? 0;
   const launchPotential =
     performance?.launchPotential ??
     Math.round(campaignScore * 0.5 + designFitScore * 0.3 + match.suitability * 0.2);
@@ -446,6 +467,7 @@ export function analyzeProductIntelligence(
     launchPotential,
     performance: performance ?? null,
     commerce: commerce ?? null,
+    historical: historical ?? null,
   };
 
   return {
@@ -475,14 +497,27 @@ export function buildDesignIntelligenceDashboard(
   products: ShopifyKnowledgeProduct[],
   performanceIntelligence?: ShopifyPerformanceIntelligence,
   commerceIntelligence?: CommerceIntelligence,
+  historicalProducts?: HistoricalProductPerformance[],
 ): DesignIntelligenceDashboard {
-  const scoredProducts = products.map((p) =>
-    analyzeProductIntelligence(
+  const historyActive =
+    isCommerceHistoryActive(commerceIntelligence?.historical) ||
+    Boolean(historicalProducts && historicalProducts.length > 0) ||
+    Boolean(commerceIntelligence?.import?.products.length);
+
+  const scoredProducts = products.map((p) => {
+    const historical =
+      commerceIntelligence?.import?.byCatalogProductId[p.id] ??
+      (historicalProducts
+        ? matchHistoricalProduct(p.title, historicalProducts)
+        : null);
+
+    return analyzeProductIntelligence(
       toInput(p),
       performanceIntelligence?.byProductId[p.id] ?? null,
       commerceIntelligence?.byProductId[p.id] ?? null,
-    ),
-  );
+      historical,
+    );
+  });
 
   const byHeroScore = (a: ProductIntelligence, b: ProductIntelligence) =>
     b.heroProductScore - a.heroProductScore;
@@ -502,16 +537,31 @@ export function buildDesignIntelligenceDashboard(
       .map((record) => byProductId.get(record.productId))
       .filter((p): p is ProductIntelligence => Boolean(p));
 
-  const topHeroProducts = commerceIntelligence
-    ? pickCommerceLeaders(commerceIntelligence.heroProducts).slice(0, 5)
-    : [...scoredProducts]
-        .filter((p) => p.heroPotential === "High" || p.badges.includes("HERO PRODUCT"))
-        .sort(byHeroScore)
-        .slice(0, 5);
+  const pickHistoricalLeaders = (
+    records: HistoricalProductPerformance[],
+  ): ProductIntelligence[] =>
+    records
+      .map((record) =>
+        scoredProducts.find((p) => p.historical?.productKey === record.productKey),
+      )
+      .filter((p): p is ProductIntelligence => Boolean(p));
 
-  const topProducts = commerceIntelligence
-    ? pickCommerceLeaders(commerceIntelligence.topProducts).slice(0, 5)
-    : [...scoredProducts].sort(byHeroScore).slice(0, 5);
+  const topHeroProducts =
+    historyActive && commerceIntelligence?.import
+      ? pickHistoricalLeaders(commerceIntelligence.import.topProducts).slice(0, 5)
+      : historyActive && commerceIntelligence
+        ? pickCommerceLeaders(commerceIntelligence.heroProducts).slice(0, 5)
+        : [...scoredProducts]
+            .filter((p) => p.heroPotential === "High" || p.badges.includes("HERO PRODUCT"))
+            .sort(byHeroScore)
+            .slice(0, 5);
+
+  const topProducts =
+    historyActive && commerceIntelligence?.import
+      ? pickHistoricalLeaders(commerceIntelligence.import.topProducts).slice(0, 5)
+      : historyActive && commerceIntelligence
+        ? pickCommerceLeaders(commerceIntelligence.topProducts).slice(0, 5)
+        : [...scoredProducts].sort(byHeroScore).slice(0, 5);
 
   const mostPremiumProducts = [...scoredProducts]
     .sort((a, b) => b.premiumScore - a.premiumScore)
@@ -532,33 +582,49 @@ export function buildDesignIntelligenceDashboard(
     })
     .slice(0, 5);
 
-  const collectionLeaders = commerceIntelligence
-    ? pickCommerceLeaders(commerceIntelligence.heroProducts).slice(0, 5)
-    : [...scoredProducts]
-        .filter((p) => p.heroProductScore >= 75)
-        .sort(byHeroScore)
-        .slice(0, 5);
+  const collectionLeaders =
+    historyActive && commerceIntelligence
+      ? pickCommerceLeaders(commerceIntelligence.heroProducts).slice(0, 5)
+      : [...scoredProducts]
+          .filter((p) => p.heroProductScore >= 75)
+          .sort(byHeroScore)
+          .slice(0, 5);
 
   const topProductsResolved = topProducts;
 
-  const topSellers = commerceIntelligence
-    ? pickCommerceLeaders(commerceIntelligence.topUnits)
-    : performanceIntelligence
-      ? pickPerformanceLeaders(performanceIntelligence.topSellers)
-      : [...scoredProducts]
-          .filter((p) => (p.commerce?.unitsSold ?? p.performance?.unitsSold ?? 0) > 0)
+  const topSellers =
+    historyActive && commerceIntelligence?.import
+      ? [...scoredProducts]
+          .filter((p) => (p.historical?.unitsSold ?? 0) > 0)
           .sort(
             (a, b) =>
-              (b.commerce?.unitsSold ?? b.performance?.unitsSold ?? 0) -
-              (a.commerce?.unitsSold ?? a.performance?.unitsSold ?? 0),
+              (b.historical?.unitsSold ?? 0) - (a.historical?.unitsSold ?? 0),
           )
-          .slice(0, 5);
+          .slice(0, 5)
+      : historyActive && commerceIntelligence
+        ? pickCommerceLeaders(commerceIntelligence.topUnits)
+        : performanceIntelligence
+          ? pickPerformanceLeaders(performanceIntelligence.topSellers)
+          : [...scoredProducts]
+              .filter((p) => (p.commerce?.unitsSold ?? p.performance?.unitsSold ?? 0) > 0)
+              .sort(
+                (a, b) =>
+                  (b.commerce?.unitsSold ?? b.performance?.unitsSold ?? 0) -
+                  (a.commerce?.unitsSold ?? a.performance?.unitsSold ?? 0),
+              )
+              .slice(0, 5);
 
-  const mostRevenue = commerceIntelligence
-    ? pickCommerceLeaders(commerceIntelligence.topRevenue)
-    : performanceIntelligence
-      ? pickPerformanceLeaders(performanceIntelligence.mostRevenue)
-      : topSellers;
+  const mostRevenue =
+    historyActive && commerceIntelligence?.import
+      ? [...scoredProducts]
+          .filter((p) => (p.historical?.revenue ?? 0) > 0)
+          .sort((a, b) => (b.historical?.revenue ?? 0) - (a.historical?.revenue ?? 0))
+          .slice(0, 5)
+      : historyActive && commerceIntelligence
+        ? pickCommerceLeaders(commerceIntelligence.topRevenue)
+        : performanceIntelligence
+          ? pickPerformanceLeaders(performanceIntelligence.mostRevenue)
+          : topSellers;
 
   const fastestGrowing = performanceIntelligence
     ? pickPerformanceLeaders(performanceIntelligence.fastestGrowing)
@@ -592,12 +658,15 @@ export function buildDesignIntelligenceDashboard(
     highestPotential,
     scoredProducts: [...scoredProducts].sort(byHeroScore),
     hasLivePerformance: Boolean(
-      commerceIntelligence?.summary.productsWithSales ||
+      (historyActive && commerceIntelligence?.summary.productsWithSales) ||
         (performanceIntelligence && performanceIntelligence.summary.productsWithSales > 0),
     ),
-    hasCommerceHistory: Boolean(
-      commerceIntelligence && commerceIntelligence.summary.totalOrders > 0,
-    ),
+    hasCommerceHistory:
+      historyActive &&
+      Boolean(
+        commerceIntelligence?.summary.totalOrders ||
+          commerceIntelligence?.import?.summary.totalOrders,
+      ),
   };
 }
 
@@ -644,8 +713,16 @@ export function scoreCollectionOpportunities(
   commerceIntelligence?: CommerceIntelligence,
 ): CollectionOpportunityScore[] {
   const catalogText = products.map((p) => normalize(p.title + " " + p.category)).join(" ");
+  const historyActive =
+    isCommerceHistoryActive(commerceIntelligence?.historical) ||
+    Boolean(commerceIntelligence?.import?.products.length);
+  const categoryRows = historyActive
+    ? commerceIntelligence?.import?.topCategories ??
+      commerceIntelligence?.topCategories ??
+      []
+    : [];
   const categorySales = new Map(
-    (commerceIntelligence?.topCategories ?? []).map((c) => [normalize(c.category), c.unitsSold]),
+    categoryRows.map((c) => [normalize(c.category), c.unitsSold]),
   );
   const avgSalesScore =
     products.length > 0

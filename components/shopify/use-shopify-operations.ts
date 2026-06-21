@@ -1,6 +1,7 @@
 "use client";
 
 import type { MarketPrintIntelligence } from "@/lib/marketprint";
+import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
 import type {
   AgentConnectionStatus,
   CommerceActivityEvent,
@@ -24,6 +25,7 @@ export interface ShopifyOperationsData {
     fulfillment: string;
   };
   marketPrintIntelligence: MarketPrintIntelligence;
+  historicalIntelligence: HistoricalIntelligence | null;
 }
 
 interface OperationsResponse {
@@ -42,6 +44,7 @@ interface OperationsResponse {
     fulfillment: string;
   };
   marketPrintIntelligence?: MarketPrintIntelligence;
+  historicalIntelligence?: HistoricalIntelligence | null;
 }
 
 export function useShopifyOperations() {
@@ -81,6 +84,7 @@ export function useShopifyOperations() {
           fulfillment: "Supplier Managed",
         },
         marketPrintIntelligence: body.marketPrintIntelligence,
+        historicalIntelligence: body.historicalIntelligence ?? null,
       });
     } catch (err) {
       setData(null);

@@ -6,7 +6,8 @@ import {
 import { fetchShopifyProductDetail } from "@/lib/shopify/fetch-product-detail";
 import { fetchShopifyKnowledge } from "@/lib/shopify/knowledge";
 import { buildProductKnowledge } from "@/lib/shopify/product-knowledge";
-import { buildProductAgentInsights } from "@/lib/shopify/operations";
+import { loadHistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
+import { matchHistoricalProduct } from "@/lib/commerce/product-performance";
 import { loadBusinessProfile } from "@/lib/business/load-profile";
 import { getBrainClient } from "@/brain/client";
 import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
@@ -64,7 +65,15 @@ export async function GET(
     }
 
     const productKnowledge = buildProductKnowledge(knowledge);
+    const historicalIntelligence = await loadHistoricalIntelligence(knowledge);
     const knowledgeProduct = knowledge.products.find((p) => p.id === decodedId);
+
+    const historicalPerformance = knowledgeProduct
+      ? matchHistoricalProduct(
+          knowledgeProduct.title,
+          historicalIntelligence?.products ?? [],
+        )
+      : null;
 
     const agentInsights = knowledgeProduct
       ? buildProductAgentInsights(
@@ -72,6 +81,7 @@ export async function GET(
           reportCounts,
           productKnowledge,
           businessProfile,
+          historicalIntelligence,
         )
       : null;
 
@@ -80,6 +90,7 @@ export async function GET(
       storeDomain: getStoreDomain(),
       product: detail,
       agentInsights,
+      historicalPerformance,
     });
   } catch (error) {
     const message =

@@ -16,11 +16,8 @@ import {
   SUPPLIER_STATUS_LABELS,
   type SupplierAvailabilityStatus,
 } from "@/lib/business/supplier-intelligence";
-import {
-  buildMarketPrintIntelligence,
-  formatSuitabilityLabel,
-  matchProductToMarketPrint,
-} from "@/lib/marketprint";
+import type { HistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
+import { matchHistoricalProduct } from "@/lib/commerce/product-performance";
 
 const SUPPLIER_STATUS_THRESHOLD = 5;
 
@@ -144,11 +141,41 @@ export function buildCommerceInsights(
   knowledge: ShopifyKnowledge,
   productKnowledge: ProductKnowledge,
   businessProfile: BusinessProfile = MILAENE_PROFILE,
+  historicalIntelligence?: HistoricalIntelligence | null,
 ): CommerceInsight[] {
   const insights: CommerceInsight[] = [];
   const pod = isPrintOnDemand(businessProfile);
   let id = 0;
   const nextId = () => `insight-${++id}`;
+
+  if (historicalIntelligence && historicalIntelligence.summary.totalOrders > 0) {
+    for (const product of historicalIntelligence.topProducts.slice(0, 5)) {
+      insights.push({
+        id: nextId(),
+        kind: "bestseller",
+        message: `${product.title} — ${product.unitsSold} historical units · score ${product.historicalScore} · rank #${product.bestsellerRank}.`,
+        priority: "high",
+      });
+    }
+
+    for (const category of historicalIntelligence.topCategories.slice(0, 3)) {
+      insights.push({
+        id: nextId(),
+        kind: "ceo",
+        message: `Historical category leader: ${category.category} (${category.unitsSold} units). Anchor future collections here.`,
+        priority: "high",
+      });
+    }
+
+    if (historicalIntelligence.allTimeBestseller) {
+      insights.push({
+        id: nextId(),
+        kind: "ceo",
+        message: `All-time bestseller: ${historicalIntelligence.allTimeBestseller.title} — build the next drop around this SKU.`,
+        priority: "high",
+      });
+    }
+  }
 
   for (const gap of productKnowledge.categoryGaps.slice(0, 4)) {
     insights.push({
@@ -160,6 +187,12 @@ export function buildCommerceInsights(
   }
 
   for (const candidate of productKnowledge.bestsellerCandidates.slice(0, 3)) {
+    if (
+      historicalIntelligence &&
+      matchHistoricalProduct(candidate.title, historicalIntelligence.products)
+    ) {
+      continue;
+    }
     insights.push({
       id: nextId(),
       kind: "bestseller",
@@ -383,6 +416,7 @@ export function buildProductAgentInsights(
   },
   productKnowledge: ProductKnowledge,
   businessProfile: BusinessProfile = MILAENE_PROFILE,
+  historicalIntelligence?: HistoricalIntelligence | null,
 ): ProductAgentInsights {
   const connections = buildGlobalAgentConnections(reportCounts);
   const pod = isPrintOnDemand(businessProfile);
@@ -470,7 +504,18 @@ export function buildProductAgentInsights(
   const isBestseller = productKnowledge.bestsellerCandidates.some(
     (c) => c.id === product.id,
   );
-  if (isBestseller) {
+  const historical = historicalIntelligence
+    ? matchHistoricalProduct(product.title, historicalIntelligence.products)
+    : null;
+
+  if (historical) {
+    ceo.push(
+      `Historical bestseller — ${historical.unitsSold} units · ${historical.revenue.toFixed(2)} EUR · rank #${historical.bestsellerRank}.`,
+    );
+    ceo.push(
+      `First sale ${historical.firstSale ?? "—"} · last sale ${historical.lastSale ?? "—"} · ${historical.orderCount} orders.`,
+    );
+  } else if (isBestseller) {
     ceo.push(
       "Bestseller candidate — prioritize visibility and MarketPrint production readiness.",
     );
