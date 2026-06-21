@@ -9,6 +9,7 @@ export const FACILITY_ROUTES = {
   reports: "/facility/reports",
   knowledge: "/facility/knowledge",
   brain: "/facility/brain",
+  analytics: "/facility/analytics",
   settings: "/settings",
 } as const;
 
@@ -37,7 +38,7 @@ export const FACILITY_WINGS: FacilityWingDefinition[] = [
   { id: "reports", label: "Reports Center", href: FACILITY_ROUTES.reports },
   { id: "knowledge", label: "Knowledge Vault", href: FACILITY_ROUTES.knowledge },
   { id: "brain-core", label: "Brain Core", href: FACILITY_ROUTES.brain },
-  { id: "analytics", label: "Analytics Chamber", href: null, comingSoon: true },
+  { id: "analytics", label: "Analytics Chamber", href: FACILITY_ROUTES.analytics },
 ];
 
 export function getFacilityWingFromPath(pathname: string): FacilityWingId | null {
@@ -46,6 +47,7 @@ export function getFacilityWingFromPath(pathname: string): FacilityWingId | null
   if (pathname.startsWith(FACILITY_ROUTES.reports)) return "reports";
   if (pathname.startsWith(FACILITY_ROUTES.knowledge)) return "knowledge";
   if (pathname.startsWith(FACILITY_ROUTES.brain)) return "brain-core";
+  if (pathname.startsWith(FACILITY_ROUTES.analytics)) return "analytics";
   return null;
 }
 

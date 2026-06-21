@@ -13,6 +13,7 @@ import "./mission-control.css";
 import "./knowledge-vault.css";
 import "./reports-center.css";
 import "./brain-core.css";
+import "./analytics-chamber.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 

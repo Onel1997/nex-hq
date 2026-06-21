@@ -33,11 +33,12 @@ const NODE_LAYOUT: Array<{ id: AgentId | "commerce"; label: string; angle: numbe
 ];
 
 const KNOWLEDGE_STREAM_DEFS: Array<Omit<BrainCoreKnowledgeStream, "active" | "signalCount">> = [
+  { id: "stream-ceo-design", from: "CEO Command", to: "Design Studio" },
   { id: "stream-research-commerce", from: "Research HQ", to: "Commerce Lab" },
-  { id: "stream-commerce-ceo", from: "Commerce Lab", to: "CEO Command" },
-  { id: "stream-research-design", from: "Research HQ", to: "Design Studio" },
-  { id: "stream-design-marketing", from: "Design Studio", to: "Marketing Center" },
+  { id: "stream-shopify-commerce", from: "Shopify Operations", to: "Commerce Lab" },
+  { id: "stream-commerce-marketing", from: "Commerce Lab", to: "Marketing Center" },
   { id: "stream-marketing-ceo", from: "Marketing Center", to: "CEO Command" },
+  { id: "stream-command-ring", from: "CEO Command", to: "Shopify Operations" },
 ];
 
 function mapOpsToNodeStatus(state: LabOpsState): BrainCoreNodeStatus {
@@ -427,25 +428,31 @@ function buildKnowledgeStreams(
   const ceoActive = snapshot.labs.ceo.opsState !== "idle";
 
   const streamActivity: Record<string, { active: boolean; count: number }> = {
+    "stream-ceo-design": {
+      active: ceoActive || hasDesign,
+      count: reports.filter((r) => r.category === "design").length + (ceoActive ? 1 : 0),
+    },
     "stream-research-commerce": {
       active: hasResearch && (hasCommerce || snapshot.labs.shopify.opsState !== "idle"),
       count: reports.filter((r) => r.category === "research").length,
     },
-    "stream-commerce-ceo": {
-      active: hasCommerce || ceoActive,
+    "stream-shopify-commerce": {
+      active: hasCommerce || snapshot.labs.shopify.opsState !== "idle",
       count: Math.max(1, snapshot.brain.knowledge.reports),
     },
-    "stream-research-design": {
-      active: hasResearch && (hasDesign || snapshot.labs.designer.opsState !== "idle"),
-      count: reports.filter((r) => r.category === "research" || r.category === "design").length,
-    },
-    "stream-design-marketing": {
-      active: hasDesign && (hasMarketing || snapshot.labs.marketing.opsState !== "idle"),
-      count: reports.filter((r) => r.category === "design" || r.category === "marketing").length,
+    "stream-commerce-marketing": {
+      active: hasCommerce && (hasMarketing || snapshot.labs.marketing.opsState !== "idle"),
+      count: reports.filter((r) => r.category === "commerce" || r.category === "marketing").length,
     },
     "stream-marketing-ceo": {
       active: hasMarketing || ceoActive,
       count: reports.filter((r) => r.category === "marketing").length + (ceoActive ? 1 : 0),
+    },
+    "stream-command-ring": {
+      active:
+        ceoActive ||
+        buildNodes(snapshot).some((n) => n.status !== "idle"),
+      count: snapshot.events.length + 1,
     },
   };
 

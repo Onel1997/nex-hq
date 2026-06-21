@@ -24,6 +24,16 @@
   --bc-core-scale: 1.5;
 }
 
+.bc-v3 {
+  --bc-core-scale: 1.5;
+}
+
+.bc-v3 .bc-neural-stage {
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 48%, rgb(56 189 248 / 0.06), transparent 65%),
+    radial-gradient(circle at 50% 50%, rgb(2 6 12 / 0.4), rgb(1 2 4 / 0.85));
+}
+
 .bc-scanlines {
   pointer-events: none;
   position: fixed;
@@ -373,6 +383,55 @@
   animation: bc-glow-pulse 3.5s ease-in-out infinite;
 }
 
+.bc-neural-v3 .bc-neural-glow {
+  inset: 8%;
+  animation: bc-glow-pulse 4.2s ease-in-out infinite;
+}
+
+.bc-neural-v3 .bc-neural-glow-outer {
+  inset: -8%;
+  background: radial-gradient(
+    circle,
+    rgb(56 189 248 / 0.08),
+    rgb(6 182 212 / 0.02) 55%,
+    transparent 78%
+  );
+}
+
+/* Starfield depth */
+
+.bc-starfield {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.bc-star {
+  position: absolute;
+  left: var(--bc-s-x);
+  top: var(--bc-s-y);
+  width: var(--bc-s-s);
+  height: var(--bc-s-s);
+  border-radius: 50%;
+  background: rgb(224 242 254 / var(--bc-s-o, 0.4));
+  box-shadow: 0 0 4px rgb(56 189 248 / 0.25);
+  animation: bc-star-twinkle var(--bc-s-d) ease-in-out infinite;
+}
+
+@keyframes bc-star-twinkle {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
 .bc-neural-glow-outer {
   position: absolute;
   border-radius: 50%;
@@ -447,6 +506,7 @@
   inset: 0;
   width: 100%;
   height: 100%;
+  z-index: 1;
 }
 
 .bc-energy-line {
@@ -464,6 +524,173 @@
   animation: bc-line-flow 6s linear infinite;
   animation-delay: var(--bc-line-delay, 0s);
   filter: drop-shadow(0 0 6px rgb(56 189 248 / 0.6));
+}
+
+/* Neural link layers — command / intelligence / feedback */
+
+.bc-neural-link {
+  stroke-linecap: round;
+  animation: bc-link-pulse 4.5s ease-in-out infinite;
+  animation-delay: var(--bc-link-delay, 0s);
+}
+
+.bc-neural-link-command {
+  stroke: rgb(255 255 255 / 0.28);
+  stroke-width: 1.5;
+  stroke-dasharray: 8 7;
+  animation:
+    bc-link-pulse 5.5s ease-in-out infinite,
+    bc-command-flow 22s linear infinite;
+  animation-delay: var(--bc-link-delay, 0s), var(--bc-link-delay, 0s);
+}
+
+.bc-command-ring-path {
+  stroke: rgb(255 255 255 / 0.38);
+  stroke-width: 1.75;
+  stroke-dasharray: 10 8;
+  animation:
+    bc-link-pulse 6s ease-in-out infinite,
+    bc-ring-flow 48s linear infinite;
+  animation-delay: var(--bc-link-delay, 0s), 0s;
+}
+
+.bc-neural-link-command.bc-neural-link-active,
+.bc-command-ring-path.bc-neural-link-active {
+  stroke: rgb(255 255 255 / 0.58);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 5px rgb(255 255 255 / 0.12));
+}
+
+@keyframes bc-ring-flow {
+  to {
+    stroke-dashoffset: -360;
+  }
+}
+
+.bc-neural-link-intelligence {
+  stroke: rgb(56 189 248 / 0.22);
+  stroke-width: 1.75;
+  stroke-dasharray: none;
+}
+
+.bc-neural-link-intelligence.bc-neural-link-active {
+  stroke: url(#bc-intel-gradient);
+  stroke-width: 2.25;
+  filter: drop-shadow(0 0 10px rgb(56 189 248 / 0.55));
+  animation:
+    bc-link-pulse 4.2s ease-in-out infinite,
+    bc-intel-glow 7s ease-in-out infinite;
+  animation-delay: var(--bc-link-delay, 0s), var(--bc-link-delay, 0s);
+}
+
+.bc-neural-link-feedback {
+  stroke: rgb(167 139 250 / 0.18);
+  stroke-width: 1.25;
+  stroke-dasharray: 4 10;
+}
+
+.bc-neural-link-feedback.bc-neural-link-active {
+  stroke: url(#bc-feedback-gradient);
+  stroke-width: 2;
+  stroke-dasharray: 6 10;
+  filter: drop-shadow(0 0 8px rgb(167 139 250 / 0.5));
+  animation:
+    bc-link-pulse 5.5s ease-in-out infinite,
+    bc-feedback-flow 24s linear infinite;
+  animation-delay: var(--bc-link-delay, 0s), var(--bc-link-delay, 0s);
+}
+
+.bc-core-protect-ring {
+  stroke: rgb(56 189 248 / 0.12);
+  stroke-width: 1;
+  stroke-dasharray: 4 8;
+  animation: bc-protect-pulse 6s ease-in-out infinite;
+}
+
+@keyframes bc-protect-pulse {
+  0%,
+  100% {
+    stroke: rgb(56 189 248 / 0.08);
+    opacity: 0.6;
+  }
+  50% {
+    stroke: rgb(103 232 249 / 0.22);
+    opacity: 1;
+  }
+}
+
+.bc-core-shield {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 38%;
+  height: 38%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgb(1 4 8 / 0.92) 0%,
+    rgb(1 4 8 / 0.65) 55%,
+    transparent 72%
+  );
+  pointer-events: none;
+  z-index: 3;
+}
+
+@keyframes bc-link-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes bc-command-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@keyframes bc-feedback-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@keyframes bc-intel-glow {
+  0%,
+  100% {
+    stroke-width: 1.75;
+  }
+  50% {
+    stroke-width: 2.25;
+  }
+}
+
+.bc-signal-packet {
+  opacity: 0.95;
+}
+
+.bc-signal-packet-command {
+  fill: rgb(255 255 255 / 0.88);
+}
+
+.bc-signal-packet-intelligence {
+  fill: #67e8f9;
+}
+
+.bc-signal-packet-feedback {
+  fill: #c084fc;
+}
+
+.bc-signal-packet-alt {
+  opacity: 0.65;
+}
+
+.bc-signal-packet-tertiary {
+  opacity: 0.45;
 }
 
 .bc-cross-stream {
@@ -524,6 +751,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 2;
 }
 
 .bc-orbit {
@@ -563,6 +791,20 @@
   height: 88%;
   animation: bc-orbit-spin 60s linear infinite reverse;
   border: 1px dotted rgb(103 232 249 / 0.1);
+}
+
+.bc-orbit-5 {
+  width: 62%;
+  height: 62%;
+  animation: bc-orbit-spin 40s linear infinite;
+  border: 1px solid rgb(56 189 248 / 0.08);
+}
+
+.bc-orbit-6 {
+  width: 52%;
+  height: 52%;
+  animation: bc-orbit-spin 28s linear infinite reverse;
+  border: 1px dashed rgb(103 232 249 / 0.06);
 }
 
 .bc-neural-pulse {
@@ -701,6 +943,12 @@
 .bc-nodes {
   position: absolute;
   inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.bc-nodes .bc-node {
+  pointer-events: auto;
 }
 
 .bc-node {
@@ -720,15 +968,55 @@
   border-radius: 50%;
   background: #64748b;
   box-shadow: 0 0 8px rgb(100 116 139 / 0.4);
+  position: relative;
+  z-index: 2;
+}
+
+.bc-node-halo {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -20%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--bc-node-color, #38bdf8) 35%, transparent),
+    transparent 70%
+  );
+  opacity: 0.55;
+  pointer-events: none;
+  animation: bc-halo-breathe 4s ease-in-out infinite;
+  animation-delay: var(--bc-node-delay, 0s);
+}
+
+@keyframes bc-halo-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translate(-50%, -20%) scale(0.9);
+  }
+  50% {
+    opacity: 0.75;
+    transform: translate(-50%, -20%) scale(1.1);
+  }
+}
+
+.bc-node-active .bc-node-dot {
+  background: var(--bc-node-color, var(--bc-accent));
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--bc-node-color, #38bdf8) 80%, transparent),
+    0 0 24px color-mix(in srgb, var(--bc-node-color, #38bdf8) 40%, transparent);
 }
 
 .bc-node-online .bc-node-dot {
-  background: var(--bc-accent);
-  box-shadow: 0 0 12px rgb(56 189 248 / 0.7);
+  background: var(--bc-node-color, var(--bc-accent));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--bc-node-color, #38bdf8) 70%, transparent);
 }
 
 .bc-node-processing .bc-node-dot {
-  background: var(--bc-accent-bright);
+  background: var(--bc-node-color, var(--bc-accent-bright));
   animation: bc-node-process 1s ease-in-out infinite;
 }
 
@@ -794,7 +1082,7 @@
   height: 28px;
   transform: translate(-50%, -35%);
   border-radius: 50%;
-  border: 1px solid rgb(103 232 249 / 0.5);
+  border: 1px solid color-mix(in srgb, var(--bc-node-color, #67e8f9) 55%, white);
   animation: bc-node-ring-pulse 2.2s ease-out infinite;
   animation-delay: var(--bc-node-delay, 0s);
   pointer-events: none;
@@ -838,6 +1126,63 @@
   font-weight: 700;
   letter-spacing: 0.2em;
   color: rgb(56 189 248 / 0.45);
+  z-index: 5;
+}
+
+.bc-link-legend {
+  position: absolute;
+  bottom: -2.1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 0.85rem;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.bc-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.bc-legend-item::before {
+  content: "";
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.bc-legend-command::before {
+  background: repeating-linear-gradient(
+    90deg,
+    rgb(255 255 255 / 0.7) 0,
+    rgb(255 255 255 / 0.7) 4px,
+    transparent 4px,
+    transparent 7px
+  );
+}
+
+.bc-legend-intelligence::before {
+  background: rgb(103 232 249 / 0.9);
+  box-shadow: 0 0 6px rgb(56 189 248 / 0.6);
+}
+
+.bc-legend-feedback::before {
+  background: repeating-linear-gradient(
+    90deg,
+    rgb(192 132 252 / 0.9) 0,
+    rgb(192 132 252 / 0.9) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+  box-shadow: 0 0 5px rgb(167 139 250 / 0.45);
 }
 
 /* Knowledge streams */
