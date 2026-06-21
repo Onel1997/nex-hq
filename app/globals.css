@@ -622,23 +622,84 @@
   --brain-x: 50%;
   --brain-y: 40%;
   background:
-    radial-gradient(
-      ellipse 88% 72% at 50% 40%,
-      transparent 42%,
-      rgb(2 5 10 / 0.55) 100%
-    ),
-    radial-gradient(
-      ellipse 62% 48% at 50% 40%,
-      #060c12 0%,
-      #030508 55%,
-      #010204 100%
-    ),
-    linear-gradient(
-      180deg,
-      #030508 0%,
-      #060c12 52%,
-      #081018 100%
-    );
+    radial-gradient(ellipse 88% 72% at 50% 40%, transparent 42%, rgb(2 5 10 / 0.55) 100%),
+    radial-gradient(ellipse 62% 48% at 50% 40%, #060c12 0%, #030508 55%, #010204 100%),
+    linear-gradient(180deg, #030508 0%, #060c12 52%, #081018 100%);
+}
+
+.facility-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(2px 2px at 15% 18%, rgb(234 242 255 / 0.95) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 32% 8%, rgb(234 242 255 / 0.85) 0%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 48% 22%, rgb(234 242 255 / 1) 0%, transparent 100%),
+    radial-gradient(2px 2px at 63% 12%, rgb(234 242 255 / 0.9) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 78% 6%, rgb(234 242 255 / 0.85) 0%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 88% 25%, rgb(234 242 255 / 0.95) 0%, transparent 100%),
+    radial-gradient(2px 2px at 8% 35%, rgb(234 242 255 / 0.8) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 22% 42%, rgb(234 242 255 / 0.75) 0%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 55% 38%, rgb(234 242 255 / 0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 72% 45%, rgb(234 242 255 / 0.85) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 92% 38%, rgb(234 242 255 / 0.8) 0%, transparent 100%),
+    radial-gradient(2px 2px at 5% 55%, rgb(234 242 255 / 0.75) 0%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 38% 58%, rgb(234 242 255 / 0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 82% 62%, rgb(234 242 255 / 0.8) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 18% 72%, rgb(234 242 255 / 0.7) 0%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 68% 15%, rgb(56 189 248 / 0.95) 0%, transparent 100%),
+    radial-gradient(2px 2px at 42% 5%, rgb(56 189 248 / 0.85) 0%, transparent 100%),
+    radial-gradient(2px 2px at 95% 55%, rgb(56 189 248 / 0.8) 0%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 25% 28%, rgb(234 242 255 / 0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 58% 68%, rgb(234 242 255 / 0.75) 0%, transparent 100%),
+    radial-gradient(3px 3px at 12% 12%, rgb(234 242 255 / 1) 0%, transparent 100%),
+    radial-gradient(3px 3px at 85% 10%, rgb(56 189 248 / 0.9) 0%, transparent 100%);
+  animation: facility-stars-twinkle 2.5s ease-in-out infinite;
+  will-change: opacity;
+}
+
+@keyframes facility-stars-twinkle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes facility-stars-twinkle-alt {
+  0%, 100% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.facility-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 28% 15%, rgb(234 242 255 / 0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 52% 28%, rgb(56 189 248 / 0.85) 0%, transparent 100%),
+    radial-gradient(2px 2px at 35% 48%, rgb(234 242 255 / 0.8) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 70% 32%, rgb(234 242 255 / 0.75) 0%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 45% 8%, rgb(56 189 248 / 0.9) 0%, transparent 100%),
+    radial-gradient(2px 2px at 90% 18%, rgb(234 242 255 / 0.85) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 15% 48%, rgb(234 242 255 / 0.7) 0%, transparent 100%),
+    radial-gradient(2px 2px at 62% 52%, rgb(56 189 248 / 0.8) 0%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 78% 72%, rgb(234 242 255 / 0.9) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 10% 62%, rgb(234 242 255 / 0.65) 0%, transparent 100%),
+    radial-gradient(2px 2px at 48% 78%, rgb(56 189 248 / 0.75) 0%, transparent 100%),
+    radial-gradient(2.5px 2.5px at 88% 48%, rgb(234 242 255 / 0.85) 0%, transparent 100%);
+  animation: facility-stars-twinkle-alt 3s ease-in-out infinite;
+  animation-delay: -2s;
+  will-change: opacity;
 }
 
 /* Architecture — massive facility forms behind the network */
@@ -1941,11 +2002,14 @@
 }
 
 .facility-lab-chamber .facility-lab-name {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--facility-text);
+  color: #ffffff;
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--agent-color, #38bdf8) 60%, transparent),
+    0 1px 3px rgb(0 0 0 / 0.9);
   line-height: 1.2;
   width: 100%;
   overflow: hidden;
@@ -3164,12 +3228,16 @@
 }
 
 .facility-lab-chamber:hover {
-  border-color: color-mix(in srgb, var(--agent-color) 42%, var(--facility-border));
+  border-color: color-mix(in srgb, var(--agent-color) 80%, white);
+  transform: scale(1.06) translateY(-4px);
   box-shadow:
-    0 0 44px color-mix(in srgb, var(--agent-color) 16%, transparent),
-    0 12px 40px rgb(0 0 0 / 0.6),
-    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 0 60px color-mix(in srgb, var(--agent-color) 45%, transparent),
+    0 0 100px color-mix(in srgb, var(--agent-color) 22%, transparent),
+    0 18px 50px rgb(0 0 0 / 0.7),
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
     inset 0 -24px 48px rgb(0 0 0 / 0.4);
+  filter: saturate(1.15) brightness(1.1) !important;
+  z-index: 20 !important;
 }
 
 .facility-lab-chamber:hover::before {
@@ -4515,4 +4583,440 @@
   .facility-nexus-layer {
     opacity: 0.85;
   }
+}
+
+.facility-scene-node-wrap:hover .facility-lab-chamber,
+.facility-scene-node-wrap:hover .facility-lab-pod,
+.facility-scene-node-wrap:hover .facility-agent-chamber {
+  border-color: color-mix(in srgb, var(--agent-color, #38bdf8) 80%, white) !important;
+  box-shadow:
+    0 0 60px color-mix(in srgb, var(--agent-color, #38bdf8) 50%, transparent),
+    0 0 110px color-mix(in srgb, var(--agent-color, #38bdf8) 25%, transparent),
+    0 18px 50px rgb(0 0 0 / 0.7) !important;
+  filter: saturate(1.2) brightness(1.15) !important;
+  transition: filter 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.facility-lab-name {
+  font-size: 0.95rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: #ffffff !important;
+  text-shadow:
+    0 0 10px color-mix(in srgb, var(--agent-color, #38bdf8) 70%, transparent),
+    0 1px 4px rgb(0 0 0 / 0.95) !important;
+  line-height: 1.25 !important;
+}
+
+/* ===== Inspector Agent Life — live activity banner ===== */
+.facility-lab-room-livebar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 1rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--facility-border);
+  background: rgb(8 14 22 / 0.6);
+}
+
+.facility-lab-room-livebar-pulse {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--facility-text-muted);
+  flex-shrink: 0;
+}
+
+.facility-lab-room-livebar-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--facility-text);
+}
+
+.facility-lab-room-livebar-dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.facility-lab-room-livebar-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--facility-glow-gold);
+  animation: facility-livebar-typing 1.2s ease-in-out infinite;
+}
+
+.facility-lab-room-livebar-dots i:nth-child(2) { animation-delay: 0.2s; }
+.facility-lab-room-livebar-dots i:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes facility-livebar-typing {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-2px); }
+}
+
+/* State colors + pulsing dot */
+.facility-lab-room-livebar-executing {
+  border-color: rgb(56 189 248 / 0.4);
+  background: rgb(56 189 248 / 0.08);
+}
+.facility-lab-room-livebar-executing .facility-lab-room-livebar-pulse {
+  background: rgb(56 189 248);
+  box-shadow: 0 0 10px rgb(56 189 248 / 0.8);
+  animation: facility-livebar-breathe 1.6s ease-in-out infinite;
+}
+
+.facility-lab-room-livebar-review {
+  border-color: rgb(168 85 247 / 0.4);
+  background: rgb(168 85 247 / 0.08);
+}
+.facility-lab-room-livebar-review .facility-lab-room-livebar-pulse {
+  background: rgb(168 85 247);
+  box-shadow: 0 0 10px rgb(168 85 247 / 0.8);
+  animation: facility-livebar-breathe 2s ease-in-out infinite;
+}
+
+.facility-lab-room-livebar-approved {
+  border-color: rgb(34 197 94 / 0.4);
+  background: rgb(34 197 94 / 0.08);
+}
+.facility-lab-room-livebar-approved .facility-lab-room-livebar-pulse {
+  background: rgb(34 197 94);
+  box-shadow: 0 0 10px rgb(34 197 94 / 0.8);
+}
+
+.facility-lab-room-livebar-error {
+  border-color: rgb(248 113 113 / 0.4);
+  background: rgb(248 113 113 / 0.08);
+}
+.facility-lab-room-livebar-error .facility-lab-room-livebar-pulse {
+  background: rgb(248 113 113);
+  box-shadow: 0 0 10px rgb(248 113 113 / 0.8);
+  animation: facility-livebar-breathe 0.9s ease-in-out infinite;
+}
+
+.facility-lab-room-livebar-queued .facility-lab-room-livebar-pulse {
+  background: rgb(96 165 250);
+}
+
+@keyframes facility-livebar-breathe {
+  0%, 100% { opacity: 0.6; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+/* ===== Inspector 2.0 — readability pass ===== */
+
+/* Section titles: bigger, brighter, clearer */
+.facility-inspector-section-title {
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.16em !important;
+  color: var(--facility-glow-gold) !important;
+  opacity: 0.95 !important;
+  margin-bottom: 0.55rem !important;
+}
+
+/* Main body text in cards: larger and crisper */
+.facility-inspector-text {
+  font-size: 0.95rem !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+  color: var(--facility-text) !important;
+}
+
+/* Meta/status text (assigned, queued, %): brighter, not washed out */
+.facility-inspector-meta {
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.05em !important;
+  color: var(--facility-text-muted) !important;
+  opacity: 0.85 !important;
+}
+
+/* Task list items: a touch more breathing room + readable */
+.facility-lab-room-list-item {
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+  padding-top: 0.55rem !important;
+  padding-bottom: 0.55rem !important;
+}
+
+/* Empty states: readable but clearly secondary */
+.facility-inspector-empty {
+  font-size: 0.82rem !important;
+  color: var(--facility-text-muted) !important;
+  opacity: 0.7 !important;
+}
+
+/* Role subtitle under agent name */
+.facility-inspector-role {
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  opacity: 0.85 !important;
+}
+
+/* ===== Inspector 2.0 — task cards with status colors ===== */
+
+/* Turn task list items into proper cards */
+.facility-lab-room-list-item {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.45rem !important;
+  align-items: flex-start !important;
+  padding: 0.7rem 0.8rem !important;
+  border-radius: 0.55rem !important;
+  border: 1px solid var(--facility-border) !important;
+  background: rgb(8 14 22 / 0.45) !important;
+  border-left-width: 3px !important;
+}
+
+/* The status meta becomes a colored pill */
+.facility-lab-room-list-item .facility-inspector-meta {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  padding: 0.18rem 0.5rem !important;
+  border-radius: 999px !important;
+  font-size: 0.62rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  opacity: 1 !important;
+}
+
+/* Default (assigned / neutral) */
+.facility-lab-room-list-item .facility-inspector-meta {
+  color: rgb(148 163 184) !important;
+  background: rgb(148 163 184 / 0.12) !important;
+  border-left-color: rgb(100 116 139) !important;
+}
+
+/* Color the card's left border + pill by status keyword.
+   These target the meta text content via data, falling back to neutral. */
+
+/* in_progress / executing / active → blue */
+.facility-lab-room-list-item:has(.facility-inspector-meta:is([data-status="in_progress"], [data-status="executing"], [data-status="active"])) {
+  border-left-color: rgb(56 189 248) !important;
+}
+/* queued / pending → amber */
+.facility-lab-room-list-item:has(.facility-inspector-meta:is([data-status="queued"], [data-status="pending"], [data-status="assigned"])) {
+  border-left-color: rgb(251 191 36) !important;
+}
+/* completed / approved → green */
+.facility-lab-room-list-item:has(.facility-inspector-meta:is([data-status="completed"], [data-status="approved"])) {
+  border-left-color: rgb(34 197 94) !important;
+}
+/* failed / error → red */
+.facility-lab-room-list-item:has(.facility-inspector-meta:is([data-status="failed"], [data-status="error"])) {
+  border-left-color: rgb(248 113 113) !important;
+}
+
+/* ===== Inspector 2.0 — vivid status pills ===== */
+
+/* queued / pending / assigned → amber */
+.facility-lab-room-list-item .facility-inspector-meta[data-status="queued"],
+.facility-lab-room-list-item .facility-inspector-meta[data-status="pending"],
+.facility-lab-room-list-item .facility-inspector-meta[data-status="assigned"] {
+  color: rgb(252 211 77) !important;
+  background: rgb(251 191 36 / 0.18) !important;
+  box-shadow: inset 0 0 0 1px rgb(251 191 36 / 0.45) !important;
+}
+
+/* in_progress / executing / active → blue */
+.facility-lab-room-list-item .facility-inspector-meta[data-status="in_progress"],
+.facility-lab-room-list-item .facility-inspector-meta[data-status="executing"],
+.facility-lab-room-list-item .facility-inspector-meta[data-status="active"] {
+  color: rgb(125 211 252) !important;
+  background: rgb(56 189 248 / 0.18) !important;
+  box-shadow: inset 0 0 0 1px rgb(56 189 248 / 0.45) !important;
+}
+
+/* completed / approved → green */
+.facility-lab-room-list-item .facility-inspector-meta[data-status="completed"],
+.facility-lab-room-list-item .facility-inspector-meta[data-status="approved"] {
+  color: rgb(134 239 172) !important;
+  background: rgb(34 197 94 / 0.18) !important;
+  box-shadow: inset 0 0 0 1px rgb(34 197 94 / 0.45) !important;
+}
+
+/* failed / error → red */
+.facility-lab-room-list-item .facility-inspector-meta[data-status="failed"],
+.facility-lab-room-list-item .facility-inspector-meta[data-status="error"] {
+  color: rgb(252 165 165) !important;
+  background: rgb(248 113 113 / 0.18) !important;
+  box-shadow: inset 0 0 0 1px rgb(248 113 113 / 0.45) !important;
+}
+
+/* ===== Phase P — facility zoom when a lab is open ===== */
+.facility-scene-wrap {
+  transition:
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.7s ease,
+    opacity 0.7s ease;
+  transform-origin: 38% 50%;
+  will-change: transform, filter;
+}
+
+/* When a lab inspector is open, push the scene left + zoom in slightly + dim */
+.facility-scene-wrap-zoomed {
+  transform: scale(1.18) translateX(-8%);
+  filter: brightness(0.55) saturate(0.85);
+}
+
+/* Keep the brain/labs from being interactive while zoomed-dimmed (optional feel) */
+.facility-scene-wrap-zoomed .facility-scene {
+  pointer-events: auto;
+}
+
+/* ===== Shopify Lab — live product cards in inspector ===== */
+.facility-shopify-product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.facility-shopify-product-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--facility-border);
+  background: rgb(8 14 22 / 0.45);
+}
+
+.facility-shopify-product-image {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 0.4rem;
+  object-fit: cover;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  background: rgb(4 8 14 / 0.8);
+}
+
+.facility-shopify-product-image-empty {
+  background:
+    linear-gradient(135deg, rgb(34 197 94 / 0.12), rgb(8 14 22 / 0.9));
+}
+
+.facility-shopify-product-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.facility-shopify-product-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--facility-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.facility-shopify-product-price {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--facility-text-muted);
+}
+
+.facility-shopify-product-card .facility-inspector-meta {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 1;
+}
+
+.facility-shopify-product-card .facility-inspector-meta[data-status="ACTIVE"] {
+  color: rgb(134 239 172);
+  background: rgb(34 197 94 / 0.18);
+  box-shadow: inset 0 0 0 1px rgb(34 197 94 / 0.45);
+}
+
+.facility-shopify-product-card .facility-inspector-meta[data-status="DRAFT"] {
+  color: rgb(252 211 77);
+  background: rgb(251 191 36 / 0.18);
+  box-shadow: inset 0 0 0 1px rgb(251 191 36 / 0.45);
+}
+
+.facility-shopify-summary {
+  margin: 0 0 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--facility-text-muted);
+  opacity: 0.8;
+}
+
+.facility-shopify-category {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.facility-shopify-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.62rem 0.72rem;
+  border: 1px solid var(--facility-border);
+  border-radius: 0.55rem;
+  background: rgb(10 16 24 / 0.72);
+  color: inherit;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.facility-shopify-category-header:hover {
+  background: rgb(14 22 32 / 0.9);
+  border-color: rgb(56 189 248 / 0.22);
+}
+
+.facility-shopify-category-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--facility-glow-gold);
+}
+
+.facility-shopify-category-count {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--facility-text-muted);
+}
+
+.facility-shopify-category-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--facility-text-muted);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.facility-shopify-category-chevron-open {
+  color: var(--facility-text);
+}
+
+.facility-shopify-category-products {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-left: 0.35rem;
 }

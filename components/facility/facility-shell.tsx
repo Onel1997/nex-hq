@@ -72,7 +72,9 @@ export function FacilityShell({
         <>
           <FacilityHud data={data} connected={connected} />
           <div className="facility-main facility-main-immersive">
-            <div className="facility-scene-wrap">
+            <div
+              className={`facility-scene-wrap${selectedLabId ? " facility-scene-wrap-zoomed" : ""}`}
+            >
               <FacilityScene
                 data={data}
                 selectedLabId={selectedLabId}

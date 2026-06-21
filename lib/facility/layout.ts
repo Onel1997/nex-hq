@@ -17,7 +17,7 @@ const BRAIN_CENTER = { left: 50, top: 40 } as const;
 export const FACILITY_ORBIT_RADIUS_PX = 480;
 
 /** CEO command platform — north pole above the Nexus (px). */
-export const FACILITY_CEO_ABOVE_BRAIN_PX = 325;
+export const FACILITY_CEO_ABOVE_BRAIN_PX = 370;
 
 /** No chamber may sit in the column beneath the Brain. */
 export const BRAIN_UNDERNEATH_EXCLUSION_X_PX = 210;
@@ -45,9 +45,10 @@ function nodeOffsetPx(
 }
 
 function ceoStackPercent(): { left: number; top: number } {
+  const cx = (BRAIN_CENTER.left / 100) * ORBIT_REF.width;
   const cy = (BRAIN_CENTER.top / 100) * ORBIT_REF.height;
   return {
-    left: BRAIN_CENTER.left,
+    left: Math.round(((cx + 20) / ORBIT_REF.width) * 1000) / 10,
     top:
       Math.round(
         ((cy - FACILITY_CEO_ABOVE_BRAIN_PX) / ORBIT_REF.height) * 1000,
@@ -101,7 +102,7 @@ const ORBITAL_SLOTS: OrbitalSlot[] = [
   },
   {
     id: "ceo",
-    offsetX: 0,
+    offsetX: 155,
     offsetY: -FACILITY_CEO_ABOVE_BRAIN_PX,
     size: 235,
     depth: "midground",
@@ -113,7 +114,7 @@ const ORBITAL_SLOTS: OrbitalSlot[] = [
   {
     id: "research",
     offsetX: -620,
-    offsetY: -320,
+    offsetY: -360,
     size: 195,
     depth: "background",
     zone: "research",
@@ -133,7 +134,7 @@ const ORBITAL_SLOTS: OrbitalSlot[] = [
   {
     id: "image",
     offsetX: -500,
-    offsetY: 240,
+    offsetY: 280,
     size: 195,
     depth: "background",
     zone: "marketing",
@@ -141,7 +142,7 @@ const ORBITAL_SLOTS: OrbitalSlot[] = [
   },
   {
     id: "marketing",
-    offsetX: 620,
+    offsetX: 700,
     offsetY: -40,
     size: 195,
     depth: "background",
@@ -153,7 +154,7 @@ const ORBITAL_SLOTS: OrbitalSlot[] = [
   {
     id: "designer",
     offsetX: -370,
-    offsetY: -320,
+    offsetY: -360,
     size: 195,
     depth: "midground",
     zone: "design",
@@ -172,8 +173,8 @@ const ORBITAL_SLOTS: OrbitalSlot[] = [
   /* Lower right arc — sweeps around Brain; column beneath Nexus stays empty */
   {
     id: "shopify",
-    offsetX: 370,
-    offsetY: -320,
+    offsetX: 450,
+    offsetY: -360,
     size: 190,
     depth: "midground",
     zone: "commerce",
@@ -181,7 +182,7 @@ const ORBITAL_SLOTS: OrbitalSlot[] = [
   },
   {
     id: "commerce",
-    offsetX: 370,
+    offsetX: 450,
     offsetY: -40,
     size: 200,
     depth: "foreground",
@@ -190,8 +191,8 @@ const ORBITAL_SLOTS: OrbitalSlot[] = [
   },
   {
     id: "operations",
-    offsetX: 620,
-    offsetY: -320,
+    offsetX: 700,
+    offsetY: -360,
     size: 195,
     depth: "foreground",
     zone: "operations",
@@ -224,7 +225,7 @@ export const NEXUS_ENVIRONMENT_ANCHOR = {
 export const FACILITY_HERO_SCALE = 0.62;
 
 /** Global composition pan — Brain as center of gravity with HUD below. */
-export const FACILITY_COMPOSITION_OFFSET = { x: 0, y: -1 } as const;
+export const FACILITY_COMPOSITION_OFFSET = { x: -7, y: -1 } as const;
 
 /** Parallax strength per depth plane (px per normalized pointer delta). */
 export const DEPTH_PARALLAX_FACTOR: Record<FacilityDepthLayer, number> = {

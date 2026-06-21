@@ -665,12 +665,14 @@
 
 .facility-chamber-callsign {
   font-family: var(--font-mono), monospace;
-  font-size: 0.52rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--chamber-accent);
-  text-shadow: 0 0 8px var(--chamber-glow);
+  color: #ffffff;
+  text-shadow:
+    0 0 10px var(--chamber-accent),
+    0 1px 4px rgb(0 0 0 / 0.95);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -921,6 +923,74 @@
   .facility-chamber-particle,
   .facility-chamber-review .facility-chamber-reactor-core,
   .facility-chamber-error .facility-chamber-frame-edge {
+    animation: none;
+  }
+}
+
+/* ===== Agent Life — activity indicators ===== */
+
+/* Pulsing "working" dots next to the callsign when executing */
+.facility-chamber-executing .facility-chamber-callsign::after {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: var(--chamber-accent);
+  box-shadow:
+    7px 0 0 var(--chamber-accent),
+    14px 0 0 var(--chamber-accent);
+  animation: facility-agent-typing 1.4s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+@keyframes facility-agent-typing {
+  0%, 100% {
+    opacity: 0.3;
+    box-shadow:
+      7px 0 0 var(--chamber-accent),
+      14px 0 0 var(--chamber-accent);
+  }
+  33% {
+    opacity: 1;
+    box-shadow:
+      7px 0 0 color-mix(in srgb, var(--chamber-accent) 40%, transparent),
+      14px 0 0 color-mix(in srgb, var(--chamber-accent) 40%, transparent);
+  }
+  66% {
+    opacity: 0.6;
+    box-shadow:
+      7px 0 0 var(--chamber-accent),
+      14px 0 0 color-mix(in srgb, var(--chamber-accent) 40%, transparent);
+  }
+}
+
+/* Subtle breathing glow on the whole chamber while executing */
+.facility-chamber-executing {
+  animation: facility-agent-alive 1.8s ease-in-out infinite;
+}
+
+@keyframes facility-agent-alive {
+  0%, 100% {
+    box-shadow:
+      0 0 28px color-mix(in srgb, var(--chamber-accent) 30%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--chamber-accent) 35%, transparent),
+      0 8px 28px rgb(0 0 0 / 0.45);
+    border-color: color-mix(in srgb, var(--chamber-accent) 50%, var(--facility-border));
+  }
+  50% {
+    box-shadow:
+      0 0 70px color-mix(in srgb, var(--chamber-accent) 70%, transparent),
+      0 0 0 2px color-mix(in srgb, var(--chamber-accent) 70%, transparent),
+      0 8px 28px rgb(0 0 0 / 0.45);
+    border-color: color-mix(in srgb, var(--chamber-accent) 90%, white);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .facility-chamber-executing .facility-chamber-callsign::after,
+  .facility-chamber-executing {
     animation: none;
   }
 }

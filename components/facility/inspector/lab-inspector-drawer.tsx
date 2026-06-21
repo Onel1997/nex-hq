@@ -5,8 +5,20 @@ import type { AgentId } from "@/lib/constants/agents";
 import type { LabInspectorData, LabSnapshot } from "@/lib/facility/types";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
-import { FlaskConical, Loader2, X } from "lucide-react";
-import { memo } from "react";
+import { ChevronDown, ChevronRight, FlaskConical, Loader2, X } from "lucide-react";
+import { memo, useEffect, useMemo, useState } from "react";
+
+interface ShopifyLiveProduct {
+  id: string;
+  title: string;
+  status: string;
+  inventory: number;
+  imageUrl: string | null;
+  price: string;
+  currency: string;
+  productType: string;
+  collections: string[];
+}
 
 interface LabInspectorDrawerProps {
   open: boolean;
@@ -32,6 +44,100 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
   const activeTasks =
     data?.taskQueue.filter((t) => t.status !== "completed" && t.status !== "failed") ??
     [];
+
+  const [shopifyProducts, setShopifyProducts] = useState<ShopifyLiveProduct[]>(
+    [],
+  );
+  const [shopifyProductsLoading, setShopifyProductsLoading] = useState(false);
+  const [shopifyProductsError, setShopifyProductsError] = useState<
+    string | null
+  >(null);
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(
+    {},
+  );
+
+  const shopifyProductCategories = useMemo(() => {
+    const grouped = shopifyProducts.reduce<
+      Record<string, ShopifyLiveProduct[]>
+    >((acc, product) => {
+      const type = product.productType?.trim() || "Uncategorized";
+      (acc[type] ??= []).push(product);
+      return acc;
+    }, {});
+
+    return Object.entries(grouped)
+      .map(([type, products]) => ({ type, products }))
+      .sort((a, b) => b.products.length - a.products.length);
+  }, [shopifyProducts]);
+
+  useEffect(() => {
+    if (!open || agentId !== "shopify") {
+      setShopifyProducts([]);
+      setShopifyProductsLoading(false);
+      setShopifyProductsError(null);
+      setOpenCategories({});
+      return;
+    }
+
+    let cancelled = false;
+
+    setShopifyProductsLoading(true);
+    setShopifyProductsError(null);
+
+    void fetch("/api/shopify/products")
+      .then(async (response) => {
+        const body = (await response.json()) as {
+          ok?: boolean;
+          products?: ShopifyLiveProduct[];
+          error?: string;
+        };
+
+        if (!response.ok || !body.ok) {
+          throw new Error(body.error ?? "Failed to load Shopify products");
+        }
+
+        if (!cancelled) {
+          setShopifyProducts(body.products ?? []);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setShopifyProducts([]);
+          setShopifyProductsError(
+            err instanceof Error ? err.message : "Failed to load Shopify products",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setShopifyProductsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, agentId]);
+
+  useEffect(() => {
+    if (shopifyProductCategories.length === 0) {
+      setOpenCategories({});
+      return;
+    }
+
+    const initial: Record<string, boolean> = {};
+    shopifyProductCategories.forEach((category, index) => {
+      initial[category.type] = index === 0;
+    });
+    setOpenCategories(initial);
+  }, [shopifyProductCategories]);
+
+  const toggleShopifyCategory = (type: string) => {
+    setOpenCategories((prev) => ({
+      ...prev,
+      [type]: !prev[type],
+    }));
+  };
 
   return (
     <AnimatePresence>
@@ -86,6 +192,137 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
                 <p className="facility-inspector-error">{error}</p>
               ) : data ? (
                 <>
+                  <div
+                    className={cn(
+                      "facility-lab-room-livebar",
+                      `facility-lab-room-livebar-${data.opsState}`,
+                    )}
+                  >
+                    <span className="facility-lab-room-livebar-pulse" aria-hidden />
+                    <span className="facility-lab-room-livebar-label">
+                      {data.opsState === "executing"
+                        ? "Agent is working"
+                        : data.opsState === "review"
+                          ? "Awaiting review"
+                          : data.opsState === "queued"
+                            ? "Task queued"
+                            : data.opsState === "approved"
+                              ? "Mission complete"
+                              : data.opsState === "error"
+                                ? "Attention needed"
+                                : "Standing by"}
+                    </span>
+                    {data.opsState === "executing" && (
+                      <span className="facility-lab-room-livebar-dots" aria-hidden>
+                        <i /><i /><i />
+                      </span>
+                    )}
+                  </div>
+                  {agentId === "shopify" ? (
+                    <section className="facility-inspector-section facility-lab-room-section">
+                      <h3 className="facility-inspector-section-title">
+                        Live Products
+                      </h3>
+                      {shopifyProductsLoading ? (
+                        <p className="facility-inspector-empty">Lade Produkte…</p>
+                      ) : shopifyProductsError ? (
+                        <p className="facility-inspector-error">
+                          {shopifyProductsError}
+                        </p>
+                      ) : shopifyProducts.length === 0 ? (
+                        <p className="facility-inspector-empty">
+                          No products found
+                        </p>
+                      ) : (
+                        <>
+                          <p className="facility-shopify-summary">
+                            {shopifyProducts.length} Produkte ·{" "}
+                            {shopifyProductCategories.length} Kategorien
+                          </p>
+                          <div className="facility-shopify-product-list">
+                            {shopifyProductCategories.map((category) => {
+                              const isOpen = openCategories[category.type] ?? false;
+
+                              return (
+                                <div
+                                  key={category.type}
+                                  className="facility-shopify-category"
+                                >
+                                  <button
+                                    type="button"
+                                    className="facility-shopify-category-header"
+                                    onClick={() =>
+                                      toggleShopifyCategory(category.type)
+                                    }
+                                    aria-expanded={isOpen}
+                                  >
+                                    <span className="facility-shopify-category-name">
+                                      {category.type}
+                                      <span className="facility-shopify-category-count">
+                                        {" "}
+                                        ({category.products.length})
+                                      </span>
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        "facility-shopify-category-chevron",
+                                        isOpen &&
+                                          "facility-shopify-category-chevron-open",
+                                      )}
+                                      aria-hidden
+                                    >
+                                      {isOpen ? (
+                                        <ChevronDown className="size-4" />
+                                      ) : (
+                                        <ChevronRight className="size-4" />
+                                      )}
+                                    </span>
+                                  </button>
+                                  {isOpen ? (
+                                    <div className="facility-shopify-category-products">
+                                      {category.products.map((product) => (
+                                        <div
+                                          key={product.id}
+                                          className="facility-shopify-product-card"
+                                        >
+                                          {product.imageUrl ? (
+                                            <img
+                                              src={product.imageUrl}
+                                              alt=""
+                                              className="facility-shopify-product-image"
+                                            />
+                                          ) : (
+                                            <div
+                                              className="facility-shopify-product-image facility-shopify-product-image-empty"
+                                              aria-hidden
+                                            />
+                                          )}
+                                          <div className="facility-shopify-product-body">
+                                            <p className="facility-shopify-product-title">
+                                              {product.title}
+                                            </p>
+                                            <p className="facility-shopify-product-price">
+                                              {product.price} {product.currency}
+                                            </p>
+                                            <span
+                                              className="facility-inspector-meta"
+                                              data-status={product.status}
+                                            >
+                                              {product.status}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </section>
+                  ) : null}
                   <section className="facility-inspector-section facility-lab-room-section">
                     <h3 className="facility-inspector-section-title">
                       Current Mission
@@ -121,7 +358,10 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
                             className="facility-inspector-list-item facility-lab-room-list-item"
                           >
                             <span>{task.title}</span>
-                            <span className="facility-inspector-meta">
+                            <span
+                              className="facility-inspector-meta"
+                              data-status={task.status}
+                            >
                               {task.status}
                             </span>
                           </li>
