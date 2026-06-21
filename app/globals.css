@@ -552,7 +552,7 @@
 }
 
 .facility-scene-silent-core .facility-scene-brain-wrap {
-  filter: drop-shadow(0 0 96px rgb(56 189 248 / 0.32));
+  filter: drop-shadow(0 0 72px rgb(56 189 248 / 0.28));
 }
 
 .facility-scene-silent-core .facility-scene-node-wrap:not(.facility-scene-brain-wrap):not(.facility-scene-ceo-wrap) {
@@ -576,27 +576,27 @@
   background:
     radial-gradient(
       ellipse 90% 80% at 50% 50%,
-      transparent 38%,
-      rgb(0 0 0 / 0.55) 100%
+      transparent 42%,
+      rgb(0 0 0 / 0.5) 100%
     ),
     radial-gradient(
       ellipse 120% 100% at 50% 50%,
-      transparent 52%,
-      rgb(0 0 0 / 0.35) 100%
+      transparent 58%,
+      rgb(0 0 0 / 0.28) 100%
     );
 }
 
 .facility-scene-silent-core .facility-brain-nexus-stack {
-  filter: drop-shadow(0 0 100px rgb(56 189 248 / 0.38));
+  filter: drop-shadow(0 0 72px rgb(56 189 248 / 0.3));
 }
 
 .facility-scene-silent-core .facility-brain-nexus-frame {
   box-shadow:
-    0 0 80px rgb(56 189 248 / 0.3),
-    0 0 160px rgb(56 189 248 / 0.1),
-    0 0 220px rgb(34 211 238 / 0.05),
-    inset 0 0 80px rgb(0 0 0 / 0.78),
-    inset 0 -28px 56px rgb(56 189 248 / 0.08);
+    0 0 56px rgb(56 189 248 / 0.26),
+    0 0 120px rgb(56 189 248 / 0.1),
+    0 0 180px rgb(34 211 238 / 0.05),
+    inset 0 0 72px rgb(0 0 0 / 0.78),
+    inset 0 -24px 48px rgb(56 189 248 / 0.08);
 }
 
 .facility-scene-silent-core .facility-nexus-intake-glow {
@@ -620,10 +620,10 @@
   z-index: 0;
   overflow: hidden;
   --brain-x: 50%;
-  --brain-y: 42%;
+  --brain-y: 40%;
   background:
     radial-gradient(
-      ellipse 88% 72% at 50% 42%,
+      ellipse 88% 72% at 50% 40%,
       transparent 42%,
       rgb(2 5 10 / 0.55) 100%
     ),
@@ -982,11 +982,11 @@
   overflow: visible;
   pointer-events: none;
   gap: 1.1rem;
-  filter: drop-shadow(0 0 72px rgb(56 189 248 / 0.32));
+  filter: drop-shadow(0 0 56px rgb(56 189 248 / 0.28));
 }
 
 .facility-brain-nexus-v4 {
-  filter: drop-shadow(0 0 88px rgb(56 189 248 / 0.38));
+  filter: drop-shadow(0 0 64px rgb(56 189 248 / 0.32));
 }
 
 .facility-brain-nexus-chamber {
@@ -1403,8 +1403,11 @@
 }
 
 .facility-scene-ceo-wrap {
-  z-index: 5;
-  filter: drop-shadow(0 0 20px rgb(255 209 102 / 0.1));
+  z-index: 14;
+  overflow: visible !important;
+  filter: drop-shadow(0 0 48px rgb(255 209 102 / 0.5))
+    drop-shadow(0 0 96px rgb(255 180 50 / 0.22))
+    drop-shadow(0 8px 28px rgb(0 0 0 / 0.45));
 }
 
 .facility-scene-brain-wrap > * {
@@ -2871,11 +2874,11 @@
 }
 
 .facility-scene-brain-wrap {
-  z-index: 8;
+  z-index: 10;
 }
 
-.facility-scene-ceo-wrap {
-  z-index: 5;
+.facility-scene-brain-wrap .facility-brain-knowledge {
+  display: none;
 }
 
 .facility-scene-node-wrap:not(.facility-scene-brain-wrap):not(.facility-scene-ceo-wrap) {
@@ -2903,15 +2906,21 @@
   filter: drop-shadow(0 6px 22px rgb(0 0 0 / 0.42));
 }
 
+.facility-depth-midground .facility-lab-chamber,
+.facility-depth-midground .facility-agent-chamber,
+.facility-depth-midground .facility-placeholder-lab {
+  filter: saturate(0.88) brightness(0.94);
+}
+
 .facility-depth-background {
-  filter: drop-shadow(0 2px 12px rgb(0 0 0 / 0.28));
+  filter: drop-shadow(0 2px 12px rgb(0 0 0 / 0.28)) blur(0.55px);
 }
 
 .facility-depth-background .facility-lab-chamber,
 .facility-depth-background .facility-agent-chamber,
 .facility-depth-background .facility-ceo-chamber,
 .facility-depth-background .facility-placeholder-lab {
-  filter: saturate(0.72) brightness(0.86);
+  filter: saturate(0.68) brightness(0.82) blur(0.35px);
 }
 
 .facility-depth-background .facility-lab-selected,

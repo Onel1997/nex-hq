@@ -1,6 +1,10 @@
 "use client";
 
 import {
+  depthParallaxTranslate,
+  useDepthParallax,
+} from "@/components/facility/hooks/use-depth-parallax";
+import {
   phaseAtLeast,
   type FacilityStartup,
 } from "@/components/facility/hooks/use-facility-startup";
@@ -19,12 +23,13 @@ import { FacilityBackdrop } from "@/components/facility/scene/facility-backdrop"
 import { FacilityStartupOverlay } from "@/components/facility/scene/facility-startup-overlay";
 import { SPECIALIST_AGENT_IDS, type AgentId } from "@/lib/constants/agents";
 import {
-  depthAtmosphere,
   FACILITY_COMPOSITION_OFFSET,
   getNodeLayout,
+  nodeSceneZIndex,
+  depthAtmosphere,
 } from "@/lib/facility/layout";
 import { FACILITY_SILENT_CORE } from "@/lib/facility/silent-core";
-import type { FacilityNodeLayout } from "@/lib/facility/types";
+import type { FacilityNodeLayout, FacilitySceneNodeId } from "@/lib/facility/types";
 import {
   PLACEHOLDER_LAB_IDS,
   PLACEHOLDER_LABS,
@@ -52,17 +57,21 @@ function nodeDepthClasses(layout: FacilityNodeLayout) {
 
 function nodeStyle(
   id: Parameters<typeof getNodeLayout>[0],
+  parallax: ReturnType<typeof useDepthParallax>,
   zIndex?: number,
 ) {
   const layout = getNodeLayout(id);
   const atmosphere = depthAtmosphere(layout.depth);
+  const drift = depthParallaxTranslate(layout.depth, parallax);
+  const stackZ =
+    zIndex ?? nodeSceneZIndex(id as FacilitySceneNodeId, layout);
   return {
     left: `${layout.left}%`,
     top: `${layout.top}%`,
     width: layout.size,
     height: layout.size,
-    transform: `translate(-50%, -50%) translateZ(${atmosphere.translateZ}px) scale(${atmosphere.scale})`,
-    zIndex: (zIndex ?? 2) + atmosphere.zBias,
+    transform: `translate(-50%, -50%) translate(${drift}) translateZ(${atmosphere.translateZ}px) scale(${atmosphere.scale})`,
+    zIndex: stackZ,
   } as React.CSSProperties;
 }
 
@@ -70,9 +79,11 @@ function labZIndex(
   agentId: AgentId,
   labs: FacilitySnapshot["labs"],
 ): number {
+  const layout = getNodeLayout(agentId);
   const state = labs[agentId].opsState;
-  if (state === "executing" || state === "review") return 3;
-  return 2;
+  const active =
+    state === "executing" || state === "review" ? 2 : 0;
+  return nodeSceneZIndex(agentId, layout, active);
 }
 
 export function FacilityScene({
@@ -108,11 +119,14 @@ export function FacilityScene({
     [highlightedLabs],
   );
 
-  const fadeIn = (from: Parameters<typeof phaseAtLeast>[1]) =>
-    startup.isComplete || phaseAtLeast(startup.phase, from);
-
   const isChamberNav = navigation.mode === "lab-focus";
   const isCeoChamber = navigation.mode === "ceo-focus";
+  const parallax = useDepthParallax(
+    startup.isComplete && !isChamberNav && !isCeoChamber,
+  );
+
+  const fadeIn = (from: Parameters<typeof phaseAtLeast>[1]) =>
+    startup.isComplete || phaseAtLeast(startup.phase, from);
 
   return (
     <div
@@ -144,35 +158,122 @@ export function FacilityScene({
           }}
           transition={{ type: "spring", damping: 26, stiffness: 160 }}
         >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.7 }}
-          animate={{
-            opacity: fadeIn("brain") ? 1 : 0,
-            scale: fadeIn("brain") ? 1 : 0.7,
-          }}
-          transition={{ duration: 0.9, ease: "easeOut" }}
-          style={{
-            ...nodeStyle("brain", 5),
-            height: "auto",
-            minHeight: getNodeLayout("brain").size,
-          }}
-          className={cn(
-            "facility-scene-node-wrap facility-scene-brain-wrap",
-            nodeDepthClasses(getNodeLayout("brain")),
-          )}
-          data-facility-node="brain"
-        >
-          <BrainCore
-            stats={data.brain}
-            labs={data.labs}
-            pulse={brainPulse}
-            pulseIntensity={pulseIntensity}
-            networkPulse={networkPulse}
-            networkSurge={networkSurge}
-            knowledgeFlow={activeKnowledgeFlow}
-            failedTasks={data.telemetry.failedTasks}
-          />
-        </motion.div>
+        {(["background", "midground", "foreground"] as const).flatMap(
+          (depthLayer) => {
+            const depthLabs = SPECIALIST_AGENT_IDS.filter(
+              (id) => getNodeLayout(id).depth === depthLayer,
+            );
+            const depthPlaceholders = PLACEHOLDER_LAB_IDS.filter(
+              (id) => getNodeLayout(id).depth === depthLayer,
+            );
+
+            return [
+              depthLayer === "midground" ? (
+                <motion.div
+                  key="brain"
+                  initial={{ opacity: 0, scale: 0.7 }}
+                  animate={{
+                    opacity: fadeIn("brain") ? 1 : 0,
+                    scale: fadeIn("brain") ? 1 : 0.7,
+                  }}
+                  transition={{ duration: 0.9, ease: "easeOut" }}
+                  style={{
+                    ...nodeStyle("brain", parallax),
+                    height: getNodeLayout("brain").size,
+                  }}
+                  className={cn(
+                    "facility-scene-node-wrap facility-scene-brain-wrap",
+                    nodeDepthClasses(getNodeLayout("brain")),
+                  )}
+                  data-facility-node="brain"
+                >
+                  <BrainCore
+                    stats={data.brain}
+                    labs={data.labs}
+                    pulse={brainPulse}
+                    pulseIntensity={pulseIntensity}
+                    networkPulse={networkPulse}
+                    networkSurge={networkSurge}
+                    knowledgeFlow={activeKnowledgeFlow}
+                    failedTasks={data.telemetry.failedTasks}
+                  />
+                </motion.div>
+              ) : null,
+              ...depthLabs.map((agentId, i) => {
+                const isFocused = navigation.focusTarget === agentId;
+                return (
+                  <motion.div
+                    key={agentId}
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    animate={{
+                      opacity: fadeIn("labs")
+                        ? isChamberNav && !isFocused
+                          ? 0.38
+                          : 1
+                        : 0,
+                      scale: fadeIn("labs") ? (isFocused ? 1.08 : 1) : 0.85,
+                      filter:
+                        isChamberNav && !isFocused ? "blur(1px)" : "blur(0px)",
+                    }}
+                    transition={{
+                      duration: 0.5,
+                      delay: i * 0.06,
+                      ease: "easeOut",
+                    }}
+                    style={nodeStyle(
+                      agentId,
+                      parallax,
+                      labZIndex(agentId, data.labs),
+                    )}
+                    className={cn(
+                      "facility-scene-node-wrap",
+                      nodeDepthClasses(getNodeLayout(agentId)),
+                      isFocused &&
+                        "facility-scene-node-focused facility-scene-chamber-active",
+                      ambientPulse?.agentId === agentId &&
+                        "facility-scene-node-ambient",
+                    )}
+                    data-facility-node={agentId}
+                  >
+                    <LabPod
+                      lab={data.labs[agentId]}
+                      nodeSize={getNodeLayout(agentId).size}
+                      selected={selectedLabId === agentId}
+                      highlighted={highlightedSet.has(agentId)}
+                      onSelect={() => onLabSelect(agentId)}
+                    />
+                  </motion.div>
+                );
+              }),
+              ...depthPlaceholders.map((labId, i) => (
+                <motion.div
+                  key={labId}
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{
+                    opacity: fadeIn("labs") ? 1 : 0,
+                    scale: fadeIn("labs") ? 1 : 0.85,
+                  }}
+                  transition={{
+                    duration: 0.5,
+                    delay: (depthLabs.length + i) * 0.06,
+                    ease: "easeOut",
+                  }}
+                  style={nodeStyle(labId, parallax)}
+                  className={cn(
+                    "facility-scene-node-wrap",
+                    nodeDepthClasses(getNodeLayout(labId)),
+                  )}
+                  data-facility-node={labId}
+                >
+                  <PlaceholderLabPod
+                    lab={PLACEHOLDER_LABS[labId]}
+                    nodeSize={getNodeLayout(labId).size}
+                  />
+                </motion.div>
+              )),
+            ];
+          },
+        )}
 
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -181,7 +282,7 @@ export function FacilityScene({
             y: fadeIn("ceo") ? 0 : -20,
           }}
           transition={{ duration: 0.7, ease: "easeOut" }}
-          style={nodeStyle("ceo", 4)}
+          style={nodeStyle("ceo", parallax)}
           className={cn(
             "facility-scene-node-wrap facility-scene-ceo-wrap",
             nodeDepthClasses(getNodeLayout("ceo")),
@@ -195,65 +296,6 @@ export function FacilityScene({
             onSelect={() => onLabSelect("ceo")}
           />
         </motion.div>
-
-        {SPECIALIST_AGENT_IDS.map((agentId, i) => {
-          const isFocused = navigation.focusTarget === agentId;
-          return (
-          <motion.div
-            key={agentId}
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{
-              opacity: fadeIn("labs") ? (isChamberNav && !isFocused ? 0.38 : 1) : 0,
-              scale: fadeIn("labs") ? (isFocused ? 1.08 : 1) : 0.85,
-              filter: isChamberNav && !isFocused ? "blur(1px)" : "blur(0px)",
-            }}
-            transition={{ duration: 0.5, delay: i * 0.06, ease: "easeOut" }}
-            style={nodeStyle(agentId, labZIndex(agentId, data.labs))}
-            className={cn(
-              "facility-scene-node-wrap",
-              nodeDepthClasses(getNodeLayout(agentId)),
-              isFocused && "facility-scene-node-focused facility-scene-chamber-active",
-              ambientPulse?.agentId === agentId && "facility-scene-node-ambient",
-            )}
-            data-facility-node={agentId}
-          >
-            <LabPod
-              lab={data.labs[agentId]}
-              nodeSize={getNodeLayout(agentId).size}
-              selected={selectedLabId === agentId}
-              highlighted={highlightedSet.has(agentId)}
-              onSelect={() => onLabSelect(agentId)}
-            />
-          </motion.div>
-          );
-        })}
-
-        {PLACEHOLDER_LAB_IDS.map((labId, i) => (
-          <motion.div
-            key={labId}
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{
-              opacity: fadeIn("labs") ? 1 : 0,
-              scale: fadeIn("labs") ? 1 : 0.85,
-            }}
-            transition={{
-              duration: 0.5,
-              delay: (SPECIALIST_AGENT_IDS.length + i) * 0.06,
-              ease: "easeOut",
-            }}
-            style={nodeStyle(labId, 2)}
-            className={cn(
-              "facility-scene-node-wrap",
-              nodeDepthClasses(getNodeLayout(labId)),
-            )}
-            data-facility-node={labId}
-          >
-            <PlaceholderLabPod
-              lab={PLACEHOLDER_LABS[labId]}
-              nodeSize={getNodeLayout(labId).size}
-            />
-          </motion.div>
-        ))}
 
         <CeoCommandBanner decisions={ceoDecisions} />
         </motion.div>

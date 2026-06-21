@@ -4,142 +4,215 @@ import type {
   FacilitySceneNodeId,
 } from "@/lib/facility/types";
 
-/** Reference canvas for converting orbital px → layout %. */
-const ORBIT_REF = { width: 1000, height: 720 } as const;
+/** Reference canvas for orbital spatial math (px → %). */
+const ORBIT_REF = { width: 1100, height: 880 } as const;
 
-/** Brain-center to chamber-center distance (px). Target: 220–280. */
-export const FACILITY_ORBIT_RADIUS_PX = 250;
+/**
+ * Brain anchor — center of gravity, slightly below viewport midpoint.
+ * Raised ~100px from Phase J to open the lower arc for Mission Control.
+ */
+const BRAIN_CENTER = { left: 50, top: 40 } as const;
 
-/** Command stack — Brain (sun) + CEO (north pole). */
-const BRAIN_CENTER = { left: 50, top: 41 } as const;
+/** Orbital distance from Brain center (px). Target: 260–340. */
+export const FACILITY_ORBIT_RADIUS_PX = 480;
 
-function orbitPercent(
-  angleDeg: number,
-  radiusPx = FACILITY_ORBIT_RADIUS_PX,
+/** CEO command platform — north pole above the Nexus (px). */
+export const FACILITY_CEO_ABOVE_BRAIN_PX = 325;
+
+/** No chamber may sit in the column beneath the Brain. */
+export const BRAIN_UNDERNEATH_EXCLUSION_X_PX = 210;
+
+interface OrbitalSlot {
+  id: FacilitySceneNodeId;
+  offsetX: number;
+  offsetY: number;
+  size: number;
+  depth: FacilityDepthLayer;
+  zone: FacilityNodeLayout["zone"];
+  tier: FacilityNodeLayout["tier"];
+}
+
+function nodeOffsetPx(
+  offsetX: number,
+  offsetY: number,
 ): { left: number; top: number } {
-  const rad = (angleDeg * Math.PI) / 180;
   const cx = (BRAIN_CENTER.left / 100) * ORBIT_REF.width;
   const cy = (BRAIN_CENTER.top / 100) * ORBIT_REF.height;
-  const x = cx + radiusPx * Math.cos(rad);
-  const y = cy + radiusPx * Math.sin(rad);
   return {
-    left: Math.round((x / ORBIT_REF.width) * 1000) / 10,
-    top: Math.round((y / ORBIT_REF.height) * 1000) / 10,
+    left: Math.round(((cx + offsetX) / ORBIT_REF.width) * 1000) / 10,
+    top: Math.round(((cy + offsetY) / ORBIT_REF.height) * 1000) / 10,
+  };
+}
+
+function ceoStackPercent(): { left: number; top: number } {
+  const cy = (BRAIN_CENTER.top / 100) * ORBIT_REF.height;
+  return {
+    left: BRAIN_CENTER.left,
+    top:
+      Math.round(
+        ((cy - FACILITY_CEO_ABOVE_BRAIN_PX) / ORBIT_REF.height) * 1000,
+      ) / 10,
   };
 }
 
 /**
- * Planetary AI layout — Brain at center, CEO above, labs on balanced orbits.
+ * Phase K — Orbital headquarters. Chambers wrap the Brain on a wide arc
+ * from left to right; nothing sits beneath the Nexus.
  *
- *                    CEO (50, 16)
- *                        │
- *         Analytics    Brain    Image
- *            ╲         (50,41)      ╱
- *     Research ─────────┼───────── Marketing
- *                        │
- *          Design    Operations    Shopify
- *            ╲         │           ╱
- *           Content ──┴── Commerce
+ *                      CEO
  *
- * Upper orbit (205°→335°): Research · Analytics · Image · Marketing
- * Lower orbit (155°→25°):  Design · Content · Operations · Commerce · Shopify
+ *        Research      Analytics
+ *
+ *  Design                          Image
+ *
+ *             BRAIN NEXUS
+ *
+ *  Content                        Marketing
+ *
+ *       Shopify        Commerce
+ *
+ *                 Operations
+ *
+ * Marketing mirrors Content on the lower arc (left / right balance).
+ * Shopify, Commerce, and Operations sweep the lower-right wing.
+ * The column beneath Brain center stays empty for Mission Control.
+ *
+ * Vertical zones:
+ *   TOP          — CEO
+ *   UPPER LEFT   — Research, Analytics
+ *   UPPER RIGHT  — Image, Marketing
+ *   LOWER LEFT   — Design, Content
+ *   LOWER RIGHT  — Shopify, Commerce, Operations
+ *
+ * Depth (scale 0.85 → 1.0):
+ *   foreground — Content, Commerce, Operations
+ *   midground  — Brain, CEO, Design, Shopify
+ *   background — Research, Marketing, Analytics, Image
  */
-export const FACILITY_NODE_LAYOUT: FacilityNodeLayout[] = [
+const ORBITAL_SLOTS: OrbitalSlot[] = [
   {
     id: "brain",
-    left: BRAIN_CENTER.left,
-    top: BRAIN_CENTER.top,
-    size: 328,
-    zone: "command",
+    offsetX: 0,
+    offsetY: 0,
+    size: 310,
     depth: "midground",
+    zone: "command",
     tier: "command",
   },
   {
     id: "ceo",
-    left: 50,
-    top: 16,
-    size: 220,
-    zone: "command",
+    offsetX: 0,
+    offsetY: -FACILITY_CEO_ABOVE_BRAIN_PX,
+    size: 235,
     depth: "midground",
+    zone: "command",
     tier: "command",
   },
 
-  /* Upper orbit */
+  /* Upper left arc */
   {
     id: "research",
-    ...orbitPercent(205),
-    size: 180,
+    offsetX: -620,
+    offsetY: -320,
+    size: 195,
+    depth: "background",
     zone: "research",
-    depth: "midground",
     tier: "primary",
   },
   {
     id: "analytics",
-    ...orbitPercent(235),
-    size: 155,
+    offsetX: -370,
+    offsetY: -40,
+    size: 190,
+    depth: "background",
     zone: "research",
-    depth: "foreground",
     tier: "support",
   },
+
+  /* Upper right arc */
   {
     id: "image",
-    ...orbitPercent(305),
-    size: 165,
+    offsetX: -500,
+    offsetY: 240,
+    size: 195,
+    depth: "background",
     zone: "marketing",
-    depth: "foreground",
     tier: "support",
   },
   {
     id: "marketing",
-    ...orbitPercent(335),
-    size: 180,
+    offsetX: 620,
+    offsetY: -40,
+    size: 195,
+    depth: "background",
     zone: "marketing",
-    depth: "midground",
     tier: "primary",
   },
 
-  /* Lower orbit */
+  /* Lower left arc */
   {
     id: "designer",
-    ...orbitPercent(155),
-    size: 170,
+    offsetX: -370,
+    offsetY: -320,
+    size: 195,
+    depth: "midground",
     zone: "design",
-    depth: "background",
-    tier: "peripheral",
+    tier: "primary",
   },
   {
     id: "content",
-    ...orbitPercent(125),
-    size: 160,
+    offsetX: -620,
+    offsetY: -40,
+    size: 200,
+    depth: "foreground",
     zone: "design",
-    depth: "background",
     tier: "support",
   },
+
+  /* Lower right arc — sweeps around Brain; column beneath Nexus stays empty */
   {
-    id: "operations",
-    ...orbitPercent(88),
-    size: 145,
-    zone: "operations",
-    depth: "background",
+    id: "shopify",
+    offsetX: 370,
+    offsetY: -320,
+    size: 190,
+    depth: "midground",
+    zone: "commerce",
     tier: "peripheral",
   },
   {
     id: "commerce",
-    ...orbitPercent(55),
-    size: 145,
+    offsetX: 370,
+    offsetY: -40,
+    size: 200,
+    depth: "foreground",
     zone: "commerce",
-    depth: "background",
     tier: "peripheral",
   },
   {
-    id: "shopify",
-    ...orbitPercent(25),
-    size: 160,
-    zone: "commerce",
-    depth: "background",
+    id: "operations",
+    offsetX: 620,
+    offsetY: -320,
+    size: 195,
+    depth: "foreground",
+    zone: "operations",
     tier: "peripheral",
   },
 ];
+
+export const FACILITY_NODE_LAYOUT: FacilityNodeLayout[] = ORBITAL_SLOTS.map(
+  (slot) => ({
+    id: slot.id,
+    ...(slot.id === "ceo"
+      ? ceoStackPercent()
+      : slot.id === "brain"
+        ? { left: BRAIN_CENTER.left, top: BRAIN_CENTER.top }
+        : nodeOffsetPx(slot.offsetX, slot.offsetY)),
+    size: slot.size,
+    zone: slot.zone,
+    depth: slot.depth,
+    tier: slot.tier,
+  }),
+);
 
 /** Environment illumination anchor — matches Neural Nexus layout position. */
 export const NEXUS_ENVIRONMENT_ANCHOR = {
@@ -147,21 +220,35 @@ export const NEXUS_ENVIRONMENT_ANCHOR = {
   top: BRAIN_CENTER.top,
 } as const;
 
-/** Overview camera — tighter framing for orbital composition. */
-export const FACILITY_HERO_SCALE = 0.74;
+/** Overview camera — single cinematic shot of the full orbital ring. */
+export const FACILITY_HERO_SCALE = 0.62;
 
-/** Global composition pan — centers the planetary system in viewport. */
-export const FACILITY_COMPOSITION_OFFSET = { x: 0, y: -2.5 } as const;
+/** Global composition pan — Brain as center of gravity with HUD below. */
+export const FACILITY_COMPOSITION_OFFSET = { x: 0, y: -1 } as const;
 
-/** 3D atmosphere offsets per depth plane. */
+/** Parallax strength per depth plane (px per normalized pointer delta). */
+export const DEPTH_PARALLAX_FACTOR: Record<FacilityDepthLayer, number> = {
+  foreground: 12,
+  midground: 6,
+  background: 3,
+};
+
+/** 3D atmosphere — foreground 1.0, midground ~0.92, background 0.85. */
 export const DEPTH_ATMOSPHERE: Record<
   FacilityDepthLayer,
   { translateZ: number; scale: number; zBias: number }
 > = {
-  foreground: { translateZ: 40, scale: 1.02, zBias: 3 },
-  midground: { translateZ: 0, scale: 1, zBias: 2 },
-  background: { translateZ: -56, scale: 0.93, zBias: 0 },
+  foreground: { translateZ: 48, scale: 1, zBias: 4 },
+  midground: { translateZ: 0, scale: 0.92, zBias: 2 },
+  background: { translateZ: -80, scale: 0.85, zBias: 0 },
 };
+
+/** Scene stacking — Brain visible; CEO command platform on top. */
+export const FACILITY_NODE_Z_INDEX: Partial<Record<FacilitySceneNodeId, number>> =
+  {
+    brain: 10,
+    ceo: 14,
+  };
 
 const FALLBACK_NODE_LAYOUT: FacilityNodeLayout = {
   id: "brain",
@@ -196,11 +283,29 @@ export function depthAtmosphere(depth: FacilityDepthLayer) {
   return DEPTH_ATMOSPHERE[depth];
 }
 
-/** Orbital positions for debug / future ring visuals. */
+export function nodeSceneZIndex(
+  id: FacilitySceneNodeId,
+  layout: FacilityNodeLayout,
+  activityBoost = 0,
+): number {
+  const pinned = FACILITY_NODE_Z_INDEX[id];
+  if (pinned != null) return pinned + activityBoost;
+  const atmosphere = depthAtmosphere(layout.depth);
+  return 3 + atmosphere.zBias + activityBoost;
+}
+
+/**
+ * Semicircular orbital arc for debug / ring visuals — wraps L→R, open beneath Brain.
+ */
 export function getOrbitRingPositions(
   radiusPx = FACILITY_ORBIT_RADIUS_PX,
 ): Array<{ left: number; top: number }> {
-  return Array.from({ length: 12 }, (_, i) =>
-    orbitPercent((i / 12) * 360, radiusPx),
-  );
+  const arcStartDeg = 155;
+  const arcEndDeg = 385;
+  const steps = 14;
+  return Array.from({ length: steps }, (_, i) => {
+    const angleDeg = arcStartDeg + ((arcEndDeg - arcStartDeg) * i) / (steps - 1);
+    const rad = (angleDeg * Math.PI) / 180;
+    return nodeOffsetPx(radiusPx * Math.cos(rad), radiusPx * Math.sin(rad));
+  });
 }

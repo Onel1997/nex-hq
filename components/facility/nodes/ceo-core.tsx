@@ -94,11 +94,33 @@ export const CeoCore = memo(function CeoCore({
       <div className="facility-ceo-chamber-viewport">
         <div className="facility-ceo-command-grid" aria-hidden />
         <motion.div
+          className="facility-ceo-orbit-ring facility-ceo-orbit-ring-outer"
+          animate={{ rotate: -360 }}
+          transition={{ duration: 32, repeat: Infinity, ease: "linear" }}
+          aria-hidden
+        />
+        <motion.div
           className="facility-ceo-orbit-ring"
           animate={{ rotate: 360 }}
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
           aria-hidden
         />
+        <div className="facility-ceo-command-particles" aria-hidden>
+          {Array.from({ length: 6 }, (_, i) => (
+            <motion.span
+              key={i}
+              className="facility-ceo-command-particle"
+              style={{ "--particle-i": i } as React.CSSProperties}
+              animate={{ opacity: [0.25, 0.9, 0.25], scale: [0.85, 1.15, 0.85] }}
+              transition={{
+                duration: 2.4 + i * 0.3,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: i * 0.35,
+              }}
+            />
+          ))}
+        </div>
         <motion.div
           className="facility-ceo-energy-core"
           animate={

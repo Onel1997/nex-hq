@@ -96,7 +96,7 @@ export function navigationTransform(
     return {
       scale: FACILITY_HERO_SCALE,
       x: 0,
-      y: -2,
+      y: -1,
       rotateX: 0,
       perspective: 1200,
     };
