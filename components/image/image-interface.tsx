@@ -168,11 +168,11 @@ export function ImageInterface() {
             reportId={result.reportId}
             reportRecordId={result.reportRecordId}
             projectName={result.projectName}
+            visualDirection={result.visualDirection}
             moodboard={result.moodboard}
             palette={result.palette}
-            corePackage={result.corePackage}
-            advancedPackage={result.advancedPackage}
-            campaignShots={result.campaignShots}
+            productionAssets={result.productionAssets}
+            lookbookShots={result.lookbookShots}
             confidence={result.confidence}
             sourceReportTitles={result.sourceReportTitles}
           />

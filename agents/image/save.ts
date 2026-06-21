@@ -5,7 +5,7 @@ import type {
 import { getBrainClient } from "@/brain/client";
 import { slugify } from "@/brain/client/utils";
 import { resolveReportTaskIds } from "@/lib/reports/task-link";
-import { IMAGE_SCHEMA_VERSION } from "./normalized";
+import { IMAGE_SCHEMA_VERSION } from "./studio-schema";
 import type { ImageOutput } from "./types";
 
 export interface SaveImageInput {
@@ -24,11 +24,12 @@ function buildImageSections(output: ImageOutput): BrainImageSections {
   return {
     schemaVersion: IMAGE_SCHEMA_VERSION,
     projectName: output.projectName,
+    collectionName: output.collectionName,
+    visualDirection: output.visualDirection,
     moodboard: output.moodboard,
     palette: output.palette,
-    corePackage: output.corePackage,
-    advancedPackage: output.advancedPackage,
-    campaignShots: output.campaignShots,
+    productionAssets: output.productionAssets,
+    lookbookShots: output.lookbookShots,
     sourceReportTitles: output.sourceReportTitles,
   };
 }
@@ -54,16 +55,16 @@ export async function saveImageToBrain(
     ...(originTaskId ? { originTaskId } : {}),
     agentId: "image",
     status: "submitted",
-    summary: input.output.moodboard.visualDirection.slice(0, 500),
+    summary: input.output.visualDirection.slice(0, 500),
     confidence: input.output.confidence,
     reportType: "image-project",
     imageSections,
-    notes: `Creative Production Briefing: ${input.brief}`,
+    notes: `Creative Studio Production Briefing: ${input.brief}`,
     artifacts: [
       {
         id: `${reportId}-image-project`,
         type: "markdown",
-        label: "Creative Production Project",
+        label: "Creative Studio Production Project",
         content: input.output.fullProject,
       },
     ],
@@ -74,10 +75,17 @@ export async function saveImageToBrain(
     domain: "reports",
     slug: `image-${baseSlug}-${slugSuffix}`,
     title: input.output.title,
-    summary: input.output.moodboard.visualDirection.slice(0, 500),
+    summary: input.output.visualDirection.slice(0, 500),
     content: reportContent,
     status: "pending_review",
-    tags: ["image-project", "image-agent", "agent-generated", "visual", "production"],
+    tags: [
+      "image-project",
+      "image-agent",
+      "agent-generated",
+      "visual",
+      "production",
+      "creative-studio",
+    ],
     provenance: {
       createdBy: { type: "agent", id: "image" },
       sourceTaskId: taskId,

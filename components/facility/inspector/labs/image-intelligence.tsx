@@ -21,21 +21,31 @@ export const ImageIntelligencePanel = memo(function ImageIntelligencePanel({
 
   const hasData =
     intel.reports.length > 0 ||
-    intel.assets.length > 0 ||
+    intel.pendingAssets.length > 0 ||
+    intel.generatedAssets.length > 0 ||
     intel.prompts.length > 0;
 
   if (!hasData) {
     return (
       <p className="facility-inspector-empty">
-        No visual assets yet — run the Image Agent to generate prompts and assets.
+        No visual production yet — run the Image Agent to plan the creative studio shoot.
       </p>
     );
   }
 
   return (
     <div className="facility-intel-panel">
+      {intel.visualDirection ? (
+        <div className="facility-intel-highlight">
+          <span className="facility-intel-highlight-label">Visual Direction</span>
+          <span className="facility-intel-highlight-value facility-inspector-text">
+            {intel.visualDirection}
+          </span>
+        </div>
+      ) : null}
+
       {intel.reports.length > 0 ? (
-        <IntelSubsection label="Image Reports">
+        <IntelSubsection label="Production Reports">
           <div className="facility-intel-report-stack">
             {intel.reports.slice(0, 4).map((r) => (
               <IntelReportRow
@@ -48,36 +58,54 @@ export const ImageIntelligencePanel = memo(function ImageIntelligencePanel({
         </IntelSubsection>
       ) : null}
 
-      {intel.prompts.length > 0 ? (
-        <IntelSubsection label="Generated Prompts">
-          <div className="facility-intel-report-stack">
-            {intel.prompts.slice(0, 4).map((p) => (
-              <IntelReportRow
-                key={p.title}
-                title={p.title}
-                meta="prompt"
-                summary={p.prompt}
-              />
-            ))}
-          </div>
-        </IntelSubsection>
-      ) : null}
-
-      {intel.assets.length > 0 ? (
-        <IntelSubsection label="Assets">
+      {intel.pendingAssets.length > 0 ? (
+        <IntelSubsection label="Pending Assets">
           <ul className="facility-inspector-list facility-lab-room-list">
-            {intel.assets.slice(0, 6).map((asset) => (
+            {intel.pendingAssets.map((asset) => (
               <li
-                key={asset.title}
+                key={`${asset.title}-${asset.assetType}`}
                 className="facility-inspector-list-item facility-lab-room-list-item"
               >
                 <span>{asset.title}</span>
-                <span className="facility-inspector-meta">
-                  {asset.type} · {asset.status}
+                <span className="facility-inspector-meta" data-status={asset.status}>
+                  {asset.productName} · {asset.assetType}
                 </span>
               </li>
             ))}
           </ul>
+        </IntelSubsection>
+      ) : null}
+
+      {intel.generatedAssets.length > 0 ? (
+        <IntelSubsection label="Generated Assets">
+          <ul className="facility-inspector-list facility-lab-room-list">
+            {intel.generatedAssets.map((asset) => (
+              <li
+                key={`gen-${asset.title}`}
+                className="facility-inspector-list-item facility-lab-room-list-item"
+              >
+                <span>{asset.title}</span>
+                <span className="facility-inspector-meta" data-status={asset.status}>
+                  {asset.assetType}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </IntelSubsection>
+      ) : null}
+
+      {intel.prompts.length > 0 ? (
+        <IntelSubsection label="Shot Briefs">
+          <div className="facility-intel-report-stack">
+            {intel.prompts.slice(0, 4).map((p) => (
+              <IntelReportRow
+                key={`${p.title}-${p.productName}`}
+                title={p.title}
+                meta={p.productName}
+                summary={p.prompt}
+              />
+            ))}
+          </div>
         </IntelSubsection>
       ) : null}
 
@@ -87,9 +115,15 @@ export const ImageIntelligencePanel = memo(function ImageIntelligencePanel({
         </IntelSubsection>
       ) : null}
 
-      {intel.productImages.length > 0 ? (
-        <IntelSubsection label="Product Images">
-          <IntelList items={intel.productImages} />
+      {intel.productVisuals.length > 0 ? (
+        <IntelSubsection label="Product Visuals">
+          <IntelList items={intel.productVisuals} />
+        </IntelSubsection>
+      ) : null}
+
+      {intel.lookbookShots.length > 0 ? (
+        <IntelSubsection label="Lookbook">
+          <IntelList items={intel.lookbookShots} limit={6} />
         </IntelSubsection>
       ) : null}
 

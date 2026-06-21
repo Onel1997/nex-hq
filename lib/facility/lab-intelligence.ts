@@ -101,10 +101,13 @@ export interface ImageIntelItem {
 
 export interface ImageIntelligence {
   reports: ImageIntelItem[];
-  prompts: Array<{ title: string; prompt: string }>;
-  assets: Array<{ title: string; type: string; status: string }>;
+  visualDirection: string | null;
+  pendingAssets: Array<{ title: string; productName: string; assetType: string; status: string }>;
+  generatedAssets: Array<{ title: string; productName: string; assetType: string; status: string }>;
+  prompts: Array<{ title: string; prompt: string; productName: string }>;
   campaignVisuals: string[];
-  productImages: string[];
+  productVisuals: string[];
+  lookbookShots: string[];
   generationStatus: Array<{ name: string; status: string }>;
 }
 
@@ -115,6 +118,38 @@ export interface CeoIntelligence {
   finalReports: Array<{ title: string; completionScore: number; verdict: string }>;
   completionPercentage: number | null;
   executiveConfidence: number | null;
+}
+
+export interface ShopifyIntelProduct {
+  title: string;
+  productType: string;
+  price: string;
+  currency: string;
+  status: string;
+  inventory: number;
+  collections: string[];
+  colors: string[];
+  materials: string[];
+}
+
+export interface ShopifyIntelligence {
+  productCount: number;
+  categories: string[];
+  collections: string[];
+  priceBands: Array<{ label: string; range: string; productCount: number }>;
+  inventory: {
+    totalProducts: number;
+    activeProducts: number;
+    inStock: number;
+    outOfStock: number;
+    lowStock: number;
+    totalInventory: number;
+  };
+  latestProducts: ShopifyIntelProduct[];
+  colors: string[];
+  materials: string[];
+  categoryGaps: string[];
+  bestsellerCandidates: ShopifyIntelProduct[];
 }
 
 function formatDate(iso: string): string {
@@ -360,50 +395,80 @@ export function extractImageIntelligence(
     assetCount: r.imageProject?.assetCount ?? 0,
   }));
 
-  const prompts = reports.flatMap((r) => {
+  const latest = reports[0]?.imageProject;
+
+  const allAssets = reports.flatMap((r) => {
     const project = r.imageProject;
     if (!project) return [];
-    return [...project.corePackage, ...project.advancedPackage]
-      .slice(0, 6)
-      .map((asset) => ({
-        title: asset.title,
-        prompt: asset.prompt.openai || asset.prompt.midjourney || asset.prompt.flux,
-      }));
+    return project.productionAssets.length
+      ? project.productionAssets
+      : [...project.corePackage, ...project.advancedPackage];
   });
 
-  const assets = reports.flatMap((r) => {
-    const project = r.imageProject;
-    if (!project) return [];
-    return [...project.corePackage, ...project.advancedPackage]
-      .slice(0, 8)
-      .map((asset) => ({
-        title: asset.title,
-        type: asset.type,
-        status: asset.status,
-      }));
-  });
+  const prompts = allAssets.slice(0, 8).map((asset) => ({
+    title: asset.title ?? asset.productName,
+    productName: asset.productName,
+    prompt:
+      asset.prompt.openai || asset.prompt.midjourney || asset.prompt.flux,
+  }));
 
-  const campaignVisuals = reports.flatMap((r) =>
-    (r.imageProject?.campaignShots ?? []).map((s) => s.shotName),
+  const pendingAssets = allAssets
+    .filter((a) => a.status === "pending" || a.status === "ready" || a.status === "generating")
+    .slice(0, 8)
+    .map((asset) => ({
+      title: asset.title ?? asset.productName,
+      productName: asset.productName,
+      assetType: asset.assetType,
+      status: asset.status,
+    }));
+
+  const generatedAssets = allAssets
+    .filter((a) => a.status === "completed")
+    .slice(0, 8)
+    .map((asset) => ({
+      title: asset.title ?? asset.productName,
+      productName: asset.productName,
+      assetType: asset.assetType,
+      status: asset.status,
+    }));
+
+  const campaignVisuals = allAssets
+    .filter(
+      (a) =>
+        a.outputCategory === "editorial_campaign" ||
+        a.outputCategory === "launch_assets" ||
+        a.assetType.includes("editorial") ||
+        a.assetType === "hero_image" ||
+        a.assetType === "collection_cover",
+    )
+    .map((a) => a.title ?? a.productName)
+    .slice(0, 8);
+
+  const productVisuals = allAssets
+    .filter((a) => a.outputCategory === "product_photography")
+    .map((a) => `${a.productName} · ${a.assetType}`)
+    .slice(0, 8);
+
+  const lookbookShots = reports.flatMap((r) =>
+    (r.imageProject?.lookbookShots ?? r.imageProject?.campaignShots ?? []).map(
+      (s) => s.shotName,
+    ),
   );
 
-  const productImages = reports.flatMap((r) =>
-    (r.imageProject?.corePackage ?? [])
-      .filter((a) => a.type === "product_mockup" || a.type === "hero_banner")
-      .map((a) => a.title),
-  );
-
-  const generationStatus = assets.map((a) => ({
-    name: a.title,
+  const generationStatus = allAssets.slice(0, 10).map((a) => ({
+    name: a.title ?? a.productName,
     status: a.status,
   }));
 
   return {
     reports: items,
+    visualDirection: latest?.visualDirection ?? latest?.moodboard?.visualDirection ?? null,
+    pendingAssets,
+    generatedAssets,
     prompts,
-    assets,
     campaignVisuals,
-    productImages,
+    productVisuals,
+    lookbookShots,
     generationStatus,
   };
 }
@@ -456,3 +521,40 @@ export function extractCeoIntelligence(
 }
 
 export { formatDate as formatInspectorDate };
+
+/** Map API product knowledge into inspector-friendly Shopify intelligence. */
+export function mapShopifyCatalogIntelligence(
+  productKnowledge: {
+    productCount: number;
+    availableCategories: string[];
+    collections: string[];
+    priceBands: Array<{ label: string; range: string; productCount: number }>;
+    availableColors: string[];
+    availableMaterials: string[];
+    categoryGaps: string[];
+    inventoryState: ShopifyIntelligence["inventory"];
+    availableProducts: ShopifyIntelProduct[];
+    bestsellerCandidates: ShopifyIntelProduct[];
+  } | null,
+): ShopifyIntelligence | null {
+  if (!productKnowledge || productKnowledge.productCount === 0) {
+    return null;
+  }
+
+  const latestProducts = [...productKnowledge.availableProducts]
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .slice(0, 6);
+
+  return {
+    productCount: productKnowledge.productCount,
+    categories: productKnowledge.availableCategories,
+    collections: productKnowledge.collections,
+    priceBands: productKnowledge.priceBands,
+    inventory: productKnowledge.inventoryState,
+    latestProducts,
+    colors: productKnowledge.availableColors,
+    materials: productKnowledge.availableMaterials,
+    categoryGaps: productKnowledge.categoryGaps,
+    bestsellerCandidates: productKnowledge.bestsellerCandidates,
+  };
+}

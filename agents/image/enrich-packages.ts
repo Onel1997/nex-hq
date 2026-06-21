@@ -14,12 +14,11 @@ import {
 import { dedupeImageAssets, matchAssetToSpec } from "./dedupe-assets";
 import { migrateLegacyImageSections } from "./migrate-legacy";
 import {
-  type ImageCampaignShot,
-  type ImageMoodboardSection,
-  type ImagePalette,
-  type NormalizedImageAsset,
-  IMAGE_SCHEMA_VERSION,
-} from "./normalized";
+  type LegacyImageCampaignShot,
+  type LegacyNormalizedImageAsset,
+  IMAGE_SCHEMA_VERSION_V2,
+} from "./legacy-v2";
+import type { ImageMoodboardSection, ImagePalette } from "./studio-schema";
 
 const LEGACY_IMAGE_PAYLOAD_KEYS = [
   "heroBanner",
@@ -206,7 +205,7 @@ function normalizeCampaignShot(
   existing: Record<string, unknown> | undefined,
   identity: ImageCollectionIdentity,
   index: number,
-): ImageCampaignShot {
+): LegacyImageCampaignShot {
   const fallback = defaultShot(identity, index);
   if (!existing) return fallback;
 
@@ -232,11 +231,11 @@ function normalizeCampaignShot(
 function normalizeCampaignShots(
   shotsRaw: unknown[],
   identity: ImageCollectionIdentity,
-): ImageCampaignShot[] {
+): LegacyImageCampaignShot[] {
   const sourceCount = shotsRaw.length;
   const targetCount =
     sourceCount < 12 ? 12 : Math.min(sourceCount, 24);
-  const shots: ImageCampaignShot[] = [];
+  const shots: LegacyImageCampaignShot[] = [];
 
   for (let i = 0; i < targetCount; i += 1) {
     shots.push(normalizeCampaignShot(asRecord(shotsRaw[i]), identity, i));
@@ -281,7 +280,7 @@ function normalizePrompts(
   value: unknown,
   identity: ImageCollectionIdentity,
   subject: string,
-): NormalizedImageAsset["prompt"] {
+): LegacyNormalizedImageAsset["prompt"] {
   const obj = asRecord(value);
   if (!obj) return buildArtDirectionPrompt({ subject, collectionName: identity.collectionName, campaignName: identity.campaignName });
 
@@ -305,7 +304,7 @@ function normalizePrompts(
 function defaultCoreAsset(
   spec: (typeof CORE_ASSET_SPECS)[number],
   identity: ImageCollectionIdentity,
-): NormalizedImageAsset {
+): LegacyNormalizedImageAsset {
   const { collectionName, campaignName } = identity;
   const subject = `${spec.title} for ${collectionName} (${campaignName})`;
   return {
@@ -329,7 +328,7 @@ function defaultCoreAsset(
 function defaultAdvancedAsset(
   spec: (typeof ADVANCED_ASSET_SPECS)[number],
   identity: ImageCollectionIdentity,
-): NormalizedImageAsset {
+): LegacyNormalizedImageAsset {
   const { collectionName, campaignName } = identity;
   const subject = `${spec.title} for ${collectionName} (${campaignName})`;
   return {
@@ -356,12 +355,12 @@ function normalizeAsset(
   identity: ImageCollectionIdentity,
   fallbackPackage: "core" | "advanced",
   specs: typeof CORE_ASSET_SPECS | typeof ADVANCED_ASSET_SPECS,
-): NormalizedImageAsset | null {
+): LegacyNormalizedImageAsset | null {
   const obj = asRecord(entry);
   if (!obj) return null;
 
   const idHint = asString(obj.id);
-  const typeHint = asString(obj.type) as NormalizedImageAsset["type"];
+  const typeHint = asString(obj.type) as LegacyNormalizedImageAsset["type"];
   const variantHint = asString(obj.variant);
 
   const spec =
@@ -409,7 +408,7 @@ function normalizeAsset(
       formatAssetTitle(identity.collectionName, assetTypeLabel),
     ),
     provider: undefined,
-    status: (asString(obj.status) as NormalizedImageAsset["status"]) || "ready",
+    status: (asString(obj.status) as LegacyNormalizedImageAsset["status"]) || "ready",
     imageUrl: asString(obj.imageUrl) || undefined,
     storagePath: asString(obj.storagePath) || undefined,
     createdAt: asString(obj.createdAt) || undefined,
@@ -418,11 +417,11 @@ function normalizeAsset(
 }
 
 function ensureCoreCoverage(
-  items: NormalizedImageAsset[],
+  items: LegacyNormalizedImageAsset[],
   identity: ImageCollectionIdentity,
-): NormalizedImageAsset[] {
+): LegacyNormalizedImageAsset[] {
   const deduped = dedupeImageAssets(items);
-  const bySpec = new Map<string, NormalizedImageAsset>();
+  const bySpec = new Map<string, LegacyNormalizedImageAsset>();
 
   for (const asset of deduped) {
     const spec = matchAssetToSpec(asset, CORE_ASSET_SPECS);
@@ -449,11 +448,11 @@ function ensureCoreCoverage(
 }
 
 function ensureAdvancedCoverage(
-  items: NormalizedImageAsset[],
+  items: LegacyNormalizedImageAsset[],
   identity: ImageCollectionIdentity,
-): NormalizedImageAsset[] {
+): LegacyNormalizedImageAsset[] {
   const deduped = dedupeImageAssets(items);
-  const bySpec = new Map<string, NormalizedImageAsset>();
+  const bySpec = new Map<string, LegacyNormalizedImageAsset>();
 
   for (const asset of deduped) {
     const spec = matchAssetToSpec(asset, ADVANCED_ASSET_SPECS);
@@ -479,7 +478,7 @@ function ensureAdvancedCoverage(
   return ADVANCED_ASSET_SPECS.map((spec) => bySpec.get(spec.id)!);
 }
 
-function defaultShot(identity: ImageCollectionIdentity, index: number): ImageCampaignShot {
+function defaultShot(identity: ImageCollectionIdentity, index: number): LegacyImageCampaignShot {
   const types = [
     "hero_portrait",
     "wide_environment",
@@ -553,7 +552,7 @@ export function enrichImagePayload(
   const adjustments: string[] = [];
 
   payload.reportType = IMAGE_PROJECT_TYPE;
-  payload.schemaVersion = IMAGE_SCHEMA_VERSION;
+  payload.schemaVersion = IMAGE_SCHEMA_VERSION_V2;
 
   const identity = resolveIdentityFromPayload(
     payload,
@@ -598,7 +597,7 @@ export function enrichImagePayload(
       .map((entry, index) =>
         normalizeAsset(entry, index, identity, "core", CORE_ASSET_SPECS),
       )
-      .filter((item): item is NormalizedImageAsset => Boolean(item)),
+      .filter((item): item is LegacyNormalizedImageAsset => Boolean(item)),
     identity,
   );
   payload.corePackage = core;
@@ -612,7 +611,7 @@ export function enrichImagePayload(
       .map((entry, index) =>
         normalizeAsset(entry, index, identity, "advanced", ADVANCED_ASSET_SPECS),
       )
-      .filter((item): item is NormalizedImageAsset => Boolean(item)),
+      .filter((item): item is LegacyNormalizedImageAsset => Boolean(item)),
     identity,
   );
   payload.advancedPackage = advanced;
@@ -666,7 +665,7 @@ export function buildV2ImageOutput(
   return {
     title: payload.title,
     reportType: payload.reportType,
-    schemaVersion: IMAGE_SCHEMA_VERSION,
+    schemaVersion: IMAGE_SCHEMA_VERSION_V2,
     projectName: payload.projectName,
     moodboard: payload.moodboard,
     palette: payload.palette,

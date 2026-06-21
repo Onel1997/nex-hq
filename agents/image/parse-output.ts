@@ -1,21 +1,21 @@
 import { z } from "zod";
-import { buildV2ImageOutput, type EnrichImageOptions } from "./enrich-packages";
+import { buildV3ImageOutput, type EnrichStudioOptions } from "./enrich-studio";
 import { imageOutputSchema, type ImageOutput } from "./types";
 
-export interface ParseImageOutputOptions extends EnrichImageOptions {}
+export interface ParseImageOutputOptions extends EnrichStudioOptions {}
 
 export const EXPECTED_IMAGE_SCHEMA = {
   title: "string (required)",
   reportType: '"image-project" (required)',
-  schemaVersion: '"2.0" (required)',
+  schemaVersion: '"3.0" (required)',
   projectName: "string (required)",
+  collectionName: "string (required)",
+  visualDirection: "string min 80 chars",
   moodboard: "{ visualDirection, aestheticKeywords, colorSystem, materialReferences, photographyStyle }",
   palette: "{ primary, secondary, accent, background, text } — Name + HEX",
-  corePackage:
-    "{ id, title, type, package: core, dimensions, platform, prompt }[] (7–16)",
-  advancedPackage:
-    "{ id, title, type, package: advanced, dimensions, prompt }[] (0–32)",
-  campaignShots: "{ shotName, shotType, location, styling, purpose }[] (12–24)",
+  productionAssets:
+    "{ assetType, productName, collection, color, material, location, lighting, photographyStyle, cameraStyle, prompt, priority }[] (18–48)",
+  lookbookShots: "{ shotName, models, location, outfitProducts, styling, purpose }[] (4–12)",
   confidence: "number 0–1 (required)",
   sourceReportTitles: "string[] (required, min 1)",
   fullProject: "string (required, min 600 chars, Markdown)",
@@ -119,11 +119,12 @@ const REQUIRED_TOP_LEVEL_FIELDS = [
   "title",
   "reportType",
   "projectName",
+  "collectionName",
+  "visualDirection",
   "moodboard",
   "palette",
-  "corePackage",
-  "advancedPackage",
-  "campaignShots",
+  "productionAssets",
+  "lookbookShots",
   "confidence",
   "sourceReportTitles",
   "fullProject",
@@ -190,6 +191,10 @@ function normalizeImagePayload(
 
   const aliasMap: Record<string, string> = {
     project_name: "projectName",
+    collection_name: "collectionName",
+    visual_direction: "visualDirection",
+    production_assets: "productionAssets",
+    lookbook_shots: "lookbookShots",
     core_package: "corePackage",
     advanced_package: "advancedPackage",
     campaign_shots: "campaignShots",
@@ -227,8 +232,8 @@ function validateImagePayload(
   context: { rawResponse: string; strippedJson: string },
   options?: ParseImageOutputOptions,
 ): ImageOutput {
-  const v2Payload = buildV2ImageOutput(parsed, options);
-  const result = imageOutputSchema.safeParse(v2Payload);
+  const v3Payload = buildV3ImageOutput(parsed, options);
+  const result = imageOutputSchema.safeParse(v3Payload);
 
   if (result.success) {
     return result.data;
@@ -236,9 +241,9 @@ function validateImagePayload(
 
   console.error("IMAGE PROJECT VALIDATION ERRORS", result.error.flatten());
 
-  const missingFields = findMissingRequiredFields(v2Payload);
+  const missingFields = findMissingRequiredFields(v3Payload);
   const validationIssues = result.error.issues.map((issue) =>
-    zodIssueToDetail(issue, v2Payload),
+    zodIssueToDetail(issue, v3Payload),
   );
 
   throw new ImageParseError({
@@ -246,7 +251,7 @@ function validateImagePayload(
     stage: "validation",
     rawResponse: context.rawResponse,
     strippedJson: context.strippedJson,
-    parsed: v2Payload,
+    parsed: v3Payload,
     missingFields,
     validationIssues,
   });

@@ -5,11 +5,12 @@
 export { runImage, ImageKnowledgeError } from "./run";
 export { parseImageOutput, ImageParseError } from "./parse-output";
 export {
-  enrichImagePayload,
-  buildV2ImageOutput,
-  stripLegacyImageFields,
-} from "./enrich-packages";
-export type { EnrichImageOptions } from "./enrich-packages";
+  enrichStudioPayload,
+  buildV3ImageOutput,
+  normalizeStudioSections,
+} from "./enrich-studio";
+export type { EnrichStudioOptions } from "./enrich-studio";
+export { STUDIO_ASSET_SPECS, STUDIO_SPECS_BY_CATEGORY } from "./studio-specs";
 export {
   extractCollectionIdentity,
   formatAssetTitle,
@@ -52,14 +53,14 @@ export type {
   ImageAiPrompts,
   ImageMoodboardSection,
   ImagePalette,
-  NormalizedImageAsset,
-  ImageCampaignShot,
+  ImageStudioAsset,
+  ImageLookbookShot,
   ImageAssetPackage,
-  ImageAssetType,
+  LegacyImageAssetType as ImageAssetType,
 } from "./types";
 export {
   IMAGE_SCHEMA_VERSION,
   countImageAssets,
   findImageAsset,
-} from "./normalized";
+} from "./studio-schema";
 export { IMAGE_PROJECT_TYPE_VALUE } from "./types";

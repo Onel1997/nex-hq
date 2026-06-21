@@ -5,6 +5,7 @@ import { getDictionary } from "@/lib/i18n/get-dictionary";
 import type { BrainContextSlice } from "./assembly";
 import { formatBulletList, truncateText } from "./text-utils";
 import { formatDesignCreativeBrief } from "@/lib/design/creative-brief";
+import type { ProductKnowledge } from "@/lib/shopify/types";
 
 const ANALYSIS_EXCERPT_CHARS = 900;
 const NOTES_EXCERPT_CHARS = 400;
@@ -437,11 +438,107 @@ function formatRecordSection(
   return `${header}\n\n${body}`;
 }
 
+function formatProductLine(product: ProductKnowledge["availableProducts"][number]): string {
+  const parts = [
+    product.title,
+    product.productType,
+    `${product.price} ${product.currency}`,
+    product.status,
+  ];
+  if (product.collections.length) {
+    parts.push(`Collections: ${product.collections.join(", ")}`);
+  }
+  if (product.colors.length) {
+    parts.push(`Colors: ${product.colors.join(", ")}`);
+  }
+  if (product.materials.length) {
+    parts.push(`Materials: ${product.materials.join(", ")}`);
+  }
+  if (product.inventory >= 0) {
+    parts.push(`Inventory: ${product.inventory}`);
+  }
+  return `- ${parts.join(" · ")}`;
+}
+
+/** Format live Shopify catalog for agent system prompts — injected before Brain context. */
+export function formatShopifyKnowledgePrompt(
+  productKnowledge: ProductKnowledge,
+): string {
+  if (productKnowledge.productCount === 0) {
+    return [
+      "## SHOPIFY KNOWLEDGE",
+      "",
+      "Kein Live-Katalog verfügbar.",
+      "VERBOTEN: Produkte, Preise, Kategorien oder Kollektionen erfinden.",
+      "Alle Katalogdaten müssen aus Shopify stammen.",
+    ].join("\n");
+  }
+
+  const activeProducts = productKnowledge.availableProducts.filter(
+    (p) => p.status === "ACTIVE",
+  );
+  const productLines = activeProducts
+    .slice(0, 40)
+    .map(formatProductLine)
+    .join("\n");
+
+  const inv = productKnowledge.inventoryState;
+  const priceLines = productKnowledge.priceBands
+    .map((b) => `- ${b.label}: ${b.range} (${b.productCount} products)`)
+    .join("\n");
+
+  const bestsellers = productKnowledge.bestsellerCandidates
+    .slice(0, 6)
+    .map((p) => `- ${p.title} (${p.inventory} units)`)
+    .join("\n");
+
+  return [
+    "## SHOPIFY KNOWLEDGE",
+    "",
+    "Products:",
+    productLines || "- (none active)",
+    "",
+    "Categories:",
+    productKnowledge.availableCategories.map((c) => `- ${c}`).join("\n") ||
+      "- (none)",
+    "",
+    "Collections:",
+    productKnowledge.collections.map((c) => `- ${c}`).join("\n") ||
+      "- (none)",
+    "",
+    "Colors:",
+    productKnowledge.availableColors.join(", ") || "(none detected)",
+    "",
+    "Materials:",
+    productKnowledge.availableMaterials.join(", ") || "(none detected)",
+    "",
+    "Prices:",
+    priceLines || "- (none)",
+    "",
+    "Inventory:",
+    `- Total products: ${inv.totalProducts} · Active: ${inv.activeProducts} · In stock: ${inv.inStock} · Out of stock: ${inv.outOfStock} · Low stock: ${inv.lowStock}`,
+    "",
+    "Bestseller candidates:",
+    bestsellers || "- (none)",
+    "",
+    "Category gaps:",
+    productKnowledge.categoryGaps.map((g) => `- ${g}`).join("\n") ||
+      "- (none detected)",
+    "",
+    "REGEL: Keine Mock-Produkte. Keine erfundenen Preise. Alles stammt aus Shopify.",
+  ].join("\n");
+}
+
 export function buildPromptContext(
   slices: BrainContextSlice[],
   locale: Locale = DEFAULT_LOCALE,
+  shopifyKnowledge?: ProductKnowledge | null,
 ): string {
   const sections: string[] = [];
+
+  if (shopifyKnowledge) {
+    sections.push(formatShopifyKnowledgePrompt(shopifyKnowledge));
+  }
 
   for (const slice of slices) {
     for (const record of slice.records) {

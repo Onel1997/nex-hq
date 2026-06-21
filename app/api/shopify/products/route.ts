@@ -2,100 +2,12 @@ import { NextResponse } from "next/server";
 import {
   ShopifyApiError,
   ShopifyConfigError,
-  shopifyGraphQL,
 } from "@/lib/shopify/client";
-
-const PRODUCTS_PAGE_QUERY = `
-  query ShopifyProductsPage($cursor: String) {
-    products(first: 100, after: $cursor) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      edges {
-        node {
-          id
-          title
-          status
-          productType
-          totalInventory
-          featuredImage { url }
-          priceRangeV2 { minVariantPrice { amount currencyCode } }
-          collections(first: 5) {
-            edges {
-              node {
-                title
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-`;
-
-interface ShopifyProductNode {
-  id: string;
-  title: string;
-  status: string;
-  productType: string;
-  totalInventory: number;
-  featuredImage: { url: string } | null;
-  priceRangeV2: {
-    minVariantPrice: {
-      amount: string;
-      currencyCode: string;
-    };
-  };
-  collections: {
-    edges: Array<{
-      node: {
-        title: string;
-      };
-    }>;
-  };
-}
-
-interface ShopifyProductsPageData {
-  products: {
-    pageInfo: {
-      hasNextPage: boolean;
-      endCursor: string | null;
-    };
-    edges: Array<{
-      node: ShopifyProductNode;
-    }>;
-  };
-}
-
-interface MappedProduct {
-  id: string;
-  title: string;
-  status: string;
-  inventory: number;
-  imageUrl: string | null;
-  price: string;
-  currency: string;
-  productType: string;
-  collections: string[];
-}
-
-function mapProductNode(node: ShopifyProductNode): MappedProduct {
-  return {
-    id: node.id,
-    title: node.title,
-    status: node.status,
-    inventory: node.totalInventory,
-    imageUrl: node.featuredImage?.url ?? null,
-    price: node.priceRangeV2.minVariantPrice.amount,
-    currency: node.priceRangeV2.minVariantPrice.currencyCode,
-    productType: node.productType?.trim() || "Uncategorized",
-    collections: node.collections.edges.map((edge) => edge.node.title),
-  };
-}
+import { fetchShopifyKnowledge } from "@/lib/shopify/knowledge";
+import { buildProductKnowledge } from "@/lib/shopify/product-knowledge";
 
 function buildProductTypeSummary(
-  products: MappedProduct[],
+  products: Array<{ productType: string }>,
 ): Array<{ type: string; count: number }> {
   const counts = new Map<string, number>();
 
@@ -108,41 +20,33 @@ function buildProductTypeSummary(
     .sort((a, b) => a.type.localeCompare(b.type));
 }
 
-async function fetchAllProducts(): Promise<MappedProduct[]> {
-  const products: MappedProduct[] = [];
-  let cursor: string | null = null;
-  let hasNextPage = true;
-
-  while (hasNextPage) {
-    const result = await shopifyGraphQL<ShopifyProductsPageData>(
-      PRODUCTS_PAGE_QUERY,
-      cursor ? { cursor } : {},
-    );
-
-    const page = result.data?.products;
-    if (!page) break;
-
-    for (const edge of page.edges) {
-      products.push(mapProductNode(edge.node));
-    }
-
-    hasNextPage = page.pageInfo.hasNextPage;
-    cursor = page.pageInfo.endCursor;
-  }
-
-  return products;
-}
-
 export async function GET() {
   try {
-    const products = await fetchAllProducts();
-    const productTypes = buildProductTypeSummary(products);
+    const knowledge = await fetchShopifyKnowledge();
+    const productKnowledge = buildProductKnowledge(knowledge);
+    const productTypes = buildProductTypeSummary(knowledge.products);
+
+    const products = knowledge.products.map((p) => ({
+      id: p.id,
+      title: p.title,
+      status: p.status,
+      inventory: p.inventory,
+      imageUrl: p.imageUrl ?? null,
+      price: p.price,
+      currency: p.currency,
+      productType: p.productType,
+      collections: p.collections,
+      tags: p.tags,
+      colors: p.colors,
+    }));
 
     return NextResponse.json({
       ok: true,
       total: products.length,
       products,
       productTypes,
+      knowledge,
+      productKnowledge,
     });
   } catch (error) {
     const message =

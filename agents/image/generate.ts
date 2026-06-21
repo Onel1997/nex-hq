@@ -8,7 +8,7 @@ import { generateWithProvider, isImageProviderConfigured } from "./providers/reg
 import { uploadImageAsset } from "./storage";
 import type { ImageGenerationResult } from "./providers/image-provider";
 import type { ImageGenerateRequest, ImageGenerateResult } from "./types-generation";
-import type { NormalizedImageAsset } from "./types";
+import type { ImageStudioAsset } from "./studio-schema";
 
 async function resolveProviderImageBytes(
   result: ImageGenerationResult & { imageBytes?: Buffer },
@@ -42,17 +42,18 @@ export class ImageProviderNotConfiguredError extends Error {
 function updateAssetInSections(
   sections: BrainImageSections,
   assetId: string,
-  patch: Partial<NormalizedImageAsset>,
+  patch: Partial<ImageStudioAsset>,
 ): BrainImageSections {
-  const updateList = (list: BrainImageSections["corePackage"]) =>
+  const updateList = (list: BrainImageSections["productionAssets"]) =>
     (list ?? []).map((asset) =>
       asset.id === assetId ? { ...asset, ...patch } : asset,
     );
 
+  const productionAssets = updateList(sections.productionAssets);
+
   return {
     ...sections,
-    corePackage: updateList(sections.corePackage),
-    advancedPackage: updateList(sections.advancedPackage),
+    productionAssets,
   };
 }
 
@@ -78,7 +79,10 @@ export async function generateImageAsset(input: {
     throw new Error("Invalid image project record");
   }
 
-  const asset = findImageAsset(imageSections, request.assetId);
+  const asset = findImageAsset(
+    { productionAssets: imageSections.productionAssets as ImageStudioAsset[] },
+    request.assetId,
+  );
   if (!asset) {
     throw new Error(`Asset not found: ${request.assetId}`);
   }
@@ -97,7 +101,6 @@ export async function generateImageAsset(input: {
       content: {
         imageSections: updateAssetInSections(imageSections, asset.id, {
           status: "generating",
-          provider: request.provider,
         }),
       },
     },
@@ -107,8 +110,8 @@ export async function generateImageAsset(input: {
   try {
     const result = await generateWithProvider(request.provider, {
       prompt,
-      dimensions: asset.dimensions,
-      assetType: asset.type,
+      dimensions: asset.dimensions ?? "2048x2048",
+      assetType: asset.assetType,
     });
 
     const imageBytes = await resolveProviderImageBytes(result);
@@ -120,11 +123,9 @@ export async function generateImageAsset(input: {
       imageBytes,
     });
 
-    const completedPatch: Partial<NormalizedImageAsset> = {
+    const completedPatch: Partial<ImageStudioAsset> = {
       status: "completed",
-      provider: request.provider,
       imageUrl: uploaded.url,
-      storagePath: uploaded.storagePath,
       createdAt: new Date().toISOString(),
       message: undefined,
     };
@@ -151,9 +152,9 @@ export async function generateImageAsset(input: {
     return {
       asset: {
         id: asset.id,
-        title: asset.title,
-        type: asset.type,
-        dimensions: asset.dimensions,
+        title: asset.title ?? asset.productName,
+        type: asset.assetType,
+        dimensions: asset.dimensions ?? "2048x2048",
         platform: asset.platform,
         provider: request.provider,
         status: "completed",
@@ -181,7 +182,6 @@ export async function generateImageAsset(input: {
             asset.id,
             {
               status: "failed",
-              provider: request.provider,
               message,
               createdAt: new Date().toISOString(),
             },

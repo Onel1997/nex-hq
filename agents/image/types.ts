@@ -1,32 +1,46 @@
 export {
   IMAGE_SCHEMA_VERSION,
-  IMAGE_ASSET_PACKAGES,
+  IMAGE_SCHEMA_VERSION_V2,
+  IMAGE_OUTPUT_CATEGORIES,
+  IMAGE_STUDIO_ASSET_TYPES,
+  IMAGE_ASSET_PRIORITIES,
   IMAGE_ASSET_STATUSES,
-  IMAGE_ASSET_TYPES,
-  CORE_ASSET_TYPES,
-  ADVANCED_ASSET_TYPES,
   imageAiPromptsSchema,
   imageMoodboardSchema,
   imagePaletteSchema,
-  normalizedImageAssetSchema,
-  imageCampaignShotSchema,
+  imageStudioAssetSchema,
+  imageLookbookShotSchema,
   imageOutputSchema,
+  countProductionAssets,
   countImageAssets,
+  findStudioAsset,
   findImageAsset,
-} from "./normalized";
+} from "./studio-schema";
 
 export type {
-  ImageAssetPackage,
+  ImageOutputCategory,
+  ImageStudioAssetType,
+  ImageAssetPriority,
   ImageAssetStatus,
-  ImageAssetType,
   ImageAiPrompts,
   ImageMoodboardSection,
   ImagePalette,
-  NormalizedImageAsset,
-  ImageCampaignShot,
+  ImageStudioAsset,
+  ImageLookbookShot,
   ImageOutput,
   ImageRunInput,
   ImageRunResult,
-} from "./normalized";
+} from "./studio-schema";
+
+export type NormalizedImageAsset = import("./studio-schema").ImageStudioAsset;
+export type ImageCampaignShot = import("./studio-schema").ImageLookbookShot;
+
+export {
+  IMAGE_ASSET_PACKAGES,
+  type ImageAssetPackage,
+  type LegacyImageAssetType,
+  type LegacyNormalizedImageAsset,
+  type LegacyImageCampaignShot,
+} from "./legacy-v2";
 
 export const IMAGE_PROJECT_TYPE_VALUE = "image-project" as const;

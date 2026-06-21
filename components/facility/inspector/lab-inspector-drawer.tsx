@@ -11,6 +11,7 @@ import { DesignIntelligencePanel } from "@/components/facility/inspector/labs/de
 import { ImageIntelligencePanel } from "@/components/facility/inspector/labs/image-intelligence";
 import { MarketingIntelligencePanel } from "@/components/facility/inspector/labs/marketing-intelligence";
 import { ResearchIntelligencePanel } from "@/components/facility/inspector/labs/research-intelligence";
+import { ShopifyCatalogBrief } from "@/components/facility/inspector/labs/shopify-catalog-brief";
 import { ShopifyIntelligencePanel } from "@/components/facility/inspector/labs/shopify-intelligence";
 import { ShopifyLiveProducts } from "@/components/facility/inspector/labs/shopify-live-products";
 import type { AgentId } from "@/lib/constants/agents";
@@ -35,14 +36,20 @@ const LAB_INTEL_SECTIONS: Partial<
   },
   designer: {
     title: "Creative Direction",
-    render: (data) => (
-      <DesignIntelligencePanel reports={data.fullReports} />
+    render: (data, open) => (
+      <>
+        <ShopifyCatalogBrief open={open} variant="designer" />
+        <DesignIntelligencePanel reports={data.fullReports} />
+      </>
     ),
   },
   marketing: {
     title: "Campaign Control",
-    render: (data) => (
-      <MarketingIntelligencePanel reports={data.fullReports} />
+    render: (data, open) => (
+      <>
+        <ShopifyCatalogBrief open={open} variant="marketing" />
+        <MarketingIntelligencePanel reports={data.fullReports} />
+      </>
     ),
   },
   content: {
@@ -62,16 +69,24 @@ const LAB_INTEL_SECTIONS: Partial<
   },
   shopify: {
     title: "Live Products",
-    render: (_data, open) => <ShopifyLiveProducts open={open} />,
+    render: (_data, open) => (
+      <>
+        <ShopifyCatalogBrief open={open} variant="shopify" />
+        <ShopifyLiveProducts open={open} />
+      </>
+    ),
   },
   ceo: {
     title: "Executive Intelligence",
-    render: (data) => (
-      <CeoIntelligencePanel
-        reports={data.fullReports}
-        tasks={data.taskQueue}
-        events={data.recentEvents}
-      />
+    render: (data, open) => (
+      <>
+        <ShopifyCatalogBrief open={open} variant="ceo" />
+        <CeoIntelligencePanel
+          reports={data.fullReports}
+          tasks={data.taskQueue}
+          events={data.recentEvents}
+        />
+      </>
     ),
   },
 };

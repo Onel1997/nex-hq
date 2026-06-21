@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import type { ReportListItem } from "@/lib/mock/reports";
-import { countImageAssets } from "@/agents/image/normalized";
 import { ReportReviewActions } from "@/components/reports/report-review-actions";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -35,9 +34,7 @@ export function ImageProjectCard({
 }: ImageProjectCardProps) {
   const t = useT();
   const project = report.imageProject;
-  const assetCount = project
-    ? countImageAssets(project.corePackage, project.advancedPackage)
-    : 0;
+  const assetCount = project?.assetCount ?? 0;
   const brainRecordId = report.brainRecordId ?? report.id;
 
   return (
@@ -125,7 +122,7 @@ export function ImageProjectCard({
         )}
         <span className="inline-flex items-center gap-1.5 px-2 text-xs text-muted-foreground">
           <ImageIcon className="size-3.5" />
-          {t("image.interface.corePackage")}: {project?.corePackage.length ?? 0}
+          {project?.assetCount ?? 0} {t("image.interface.assets")}
         </span>
       </div>
 

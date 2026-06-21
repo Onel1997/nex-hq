@@ -428,6 +428,38 @@ export interface BrainImageCampaignShot {
   purpose: string;
 }
 
+/** V3 creative studio production asset (Image Agent). */
+export interface BrainImageStudioAsset {
+  id: string;
+  assetType: string;
+  outputCategory: string;
+  productName: string;
+  collection: string;
+  color: string;
+  material: string;
+  location: string;
+  lighting: string;
+  photographyStyle: string;
+  cameraStyle: string;
+  prompt: BrainImageAiPrompts;
+  priority: "hero" | "core" | "support";
+  status: "ready" | "generating" | "completed" | "failed" | "pending";
+  title?: string;
+  platform?: string;
+  dimensions?: string;
+  imageUrl?: string;
+}
+
+/** V3 lookbook shot plan. */
+export interface BrainImageLookbookShot {
+  shotName: string;
+  models: string;
+  location: string;
+  outfitProducts: string[];
+  styling: string;
+  purpose: string;
+}
+
 /** Normalized image asset (Image Agent V2). */
 export interface BrainNormalizedImageAsset {
   id: string;
@@ -464,10 +496,16 @@ export interface BrainNormalizedImageAsset {
 
 /** Structured visual production project (Image Agent). */
 export interface BrainImageSections {
-  schemaVersion?: "2.0" | "1.0";
+  schemaVersion?: "3.0" | "2.0" | "1.0";
   projectName: string;
+  collectionName?: string;
+  visualDirection?: string;
   moodboard: BrainImageMoodboardSection;
   palette?: BrainImagePalette;
+  /** V3 creative studio assets. */
+  productionAssets?: BrainImageStudioAsset[];
+  lookbookShots?: BrainImageLookbookShot[];
+  /** V2 packages — legacy, migrated on read. */
   corePackage?: BrainNormalizedImageAsset[];
   advancedPackage?: BrainNormalizedImageAsset[];
   campaignShots?: BrainImageCampaignShot[];

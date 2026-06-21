@@ -103,9 +103,9 @@ export default function ImageProjectDetailPage({
               text: "Charcoal #2A2A2A",
             }
           }
-          corePackage={project.corePackage}
-          advancedPackage={project.advancedPackage}
-          campaignShots={project.campaignShots}
+          productionAssets={project.productionAssets}
+          lookbookShots={project.lookbookShots}
+          visualDirection={project.visualDirection}
           confidence={confidence}
           sourceReportTitles={project.sourceReportTitles}
         />

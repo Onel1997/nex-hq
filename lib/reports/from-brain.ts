@@ -291,7 +291,9 @@ export function brainReportRecordToListItem(
     createdAt: record.createdAt,
     originTaskId: content.originTaskId,
     highlights: isImageReport
-      ? toImageProjectView(imageSections)?.corePackage.map((item) => item.title)
+      ? toImageProjectView(imageSections)?.productionAssets
+          .map((item) => item.title ?? item.productName)
+          .filter(Boolean)
       : isContentReport
       ? contentSections?.socialContent.launchPosts
       : isShopifyReport
