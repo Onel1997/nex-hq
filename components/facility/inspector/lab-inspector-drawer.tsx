@@ -1,24 +1,80 @@
 "use client";
 
-import { ExecutionTimeline } from "@/components/facility/inspector/execution-timeline";
+import { AgentMemoryPanel } from "@/components/facility/inspector/agent-memory-panel";
+import { AgentMetricsGrid } from "@/components/facility/inspector/agent-metric-card";
+import { AgentReportList } from "@/components/facility/inspector/agent-report-list";
+import { AgentSection } from "@/components/facility/inspector/agent-section";
+import { AgentTimeline } from "@/components/facility/inspector/agent-timeline";
+import { CeoIntelligencePanel } from "@/components/facility/inspector/labs/ceo-intelligence";
+import { ContentIntelligencePanel } from "@/components/facility/inspector/labs/content-intelligence";
+import { DesignIntelligencePanel } from "@/components/facility/inspector/labs/design-intelligence";
+import { ImageIntelligencePanel } from "@/components/facility/inspector/labs/image-intelligence";
+import { MarketingIntelligencePanel } from "@/components/facility/inspector/labs/marketing-intelligence";
+import { ResearchIntelligencePanel } from "@/components/facility/inspector/labs/research-intelligence";
+import { ShopifyIntelligencePanel } from "@/components/facility/inspector/labs/shopify-intelligence";
+import { ShopifyLiveProducts } from "@/components/facility/inspector/labs/shopify-live-products";
 import type { AgentId } from "@/lib/constants/agents";
+import { getAgentColor } from "@/lib/facility/facility-theme";
 import type { LabInspectorData, LabSnapshot } from "@/lib/facility/types";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, ChevronRight, FlaskConical, Loader2, X } from "lucide-react";
-import { memo, useEffect, useMemo, useState } from "react";
+import { FlaskConical, Loader2, X } from "lucide-react";
+import { memo, type ReactNode } from "react";
 
-interface ShopifyLiveProduct {
-  id: string;
-  title: string;
-  status: string;
-  inventory: number;
-  imageUrl: string | null;
-  price: string;
-  currency: string;
-  productType: string;
-  collections: string[];
-}
+const LAB_INTEL_SECTIONS: Partial<
+  Record<
+    AgentId,
+    { title: string; render: (data: LabInspectorData, open: boolean) => ReactNode }
+  >
+> = {
+  research: {
+    title: "Research Intelligence",
+    render: (data) => (
+      <ResearchIntelligencePanel reports={data.fullReports} />
+    ),
+  },
+  designer: {
+    title: "Creative Direction",
+    render: (data) => (
+      <DesignIntelligencePanel reports={data.fullReports} />
+    ),
+  },
+  marketing: {
+    title: "Campaign Control",
+    render: (data) => (
+      <MarketingIntelligencePanel reports={data.fullReports} />
+    ),
+  },
+  content: {
+    title: "Content Pipeline",
+    render: (data) => (
+      <ContentIntelligencePanel
+        reports={data.fullReports}
+        tasks={data.taskQueue}
+      />
+    ),
+  },
+  image: {
+    title: "Visual Assets",
+    render: (data) => (
+      <ImageIntelligencePanel reports={data.fullReports} />
+    ),
+  },
+  shopify: {
+    title: "Live Products",
+    render: (_data, open) => <ShopifyLiveProducts open={open} />,
+  },
+  ceo: {
+    title: "Executive Intelligence",
+    render: (data) => (
+      <CeoIntelligencePanel
+        reports={data.fullReports}
+        tasks={data.taskQueue}
+        events={data.recentEvents}
+      />
+    ),
+  },
+};
 
 interface LabInspectorDrawerProps {
   open: boolean;
@@ -40,104 +96,11 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
   onClose,
 }: LabInspectorDrawerProps) {
   const displayName = data?.agentName ?? lab?.label ?? agentId;
-  const latestReport = data?.reports[0] ?? null;
   const activeTasks =
     data?.taskQueue.filter((t) => t.status !== "completed" && t.status !== "failed") ??
     [];
-
-  const [shopifyProducts, setShopifyProducts] = useState<ShopifyLiveProduct[]>(
-    [],
-  );
-  const [shopifyProductsLoading, setShopifyProductsLoading] = useState(false);
-  const [shopifyProductsError, setShopifyProductsError] = useState<
-    string | null
-  >(null);
-  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(
-    {},
-  );
-
-  const shopifyProductCategories = useMemo(() => {
-    const grouped = shopifyProducts.reduce<
-      Record<string, ShopifyLiveProduct[]>
-    >((acc, product) => {
-      const type = product.productType?.trim() || "Uncategorized";
-      (acc[type] ??= []).push(product);
-      return acc;
-    }, {});
-
-    return Object.entries(grouped)
-      .map(([type, products]) => ({ type, products }))
-      .sort((a, b) => b.products.length - a.products.length);
-  }, [shopifyProducts]);
-
-  useEffect(() => {
-    if (!open || agentId !== "shopify") {
-      setShopifyProducts([]);
-      setShopifyProductsLoading(false);
-      setShopifyProductsError(null);
-      setOpenCategories({});
-      return;
-    }
-
-    let cancelled = false;
-
-    setShopifyProductsLoading(true);
-    setShopifyProductsError(null);
-
-    void fetch("/api/shopify/products")
-      .then(async (response) => {
-        const body = (await response.json()) as {
-          ok?: boolean;
-          products?: ShopifyLiveProduct[];
-          error?: string;
-        };
-
-        if (!response.ok || !body.ok) {
-          throw new Error(body.error ?? "Failed to load Shopify products");
-        }
-
-        if (!cancelled) {
-          setShopifyProducts(body.products ?? []);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setShopifyProducts([]);
-          setShopifyProductsError(
-            err instanceof Error ? err.message : "Failed to load Shopify products",
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setShopifyProductsLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, agentId]);
-
-  useEffect(() => {
-    if (shopifyProductCategories.length === 0) {
-      setOpenCategories({});
-      return;
-    }
-
-    const initial: Record<string, boolean> = {};
-    shopifyProductCategories.forEach((category, index) => {
-      initial[category.type] = index === 0;
-    });
-    setOpenCategories(initial);
-  }, [shopifyProductCategories]);
-
-  const toggleShopifyCategory = (type: string) => {
-    setOpenCategories((prev) => ({
-      ...prev,
-      [type]: !prev[type],
-    }));
-  };
+  const accent = agentId ? getAgentColor(agentId) : undefined;
+  const intelSection = agentId ? LAB_INTEL_SECTIONS[agentId] : undefined;
 
   return (
     <AnimatePresence>
@@ -154,6 +117,11 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
           />
           <motion.aside
             className="facility-inspector-drawer facility-lab-room"
+            style={
+              accent
+                ? ({ "--agent-accent": accent } as React.CSSProperties)
+                : undefined
+            }
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -163,7 +131,10 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
 
             <header className="facility-inspector-header facility-lab-room-header">
               <div className="facility-lab-room-title-block">
-                <div className="facility-lab-room-badge">
+                <div
+                  className="facility-lab-room-badge"
+                  style={accent ? { color: accent } : undefined}
+                >
                   <FlaskConical className="size-3.5" />
                   <span>Laboratory Chamber</span>
                 </div>
@@ -212,121 +183,23 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
                                 ? "Attention needed"
                                 : "Standing by"}
                     </span>
-                    {data.opsState === "executing" && (
+                    {data.opsState === "executing" ? (
                       <span className="facility-lab-room-livebar-dots" aria-hidden>
                         <i /><i /><i />
                       </span>
-                    )}
+                    ) : null}
                   </div>
-                  {agentId === "shopify" ? (
-                    <section className="facility-inspector-section facility-lab-room-section">
-                      <h3 className="facility-inspector-section-title">
-                        Live Products
-                      </h3>
-                      {shopifyProductsLoading ? (
-                        <p className="facility-inspector-empty">Lade Produkte…</p>
-                      ) : shopifyProductsError ? (
-                        <p className="facility-inspector-error">
-                          {shopifyProductsError}
-                        </p>
-                      ) : shopifyProducts.length === 0 ? (
-                        <p className="facility-inspector-empty">
-                          No products found
-                        </p>
-                      ) : (
-                        <>
-                          <p className="facility-shopify-summary">
-                            {shopifyProducts.length} Produkte ·{" "}
-                            {shopifyProductCategories.length} Kategorien
-                          </p>
-                          <div className="facility-shopify-product-list">
-                            {shopifyProductCategories.map((category) => {
-                              const isOpen = openCategories[category.type] ?? false;
 
-                              return (
-                                <div
-                                  key={category.type}
-                                  className="facility-shopify-category"
-                                >
-                                  <button
-                                    type="button"
-                                    className="facility-shopify-category-header"
-                                    onClick={() =>
-                                      toggleShopifyCategory(category.type)
-                                    }
-                                    aria-expanded={isOpen}
-                                  >
-                                    <span className="facility-shopify-category-name">
-                                      {category.type}
-                                      <span className="facility-shopify-category-count">
-                                        {" "}
-                                        ({category.products.length})
-                                      </span>
-                                    </span>
-                                    <span
-                                      className={cn(
-                                        "facility-shopify-category-chevron",
-                                        isOpen &&
-                                          "facility-shopify-category-chevron-open",
-                                      )}
-                                      aria-hidden
-                                    >
-                                      {isOpen ? (
-                                        <ChevronDown className="size-4" />
-                                      ) : (
-                                        <ChevronRight className="size-4" />
-                                      )}
-                                    </span>
-                                  </button>
-                                  {isOpen ? (
-                                    <div className="facility-shopify-category-products">
-                                      {category.products.map((product) => (
-                                        <div
-                                          key={product.id}
-                                          className="facility-shopify-product-card"
-                                        >
-                                          {product.imageUrl ? (
-                                            <img
-                                              src={product.imageUrl}
-                                              alt=""
-                                              className="facility-shopify-product-image"
-                                            />
-                                          ) : (
-                                            <div
-                                              className="facility-shopify-product-image facility-shopify-product-image-empty"
-                                              aria-hidden
-                                            />
-                                          )}
-                                          <div className="facility-shopify-product-body">
-                                            <p className="facility-shopify-product-title">
-                                              {product.title}
-                                            </p>
-                                            <p className="facility-shopify-product-price">
-                                              {product.price} {product.currency}
-                                            </p>
-                                            <span
-                                              className="facility-inspector-meta"
-                                              data-status={product.status}
-                                            >
-                                              {product.status}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </section>
+                  {intelSection ? (
+                    <AgentSection title={intelSection.title} agentId={agentId}>
+                      {intelSection.render(data, open)}
+                      {agentId === "shopify" ? (
+                        <ShopifyIntelligencePanel reports={data.fullReports} />
+                      ) : null}
+                    </AgentSection>
                   ) : null}
-                  <section className="facility-inspector-section facility-lab-room-section">
-                    <h3 className="facility-inspector-section-title">
-                      Current Mission
-                    </h3>
+
+                  <AgentSection title="Current Mission" agentId={agentId}>
                     <div className="facility-lab-room-card">
                       <p className="facility-inspector-text">
                         {data.currentTask?.title ?? "No active mission assigned"}
@@ -342,115 +215,69 @@ export const LabInspectorDrawer = memo(function LabInspectorDrawer({
                         </span>
                       </div>
                     </div>
-                  </section>
+                  </AgentSection>
 
-                  <section className="facility-inspector-section facility-lab-room-section">
-                    <h3 className="facility-inspector-section-title">
-                      Active Tasks
-                    </h3>
-                    {activeTasks.length === 0 ? (
-                      <p className="facility-inspector-empty">No active tasks</p>
-                    ) : (
-                      <ul className="facility-inspector-list facility-lab-room-list">
-                        {activeTasks.map((task) => (
-                          <li
-                            key={task.id}
-                            className="facility-inspector-list-item facility-lab-room-list-item"
+                  <AgentSection
+                    title="Active Tasks"
+                    agentId={agentId}
+                    empty={activeTasks.length === 0}
+                    emptyMessage="No active tasks"
+                  >
+                    <ul className="facility-inspector-list facility-lab-room-list">
+                      {activeTasks.map((task) => (
+                        <li
+                          key={task.id}
+                          className="facility-inspector-list-item facility-lab-room-list-item"
+                        >
+                          <span>{task.title}</span>
+                          <span
+                            className="facility-inspector-meta"
+                            data-status={task.status}
                           >
-                            <span>{task.title}</span>
-                            <span
-                              className="facility-inspector-meta"
-                              data-status={task.status}
-                            >
-                              {task.status}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
-
-                  <section className="facility-inspector-section facility-lab-room-section">
-                    <h3 className="facility-inspector-section-title">
-                      Latest Report
-                    </h3>
-                    <div className="facility-lab-room-card">
-                      {latestReport ? (
-                        <>
-                          <p className="facility-inspector-text">
-                            {latestReport.title}
-                          </p>
-                          <span className="facility-inspector-meta">
-                            {latestReport.status} ·{" "}
-                            {Math.round(latestReport.confidence * 100)}%
+                            {task.status}
                           </span>
-                        </>
-                      ) : (
-                        <p className="facility-inspector-empty">
-                          No reports submitted
-                        </p>
-                      )}
-                    </div>
-                  </section>
+                        </li>
+                      ))}
+                    </ul>
+                  </AgentSection>
 
-                  <section className="facility-inspector-section facility-lab-room-section">
-                    <h3 className="facility-inspector-section-title">
-                      Confidence
-                    </h3>
-                    <div className="facility-lab-room-confidence">
-                      {data.confidence != null ? (
-                        <>
-                          <span className="facility-lab-room-confidence-value">
-                            {Math.round(data.confidence * 100)}%
-                          </span>
-                          <div className="facility-lab-room-confidence-bar">
-                            <div
-                              className="facility-lab-room-confidence-fill"
-                              style={{
-                                width: `${Math.round(data.confidence * 100)}%`,
-                              }}
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        <p className="facility-inspector-empty">
-                          Confidence not yet established
-                        </p>
-                      )}
-                    </div>
-                  </section>
+                  <AgentSection
+                    title="Recent Reports"
+                    agentId={agentId}
+                    empty={data.reports.length === 0}
+                    emptyMessage="No reports submitted"
+                  >
+                    <AgentReportList reports={data.reports} />
+                  </AgentSection>
 
-                  <section className="facility-inspector-section facility-lab-room-section">
-                    <h3 className="facility-inspector-section-title">
-                      Knowledge References
-                    </h3>
-                    {data.knowledgeRefs.length === 0 ? (
-                      <p className="facility-inspector-empty">
-                        No knowledge linked
-                      </p>
-                    ) : (
-                      <ul className="facility-inspector-list facility-lab-room-list">
-                        {data.knowledgeRefs.slice(0, 10).map((ref) => (
-                          <li
-                            key={`${ref.domain}-${ref.id}`}
-                            className="facility-inspector-list-item facility-lab-room-list-item"
-                          >
-                            <span>{ref.title}</span>
-                            <span className="facility-inspector-meta">
-                              {ref.domain}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
+                  <AgentSection
+                    title="Knowledge Memory"
+                    agentId={agentId}
+                    empty={
+                      data.reports.length === 0 &&
+                      data.taskQueue.length === 0 &&
+                      data.knowledgeRefs.length === 0
+                    }
+                    emptyMessage="No knowledge linked"
+                  >
+                    <AgentMemoryPanel
+                      reports={data.reports}
+                      tasks={data.taskQueue}
+                      knowledgeRefs={data.knowledgeRefs}
+                    />
+                  </AgentSection>
 
-                  <section className="facility-inspector-section facility-lab-room-section facility-lab-room-timeline">
-                    <h3 className="facility-inspector-section-title">
-                      Activity Timeline
-                    </h3>
-                    <ExecutionTimeline items={data.timeline} />
-                  </section>
+                  <AgentSection title="Agent Metrics" agentId={agentId}>
+                    <AgentMetricsGrid agentId={agentId} metrics={data.metrics} />
+                  </AgentSection>
+
+                  <AgentSection
+                    title="Timeline Activity"
+                    agentId={agentId}
+                    className="facility-lab-room-timeline"
+                  >
+                    <AgentTimeline items={data.timeline} agentId={agentId} />
+                  </AgentSection>
                 </>
               ) : null}
             </div>

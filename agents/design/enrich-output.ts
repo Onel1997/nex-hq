@@ -2,10 +2,12 @@ import { DESIGN_REPORT_TYPE } from "@/brain/domains/reports";
 
 const MIN_STORY_CHARS = 120;
 const MIN_DIRECTION_CHARS = 100;
-const MIN_BULLET_CHARS = 12;
-const MIN_PRODUCT_DESC = 30;
-const MIN_HERO_DESC = 40;
-const MIN_HERO_RATIONALE = 30;
+const MIN_MOOD_CHARS = 60;
+const MIN_PHOTO_CHARS = 40;
+const MIN_AUDIENCE_CHARS = 40;
+const MIN_BULLET_CHARS = 8;
+const MIN_PRODUCT_DETAIL = 20;
+const MIN_PROMPT_CHARS = 40;
 const MIN_FULL_CONCEPT = 800;
 const MIN_COLOR_ROLE = 8;
 
@@ -53,7 +55,7 @@ function ensureBulletList(
     const normalized = ensureMinLength(
       item,
       MIN_BULLET_CHARS,
-      "Basierend auf dem Wissensspeicher-Kontext und der Markenpositionierung.",
+      "Basierend auf Trend- und Markenintelligence.",
     );
     if (!seen.has(normalized)) {
       seen.add(normalized);
@@ -68,7 +70,7 @@ function ensureBulletList(
   }
 
   const filler =
-    "Weitere Designentscheidung aus Trend- und CEO-Intelligence ableiten und in der Kollektion verankern.";
+    "Creative Direction aus Research- und CEO-Intelligence ableiten.";
   while (result.length < min) {
     add(`${filler} (${result.length + 1})`);
   }
@@ -99,7 +101,7 @@ function defaultColorPalette(collectionName: string) {
   }));
 }
 
-function normalizeColorPalette(value: unknown, collectionName: string) {
+function normalizeColorPalette(value: unknown, _collectionName: string) {
   const raw = Array.isArray(value) ? value : [];
   const colors = raw
     .map((entry) => {
@@ -130,24 +132,56 @@ function normalizeColorPalette(value: unknown, collectionName: string) {
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
   if (colors.length >= 3) return colors.slice(0, 8);
-  return defaultColorPalette(collectionName);
+  return defaultColorPalette("");
 }
 
-function normalizeProducts(value: unknown, collectionName: string) {
+function normalizeProductsV2(value: unknown, collectionName: string) {
   const raw = Array.isArray(value) ? value : [];
   const products = raw
-    .map((entry) => {
+    .map((entry, index) => {
       const obj = asRecord(entry);
       if (!obj) return null;
       const name = asString(obj.name);
-      const category = asString(obj.category) || "Apparel";
-      const description = ensureMinLength(
-        asString(obj.description),
-        MIN_PRODUCT_DESC,
-        `Designkonzept für ${name || category} in der Kollektion ${collectionName}.`,
-      );
       if (!name) return null;
-      return { name, category, description };
+      const category = asString(obj.category) || "Apparel";
+      const details = ensureMinLength(
+        asString(obj.details) ||
+          asString(obj.description) ||
+          `Designkonzept für ${name} in ${collectionName}.`,
+        MIN_PRODUCT_DETAIL,
+        "Produktdetails aus Kollektionskonzept.",
+      );
+      const priorityRaw = asString(obj.priority).toLowerCase();
+      const priority =
+        priorityRaw === "hero" || priorityRaw === "support"
+          ? priorityRaw
+          : index < 2
+            ? "hero"
+            : "core";
+
+      return {
+        name,
+        category,
+        fit: ensureMinLength(
+          asString(obj.fit) || "Oversized relaxed fit",
+          MIN_BULLET_CHARS,
+          "Fit",
+        ),
+        material: ensureMinLength(
+          asString(obj.material) || "Premium Baumwoll-Mix",
+          MIN_BULLET_CHARS,
+          "Material",
+        ),
+        color: asString(obj.color) || "Stone washed black",
+        details,
+        pricePosition: ensureMinLength(
+          asString(obj.pricePosition) || "Premium positioning",
+          MIN_BULLET_CHARS,
+          "Positionierung",
+        ),
+        priority: priority as "hero" | "core" | "support",
+        description: asString(obj.description) || details,
+      };
     })
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
@@ -155,38 +189,48 @@ function normalizeProducts(value: unknown, collectionName: string) {
     {
       name: "Oversized Hoodie",
       category: "Oberbekleidung",
-      description: ensureMinLength(
-        `Schwerer French-Terry-Hoodie als Kernstück der ${collectionName}-Capsule mit strukturierter Silhouette und Premium-Finish.`,
-        MIN_PRODUCT_DESC,
-        "Produkt",
-      ),
+      fit: "Oversized dropped-shoulder fit",
+      material: "480gsm French Terry cotton",
+      color: "Stone washed black",
+      details:
+        "Schwerer Hoodie als Kernstück mit strukturierter Silhouette, Premium-Finish und urbanem Fall.",
+      pricePosition: "Premium positioning",
+      priority: "hero" as const,
+      description:
+        "Schwerer Hoodie als Kernstück mit strukturierter Silhouette, Premium-Finish und urbanem Fall.",
     },
     {
       name: "Boxy T-Shirt",
       category: "Tops",
-      description: ensureMinLength(
-        "Boxy-Cut Tee mit verstärkten Nähten und subtiler Grafik — Layering-Base für den Drop.",
-        MIN_PRODUCT_DESC,
-        "Produkt",
-      ),
+      fit: "Boxy cropped fit",
+      material: "240gsm heavy cotton jersey",
+      color: "Concrete grey",
+      details: "Boxy Tee mit verstärkten Nähten — Layering-Base für den Drop.",
+      pricePosition: "Core tier",
+      priority: "core" as const,
+      description: "Boxy Tee mit verstärkten Nähten — Layering-Base für den Drop.",
     },
     {
       name: "Wide-Leg Cargo",
       category: "Hosen",
-      description: ensureMinLength(
-        "Wide-Leg Cargo mit funktionalen Taschen und urbanem Fall — ergänzt die Silhouetten-Story der Kollektion.",
-        MIN_PRODUCT_DESC,
-        "Produkt",
-      ),
+      fit: "Wide-leg relaxed fit",
+      material: "Ripstop cotton blend",
+      color: "Washed black",
+      details: "Wide-Leg Cargo mit funktionalen Taschen und urbanem Fall.",
+      pricePosition: "Core tier",
+      priority: "core" as const,
+      description: "Wide-Leg Cargo mit funktionalen Taschen und urbanem Fall.",
     },
     {
       name: "Coach Jacket",
       category: "Outerwear",
-      description: ensureMinLength(
-        "Leichte Coach Jacket als Transitional Piece mit Kontrast-Piping und Marken-Details.",
-        MIN_PRODUCT_DESC,
-        "Produkt",
-      ),
+      fit: "Regular boxy fit",
+      material: "Nylon-cotton shell",
+      color: "Obsidian black",
+      details: "Coach Jacket als Transitional Piece mit Kontrast-Piping.",
+      pricePosition: "Premium positioning",
+      priority: "support" as const,
+      description: "Coach Jacket als Transitional Piece mit Kontrast-Piping.",
     },
   ];
 
@@ -199,89 +243,56 @@ function normalizeProducts(value: unknown, collectionName: string) {
   return merged.slice(0, 14);
 }
 
-function normalizeHeroProducts(
-  value: unknown,
-  productLineup: Array<{ name: string; category: string; description: string }>,
-  collectionName: string,
-) {
-  const raw = Array.isArray(value) ? value : [];
-  const heroes = raw
-    .map((entry) => {
-      const obj = asRecord(entry);
-      if (!obj) return null;
-      const name = asString(obj.name);
-      if (!name) return null;
-      return {
-        name,
-        description: ensureMinLength(
-          asString(obj.description),
-          MIN_HERO_DESC,
-          `Hero-SKU der ${collectionName}-Kollektion mit starker visueller Präsenz und klarer Markenidentität.`,
-        ),
-        rationale: ensureMinLength(
-          asString(obj.rationale),
-          MIN_HERO_RATIONALE,
-          "Führt die Kollektionsstory und differenziert die Marke im Wettbewerbsumfeld.",
-        ),
-      };
-    })
-    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-
-  if (heroes.length >= 2) return heroes.slice(0, 6);
-
-  const fromLineup = productLineup.slice(0, 2).map((product, index) => ({
-    name: product.name,
-    description: ensureMinLength(
-      product.description,
-      MIN_HERO_DESC,
-      `Hero-Produkt ${index + 1} der Kollektion ${collectionName}.`,
-    ),
-    rationale: ensureMinLength(
-      `Trägt die Kernnarrative von ${collectionName} und maximiert Sell-through beim Drop-Launch.`,
-      MIN_HERO_RATIONALE,
-      "Hero",
-    ),
-  }));
-
-  return [...heroes, ...fromLineup].slice(0, 6);
-}
-
 function buildFullConcept(payload: Record<string, unknown>): string {
   const title = asString(payload.title) || "Kollektionskonzept";
   const collectionName = asString(payload.collectionName) || title;
-  const story = asString(payload.collectionStory);
-  const direction = asString(payload.designDirection);
-  const silhouettes = asStringArray(payload.silhouettes);
-  const materials = asStringArray(payload.materials);
-  const launch = asStringArray(payload.launchRecommendations);
-  const products = Array.isArray(payload.productLineup)
-    ? payload.productLineup
-    : [];
+  const story =
+    asString(payload.story) || asString(payload.collectionStory);
+  const direction =
+    asString(payload.stylingDirection) || asString(payload.designDirection);
+  const products = Array.isArray(payload.products)
+    ? payload.products
+    : Array.isArray(payload.productLineup)
+      ? payload.productLineup
+      : [];
 
   const sections = [
     `# ${title}`,
     `## Kollektion: ${collectionName}`,
+    asString(payload.season) ? `**Saison:** ${asString(payload.season)}` : "",
+    asString(payload.theme) ? `**Theme:** ${asString(payload.theme)}` : "",
     story,
-    "## Design-Richtung",
+    asString(payload.targetAudience)
+      ? `**Zielgruppe:** ${asString(payload.targetAudience)}`
+      : "",
+    asString(payload.moodDescription)
+      ? `**Mood:** ${asString(payload.moodDescription)}`
+      : "",
+    "## Styling Direction",
     direction,
     "## Silhouetten",
-    ...silhouettes.map((s) => `- ${s}`),
+    ...asStringArray(payload.silhouettes).map((s) => `- ${s}`),
     "## Materialien",
-    ...materials.map((m) => `- ${m}`),
+    ...asStringArray(payload.materials).map((m) => `- ${m}`),
     "## Produktlinie",
     ...products.map((p) => {
       const obj = asRecord(p);
       if (!obj) return "";
-      return `- **${asString(obj.name)}** (${asString(obj.category)}): ${asString(obj.description)}`;
+      const name = asString(obj.name);
+      return `- **${name}** (${asString(obj.category)}): ${asString(obj.details) || asString(obj.description)}`;
     }),
-    "## Launch-Empfehlungen",
-    ...launch.map((l) => `- ${l}`),
+    "## Visual Keywords",
+    ...asStringArray(payload.visualKeywords).map((k) => `- ${k}`),
+    "## Campaign Ideas",
+    ...asStringArray(payload.campaignIdeas || payload.launchRecommendations).map(
+      (c) => `- ${c}`,
+    ),
   ].filter(Boolean);
 
   return ensureMinLength(
     sections.join("\n\n"),
     MIN_FULL_CONCEPT,
-    "Vollständiges Kollektionskonzept basierend auf Trend-, Wettbewerbs-, Pricing- und CEO-Intelligence aus dem Wissensspeicher.",
+    "Vollständiges Kollektionskonzept basierend auf Trend-, Wettbewerbs-, Pricing- und CEO-Intelligence.",
   );
 }
 
@@ -314,20 +325,47 @@ export function enrichDesignPayload(
     adjustments.push("generated collectionName");
   }
 
+  if (!asString(payload.season)) {
+    payload.season = "SS26";
+    adjustments.push("generated season");
+  }
+
+  if (!asString(payload.theme)) {
+    payload.theme = ensureMinLength(
+      `Urban luxury streetwear — ${collectionName}`,
+      8,
+      "Theme",
+    );
+    adjustments.push("generated theme");
+  }
+
   const storySeed =
+    asString(payload.story) ||
     asString(payload.collectionStory) ||
     asString(payload.designDirection) ||
+    asString(payload.stylingDirection) ||
     `Die Kollektion ${collectionName} verbindet Streetwear-Ästhetik mit Premium-Handwerk.`;
-  if (
-    !asString(payload.collectionStory) ||
-    asString(payload.collectionStory).length < MIN_STORY_CHARS
-  ) {
-    payload.collectionStory = ensureMinLength(
+  if (!asString(payload.story) || asString(payload.story).length < MIN_STORY_CHARS) {
+    payload.story = ensureMinLength(
       storySeed,
       MIN_STORY_CHARS,
-      "Die Narrative leitet sich aus Trend- und CEO-Intelligence ab und positioniert die Marke klar im Wettbewerbsumfeld.",
+      "Die Narrative leitet sich aus Trend- und CEO-Intelligence ab.",
     );
-    adjustments.push("enriched collectionStory");
+    adjustments.push("enriched story");
+  }
+  payload.collectionStory = payload.story;
+
+  if (
+    !asString(payload.targetAudience) ||
+    asString(payload.targetAudience).length < MIN_AUDIENCE_CHARS
+  ) {
+    payload.targetAudience = ensureMinLength(
+      asString(payload.targetAudience) ||
+        "Streetwear-affine Premium-Konsumenten, 18–32, urban, kulturbewusst.",
+      MIN_AUDIENCE_CHARS,
+      "Zielgruppe",
+    );
+    adjustments.push("enriched targetAudience");
   }
 
   const palette = normalizeColorPalette(payload.colorPalette, collectionName);
@@ -346,71 +384,131 @@ export function enrichDesignPayload(
       "Wide-Leg Cargo mit tiefem Rise und funktionalen Panel-Taschen.",
     ],
   );
-  if (payload.silhouettes !== silhouettes) {
-    payload.silhouettes = silhouettes;
-    adjustments.push("enriched silhouettes");
-  }
+  payload.silhouettes = silhouettes;
 
-  const productLineup = normalizeProducts(payload.productLineup, collectionName);
-  if (payload.productLineup !== productLineup) {
-    payload.productLineup = productLineup;
-    adjustments.push("enriched productLineup");
-  }
+  const fits = ensureBulletList(
+    asStringArray(payload.fits),
+    2,
+    8,
+    [
+      "Oversized relaxed fit für Hoodies und Outerwear.",
+      "Boxy cropped fit für Tops.",
+      "Wide-leg relaxed fit für Bottoms.",
+    ],
+  );
+  payload.fits = fits;
 
-  const heroProducts = normalizeHeroProducts(
-    payload.heroProducts,
-    productLineup,
+  const products = normalizeProductsV2(
+    payload.products ?? payload.productLineup,
     collectionName,
   );
-  if (payload.heroProducts !== heroProducts) {
-    payload.heroProducts = heroProducts;
-    adjustments.push("enriched heroProducts");
-  }
+  payload.products = products;
+  payload.productLineup = products;
 
   const materials = ensureBulletList(
     asStringArray(payload.materials),
     3,
     10,
     [
-      "400–450 gsm French Terry für Hoodies mit Premium-Haptik.",
-      "240 gsm schweres Baumwoll-Jersey für Boxy Tees.",
+      "480gsm French Terry für Hoodies mit Premium-Haptik.",
+      "240gsm schweres Baumwoll-Jersey für Boxy Tees.",
       "Ripstop- und Canvas-Mix für Cargos mit urbanem Fall.",
     ],
   );
-  if (payload.materials !== materials) {
-    payload.materials = materials;
-    adjustments.push("enriched materials");
-  }
+  payload.materials = materials;
 
   const directionSeed =
+    asString(payload.stylingDirection) ||
     asString(payload.designDirection) ||
-    asString(payload.collectionStory) ||
+    asString(payload.story) ||
     `Visuelle Richtung für ${collectionName}: urban, reduziert, materialgetrieben.`;
   if (
-    !asString(payload.designDirection) ||
-    asString(payload.designDirection).length < MIN_DIRECTION_CHARS
+    !asString(payload.stylingDirection) ||
+    asString(payload.stylingDirection).length < MIN_DIRECTION_CHARS
   ) {
-    payload.designDirection = ensureMinLength(
+    payload.stylingDirection = ensureMinLength(
       directionSeed,
       MIN_DIRECTION_CHARS,
-      "Grafische Behandlung, Proportionen und Details orientieren sich an Markenregeln und Intelligence-Berichten.",
+      "Grafik, Proportionen und Details orientieren sich an Markenregeln und Intelligence.",
     );
-    adjustments.push("enriched designDirection");
+    adjustments.push("enriched stylingDirection");
   }
+  payload.designDirection = payload.stylingDirection;
 
-  const launchRecommendations = ensureBulletList(
-    asStringArray(payload.launchRecommendations),
+  payload.visualKeywords = ensureBulletList(
+    asStringArray(payload.visualKeywords),
+    3,
+    12,
+    [
+      "Tokyo night streetwear",
+      "cold metallic campaign",
+      "minimal luxury fashion",
+      "urban concrete texture",
+    ],
+  );
+
+  payload.mockupIdeas = ensureBulletList(
+    asStringArray(payload.mockupIdeas),
+    3,
+    10,
+    [
+      "Hero Hoodie flat lay auf Betonoberfläche mit hartem Seitenlicht.",
+      "Wide-Leg Cargo Lifestyle-Shot in nächtlicher Urban-Umgebung.",
+      "Coach Jacket Studio-Shot mit Kontrast-Piping und Premium-Finish.",
+    ],
+  );
+
+  payload.campaignIdeas = ensureBulletList(
+    asStringArray(payload.campaignIdeas ?? payload.launchRecommendations),
     3,
     8,
     [
-      "Tease-Phase über 5–7 Tage mit Silhouette- und Material-Hints ohne Full-Reveal.",
-      "Hero-Produkt zuerst als Limited SKU mit nummerierter Edition launchen.",
-      "IG Carousel + TikTok Culture Clip am Reveal-Tag für organische Reichweite.",
+      "Tease-Phase über 5–7 Tage mit Silhouette- und Material-Hints.",
+      "Hero-Produkt zuerst als Limited SKU launchen.",
+      "IG Carousel + TikTok Culture Clip am Reveal-Tag.",
     ],
   );
-  if (payload.launchRecommendations !== launchRecommendations) {
-    payload.launchRecommendations = launchRecommendations;
-    adjustments.push("enriched launchRecommendations");
+  payload.launchRecommendations = payload.campaignIdeas;
+
+  if (
+    !asString(payload.photographyStyle) ||
+    asString(payload.photographyStyle).length < MIN_PHOTO_CHARS
+  ) {
+    payload.photographyStyle = ensureMinLength(
+      asString(payload.photographyStyle) ||
+        "Editorial streetwear photography — 35mm, soft overcast urban light, muted grade with signal accent.",
+      MIN_PHOTO_CHARS,
+      "Fotografie",
+    );
+    adjustments.push("enriched photographyStyle");
+  }
+
+  const imagePrompts = asStringArray(payload.imagePrompts);
+  if (imagePrompts.length < 2) {
+    payload.imagePrompts = ensureBulletList(
+      [
+        ...imagePrompts,
+        `${collectionName} oversized hoodie, stone washed black, 480gsm cotton, studio soft key light, editorial streetwear, 35mm`,
+        `${collectionName} wide-leg cargo, urban night environment, cold metallic campaign mood, premium streetwear photography`,
+      ],
+      2,
+      8,
+      [],
+    ).map((p) => ensureMinLength(p, MIN_PROMPT_CHARS, "Image prompt"));
+    adjustments.push("enriched imagePrompts");
+  }
+
+  if (
+    !asString(payload.moodDescription) ||
+    asString(payload.moodDescription).length < MIN_MOOD_CHARS
+  ) {
+    payload.moodDescription = ensureMinLength(
+      asString(payload.moodDescription) ||
+        `Mood für ${collectionName}: urban luxury, kühle Metall-Ästhetik, Premium-Streetwear mit reduzierter Grafik.`,
+      MIN_MOOD_CHARS,
+      "Mood",
+    );
+    adjustments.push("enriched moodDescription");
   }
 
   const sourceTitles = asStringArray(payload.sourceReportTitles);

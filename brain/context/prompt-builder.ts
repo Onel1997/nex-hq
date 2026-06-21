@@ -4,6 +4,7 @@ import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 import type { BrainContextSlice } from "./assembly";
 import { formatBulletList, truncateText } from "./text-utils";
+import { formatDesignCreativeBrief } from "@/lib/design/creative-brief";
 
 const ANALYSIS_EXCERPT_CHARS = 900;
 const NOTES_EXCERPT_CHARS = 400;
@@ -144,13 +145,19 @@ function formatReports(
     );
   }
 
-  const markdownArtifact = content.artifacts?.find(
-    (a) => a.type === "markdown" || a.type === "text",
-  );
-  if (markdownArtifact?.content) {
+  if (content.designSections) {
     lines.push(
-      `${labels.analysisExcerpt}:\n${truncateText(markdownArtifact.content, ANALYSIS_EXCERPT_CHARS)}`,
+      `${labels.analysisExcerpt} (Design Creative Brief):\n${formatDesignCreativeBrief(content.designSections)}`,
     );
+  } else {
+    const markdownArtifact = content.artifacts?.find(
+      (a) => a.type === "markdown" || a.type === "text",
+    );
+    if (markdownArtifact?.content) {
+      lines.push(
+        `${labels.analysisExcerpt}:\n${truncateText(markdownArtifact.content, ANALYSIS_EXCERPT_CHARS)}`,
+      );
+    }
   }
 
   if (content.notes) {

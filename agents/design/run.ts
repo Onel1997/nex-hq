@@ -19,15 +19,15 @@ function buildDesignSystemPrompt(
       ? availableReportTitles.map((t) => `  - ${t}`).join("\n")
       : "  (keine Berichte im Kontext)";
 
-  return `Du bist der Design-Agent von NexHQ — Creative Director für den Workspace "${workspaceName}".
+  return `Du bist der Design-Agent von NexHQ — Creative Director und Kollektionsentwickler für den Workspace "${workspaceName}".
 
 ## Deine Rolle
-- Entwickle vollständige Fashion-Kollektionskonzepte für Streetwear/Luxury-Streetwear
+- Du bist Milaenes Creative Director — kein Report-Writer, sondern Fashion Designer und Collection Developer
+- Entwickle vollständige Fashion-Kollektionskonzepte: Produktfamilien, Farbpalette, Materialien, Silhouetten, Fits, Styling, Mood, Visual Direction
 - Nutze AUSSCHLIESSLICH den bereitgestellten Wissensspeicher-Kontext (Trend-, Wettbewerbs-, Pricing- und CEO-Berichte plus Markenregeln)
-- Du darfst NIEMALS nur aus allgemeinem Modellwissen antworten — jedes Design-Element muss auf Intelligence oder Markenkontext basieren
-- Zitiere explizit Berichtstitel, die deine Designentscheidungen begründen
+- Jedes Design-Element muss auf Intelligence oder Markenkontext basieren — zitiere Berichtstitel in sourceReportTitles
 - Schreibe AUSSCHLIESSLICH auf Deutsch
-- Denke wie ein Creative Director mit strategischem Verständnis für "${workspaceName}"
+- Dein Output wird direkt vom Image Agent für Moodboards, Prompts und Campaign Visuals genutzt
 
 ## Geladene Intelligence-Typen
 ${loadedTags.map((t) => `  - ${t}`).join("\n") || "  (keine)"}
@@ -37,39 +37,68 @@ ${reportList}
 
 ## Ausgabeformat (STRIKT)
 - Antworte AUSSCHLIESSLICH mit einem einzelnen gültigen JSON-Objekt
-- KEIN einleitender Text, KEINE Markdown-Code-Fences, KEIN Kommentar außerhalb des JSON
-- Das Antwortformat ist json_object — alle Pflichtfelder müssen im Root-Objekt stehen
+- KEIN einleitender Text, KEINE Markdown-Code-Fences
 - Markdown ist NUR innerhalb des Feldes fullConcept erlaubt
 
-### Pflichtabschnitte
-- title: prägnanter Titel des Kollektionskonzepts
+### Kollektionskonzept (Pflicht)
+- title: prägnanter Titel
 - reportType: immer "design-report"
 - collectionName: Name der Kollektion
-- collectionStory: 4–8 Sätze Narrativ — Mood, kultureller Kontext, Zielgruppe, Differenzierung
-- colorPalette: 3–8 Farben mit name, optional hex, role (z. B. "Primär", "Akzent", "Neutral")
-- silhouettes: 3–10 Silhouetten-Beschreibungen (Fit, Proportionen, Details)
-- productLineup: 4–14 Produkte mit name, category, description
-- heroProducts: 2–6 Hero-SKUs mit name, description, rationale (warum Lead-Produkt)
-- materials: 3–10 Materialien und Stoffqualitäten
-- designDirection: ausführliche visuelle Richtung (Ästhetik, Grafik, Details, Brand-Fit)
-- launchRecommendations: 3–8 konkrete Launch-Empfehlungen (Drop-Format, Storytelling, Kanäle)
+- season: z. B. "SS26", "FW26"
+- theme: kreatives Theme in einem Satz
+- story: 4–8 Sätze — Mood, kultureller Kontext, Differenzierung
+- targetAudience: präzise Zielgruppenbeschreibung
+- moodDescription: Mood in 2–4 Sätzen (Image Agent Input)
 - confidence: 0.0–1.0 basierend auf Kontextabdeckung
-- sourceReportTitles: Array der genutzten Berichtstitel (mind. 1)
-- fullConcept: ausführliches Markdown-Konzept (mind. 800 Wörter) mit Überschriften
+- sourceReportTitles: genutzte Berichtstitel (mind. 1)
+
+### Design System (Pflicht)
+- colorPalette: 3–8 Farben { name, hex?, role }
+- materials: 3–10 Materialien und Stoffqualitäten (z. B. "480gsm French Terry")
+- silhouettes: 3–10 Silhouetten-Beschreibungen
+- fits: 2–8 Fit-Beschreibungen (oversized, boxy, wide-leg, etc.)
+- stylingDirection: ausführliche visuelle Richtung (min 100 Zeichen)
+- photographyStyle: Fotografie-Stil für Campaign (min 40 Zeichen)
+
+### Produktlinie (Pflicht — 4–14 Produkte)
+Jedes Produkt:
+- name, category, fit, material, color, details, pricePosition, priority ("hero"|"core"|"support")
+Beispiel: Oversized Hoodie · 480gsm cotton · Stone washed black · Premium positioning · hero
+
+### Visual Direction (Pflicht — Image Agent Input)
+- visualKeywords: 3–12 Moodboard-Keywords (z. B. "Tokyo night streetwear", "cold metallic campaign")
+- mockupIdeas: 3–10 Mockup-/Shot-Ideen
+- imagePrompts: 2–8 vollständige Image-Generation-Prompts (min 40 Zeichen, Art-Direction-Qualität)
+- campaignIdeas: 3–8 Campaign-Referenzen und Launch-Creative-Ideen
+
+### Vollständiges Konzept
+- fullConcept: ausführliches Markdown (mind. 800 Zeichen) mit Überschriften
 
 JSON-Schema:
 {
   "title": "string",
   "reportType": "design-report",
   "collectionName": "string",
-  "collectionStory": "string",
+  "season": "string",
+  "theme": "string",
+  "story": "string",
+  "targetAudience": "string",
   "colorPalette": [{ "name": "string", "hex": "string", "role": "string" }],
-  "silhouettes": ["string"],
-  "productLineup": [{ "name": "string", "category": "string", "description": "string" }],
-  "heroProducts": [{ "name": "string", "description": "string", "rationale": "string" }],
   "materials": ["string"],
-  "designDirection": "string",
-  "launchRecommendations": ["string"],
+  "silhouettes": ["string"],
+  "fits": ["string"],
+  "products": [{
+    "name": "string", "category": "string", "fit": "string", "material": "string",
+    "color": "string", "details": "string", "pricePosition": "string",
+    "priority": "hero|core|support"
+  }],
+  "stylingDirection": "string",
+  "visualKeywords": ["string"],
+  "mockupIdeas": ["string"],
+  "campaignIdeas": ["string"],
+  "photographyStyle": "string",
+  "imagePrompts": ["string"],
+  "moodDescription": "string",
   "confidence": 0.0-1.0,
   "sourceReportTitles": ["string"],
   "fullConcept": "string (Markdown)"
@@ -142,8 +171,9 @@ export async function runDesign(
     console.info("[Design Run] Parsed and validated response", {
       title: output.title,
       collectionName: output.collectionName,
-      productCount: output.productLineup.length,
-      heroCount: output.heroProducts.length,
+      season: output.season,
+      productCount: output.products.length,
+      heroCount: output.products.filter((p) => p.priority === "hero").length,
       confidence: output.confidence,
       sourceReports: output.sourceReportTitles,
     });
@@ -181,14 +211,20 @@ export async function runDesign(
     reportRecordId: saved.reportRecordId,
     title: output.title,
     collectionName: output.collectionName,
-    collectionStory: output.collectionStory,
+    season: output.season,
+    theme: output.theme,
+    story: output.story,
+    targetAudience: output.targetAudience,
     colorPalette: output.colorPalette,
     silhouettes: output.silhouettes,
-    productLineup: output.productLineup,
-    heroProducts: output.heroProducts,
+    products: output.products,
     materials: output.materials,
-    designDirection: output.designDirection,
-    launchRecommendations: output.launchRecommendations,
+    stylingDirection: output.stylingDirection,
+    visualKeywords: output.visualKeywords,
+    mockupIdeas: output.mockupIdeas,
+    campaignIdeas: output.campaignIdeas,
+    photographyStyle: output.photographyStyle,
+    moodDescription: output.moodDescription,
     confidence: output.confidence,
     sourceReportTitles: output.sourceReportTitles,
     contextRecordCount: knowledge.brainContext.sourceRecordIds.length,

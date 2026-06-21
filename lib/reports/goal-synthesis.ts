@@ -85,6 +85,7 @@ function extractReportSnapshot(
 
   const executiveSummary =
     research?.executiveSummary ??
+    design?.story ??
     design?.collectionStory ??
     marketing?.launchStrategy ??
     ceo?.executiveSummary ??

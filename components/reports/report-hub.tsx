@@ -613,14 +613,39 @@ function ReportCard({
               <ReportSection label={sectionLabels.collectionName}>
                 <p className="text-base font-medium text-foreground">
                   {design.collectionName}
+                  {design.season ? (
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {" "}
+                      · {design.season}
+                    </span>
+                  ) : null}
                 </p>
+                {design.theme ? (
+                  <p className="mt-1 text-sm text-muted-foreground">{design.theme}</p>
+                ) : null}
               </ReportSection>
 
               <ReportSection label={sectionLabels.collectionStory}>
                 <p className="text-base leading-relaxed text-muted-foreground">
-                  {design.collectionStory}
+                  {design.story ?? design.collectionStory}
                 </p>
               </ReportSection>
+
+              {design.targetAudience ? (
+                <ReportSection label="Target Audience">
+                  <p className="text-base leading-relaxed text-muted-foreground">
+                    {design.targetAudience}
+                  </p>
+                </ReportSection>
+              ) : null}
+
+              {design.moodDescription ? (
+                <ReportSection label="Mood">
+                  <p className="text-base leading-relaxed text-muted-foreground">
+                    {design.moodDescription}
+                  </p>
+                </ReportSection>
+              ) : null}
 
               {design.colorPalette.length > 0 && (
                 <ReportSection label={sectionLabels.colorPalette}>
@@ -648,10 +673,20 @@ function ReportCard({
                 </ReportSection>
               )}
 
-              {design.productLineup.length > 0 && (
+              {(design.products?.length ?? design.productLineup.length) > 0 && (
                 <ReportSection label={sectionLabels.productLineup}>
                   <ul className="space-y-3">
-                    {design.productLineup.map((product) => (
+                    {(design.products ??
+                      design.productLineup.map((p) => ({
+                        name: p.name,
+                        category: p.category,
+                        fit: "—",
+                        material: "—",
+                        color: "—",
+                        details: p.description,
+                        pricePosition: "—",
+                        priority: "core" as const,
+                      }))).map((product) => (
                       <li
                         key={product.name}
                         className="rounded-xl border border-border bg-muted/20 p-4"
@@ -659,17 +694,47 @@ function ReportCard({
                         <p className="font-medium text-foreground">
                           {product.name}{" "}
                           <span className="text-sm font-normal text-muted-foreground">
-                            · {product.category}
+                            · {product.category} · {product.priority}
                           </span>
                         </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {product.fit} · {product.material} · {product.color} ·{" "}
+                          {product.pricePosition}
+                        </p>
                         <p className="mt-1 text-base text-muted-foreground">
-                          {product.description}
+                          {product.details}
                         </p>
                       </li>
                     ))}
                   </ul>
                 </ReportSection>
               )}
+
+              {design.visualKeywords && design.visualKeywords.length > 0 && (
+                <ReportSection label="Visual Keywords">
+                  <BulletList items={design.visualKeywords} />
+                </ReportSection>
+              )}
+
+              {design.mockupIdeas && design.mockupIdeas.length > 0 && (
+                <ReportSection label="Mockup Ideas">
+                  <BulletList items={design.mockupIdeas} />
+                </ReportSection>
+              )}
+
+              {design.imagePrompts && design.imagePrompts.length > 0 && (
+                <ReportSection label="Image Prompts">
+                  <BulletList items={design.imagePrompts} />
+                </ReportSection>
+              )}
+
+              {design.photographyStyle ? (
+                <ReportSection label="Photography Style">
+                  <p className="text-base leading-relaxed text-muted-foreground">
+                    {design.photographyStyle}
+                  </p>
+                </ReportSection>
+              ) : null}
 
               {design.heroProducts.length > 0 && (
                 <ReportSection label={sectionLabels.heroProducts}>
@@ -700,13 +765,13 @@ function ReportCard({
 
               <ReportSection label={sectionLabels.designDirection}>
                 <p className="text-base leading-relaxed text-muted-foreground">
-                  {design.designDirection}
+                  {design.stylingDirection ?? design.designDirection}
                 </p>
               </ReportSection>
 
-              {design.launchRecommendations.length > 0 && (
+              {(design.campaignIdeas ?? design.launchRecommendations).length > 0 && (
                 <ReportSection label={sectionLabels.launchRecommendations}>
-                  <BulletList items={design.launchRecommendations} />
+                  <BulletList items={design.campaignIdeas ?? design.launchRecommendations} />
                 </ReportSection>
               )}
             </>

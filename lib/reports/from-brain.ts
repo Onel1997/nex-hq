@@ -153,14 +153,28 @@ function mapDesignSections(
 ): ReportListItem["designReport"] {
   if (!sections) return undefined;
   return {
+    schemaVersion: sections.schemaVersion,
     collectionName: sections.collectionName,
+    season: sections.season,
+    theme: sections.theme,
+    story: sections.story ?? sections.collectionStory,
     collectionStory: sections.collectionStory,
+    targetAudience: sections.targetAudience,
     colorPalette: sections.colorPalette,
     silhouettes: sections.silhouettes,
+    fits: sections.fits,
+    products: sections.products,
     productLineup: sections.productLineup,
     heroProducts: sections.heroProducts,
     materials: sections.materials,
+    stylingDirection: sections.stylingDirection ?? sections.designDirection,
     designDirection: sections.designDirection,
+    visualKeywords: sections.visualKeywords,
+    mockupIdeas: sections.mockupIdeas,
+    campaignIdeas: sections.campaignIdeas,
+    photographyStyle: sections.photographyStyle,
+    imagePrompts: sections.imagePrompts,
+    moodDescription: sections.moodDescription,
     launchRecommendations: sections.launchRecommendations,
     sourceReportTitles: sections.sourceReportTitles,
   };
@@ -262,7 +276,9 @@ export function brainReportRecordToListItem(
         : isMarketingReport
           ? marketingSections?.launchStrategy ?? content.summary
           : isDesignReport
-            ? designSections?.collectionStory ?? content.summary
+            ? designSections?.story ??
+              designSections?.collectionStory ??
+              content.summary
             : isCeoFinalReport
               ? ceoFinalSections?.executiveSummary ?? content.summary
             : ceoSections?.executiveSummary ??
@@ -283,7 +299,8 @@ export function brainReportRecordToListItem(
         : isMarketingReport
           ? marketingSections?.contentPillars
           : isDesignReport
-            ? designSections?.silhouettes
+            ? designSections?.visualKeywords ??
+              designSections?.silhouettes
             : isCeoFinalReport
               ? ceoFinalSections?.keyFindings
             : isCeoReport
@@ -313,7 +330,9 @@ export function brainReportRecordToListItem(
         : isMarketingReport
           ? marketingSections?.launchStrategy ?? content.summary
           : isDesignReport
-            ? designSections?.collectionStory ?? content.summary
+            ? designSections?.story ??
+              designSections?.collectionStory ??
+              content.summary
             : isCeoFinalReport
               ? ceoFinalSections?.executiveSummary ?? content.summary
             : ceoSections?.executiveSummary ??
@@ -329,7 +348,8 @@ export function brainReportRecordToListItem(
           ? marketingSections?.contentPillars
           : isCeoReport || isDesignReport
             ? isDesignReport
-              ? designSections?.launchRecommendations
+              ? designSections?.mockupIdeas ??
+                designSections?.launchRecommendations
               : undefined
             : researchSections?.recommendations,
     opportunities: isCeoFinalReport

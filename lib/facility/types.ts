@@ -216,6 +216,13 @@ export interface LabReportDetail {
   summary: string;
 }
 
+export interface LabInspectorMetrics {
+  confidence: number | null;
+  reportCount: number;
+  activeTaskCount: number;
+  approvedReportCount: number;
+}
+
 export interface LabInspectorData {
   agentId: FacilityLabId;
   agentName: string;
@@ -225,6 +232,8 @@ export interface LabInspectorData {
   currentTask: LabTaskSnapshot | null;
   taskQueue: LabTaskSnapshot[];
   reports: LabReportDetail[];
+  fullReports: ReportListItem[];
+  metrics: LabInspectorMetrics;
   recentEvents: FacilityEvent[];
   timeline: TimelineItem[];
   knowledgeRefs: KnowledgeRef[];

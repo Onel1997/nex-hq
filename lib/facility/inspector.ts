@@ -11,6 +11,7 @@ import type {
   KnowledgeRef,
   TimelineItem,
 } from "@/lib/facility/types";
+import { buildLabMetrics } from "@/lib/facility/lab-intelligence";
 import { brainReportRecordsToListItems } from "@/lib/reports/from-brain";
 import { listTasks } from "@/lib/tasks/task-service";
 import type { TaskListItem, TaskPriority, TaskStatus } from "@/tasks/types";
@@ -173,6 +174,8 @@ export async function getLabInspectorData(
   const latestReport = agentReports[0] ?? null;
   const agentEvents = await getAgentEvents(agentId, 30);
 
+  const taskSnapshots = agentTasks.map(toTaskSnapshot);
+
   return {
     agentId,
     agentName: catalog.name,
@@ -180,8 +183,10 @@ export async function getLabInspectorData(
     opsState: lab.opsState,
     confidence: latestReport?.confidence ?? null,
     currentTask: lab.activeTask,
-    taskQueue: agentTasks.map(toTaskSnapshot),
+    taskQueue: taskSnapshots,
     reports: reportDetails,
+    fullReports: agentReports,
+    metrics: buildLabMetrics(agentReports, taskSnapshots),
     recentEvents: agentEvents,
     timeline: buildTimeline(agentEvents, catalog.name),
     knowledgeRefs: buildKnowledgeRefs(agentReports, agentTasks),

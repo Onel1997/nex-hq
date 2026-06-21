@@ -9,6 +9,10 @@ import {
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
 import type { BrainReportContent } from "@/brain/domains/reports";
+import {
+  extractImageInputsFromDesign,
+  formatDesignCreativeBrief,
+} from "@/lib/design/creative-brief";
 import type { BrainRecord } from "@/brain/types";
 import {
   type ImageCollectionIdentity,
@@ -104,6 +108,8 @@ export interface ImageKnowledgeContext {
   reportTitles: string[];
   loadedTags: string[];
   collectionIdentity: ImageCollectionIdentity;
+  designCreativeBrief: string | null;
+  designImageInputs: ReturnType<typeof extractImageInputsFromDesign> | null;
 }
 
 function mergeRecordsIntoSlice(
@@ -133,6 +139,31 @@ function mergeRecordsIntoSlice(
     ...slices,
     { domain, records: newRecords, relevanceScore: 1 },
   ];
+}
+
+function extractLatestDesignContext(slices: BrainContextSlice[]): {
+  brief: string | null;
+  inputs: ReturnType<typeof extractImageInputsFromDesign> | null;
+} {
+  const reportSlice = slices.find((s) => s.domain === "reports");
+  if (!reportSlice) return { brief: null, inputs: null };
+
+  const designRecord = reportSlice.records
+    .filter((record) => matchesReportType(record, "design-report"))
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )[0];
+
+  if (!designRecord) return { brief: null, inputs: null };
+
+  const content = getRecordContent(designRecord);
+  if (!content?.designSections) return { brief: null, inputs: null };
+
+  return {
+    brief: formatDesignCreativeBrief(content.designSections),
+    inputs: extractImageInputsFromDesign(content.designSections),
+  };
 }
 
 function extractReportTitles(slices: BrainContextSlice[]): string[] {
@@ -415,6 +446,7 @@ export async function retrieveImageKnowledge(input: {
     brief: input.brief,
     workspaceName: input.workspaceName,
   });
+  const designContext = extractLatestDesignContext(slices);
 
   const brainContext: BrainAgentContext = {
     ...baseContext,
@@ -450,5 +482,7 @@ export async function retrieveImageKnowledge(input: {
     reportTitles,
     loadedTags,
     collectionIdentity,
+    designCreativeBrief: designContext.brief,
+    designImageInputs: designContext.inputs,
   };
 }

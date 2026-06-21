@@ -149,6 +149,16 @@ export async function runImage(
             knowledge.collectionIdentity.campaignName,
             knowledge.collectionIdentity.projectName,
           ) +
+          (knowledge.designCreativeBrief
+            ? "\n\n## Design Agent — Creative Brief (PRIMÄRE QUELLE)\n\n" +
+              knowledge.designCreativeBrief +
+              (knowledge.designImageInputs?.imagePrompts.length
+                ? "\n\n### Design Image Prompts\n" +
+                  knowledge.designImageInputs.imagePrompts
+                    .map((p) => `- ${p}`)
+                    .join("\n")
+                : "")
+            : "") +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },

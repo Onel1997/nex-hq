@@ -78,14 +78,38 @@ export interface ReportListItem {
   nextSteps?: ReportNextStep[];
   sourceReportTitles?: string[];
   designReport?: {
+    schemaVersion?: "2.0" | "1.0";
     collectionName: string;
+    season?: string;
+    theme?: string;
+    story?: string;
     collectionStory: string;
+    targetAudience?: string;
     colorPalette: BrainDesignColor[];
     silhouettes: string[];
+    fits?: string[];
+    products?: Array<{
+      name: string;
+      category: string;
+      fit: string;
+      material: string;
+      color: string;
+      details: string;
+      pricePosition: string;
+      priority: "hero" | "core" | "support";
+      description?: string;
+    }>;
     productLineup: BrainDesignProduct[];
     heroProducts: BrainDesignHeroProduct[];
     materials: string[];
+    stylingDirection?: string;
     designDirection: string;
+    visualKeywords?: string[];
+    mockupIdeas?: string[];
+    campaignIdeas?: string[];
+    photographyStyle?: string;
+    imagePrompts?: string[];
+    moodDescription?: string;
     launchRecommendations: string[];
     sourceReportTitles?: string[];
   };

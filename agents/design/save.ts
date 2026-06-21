@@ -1,4 +1,7 @@
 import type {
+  BrainDesignHeroProduct,
+  BrainDesignProduct,
+  BrainDesignProductV2,
   BrainDesignSections,
   BrainReportContent,
 } from "@/brain/domains/reports";
@@ -19,17 +22,68 @@ export interface SaveDesignResult {
   reportRecordId: string;
 }
 
-function buildDesignSections(output: DesignOutput): BrainDesignSections {
+function toLegacyProduct(product: DesignOutput["products"][number]): BrainDesignProduct {
   return {
+    name: product.name,
+    category: product.category,
+    description:
+      product.description ??
+      `${product.details} · ${product.material} · ${product.color} · ${product.fit}`,
+  };
+}
+
+function toHeroProducts(
+  products: DesignOutput["products"],
+): BrainDesignHeroProduct[] {
+  return products
+    .filter((p) => p.priority === "hero")
+    .slice(0, 6)
+    .map((p) => ({
+      name: p.name,
+      description:
+        p.description ??
+        `${p.details} · ${p.material} · ${p.color}`,
+      rationale: `${p.pricePosition} — führt die Kollektionsstory als Hero-SKU.`,
+    }));
+}
+
+function buildDesignSections(output: DesignOutput): BrainDesignSections {
+  const heroProducts = toHeroProducts(output.products);
+  const fallbackHeroes =
+    heroProducts.length >= 2
+      ? heroProducts
+      : output.products.slice(0, 2).map((p) => ({
+          name: p.name,
+          description:
+            p.description ??
+            `${p.details} · ${p.material} · ${p.color}`,
+          rationale: `${p.pricePosition} — Kernprodukt der Kollektion.`,
+        }));
+
+  return {
+    schemaVersion: "2.0",
     collectionName: output.collectionName,
-    collectionStory: output.collectionStory,
+    season: output.season,
+    theme: output.theme,
+    story: output.story,
+    collectionStory: output.story,
+    targetAudience: output.targetAudience,
     colorPalette: output.colorPalette,
-    silhouettes: output.silhouettes,
-    productLineup: output.productLineup,
-    heroProducts: output.heroProducts,
     materials: output.materials,
-    designDirection: output.designDirection,
-    launchRecommendations: output.launchRecommendations,
+    silhouettes: output.silhouettes,
+    fits: output.fits,
+    products: output.products as BrainDesignProductV2[],
+    stylingDirection: output.stylingDirection,
+    designDirection: output.stylingDirection,
+    visualKeywords: output.visualKeywords,
+    mockupIdeas: output.mockupIdeas,
+    campaignIdeas: output.campaignIdeas,
+    photographyStyle: output.photographyStyle,
+    imagePrompts: output.imagePrompts,
+    moodDescription: output.moodDescription,
+    productLineup: output.products.map(toLegacyProduct),
+    heroProducts: fallbackHeroes,
+    launchRecommendations: output.campaignIdeas,
     sourceReportTitles: output.sourceReportTitles,
   };
 }
@@ -55,7 +109,7 @@ export async function saveDesignToBrain(
     ...(originTaskId ? { originTaskId } : {}),
     agentId: "designer",
     status: "submitted",
-    summary: input.output.collectionStory,
+    summary: input.output.story,
     confidence: input.output.confidence,
     reportType: "design-report",
     designSections,
@@ -75,10 +129,16 @@ export async function saveDesignToBrain(
     domain: "reports",
     slug: `design-${baseSlug}-${slugSuffix}`,
     title: input.output.title,
-    summary: input.output.collectionStory,
+    summary: input.output.story,
     content: reportContent,
     status: "pending_review",
-    tags: ["design-report", "designer", "agent-generated", "collection"],
+    tags: [
+      "design-report",
+      "designer",
+      "agent-generated",
+      "collection",
+      "design-v2",
+    ],
     provenance: {
       createdBy: { type: "agent", id: "designer" },
       sourceTaskId: taskId,

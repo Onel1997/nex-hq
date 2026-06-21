@@ -69,14 +69,28 @@ export interface BrainDesignColor {
   role: string;
 }
 
-/** Product SKU in a design collection lineup. */
+/** Product SKU in a design collection lineup (V1 legacy). */
 export interface BrainDesignProduct {
   name: string;
   category: string;
   description: string;
 }
 
-/** Hero product highlight in a design collection concept. */
+/** Full product spec in a design collection (Designer Agent V2). */
+export interface BrainDesignProductV2 {
+  name: string;
+  category: string;
+  fit: string;
+  material: string;
+  color: string;
+  details: string;
+  pricePosition: string;
+  priority: "hero" | "core" | "support";
+  /** Legacy narrative — optional on V2 records */
+  description?: string;
+}
+
+/** Hero product highlight in a design collection concept (V1 legacy). */
 export interface BrainDesignHeroProduct {
   name: string;
   description: string;
@@ -85,13 +99,41 @@ export interface BrainDesignHeroProduct {
 
 /** Structured design collection concept sections (Designer Agent). */
 export interface BrainDesignSections {
+  schemaVersion?: "2.0" | "1.0";
   collectionName: string;
-  collectionStory: string;
+  /** V2 — season label e.g. SS26 */
+  season?: string;
+  /** V2 — creative theme */
+  theme?: string;
+  /** V2 — collection narrative */
+  story?: string;
+  /** V2 — primary audience */
+  targetAudience?: string;
   colorPalette: BrainDesignColor[];
+  materials: string[];
   silhouettes: string[];
+  /** V2 — structured product lineup */
+  products?: BrainDesignProductV2[];
+  /** V2 — styling and art direction */
+  stylingDirection?: string;
+  /** V2 — moodboard keywords */
+  visualKeywords?: string[];
+  /** V2 — mockup / image generation ideas */
+  mockupIdeas?: string[];
+  /** V2 — campaign creative references */
+  campaignIdeas?: string[];
+  /** V2 — photography direction */
+  photographyStyle?: string;
+  /** V2 — image generation prompts for Image Agent */
+  imagePrompts?: string[];
+  /** V2 — mood description */
+  moodDescription?: string;
+  /** V2 — fit descriptions */
+  fits?: string[];
+  /** Legacy V1 */
+  collectionStory: string;
   productLineup: BrainDesignProduct[];
   heroProducts: BrainDesignHeroProduct[];
-  materials: string[];
   designDirection: string;
   launchRecommendations: string[];
   /** Report titles cited as knowledge sources. */
