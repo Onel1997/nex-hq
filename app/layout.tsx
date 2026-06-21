@@ -10,6 +10,9 @@ import "./design-studio.css";
 import "./commerce-lab.css";
 import "./facility-wings.css";
 import "./mission-control.css";
+import "./knowledge-vault.css";
+import "./reports-center.css";
+import "./brain-core.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 
