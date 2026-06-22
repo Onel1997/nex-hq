@@ -30,6 +30,7 @@ import {
   maybeTriggerEmergency,
   pickNextMission,
   pickNextWorkflow,
+  revealMissionReview,
   startMission,
   type MissionIntelligenceState,
 } from "@/lib/facility/brain-core-missions";
@@ -50,38 +51,42 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
+import {
+  BRAIN_CORE_AGENT_COLORS,
+} from "@/lib/facility/brain-core-agent-colors";
+import {
+  BRAIN_CEO_GLOW_SCALE,
+  BRAIN_CHAMBER_SIZE,
+  BRAIN_COMMAND_RING_RADIUS,
+  BRAIN_FEEDBACK_ORBIT_RADIUS,
+  BRAIN_INTEL_ORBIT_RADIUS,
+  BRAIN_NODE_AURA_PX,
+  BRAIN_NODE_DOT_PX,
+  BRAIN_NODE_EDGE_TRIM,
+  BRAIN_NODE_HALO_PX,
+  BRAIN_NODE_ORBIT_GLOW_PX,
+  BRAIN_NODE_RADIUS,
+  brainChamberCenter,
+  brainNodeCenter,
+  type BrainCoreAgentNodeId,
+} from "@/lib/facility/brain-core-alignment";
 
-const CHAMBER_SIZE = 630;
-const CHAMBER_CENTER = CHAMBER_SIZE / 2;
-const NODE_RADIUS = 252;
+const CHAMBER_SIZE = BRAIN_CHAMBER_SIZE;
+const CHAMBER_CENTER = brainChamberCenter();
+const NODE_RADIUS = BRAIN_NODE_RADIUS;
 const CORE_RADIUS = 78;
 const CORE_PROTECT_RADIUS = 118;
-const INTEL_ORBIT_RADIUS = 186;
-const FEEDBACK_ORBIT_RADIUS = 208;
-const COMMAND_RING_RADIUS = NODE_RADIUS - 6;
-const NODE_EDGE_TRIM = 16;
+const INTEL_ORBIT_RADIUS = BRAIN_INTEL_ORBIT_RADIUS;
+const FEEDBACK_ORBIT_RADIUS = BRAIN_FEEDBACK_ORBIT_RADIUS;
+const COMMAND_RING_RADIUS = BRAIN_COMMAND_RING_RADIUS;
+const NODE_EDGE_TRIM = BRAIN_NODE_EDGE_TRIM;
 
 type NeuralLinkType = "command" | "intelligence" | "feedback";
 
-type AgentNodeId =
-  | "ceo"
-  | "research"
-  | "commerce"
-  | "designer"
-  | "marketing"
-  | "content"
-  | "image"
-  | "shopify";
+type AgentNodeId = BrainCoreAgentNodeId;
 
 const AGENT_COLORS: Record<AgentNodeId, string> = {
-  ceo: "#ffd166",
-  research: "#22d3ee",
-  commerce: "#34d399",
-  designer: "#dbeafe",
-  marketing: "#fb923c",
-  content: "#a78bfa",
-  image: "#f472b6",
-  shopify: "#2dd4bf",
+  ...BRAIN_CORE_AGENT_COLORS,
 };
 
 interface NeuralLink {
@@ -150,8 +155,8 @@ function pointOnCircle(angleDeg: number, radius: number) {
   };
 }
 
-function nodeCoords(angle: number) {
-  return pointOnCircle(angle, NODE_RADIUS);
+function nodeCoords(angle: number, agentId?: AgentNodeId) {
+  return brainNodeCenter(angle, agentId);
 }
 
 function nodeById(nodes: BrainCoreAgentNode[], id: string) {
@@ -190,15 +195,21 @@ function buildOrbitArc(
   toAngle: number,
   orbitRadius: number,
   longArc: boolean,
+  fromId?: AgentNodeId,
+  toId?: AgentNodeId,
 ): string {
   const span = orbitSpan(fromAngle, toAngle, longArc);
-  const nodeFrom = pointOnCircle(fromAngle, NODE_RADIUS);
-  const nodeTo = pointOnCircle(toAngle, NODE_RADIUS);
+  const nodeFrom = nodeCoords(fromAngle, fromId);
+  const nodeTo = nodeCoords(toAngle, toId);
   const orbitFrom = pointOnCircle(fromAngle, orbitRadius);
   const orbitTo = pointOnCircle(toAngle, orbitRadius);
 
-  const start = trimToward(nodeFrom, orbitFrom, NODE_EDGE_TRIM);
-  const end = trimToward(nodeTo, orbitTo, NODE_EDGE_TRIM);
+  const start =
+    NODE_EDGE_TRIM > 0
+      ? trimToward(nodeFrom, orbitFrom, NODE_EDGE_TRIM)
+      : nodeFrom;
+  const end =
+    NODE_EDGE_TRIM > 0 ? trimToward(nodeTo, orbitTo, NODE_EDGE_TRIM) : nodeTo;
 
   const largeArcFlag = Math.abs(span) > 180 ? 1 : 0;
   const sweepFlag = span >= 0 ? 1 : 0;
@@ -248,6 +259,8 @@ function buildNeuralNetwork(
         toNode.angle,
         edge.orbitRadius ?? INTEL_ORBIT_RADIUS,
         edge.longArc ?? false,
+        edge.from,
+        edge.to,
       ),
       active: activeLinkIds.has(id),
       fromId: edge.from,
@@ -265,7 +278,14 @@ function buildNeuralNetwork(
     links.push({
       id,
       type: "feedback",
-      d: buildOrbitArc(fromNode.angle, toNode.angle, FEEDBACK_ORBIT_RADIUS, true),
+      d: buildOrbitArc(
+        fromNode.angle,
+        toNode.angle,
+        FEEDBACK_ORBIT_RADIUS,
+        true,
+        edge.from,
+        edge.to,
+      ),
       active: activeLinkIds.has(id),
       fromId: edge.from,
       toId: edge.to,
@@ -341,6 +361,9 @@ function useBrainCoreLiving(
         setMission((prev) => completeMission(prev));
         cascadeStep.current = 0;
         missionBeats.current = [];
+        schedule(() => {
+          setMission((prev) => revealMissionReview(prev));
+        }, 1500 + Math.random() * 500);
         schedule(() => {
           setMission((prev) => maybeTriggerEmergency(prev));
         }, 2000);
@@ -648,8 +671,8 @@ function BrainCoreChamber({ data }: { data: BrainCorePayload }) {
           {mission.activeMission ? (
             <MissionPanel mission={mission.activeMission} />
           ) : null}
-          {mission.ceoReview && liveState.chamberMode === "ceo-event" ? (
-            <CeoReviewOverlay review={mission.ceoReview} />
+          {mission.reviewCardVisible && mission.displayedReview ? (
+            <CeoReviewOverlay review={mission.displayedReview} />
           ) : null}
           <NeuralCore
             baseNodes={data.nodes}
@@ -839,7 +862,14 @@ function NeuralCore({
         `bc-chamber-mode-${chamberMode}`,
         ceoLive?.isLiveActive && ceoLive.liveState === "executing" && "bc-ceo-command-active",
       )}
-      style={{ ["--bc-motion-scale" as string]: String(motionScale) }}
+      style={{
+        ["--bc-motion-scale" as string]: String(motionScale),
+        ["--bc-node-dot-size" as string]: `${BRAIN_NODE_DOT_PX}px`,
+        ["--bc-node-orbit-glow-size" as string]: `${BRAIN_NODE_ORBIT_GLOW_PX}px`,
+        ["--bc-node-halo-size" as string]: `${BRAIN_NODE_HALO_PX}px`,
+        ["--bc-node-aura-size" as string]: `${BRAIN_NODE_AURA_PX}px`,
+        ["--bc-ceo-glow-scale" as string]: String(BRAIN_CEO_GLOW_SCALE),
+      }}
     >
       <div className="bc-starfield" aria-hidden>
         {Array.from({ length: 48 }).map((_, i) => (
@@ -1023,9 +1053,9 @@ function NeuralCore({
       <p className="bc-core-label">NEURAL CORE · V5</p>
 
       <div className="bc-link-legend" aria-label="Connection types">
-        <span className="bc-legend-item bc-legend-command">Command routes</span>
+        <span className="bc-legend-item bc-legend-command">Command network</span>
         <span className="bc-legend-item bc-legend-intelligence">Intelligence flow</span>
-        <span className="bc-legend-item bc-legend-feedback">Feedback loops</span>
+        <span className="bc-legend-item bc-legend-feedback">Feedback matrix</span>
       </div>
     </div>
   );
@@ -1250,8 +1280,8 @@ function AgentNode({
   previousActiveId: AgentNodeId | null;
   feedEventKind?: BrainCoreFeedItem["kind"];
 }) {
-  const pos = nodeCoords(node.angle);
   const agentId = node.id;
+  const pos = nodeCoords(node.angle, agentId);
   const nodeColor = AGENT_COLORS[agentId] ?? "#38bdf8";
   const isCeoEvent = agentId === "ceo" && chamberMode === "ceo-event" && node.isLiveActive;
   const isActive = node.isLiveActive || isMissionOwner || Boolean(feedEventKind);

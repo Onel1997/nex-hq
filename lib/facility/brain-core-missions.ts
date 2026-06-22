@@ -51,6 +51,8 @@ export interface ActiveMission {
 export interface MissionIntelligenceState {
   activeMission: ActiveMission | null;
   ceoReview: CeoMissionReview | null;
+  displayedReview: CeoMissionReview | null;
+  reviewCardVisible: boolean;
   decisionHistory: MissionDecisionRecord[];
   emergency: EmergencyEvent | null;
   missionOwnerId: AgentNodeId | null;
@@ -294,6 +296,8 @@ export function createInitialMissionState(): MissionIntelligenceState {
   return {
     activeMission: null,
     ceoReview: null,
+    displayedReview: null,
+    reviewCardVisible: false,
     decisionHistory: seedDecisionHistory(),
     emergency: null,
     missionOwnerId: null,
@@ -364,6 +368,8 @@ export function startMission(
       startedAt: Date.now(),
     },
     ceoReview: null,
+    displayedReview: null,
+    reviewCardVisible: false,
     decisionHistory: previous.decisionHistory,
     emergency: null,
     missionOwnerId: workflowAgents[0]!,
@@ -440,6 +446,15 @@ export function completeMission(state: MissionIntelligenceState): MissionIntelli
   const verdict = state.ceoReview?.decision ?? state.activeMission.definition.recommendation;
   decisionCounter += 1;
 
+  const displayedReview: CeoMissionReview =
+    state.ceoReview ?? {
+      missionTitle: state.activeMission.definition.title,
+      confidence: state.activeMission.confidence,
+      supportingAgents: state.activeMission.workflowAgents.filter((id) => id !== "ceo").length,
+      recommendation: state.activeMission.definition.recommendation,
+      decision: verdict,
+    };
+
   const record: MissionDecisionRecord = {
     id: `mission-decision-${decisionCounter}-${Date.now()}`,
     verdict,
@@ -451,9 +466,21 @@ export function completeMission(state: MissionIntelligenceState): MissionIntelli
   return {
     activeMission: null,
     ceoReview: null,
+    displayedReview,
+    reviewCardVisible: false,
     decisionHistory: [record, ...state.decisionHistory].slice(0, 5),
     emergency: null,
     missionOwnerId: null,
+  };
+}
+
+export function revealMissionReview(
+  state: MissionIntelligenceState,
+): MissionIntelligenceState {
+  if (!state.displayedReview) return state;
+  return {
+    ...state,
+    reviewCardVisible: true,
   };
 }
 
