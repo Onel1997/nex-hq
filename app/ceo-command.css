@@ -1,0 +1,487 @@
+/* CEO Command V3 — Executive Bronze Gold (Bentley / boardroom, no neon glow) */
+
+.ceo-command-shell {
+  --workspace-accent: #b89552;
+}
+
+.ceo-command-bridge {
+  --ceo-primary: #b89552;
+  --ceo-secondary: #8a6a34;
+  --ceo-accent: #d4b16a;
+  --ceo-border: rgb(184 149 82 / 0.15);
+  --ceo-border-subtle: rgb(184 149 82 / 0.12);
+  --ceo-text-highlight: #e5d0a3;
+  --ceo-headline: rgb(245 240 230 / 0.95);
+  --ceo-status-active: rgb(130 158 125 / 0.78);
+  --ceo-status-muted: rgb(148 163 184 / 0.48);
+  --ceo-surface: rgb(6 8 12 / 0.94);
+  --ceo-gold-dim: rgb(184 149 82 / 0.08);
+  --ceo-atmosphere: rgb(217 185 99 / 0.08);
+  --ceo-atmosphere-strong: rgb(217 185 99 / 0.12);
+}
+
+/* ── Hero command card ── */
+.ceo-command-bridge .command-interface {
+  border: 1px solid rgb(184 149 82 / 0.12) !important;
+  background:
+    linear-gradient(
+      165deg,
+      var(--ceo-atmosphere) 0%,
+      transparent 38%
+    ),
+    var(--ceo-surface) !important;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.35) !important;
+}
+
+/* ── Hero top row + status panel ── */
+.ceo-hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.ceo-hero-top-main {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.ceo-hero-status {
+  flex: 0 1 auto;
+  min-width: 11.5rem;
+  max-width: 16rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(184 149 82 / 0.12);
+  background: rgb(217 185 99 / 0.04);
+}
+
+.ceo-hero-status-label {
+  margin: 0 0 0.55rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ceo-text-highlight);
+  opacity: 0.85;
+}
+
+.ceo-hero-status-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ceo-hero-status-list li {
+  position: relative;
+  padding: 0.2rem 0 0.2rem 0.85rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgb(203 213 225 / 0.72);
+}
+
+.ceo-hero-status-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55rem;
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--ceo-secondary);
+  opacity: 0.75;
+}
+
+/* ── Executive mission buttons ── */
+.ceo-executive-mission {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 3rem;
+  padding: 0.75rem 1.35rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgb(184 149 82 / 0.28);
+  background: rgb(217 185 99 / 0.04);
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgb(226 232 240 / 0.88);
+  cursor: pointer;
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    box-shadow 0.25s ease,
+    color 0.25s ease;
+}
+
+.ceo-executive-mission:hover:not(:disabled) {
+  border-color: rgb(184 149 82 / 0.42);
+  background: var(--ceo-atmosphere-strong);
+  color: var(--ceo-headline);
+  box-shadow: 0 0 24px rgb(217 185 99 / 0.1);
+}
+
+.ceo-executive-mission:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ceo-executive-mission-dot {
+  flex-shrink: 0;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--ceo-accent);
+  background: transparent;
+  box-shadow: 0 0 8px rgb(217 185 99 / 0.15);
+}
+
+.ceo-executive-mission:hover:not(:disabled) .ceo-executive-mission-dot {
+  background: rgb(217 185 99 / 0.25);
+}
+
+/* ── Command textarea ── */
+.ceo-command-textarea {
+  min-height: 8.5rem;
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.ceo-command-bridge .ceo-command-textarea:focus {
+  --tw-ring-color: rgb(217 185 99 / 0.14);
+  border-color: rgb(184 149 82 / 0.28);
+  box-shadow:
+    0 0 0 1px rgb(184 149 82 / 0.12),
+    0 0 28px rgb(217 185 99 / 0.1);
+}
+
+.ceo-command-bridge .command-interface-headline {
+  color: var(--ceo-headline);
+  letter-spacing: -0.025em;
+}
+
+.ceo-command-bridge .text-label {
+  color: var(--ceo-text-highlight);
+}
+
+.ceo-command-bridge .text-primary {
+  color: var(--ceo-text-highlight);
+}
+
+.ceo-command-bridge a.text-primary:hover {
+  color: var(--ceo-accent);
+}
+
+/* ── Mode & submit buttons ── */
+.ceo-command-mode-active {
+  background: linear-gradient(135deg, #b89552, #d4b16a) !important;
+  color: rgb(22 18 12 / 0.92) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.ceo-command-mode-active:hover {
+  filter: brightness(1.05);
+}
+
+.ceo-command-submit {
+  background: linear-gradient(135deg, #b89552, #d4b16a) !important;
+  color: rgb(22 18 12 / 0.92) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.ceo-command-submit:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+/* ── Example chips — replaced by executive missions ── */
+
+/* ── Result surfaces (delegation / briefing) ── */
+.ceo-command-bridge .ceo-result-surface,
+.ceo-command-bridge .ceo-result-surface.luxury-surface-elevated {
+  border: 1px solid rgb(184 149 82 / 0.12) !important;
+  background: var(--ceo-surface) !important;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.3) !important;
+}
+
+.ceo-command-bridge .ceo-result-surface .text-primary {
+  color: var(--ceo-text-highlight);
+}
+
+.ceo-command-bridge svg.text-primary {
+  color: var(--ceo-secondary);
+  opacity: 0.8;
+}
+
+.ceo-command-bridge .ceo-bullet-dot {
+  background: rgb(184 149 82 / 0.45);
+}
+
+.ceo-command-bridge .ceo-bullet-dot-muted {
+  background: rgb(184 149 82 / 0.28);
+}
+
+/* ── Accordion panels ── */
+.ceo-command-panels {
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgb(184 149 82 / 0.1);
+}
+
+.ceo-command-panels-label {
+  margin-bottom: 1.25rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(148 163 184 / 0.55);
+}
+
+.ceo-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.ceo-accordion-item {
+  overflow: hidden;
+  border-radius: 0.9rem;
+  border: 1px solid rgb(184 149 82 / 0.1);
+  background: rgb(217 185 99 / 0.02);
+  transition:
+    border-color 0.28s ease,
+    background 0.28s ease,
+    box-shadow 0.28s ease;
+}
+
+.ceo-accordion-item:hover {
+  border-color: rgb(184 149 82 / 0.16);
+  box-shadow: 0 0 20px rgb(217 185 99 / 0.06);
+}
+
+.ceo-accordion-item-open {
+  border-color: rgb(184 149 82 / 0.2);
+  background: rgb(217 185 99 / 0.05);
+  box-shadow: 0 0 28px rgb(217 185 99 / 0.08);
+}
+
+.ceo-accordion-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.2s;
+}
+
+.ceo-accordion-trigger:hover {
+  color: var(--ceo-text-highlight);
+}
+
+.ceo-accordion-trigger-text {
+  min-width: 0;
+}
+
+.ceo-accordion-trigger-title {
+  font-family: var(--font-display, inherit);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  color: rgb(236 240 245 / 0.92);
+}
+
+.ceo-accordion-trigger-meta {
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--ceo-status-muted);
+}
+
+.ceo-accordion-chevron {
+  flex-shrink: 0;
+  color: var(--ceo-secondary);
+  opacity: 0.75;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s;
+}
+
+.ceo-accordion-item-open .ceo-accordion-chevron {
+  transform: rotate(180deg);
+  opacity: 0.95;
+  color: var(--ceo-accent);
+}
+
+.ceo-accordion-content-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ceo-accordion-content-wrap-open {
+  grid-template-rows: 1fr;
+}
+
+.ceo-accordion-content {
+  overflow: hidden;
+  padding: 0 1.5rem 1.35rem;
+}
+
+.ceo-panel-section-label {
+  margin-top: 1rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ceo-status-muted);
+}
+
+.ceo-panel-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ceo-panel-list li {
+  padding: 0.65rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.04);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: rgb(203 213 225 / 0.78);
+}
+
+.ceo-panel-list li:last-child {
+  border-bottom: none;
+}
+
+.ceo-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.04);
+  font-size: 0.875rem;
+}
+
+.ceo-panel-row:last-child {
+  border-bottom: none;
+}
+
+.ceo-panel-row-label {
+  color: rgb(226 232 240 / 0.85);
+}
+
+.ceo-panel-row-sub {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--ceo-status-muted);
+}
+
+/* ── Status pills: bronze · grey · muted green ── */
+.ceo-status-pill {
+  flex-shrink: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ceo-status-running,
+.ceo-status-active {
+  color: var(--ceo-status-active);
+  background: rgb(130 158 125 / 0.1);
+}
+
+.ceo-status-waiting,
+.ceo-status-pending {
+  color: var(--ceo-status-muted);
+  background: rgb(148 163 184 / 0.07);
+}
+
+.ceo-status-completed {
+  color: var(--ceo-text-highlight);
+  background: var(--ceo-gold-dim);
+}
+
+.ceo-status-failed {
+  color: rgb(160 130 130 / 0.65);
+  background: rgb(160 130 130 / 0.06);
+}
+
+.ceo-panel-empty {
+  padding: 0.5rem 0;
+  font-size: 0.875rem;
+  color: var(--ceo-status-muted);
+}
+
+.ceo-panel-overview-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.5rem;
+  padding: 0.25rem 0 0.75rem;
+  font-size: 0.875rem;
+  color: rgb(203 213 225 / 0.78);
+}
+
+.ceo-panel-overview-line span {
+  white-space: nowrap;
+}
+
+.ceo-panel-overview-line strong {
+  font-weight: 500;
+  color: var(--ceo-text-highlight);
+}
+
+.ceo-panel-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--ceo-accent);
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.2s;
+}
+
+.ceo-panel-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.ceo-panels-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 2rem;
+  font-size: 0.875rem;
+  color: var(--ceo-status-muted);
+}
+
+.ceo-priority-dot {
+  display: inline-block;
+  width: 0.35rem;
+  height: 0.35rem;
+  margin-right: 0.5rem;
+  border-radius: 999px;
+  background: var(--ceo-secondary);
+  opacity: 0.65;
+  vertical-align: middle;
+}
+
+.ceo-priority-dot-high {
+  background: var(--ceo-accent);
+  opacity: 0.75;
+}
