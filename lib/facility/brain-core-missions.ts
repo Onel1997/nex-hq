@@ -48,14 +48,21 @@ export interface ActiveMission {
   startedAt: number;
 }
 
+export type ReviewCardPhase = "hidden" | "visible" | "minimized";
+
 export interface MissionIntelligenceState {
   activeMission: ActiveMission | null;
   ceoReview: CeoMissionReview | null;
   displayedReview: CeoMissionReview | null;
-  reviewCardVisible: boolean;
+  reviewCardPhase: ReviewCardPhase;
   decisionHistory: MissionDecisionRecord[];
   emergency: EmergencyEvent | null;
   missionOwnerId: AgentNodeId | null;
+}
+
+/** Full decision cycle: Research → Commerce → Design → … → Marketing → CEO */
+export function workflowEarnsMissionReview(workflowId: WorkflowId): boolean {
+  return workflowId === "full-pipeline";
 }
 
 const AGENT_LABELS: Record<AgentNodeId, string> = {
@@ -242,7 +249,9 @@ function buildChainBeats(chain: AgentNodeId[]): CascadeBeat[] {
       state: liveStateForAgent(agent),
       labels: { [agent]: statusLabelForAgent(agent) },
       holdMs: isCeo ? 4200 : 2400,
-      feed: conversationFeed(agent),
+      feed: isCeo
+        ? { message: "CEO decision issued.", kind: "ceo" }
+        : conversationFeed(agent),
     });
 
     if (next) {
@@ -297,7 +306,7 @@ export function createInitialMissionState(): MissionIntelligenceState {
     activeMission: null,
     ceoReview: null,
     displayedReview: null,
-    reviewCardVisible: false,
+    reviewCardPhase: "hidden",
     decisionHistory: seedDecisionHistory(),
     emergency: null,
     missionOwnerId: null,
@@ -369,7 +378,7 @@ export function startMission(
     },
     ceoReview: null,
     displayedReview: null,
-    reviewCardVisible: false,
+    reviewCardPhase: "hidden",
     decisionHistory: previous.decisionHistory,
     emergency: null,
     missionOwnerId: workflowAgents[0]!,
@@ -443,17 +452,20 @@ export function advanceMissionBeat(
 export function completeMission(state: MissionIntelligenceState): MissionIntelligenceState {
   if (!state.activeMission) return state;
 
+  const { workflowId } = state.activeMission;
+  const earnedReview = workflowEarnsMissionReview(workflowId) && state.ceoReview;
   const verdict = state.ceoReview?.decision ?? state.activeMission.definition.recommendation;
   decisionCounter += 1;
 
-  const displayedReview: CeoMissionReview =
-    state.ceoReview ?? {
-      missionTitle: state.activeMission.definition.title,
-      confidence: state.activeMission.confidence,
-      supportingAgents: state.activeMission.workflowAgents.filter((id) => id !== "ceo").length,
-      recommendation: state.activeMission.definition.recommendation,
-      decision: verdict,
-    };
+  const displayedReview: CeoMissionReview | null = earnedReview
+    ? (state.ceoReview ?? {
+        missionTitle: state.activeMission.definition.title,
+        confidence: state.activeMission.confidence,
+        supportingAgents: state.activeMission.workflowAgents.filter((id) => id !== "ceo").length,
+        recommendation: state.activeMission.definition.recommendation,
+        decision: verdict,
+      })
+    : null;
 
   const record: MissionDecisionRecord = {
     id: `mission-decision-${decisionCounter}-${Date.now()}`,
@@ -467,7 +479,7 @@ export function completeMission(state: MissionIntelligenceState): MissionIntelli
     activeMission: null,
     ceoReview: null,
     displayedReview,
-    reviewCardVisible: false,
+    reviewCardPhase: "hidden",
     decisionHistory: [record, ...state.decisionHistory].slice(0, 5),
     emergency: null,
     missionOwnerId: null,
@@ -477,10 +489,31 @@ export function completeMission(state: MissionIntelligenceState): MissionIntelli
 export function revealMissionReview(
   state: MissionIntelligenceState,
 ): MissionIntelligenceState {
-  if (!state.displayedReview) return state;
+  if (!state.displayedReview || state.reviewCardPhase === "visible") return state;
   return {
     ...state,
-    reviewCardVisible: true,
+    reviewCardPhase: "visible",
+  };
+}
+
+export function minimizeMissionReview(
+  state: MissionIntelligenceState,
+): MissionIntelligenceState {
+  if (!state.displayedReview || state.reviewCardPhase !== "visible") return state;
+  return {
+    ...state,
+    reviewCardPhase: "minimized",
+  };
+}
+
+export function hideMissionReview(
+  state: MissionIntelligenceState,
+): MissionIntelligenceState {
+  if (state.reviewCardPhase === "hidden") return state;
+  return {
+    ...state,
+    reviewCardPhase: "hidden",
+    displayedReview: null,
   };
 }
 

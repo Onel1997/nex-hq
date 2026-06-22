@@ -1,6 +1,11 @@
 "use client";
 
-import type { CeoMissionReview, MissionDecisionRecord, MissionIntelligenceState } from "@/lib/facility/brain-core-missions";
+import type {
+  CeoMissionReview,
+  MissionDecisionRecord,
+  MissionIntelligenceState,
+  ReviewCardPhase,
+} from "@/lib/facility/brain-core-missions";
 import { formatEta } from "@/lib/facility/brain-core-missions";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Shield, XCircle } from "lucide-react";
@@ -57,24 +62,52 @@ export function MissionPanel({
   );
 }
 
-export function CeoReviewOverlay({ review }: { review: CeoMissionReview }) {
+export function CeoReviewOverlay({
+  review,
+  phase,
+  onRestore,
+}: {
+  review: CeoMissionReview;
+  phase: Exclude<ReviewCardPhase, "hidden">;
+  onRestore?: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const minimized = phase === "minimized";
 
   useEffect(() => {
     setExpanded(false);
-  }, [review.missionTitle, review.confidence, review.decision]);
+  }, [review.missionTitle, review.confidence, review.decision, phase]);
 
   return (
     <aside
-      className={cn("bc-ceo-review", "bc-ceo-review-visible", expanded && "bc-ceo-review-expanded")}
+      className={cn(
+        "bc-ceo-review",
+        phase === "visible" && "bc-ceo-review-entering",
+        minimized && "bc-ceo-review-minimized",
+        expanded && !minimized && "bc-ceo-review-expanded",
+      )}
       aria-label="Mission review"
-      aria-expanded={expanded}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
-      onClick={() => setExpanded((value) => !value)}
+      aria-expanded={expanded || minimized}
+      onMouseEnter={() => {
+        if (!minimized) setExpanded(true);
+      }}
+      onMouseLeave={() => {
+        if (!minimized) setExpanded(false);
+      }}
+      onClick={() => {
+        if (minimized) {
+          onRestore?.();
+          return;
+        }
+        setExpanded((value) => !value);
+      }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
+          if (minimized) {
+            onRestore?.();
+            return;
+          }
           setExpanded((value) => !value);
         }
       }}
@@ -82,13 +115,9 @@ export function CeoReviewOverlay({ review }: { review: CeoMissionReview }) {
       tabIndex={0}
     >
       <div className="bc-ceo-review-card">
-        <div className="bc-ceo-review-summary">
-          <div className="bc-ceo-review-summary-main">
+        {minimized ? (
+          <div className="bc-ceo-review-badge-compact">
             <span className="bc-ceo-review-badge">Mission Review</span>
-            <h3>{review.missionTitle}</h3>
-          </div>
-          <div className="bc-ceo-review-summary-meta">
-            <span className="bc-ceo-review-confidence">{review.confidence}%</span>
             <span
               className={cn(
                 "bc-ceo-review-verdict",
@@ -97,34 +126,55 @@ export function CeoReviewOverlay({ review }: { review: CeoMissionReview }) {
             >
               {review.decision}
             </span>
-            <ChevronDown className="bc-ceo-review-chevron" aria-hidden />
+            <span className="bc-ceo-review-confidence">{review.confidence}%</span>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="bc-ceo-review-summary">
+              <div className="bc-ceo-review-summary-main">
+                <span className="bc-ceo-review-badge">Mission Review</span>
+                <h3>{review.missionTitle}</h3>
+              </div>
+              <div className="bc-ceo-review-summary-meta">
+                <span className="bc-ceo-review-confidence">{review.confidence}%</span>
+                <span
+                  className={cn(
+                    "bc-ceo-review-verdict",
+                    `bc-verdict-${review.decision.toLowerCase()}`,
+                  )}
+                >
+                  {review.decision}
+                </span>
+                <ChevronDown className="bc-ceo-review-chevron" aria-hidden />
+              </div>
+            </div>
 
-        <div className="bc-ceo-review-details" aria-hidden={!expanded}>
-          <dl className="bc-ceo-review-grid">
-            <div>
-              <dt>Supporting Agents</dt>
-              <dd>{review.supportingAgents}</dd>
+            <div className="bc-ceo-review-details" aria-hidden={!expanded}>
+              <dl className="bc-ceo-review-grid">
+                <div>
+                  <dt>Supporting Agents</dt>
+                  <dd>{review.supportingAgents}</dd>
+                </div>
+                <div>
+                  <dt>Recommendation</dt>
+                  <dd className={cn("bc-verdict", `bc-verdict-${review.recommendation.toLowerCase()}`)}>
+                    {review.recommendation}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Decision</dt>
+                  <dd className={cn("bc-verdict", `bc-verdict-${review.decision.toLowerCase()}`)}>
+                    {review.decision}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Confidence</dt>
+                  <dd>{review.confidence}%</dd>
+                </div>
+              </dl>
             </div>
-            <div>
-              <dt>Recommendation</dt>
-              <dd className={cn("bc-verdict", `bc-verdict-${review.recommendation.toLowerCase()}`)}>
-                {review.recommendation}
-              </dd>
-            </div>
-            <div>
-              <dt>Decision</dt>
-              <dd className={cn("bc-verdict", `bc-verdict-${review.decision.toLowerCase()}`)}>
-                {review.decision}
-              </dd>
-            </div>
-            <div>
-              <dt>Confidence</dt>
-              <dd>{review.confidence}%</dd>
-            </div>
-          </dl>
-        </div>
+          </>
+        )}
       </div>
     </aside>
   );

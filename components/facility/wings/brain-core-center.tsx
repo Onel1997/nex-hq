@@ -28,10 +28,12 @@ import {
   completeMission,
   createInitialMissionState,
   maybeTriggerEmergency,
+  minimizeMissionReview,
   pickNextMission,
   pickNextWorkflow,
   revealMissionReview,
   startMission,
+  workflowEarnsMissionReview,
   type MissionIntelligenceState,
 } from "@/lib/facility/brain-core-missions";
 import {
@@ -45,6 +47,8 @@ import {
   Activity,
   ArrowRight,
   Brain,
+  ChevronLeft,
+  ChevronUp,
   GitBranch,
   Loader2,
   RefreshCw,
@@ -308,6 +312,8 @@ function useBrainCoreLiving(
   const [mission, setMission] = useState<MissionIntelligenceState>(createInitialMissionState);
   const cascadeStep = useRef(0);
   const missionBeats = useRef<CascadeBeat[]>([]);
+  const ceoDecisionAt = useRef<number | null>(null);
+  const reviewMinimizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const seenFeedIds = useRef<Set<string>>(new Set());
   const [feedPulses, setFeedPulses] = useState<
@@ -322,7 +328,28 @@ function useBrainCoreLiving(
   const clearTimers = useCallback(() => {
     for (const t of timers.current) clearTimeout(t);
     timers.current = [];
+    if (reviewMinimizeTimer.current) {
+      clearTimeout(reviewMinimizeTimer.current);
+      reviewMinimizeTimer.current = null;
+    }
   }, []);
+
+  const scheduleReviewMinimize = useCallback(
+    (delayMs: number) => {
+      if (reviewMinimizeTimer.current) clearTimeout(reviewMinimizeTimer.current);
+      reviewMinimizeTimer.current = setTimeout(() => {
+        setMission((current) => minimizeMissionReview(current));
+        reviewMinimizeTimer.current = null;
+      }, delayMs);
+      timers.current.push(reviewMinimizeTimer.current);
+    },
+    [],
+  );
+
+  const restoreMissionReview = useCallback(() => {
+    setMission((current) => revealMissionReview(current));
+    scheduleReviewMinimize(10000 + Math.random() * 5000);
+  }, [scheduleReviewMinimize]);
 
   const schedule = useCallback((fn: () => void, ms: number) => {
     const t = setTimeout(fn, ms);
@@ -335,6 +362,7 @@ function useBrainCoreLiving(
     setMission(createInitialMissionState());
     cascadeStep.current = 0;
     missionBeats.current = [];
+    ceoDecisionAt.current = null;
     seenFeedIds.current = new Set(data.feed.map((f) => f.id));
     setFeedPulses({});
   }, [data?.loadedAt]);
@@ -358,17 +386,43 @@ function useBrainCoreLiving(
 
       if (!beat) {
         setLiving((prev) => (prev ? finishCascade(prev) : prev));
-        setMission((prev) => completeMission(prev));
+
+        setMission((prev) => {
+          const workflowId = prev.activeMission?.workflowId;
+          const shouldReveal =
+            workflowId && workflowEarnsMissionReview(workflowId) && prev.ceoReview;
+          const next = completeMission(prev);
+
+          if (shouldReveal && next.displayedReview) {
+            const decisionAt = ceoDecisionAt.current ?? Date.now();
+            const revealDelay = Math.max(
+              0,
+              1000 + Math.random() * 1000 - (Date.now() - decisionAt),
+            );
+            const visibleDuration = 10000 + Math.random() * 5000;
+
+            schedule(() => {
+              setMission((current) => revealMissionReview(current));
+            }, revealDelay);
+
+            scheduleReviewMinimize(revealDelay + visibleDuration);
+          }
+
+          ceoDecisionAt.current = null;
+          return next;
+        });
+
         cascadeStep.current = 0;
         missionBeats.current = [];
-        schedule(() => {
-          setMission((prev) => revealMissionReview(prev));
-        }, 1500 + Math.random() * 500);
         schedule(() => {
           setMission((prev) => maybeTriggerEmergency(prev));
         }, 2000);
         schedule(runBeat, 14000 + Math.random() * 8000);
         return;
+      }
+
+      if (beat.feed?.message === "CEO decision issued.") {
+        ceoDecisionAt.current = Date.now();
       }
 
       setLiving((prev) =>
@@ -453,7 +507,7 @@ function useBrainCoreLiving(
       clearInterval(ambientInterval);
       clearInterval(emergencyClear);
     };
-  }, [data?.loadedAt, linkPaths, clearTimers, schedule]);
+  }, [data?.loadedAt, linkPaths, clearTimers, schedule, scheduleReviewMinimize]);
 
   const expirePacket = useCallback((id: string) => {
     setLiving((prev) => {
@@ -549,7 +603,7 @@ function useBrainCoreLiving(
     return () => clearTimeout(timer);
   }, [living?.feed[0]?.id, linkPaths]);
 
-  return { living, mission, expirePacket, linkPaths, feedPulses };
+  return { living, mission, expirePacket, linkPaths, feedPulses, restoreMissionReview };
 }
 
 export function BrainCoreCenter() {
@@ -562,6 +616,7 @@ export function BrainCoreCenter() {
       icon={Brain}
       subtitle="Living neural center — the AI mind of Milaene HQ"
       className="bc-shell"
+      collapsibleWingNav
       headerActions={
         <button
           type="button"
@@ -598,10 +653,20 @@ export function BrainCoreCenter() {
 }
 
 function BrainCoreChamber({ data }: { data: BrainCorePayload }) {
-  const { living, mission, expirePacket, feedPulses } = useBrainCoreLiving(data, data.nodes);
+  const { living, mission, expirePacket, feedPulses, restoreMissionReview } =
+    useBrainCoreLiving(data, data.nodes);
+  const [feedCollapsed, setFeedCollapsed] = useState(false);
+  const [decisionsExpanded, setDecisionsExpanded] = useState(false);
   const liveState = living ?? createInitialLivingState(data);
   const isVisualStandby =
     liveState.chamberMode === "standby" && !mission.activeMission && !mission.emergency;
+  const visibleFeed = feedCollapsed ? liveState.feed.slice(0, 1) : liveState.feed;
+
+  useEffect(() => {
+    if (mission.reviewCardPhase === "visible") {
+      setDecisionsExpanded(true);
+    }
+  }, [mission.reviewCardPhase]);
 
   return (
     <div
@@ -631,14 +696,27 @@ function BrainCoreChamber({ data }: { data: BrainCorePayload }) {
 
       <MetricsBar metrics={data.metrics} coreState={data.coreState} />
 
-      <div className="bc-main">
-        <aside className="bc-panel bc-feed-panel">
+      <div className={cn("bc-main", feedCollapsed && "bc-main-feed-collapsed")}>
+        <aside
+          className={cn("bc-panel bc-feed-panel", feedCollapsed && "bc-feed-panel-collapsed")}
+        >
           <header className="bc-panel-header">
             <Activity className="size-4" />
             <h2>Live Intelligence Feed</h2>
+            <button
+              type="button"
+              className="bc-panel-collapse"
+              onClick={() => setFeedCollapsed((value) => !value)}
+              aria-label={feedCollapsed ? "Expand intelligence feed" : "Collapse intelligence feed"}
+              aria-expanded={!feedCollapsed}
+            >
+              <ChevronLeft
+                className={cn("bc-panel-collapse-icon", feedCollapsed && "is-collapsed")}
+              />
+            </button>
           </header>
           <ul className="bc-feed-list">
-            {liveState.feed.map((item, index) => (
+            {visibleFeed.map((item, index) => (
               <li
                 key={item.id}
                 className={cn(
@@ -671,8 +749,12 @@ function BrainCoreChamber({ data }: { data: BrainCorePayload }) {
           {mission.activeMission ? (
             <MissionPanel mission={mission.activeMission} />
           ) : null}
-          {mission.reviewCardVisible && mission.displayedReview ? (
-            <CeoReviewOverlay review={mission.displayedReview} />
+          {mission.reviewCardPhase !== "hidden" && mission.displayedReview ? (
+            <CeoReviewOverlay
+              review={mission.displayedReview}
+              phase={mission.reviewCardPhase}
+              onRestore={restoreMissionReview}
+            />
           ) : null}
           <NeuralCore
             baseNodes={data.nodes}
@@ -734,20 +816,64 @@ function BrainCoreChamber({ data }: { data: BrainCorePayload }) {
         </aside>
       </div>
 
-      <section className="bc-decisions" aria-label="CEO Strategic Decisions">
-        <header className="bc-decisions-header">
-          <Sparkles className="size-4 text-[var(--bc-gold)]" />
-          <h2>CEO Strategic Decisions</h2>
-          <span>{data.decisions.length} active</span>
-        </header>
+      <StrategicDecisionsDrawer
+        decisions={data.decisions}
+        expanded={decisionsExpanded}
+        onToggle={() => setDecisionsExpanded((value) => !value)}
+        ceoEventLive={liveState.chamberMode === "ceo-event"}
+      />
+    </div>
+  );
+}
+
+function StrategicDecisionsDrawer({
+  decisions,
+  expanded,
+  onToggle,
+  ceoEventLive,
+}: {
+  decisions: BrainCorePayload["decisions"];
+  expanded: boolean;
+  onToggle: () => void;
+  ceoEventLive: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "bc-decisions-drawer",
+        expanded && "bc-decisions-drawer-expanded",
+        ceoEventLive && "bc-decisions-drawer-live",
+      )}
+    >
+      <button
+        type="button"
+        className="bc-decisions-drawer-handle"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls="bc-decisions-drawer-body"
+      >
+        <Sparkles className="size-3.5 text-[var(--bc-gold)]" />
+        <span className="bc-decisions-drawer-title">CEO Strategic Decisions</span>
+        <span className="bc-decisions-drawer-count">{decisions.length} active</span>
+        <ChevronUp
+          className={cn("bc-decisions-drawer-chevron", expanded && "is-expanded")}
+          aria-hidden
+        />
+      </button>
+
+      <div
+        id="bc-decisions-drawer-body"
+        className="bc-decisions-drawer-body"
+        aria-hidden={!expanded}
+      >
         <div className="bc-decisions-grid">
-          {data.decisions.map((decision) => (
+          {decisions.map((decision) => (
             <article
               key={decision.id}
               className={cn(
                 "bc-decision-card",
                 `bc-decision-${decision.priority.toLowerCase()}`,
-                liveState.chamberMode === "ceo-event" && "bc-decision-card-live",
+                ceoEventLive && "bc-decision-card-live",
               )}
             >
               <header>
@@ -766,7 +892,7 @@ function BrainCoreChamber({ data }: { data: BrainCorePayload }) {
             </article>
           ))}
         </div>
-      </section>
+      </div>
     </div>
   );
 }
@@ -1050,12 +1176,10 @@ function NeuralCore({
         ))}
       </div>
 
-      <p className="bc-core-label">NEURAL CORE · V5</p>
-
       <div className="bc-link-legend" aria-label="Connection types">
-        <span className="bc-legend-item bc-legend-command">Command network</span>
+        <span className="bc-legend-item bc-legend-command">Command routes</span>
         <span className="bc-legend-item bc-legend-intelligence">Intelligence flow</span>
-        <span className="bc-legend-item bc-legend-feedback">Feedback matrix</span>
+        <span className="bc-legend-item bc-legend-feedback">Feedback loops</span>
       </div>
     </div>
   );
