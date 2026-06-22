@@ -8,7 +8,8 @@ import {
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
 import { loadBusinessProfile } from "@/lib/business/load-profile";
-import { loadShopifyAgentContext } from "@/lib/shopify/agent-context";
+import { formatMarketingCommerceSignals } from "@/lib/commerce/department-signals";
+import { loadMilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
 import type { BrainRecord } from "@/brain/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
@@ -268,17 +269,20 @@ export async function retrieveMarketingKnowledge(input: {
     ...new Set(slices.flatMap((s) => s.records.map((r) => r.id))),
   ];
 
-  const { productKnowledge: shopifyKnowledge, marketPrintIntelligence } =
-    await loadShopifyAgentContext();
+  const baseline = await loadMilaeneCommerceBaseline();
+  const { productKnowledge: shopifyKnowledge, marketPrintIntelligence } = baseline;
   const businessProfile = await loadBusinessProfile(input.workspaceId);
-  const promptContext = buildPromptContext(
-    slices,
-    locale,
-    shopifyKnowledge,
-    businessProfile,
-    null,
-    marketPrintIntelligence,
-  );
+  const promptContext =
+    buildPromptContext(
+      slices,
+      locale,
+      shopifyKnowledge,
+      businessProfile,
+      null,
+      marketPrintIntelligence,
+    ) +
+    "\n\n" +
+    formatMarketingCommerceSignals(baseline);
   const reportTitles = extractReportTitles(slices);
 
   const brainContext: BrainAgentContext = {

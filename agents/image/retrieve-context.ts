@@ -9,7 +9,8 @@ import {
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
 import { loadBusinessProfile } from "@/lib/business/load-profile";
-import { loadShopifyAgentContext } from "@/lib/shopify/agent-context";
+import { formatImageCommerceSignals } from "@/lib/commerce/department-signals";
+import { loadMilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
 import type { BrainReportContent } from "@/brain/domains/reports";
 import {
   extractImageInputsFromDesign,
@@ -443,17 +444,20 @@ export async function retrieveImageKnowledge(input: {
     ...new Set(slices.flatMap((s) => s.records.map((r) => r.id))),
   ];
 
-  const { productKnowledge: shopifyKnowledge, marketPrintIntelligence } =
-    await loadShopifyAgentContext();
+  const baseline = await loadMilaeneCommerceBaseline();
+  const { productKnowledge: shopifyKnowledge, marketPrintIntelligence } = baseline;
   const businessProfile = await loadBusinessProfile(input.workspaceId);
-  const promptContext = buildPromptContext(
-    slices,
-    locale,
-    shopifyKnowledge,
-    businessProfile,
-    null,
-    marketPrintIntelligence,
-  );
+  const promptContext =
+    buildPromptContext(
+      slices,
+      locale,
+      shopifyKnowledge,
+      businessProfile,
+      null,
+      marketPrintIntelligence,
+    ) +
+    "\n\n" +
+    formatImageCommerceSignals(baseline);
   const reportTitles = extractReportTitles(slices);
   const collectionIdentity = extractCollectionIdentity({
     slices,

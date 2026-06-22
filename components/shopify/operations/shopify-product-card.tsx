@@ -5,7 +5,7 @@ import {
   getProductStockStatus,
   getShopifyAdminProductUrl,
   getStorefrontProductUrl,
-  SUPPLIER_STATUS_LABELS,
+  type ProductStockStatus,
 } from "@/lib/shopify/operations";
 import type { ShopifyKnowledgeProduct } from "@/lib/shopify/types";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,33 @@ interface ShopifyProductCardProps {
   onOpen: (product: ShopifyKnowledgeProduct) => void;
 }
 
-const STATUS_LABELS = SUPPLIER_STATUS_LABELS;
+type DisplayStatus = "available" | "sold_out" | "low_stock" | "archived";
+
+const DISPLAY_STATUS: Record<
+  DisplayStatus,
+  { label: string; className: string }
+> = {
+  available: { label: "Available", className: "shopify-product-status-available" },
+  sold_out: { label: "Sold Out", className: "shopify-product-status-sold_out" },
+  low_stock: { label: "Low Stock", className: "shopify-product-status-low_stock" },
+  archived: { label: "Archived", className: "shopify-product-status-archived" },
+};
+
+function resolveDisplayStatus(
+  product: ShopifyKnowledgeProduct,
+  stockStatus: ProductStockStatus,
+): { label: string; className: string } {
+  if (product.status === "ARCHIVED" || product.status === "DRAFT") {
+    return DISPLAY_STATUS.archived;
+  }
+  if (stockStatus === "supplier_status") {
+    return DISPLAY_STATUS.low_stock;
+  }
+  if (stockStatus === "supplier_unavailable") {
+    return DISPLAY_STATUS.sold_out;
+  }
+  return DISPLAY_STATUS.available;
+}
 
 export function ShopifyProductCard({
   product,
@@ -26,6 +52,7 @@ export function ShopifyProductCard({
   onOpen,
 }: ShopifyProductCardProps) {
   const stockStatus = getProductStockStatus(product);
+  const status = resolveDisplayStatus(product, stockStatus);
   const storefrontUrl = getStorefrontProductUrl(storeDomain, product.handle);
   const adminUrl = getShopifyAdminProductUrl(storeDomain, product.id);
 
@@ -48,13 +75,8 @@ export function ShopifyProductCard({
         ) : (
           <div className="shopify-product-card-no-image">No image</div>
         )}
-        <span
-          className={cn(
-            "shopify-product-status",
-            `shopify-product-status-${stockStatus}`,
-          )}
-        >
-          {STATUS_LABELS[stockStatus]}
+        <span className={cn("shopify-product-status", status.className)}>
+          {status.label}
         </span>
       </button>
 

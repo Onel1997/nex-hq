@@ -9,7 +9,7 @@ interface ShopifyKpiBarProps {
   historical?: CommerceHistoryResponse | null;
 }
 
-const KPI_ITEMS: Array<{
+const CATALOG_KPIS: Array<{
   key: keyof ShopifyOperationsKpis;
   label: string;
   format?: (kpis: ShopifyOperationsKpis) => string;
@@ -38,7 +38,7 @@ const KPI_ITEMS: Array<{
   },
   {
     key: "bestSellerCandidate",
-    label: "Best Seller",
+    label: "Catalog Best",
     format: (k) => k.bestSellerCandidate?.title ?? "—",
   },
 ];
@@ -46,28 +46,31 @@ const KPI_ITEMS: Array<{
 export function ShopifyKpiBar({ kpis, historical }: ShopifyKpiBarProps) {
   const historicalItems = historical
     ? [
+        { label: "Historical Orders", value: String(historical.orders) },
         {
-          label: "Historical Orders",
-          value: String(historical.orders),
-        },
-        {
-          label: "All Time Bestseller",
+          label: "Best Seller",
           value: historical.topProducts[0]?.title ?? "—",
         },
         {
           label: "First Sale",
           value: historical.firstSale
-            ? new Date(historical.firstSale).toLocaleDateString()
+            ? new Date(historical.firstSale).toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "short",
+              })
             : "—",
         },
         {
           label: "Last Sale",
           value: historical.lastSale
-            ? new Date(historical.lastSale).toLocaleDateString()
+            ? new Date(historical.lastSale).toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "short",
+              })
             : "—",
         },
         {
-          label: "Historical Revenue",
+          label: "Revenue",
           value: formatPrice(historical.revenue, historical.currency),
         },
       ]
@@ -77,13 +80,15 @@ export function ShopifyKpiBar({ kpis, historical }: ShopifyKpiBarProps) {
     <div className="shopify-kpi-bar">
       {historicalItems.map((item) => (
         <div key={item.label} className="shopify-kpi-item shopify-kpi-item-historical">
-          <span className="shopify-kpi-value">{item.value}</span>
+          <span className="shopify-kpi-value" title={item.value}>
+            {item.value}
+          </span>
           <span className="shopify-kpi-label">{item.label}</span>
         </div>
       ))}
-      {KPI_ITEMS.map((item) => (
+      {CATALOG_KPIS.map((item) => (
         <div key={item.key} className="shopify-kpi-item">
-          <span className="shopify-kpi-value">
+          <span className="shopify-kpi-value" title={item.format ? item.format(kpis) : String(kpis[item.key])}>
             {item.format ? item.format(kpis) : String(kpis[item.key])}
           </span>
           <span className="shopify-kpi-label">{item.label}</span>

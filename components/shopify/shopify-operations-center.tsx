@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * Milaene Commerce Intelligence System — canonical production UI.
+ * This page is the permanent baseline for NexHQ commerce intelligence.
+ * @see docs/milaene-commerce-intelligence.md
+ */
+
 import { ShopifyOperationsCommerce } from "@/components/shopify/shopify-operations-commerce";
 import { useShopifyOperations } from "@/components/shopify/use-shopify-operations";
 import { WorkspaceNav } from "@/components/workspace/workspace-nav";

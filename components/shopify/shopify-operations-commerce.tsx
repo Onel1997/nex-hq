@@ -1,5 +1,11 @@
 "use client";
 
+/**
+ * Milaene Commerce Intelligence System — catalog-first operations surface.
+ * Product catalog, filters, AI commerce panel, MarketPrint, historical sales,
+ * and activity feed. Must not be replaced by KPI dashboard shells.
+ */
+
 import { ShopifyActivityFeed } from "@/components/shopify/operations/shopify-activity-feed";
 import { ShopifyAiPanel } from "@/components/shopify/operations/shopify-ai-panel";
 import { ShopifyFilterPanel } from "@/components/shopify/operations/shopify-filter-panel";

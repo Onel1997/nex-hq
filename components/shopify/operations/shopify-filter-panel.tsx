@@ -17,18 +17,19 @@ function FilterSection({
   items,
   selected,
   onToggle,
-  defaultOpen = true,
+  defaultOpen = false,
 }: FilterSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   if (items.length === 0) return null;
 
   return (
-    <div className="shopify-filter-section">
+    <div className={cn("shopify-filter-section", open && "shopify-filter-section-open")}>
       <button
         type="button"
         className="shopify-filter-section-header"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
       >
         {open ? (
           <ChevronDown className="size-3.5 opacity-60" />
@@ -39,7 +40,7 @@ function FilterSection({
         <span className="shopify-filter-section-count">{items.length}</span>
       </button>
 
-      {open ? (
+      <div className="shopify-filter-section-body">
         <ul className="shopify-filter-list">
           {items.map((item) => {
             const active = selected.has(item.label);
@@ -62,7 +63,7 @@ function FilterSection({
             );
           })}
         </ul>
-      ) : null}
+      </div>
     </div>
   );
 }
@@ -113,12 +114,14 @@ export function ShopifyFilterPanel({
         items={collections}
         selected={selectedCollections}
         onToggle={onToggleCollection}
+        defaultOpen={false}
       />
       <FilterSection
         title="Categories"
         items={categories}
         selected={selectedCategories}
         onToggle={onToggleCategory}
+        defaultOpen={false}
       />
       <FilterSection
         title="Tags"
