@@ -219,11 +219,33 @@ const UNDERUSED_ROUTE_IDS = new Set([
   "intel-content-image",
   "intel-shopify-research",
   "fb-shopify-ceo",
+  "fb-marketing-ceo",
+]);
+
+const SPECIALIST_SIGNAL_ROUTE_IDS = new Set([
+  "intel-commerce-shopify",
+  "intel-designer-image",
+  "intel-designer-content",
+  "intel-image-content",
+  "intel-content-marketing",
+  "intel-content-image",
+  "intel-shopify-research",
+  "fb-shopify-ceo",
+  "fb-marketing-ceo",
+]);
+
+const SPECIALIST_SIGNAL_AGENTS = new Set<AgentNodeId>([
+  "shopify",
+  "image",
+  "content",
+  "designer",
+  "marketing",
 ]);
 
 let feedCounter = 0;
 let packetCounter = 0;
 let idleRotateIndex = 0;
+let specialistSignalIndex = 0;
 
 function pick<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)]!;
@@ -560,13 +582,20 @@ export function spawnAmbientPacket(
   state: LivingNetworkState,
   linkPaths: Map<string, string>,
 ): LivingNetworkState {
-  if (Math.random() > 0.28) return state;
+  if (Math.random() > 0.48) return state;
 
+  const specialistRoutes = LINK_LOOKUP.filter(
+    (route) => SPECIALIST_SIGNAL_ROUTE_IDS.has(route.id) && linkPaths.has(route.id),
+  );
   const ambientRoutes = LINK_LOOKUP.filter((l) => linkPaths.has(l.id));
   const weighted = ambientRoutes.flatMap((route) =>
     UNDERUSED_ROUTE_IDS.has(route.id) ? [route, route, route] : [route],
   );
-  const route = pick(weighted);
+
+  const route =
+    specialistRoutes.length > 0
+      ? specialistRoutes[specialistSignalIndex++ % specialistRoutes.length]!
+      : pick(weighted);
   const path = linkPaths.get(route.id);
   if (!path) return state;
 
@@ -578,13 +607,18 @@ export function spawnAmbientPacket(
   const motionScale =
     state.chamberMode === "cascade" || state.chamberMode === "ceo-event"
       ? Math.max(state.motionScale, 0.95)
-      : 0.78;
+      : 0.82;
 
   const currentlyActive = state.nodes.find((n) => n.isLiveActive)?.id ?? null;
   const previousActiveId =
     currentlyActive && currentlyActive !== route.from
       ? currentlyActive
       : state.previousActiveId;
+
+  const signalAgents = new Set<AgentNodeId>([route.from]);
+  if (SPECIALIST_SIGNAL_AGENTS.has(route.to)) {
+    signalAgents.add(route.to);
+  }
 
   return {
     ...state,
@@ -594,11 +628,11 @@ export function spawnAmbientPacket(
       state.chamberMode === "standby" ? "ambient" : state.chamberMode,
     motionScale,
     nodes: state.nodes.map((node) =>
-      node.id === route.from
+      signalAgents.has(node.id)
         ? {
             ...node,
             liveState: "processing" as const,
-            statusLabel: pick(AGENT_STATUS_POOL[route.from]),
+            statusLabel: pick(AGENT_STATUS_POOL[node.id]),
             isLiveActive: true,
           }
         : node,
@@ -614,7 +648,16 @@ export function spawnAmbientPacket(
         duration: 3.2 + Math.random() * 3.8,
         size: 2.8 + Math.random() * 1.8,
       },
-    ].slice(-8),
+      {
+        id: `pkt-trail-${packetCounter}-${Date.now()}`,
+        linkId: route.id,
+        path,
+        fromId: route.from,
+        type: route.type,
+        duration: 4.4 + Math.random() * 2.6,
+        size: 2.2 + Math.random() * 1.2,
+      },
+    ].slice(-10),
   };
 }
 

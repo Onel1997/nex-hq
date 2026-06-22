@@ -969,13 +969,9 @@
 
 .bc-node {
   position: absolute;
+  width: 0;
+  height: 0;
   transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  width: 100px;
-  text-align: center;
   --bc-node-light: 0.25;
 }
 
@@ -1006,7 +1002,10 @@
     0 0 calc(8px + var(--bc-node-light, 0.25) * 20px)
       color-mix(in srgb, var(--bc-node-color, #38bdf8) calc(15% + var(--bc-node-light, 0.25) * 45%), transparent);
   opacity: calc(0.62 + var(--bc-node-light, 0.25) * 0.38);
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(-50%, -50%);
   z-index: 3;
   transition: box-shadow 0.45s ease, opacity 0.45s ease, background 0.45s ease;
 }
@@ -1014,10 +1013,10 @@
 .bc-node-halo {
   position: absolute;
   top: 0;
-  left: 50%;
+  left: 0;
   width: calc(20px + var(--bc-node-light, 0.25) * 20px);
   height: calc(20px + var(--bc-node-light, 0.25) * 20px);
-  transform: translate(-50%, -20%);
+  transform: translate(-50%, -50%);
   border-radius: 50%;
   background: radial-gradient(
     circle,
@@ -1039,10 +1038,10 @@
 .bc-node-orbit-glow {
   position: absolute;
   top: 0;
-  left: 50%;
+  left: 0;
   width: calc(48px + var(--bc-node-light, 0.25) * 36px);
   height: calc(48px + var(--bc-node-light, 0.25) * 36px);
-  transform: translate(-50%, -42%);
+  transform: translate(-50%, -50%);
   border-radius: 50%;
   pointer-events: none;
   z-index: 0;
@@ -1058,10 +1057,10 @@
 .bc-node-aura {
   position: absolute;
   top: 0;
-  left: 50%;
+  left: 0;
   width: 28px;
   height: 28px;
-  transform: translate(-50%, -38%);
+  transform: translate(-50%, -50%);
   border-radius: 50%;
   border: 1px solid
     color-mix(in srgb, var(--bc-node-color, #38bdf8) calc(10% + var(--bc-node-light, 0.25) * 35%), transparent);
@@ -1075,9 +1074,10 @@
 .bc-node-particles {
   position: absolute;
   top: 0;
-  left: 50%;
+  left: 0;
   width: 0;
   height: 0;
+  transform: translate(-50%, -50%);
   z-index: 2;
   pointer-events: none;
 }
@@ -1099,11 +1099,11 @@
   0%,
   100% {
     opacity: calc(0.2 + var(--bc-node-light, 0.25) * 0.45);
-    transform: translate(-50%, -38%) scale(0.94);
+    transform: translate(-50%, -50%) scale(0.94);
   }
   50% {
     opacity: calc(0.32 + var(--bc-node-light, 0.25) * 0.62);
-    transform: translate(-50%, -38%) scale(1.06);
+    transform: translate(-50%, -50%) scale(1.06);
   }
 }
 
@@ -1130,11 +1130,11 @@
   0%,
   100% {
     opacity: calc(0.2 + var(--bc-node-light, 0.25) * 0.42);
-    transform: translate(-50%, -20%) scale(0.94);
+    transform: translate(-50%, -50%) scale(0.94);
   }
   50% {
     opacity: calc(0.28 + var(--bc-node-light, 0.25) * 0.62);
-    transform: translate(-50%, -20%) scale(1.06);
+    transform: translate(-50%, -50%) scale(1.06);
   }
 }
 
@@ -1163,14 +1163,19 @@
 @keyframes bc-node-process {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
   50% {
-    transform: scale(1.3);
+    transform: translate(-50%, -50%) scale(1.3);
   }
 }
 
 .bc-node-body {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
   padding: 0.35rem 0.45rem;
   border-radius: 8px;
   border: 1px solid rgb(56 189 248 / 0.15);
@@ -1212,10 +1217,10 @@
 .bc-node-receiving .bc-node-ring {
   position: absolute;
   top: 0;
-  left: 50%;
+  left: 0;
   width: 28px;
   height: 28px;
-  transform: translate(-50%, -35%);
+  transform: translate(-50%, -50%);
   border-radius: 50%;
   border: 1px solid color-mix(in srgb, var(--bc-node-color, #67e8f9) 55%, white);
   animation: bc-node-ring-pulse 2.2s ease-out infinite;
@@ -1226,22 +1231,22 @@
 @keyframes bc-node-receive {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
     box-shadow: 0 0 10px rgb(56 189 248 / 0.5);
   }
   50% {
-    transform: scale(1.45);
+    transform: translate(-50%, -50%) scale(1.45);
     box-shadow: 0 0 22px rgb(103 232 249 / 0.9);
   }
 }
 
 @keyframes bc-node-ring-pulse {
   0% {
-    transform: translate(-50%, -35%) scale(0.6);
+    transform: translate(-50%, -50%) scale(0.6);
     opacity: 0.9;
   }
   100% {
-    transform: translate(-50%, -35%) scale(1.8);
+    transform: translate(-50%, -50%) scale(1.8);
     opacity: 0;
   }
 }
@@ -1773,11 +1778,11 @@
 @keyframes bc-node-think {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
     opacity: 0.85;
   }
   50% {
-    transform: scale(1.15);
+    transform: translate(-50%, -50%) scale(1.15);
     opacity: 1;
   }
 }
@@ -1786,22 +1791,22 @@
   0%,
   100% {
     opacity: 0.28;
-    transform: translate(-50%, -20%) scale(0.94);
+    transform: translate(-50%, -50%) scale(0.94);
   }
   50% {
     opacity: 0.48;
-    transform: translate(-50%, -20%) scale(1.08);
+    transform: translate(-50%, -50%) scale(1.08);
   }
 }
 
 @keyframes bc-node-execute {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
     box-shadow: 0 0 14px color-mix(in srgb, var(--bc-node-color, #38bdf8) 70%, transparent);
   }
   50% {
-    transform: scale(1.35);
+    transform: translate(-50%, -50%) scale(1.35);
     box-shadow:
       0 0 24px color-mix(in srgb, var(--bc-node-color, #38bdf8) 90%, transparent),
       0 0 40px color-mix(in srgb, var(--bc-node-color, #38bdf8) 45%, transparent);
@@ -1812,11 +1817,11 @@
   0%,
   100% {
     opacity: 0.5;
-    transform: translate(-50%, -20%) scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
   50% {
     opacity: 1;
-    transform: translate(-50%, -20%) scale(1.35);
+    transform: translate(-50%, -50%) scale(1.35);
   }
 }
 
@@ -1833,12 +1838,12 @@
 /* CEO command event */
 
 .bc-node-ceo-event .bc-node-halo {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   background: radial-gradient(
     circle,
-    rgb(255 209 102 / 0.45),
-    rgb(255 209 102 / 0.1) 55%,
+    rgb(255 209 102 / 0.38),
+    rgb(255 209 102 / 0.08) 55%,
     transparent 72%
   );
   animation: bc-personality-gold 3.6s ease-in-out infinite;
@@ -1847,8 +1852,8 @@
 .bc-node-ceo-event .bc-node-dot {
   background: var(--bc-gold);
   box-shadow:
-    0 0 12px rgb(255 209 102 / 0.7),
-    0 0 20px rgb(255 209 102 / 0.3);
+    0 0 10px rgb(255 209 102 / 0.58),
+    0 0 18px rgb(255 209 102 / 0.24);
   animation: bc-ceo-pulse 1.8s ease-in-out infinite;
 }
 
@@ -1860,31 +1865,31 @@
   0%,
   100% {
     opacity: 0.65;
-    transform: translate(-50%, -20%) scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
   50% {
     opacity: 1;
-    transform: translate(-50%, -20%) scale(1.2);
+    transform: translate(-50%, -50%) scale(1.2);
   }
 }
 
 @keyframes bc-ceo-pulse {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
   50% {
-    transform: scale(1.4);
+    transform: translate(-50%, -50%) scale(1.4);
   }
 }
 
 .bc-node-report-beam {
   position: absolute;
   top: 0;
-  left: 50%;
+  left: 0;
   width: 2px;
   height: 36px;
-  transform: translate(-50%, -120%);
+  transform: translate(-50%, -50%);
   background: linear-gradient(to top, var(--bc-node-color, #67e8f9), transparent);
   opacity: 0.7;
   animation: bc-report-beam 1.6s ease-in-out infinite;
@@ -1931,6 +1936,15 @@
 
 .bc-ambient-packet {
   fill: rgb(103 232 249 / 0.55);
+  filter: url(#bc-packet-bloom);
+}
+
+.bc-ambient-packet-signal {
+  opacity: 0.62;
+}
+
+.bc-ambient-packet-agent {
+  opacity: 0.68;
 }
 
 .bc-neural-link-standby {
@@ -1999,6 +2013,12 @@
 
 .bc-ambient-packet-active {
   opacity: 0.85;
+  filter: drop-shadow(0 0 5px rgb(103 232 249 / 0.75)) drop-shadow(0 0 12px rgb(56 189 248 / 0.4));
+}
+
+.bc-ambient-packet-agent.bc-ambient-packet-active {
+  opacity: 0.82;
+  filter: url(#bc-packet-bloom);
 }
 
 /* Feed-synced agent event pulses */
@@ -2029,12 +2049,11 @@
 }
 
 .bc-node-feed-event-design .bc-node-halo {
-  background: radial-gradient(circle, rgb(248 250 252 / 0.4), transparent 70%);
+  background: radial-gradient(circle, rgb(186 230 253 / 0.38), transparent 70%);
 }
 
 .bc-node-feed-event-design .bc-node-dot {
-  background: #f8fafc;
-  box-shadow: 0 0 10px rgb(248 250 252 / 0.7), 0 0 16px rgb(186 230 253 / 0.3);
+  box-shadow: 0 0 10px rgb(186 230 253 / 0.6), 0 0 16px rgb(186 230 253 / 0.28);
 }
 
 .bc-node-feed-event-marketing .bc-node-halo {
@@ -2047,7 +2066,7 @@
 
 .bc-node-feed-event-ceo .bc-node-halo {
   background: radial-gradient(circle, rgb(255 209 102 / 0.45), transparent 72%);
-  transform: translate(-50%, -20%) scale(1.05);
+  transform: translate(-50%, -50%) scale(1.05);
 }
 
 .bc-node-feed-event-ceo .bc-node-dot {
@@ -2057,7 +2076,7 @@
 }
 
 .bc-node-mission-owner .bc-node-halo {
-  transform: translate(-50%, -20%) scale(1.05);
+  transform: translate(-50%, -50%) scale(1.05);
   opacity: 0.55;
 }
 
@@ -2394,11 +2413,11 @@
   0%,
   100% {
     opacity: calc(0.58 + var(--bc-node-light, 0.5) * 0.22);
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
   50% {
     opacity: calc(0.68 + var(--bc-node-light, 0.5) * 0.28);
-    transform: scale(1.05);
+    transform: translate(-50%, -50%) scale(1.05);
   }
 }
 
@@ -2455,11 +2474,12 @@
 }
 
 .bc-node-live-active .bc-node-ring {
+  position: absolute;
   top: 0;
-  left: 50%;
+  left: 0;
   width: 36px;
   height: 36px;
-  transform: translate(-50%, -38%);
+  transform: translate(-50%, -50%);
   border: 1.5px solid color-mix(in srgb, var(--bc-node-color, #67e8f9) 70%, white);
   animation: bc-scan-ring 4.8s ease-out infinite;
   opacity: 0.85;
@@ -2476,11 +2496,11 @@
 @keyframes bc-halo-active {
   0%,
   100% {
-    transform: translate(-50%, -20%) scale(0.96);
+    transform: translate(-50%, -50%) scale(0.96);
     opacity: 0.88;
   }
   50% {
-    transform: translate(-50%, -20%) scale(1.1);
+    transform: translate(-50%, -50%) scale(1.1);
     opacity: 1;
   }
 }
@@ -2488,20 +2508,20 @@
 @keyframes bc-dot-active-pulse {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
   50% {
-    transform: scale(1.12);
+    transform: translate(-50%, -50%) scale(1.12);
   }
 }
 
 @keyframes bc-aura-active {
   0% {
-    transform: translate(-50%, -38%) scale(0.75);
+    transform: translate(-50%, -50%) scale(0.75);
     opacity: 0.65;
   }
   100% {
-    transform: translate(-50%, -38%) scale(1.45);
+    transform: translate(-50%, -50%) scale(1.45);
     opacity: 0;
   }
 }
@@ -2524,12 +2544,12 @@
 
 @keyframes bc-scan-ring {
   0% {
-    transform: translate(-50%, -38%) scale(0.7);
+    transform: translate(-50%, -50%) scale(0.7);
     opacity: 0.5;
     border-color: rgb(103 232 249 / 0.22);
   }
   100% {
-    transform: translate(-50%, -38%) scale(1.55);
+    transform: translate(-50%, -50%) scale(1.55);
     opacity: 0;
     border-color: rgb(103 232 249 / 0.08);
   }
@@ -2537,11 +2557,11 @@
 
 @keyframes bc-node-ring-pulse-strong {
   0% {
-    transform: translate(-50%, -38%) scale(0.7);
+    transform: translate(-50%, -50%) scale(0.7);
     opacity: 0.5;
   }
   100% {
-    transform: translate(-50%, -38%) scale(1.55);
+    transform: translate(-50%, -50%) scale(1.55);
     opacity: 0;
   }
 }
@@ -2555,13 +2575,13 @@
 @keyframes bc-node-process-strong {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
     box-shadow:
       0 0 10px color-mix(in srgb, var(--bc-node-color, #38bdf8) 65%, white),
       0 0 18px color-mix(in srgb, var(--bc-node-color, #38bdf8) 35%, transparent);
   }
   50% {
-    transform: scale(1.2);
+    transform: translate(-50%, -50%) scale(1.2);
     box-shadow:
       0 0 14px color-mix(in srgb, var(--bc-node-color, #38bdf8) 80%, white),
       0 0 24px color-mix(in srgb, var(--bc-node-color, #38bdf8) 40%, transparent);
@@ -2577,11 +2597,11 @@
   0%,
   100% {
     opacity: 0.32;
-    transform: translate(-50%, -20%) scale(0.96);
+    transform: translate(-50%, -50%) scale(0.96);
   }
   50% {
     opacity: 0.52;
-    transform: translate(-50%, -20%) scale(1.1);
+    transform: translate(-50%, -50%) scale(1.1);
   }
 }
 
@@ -2593,13 +2613,13 @@
 @keyframes bc-node-receive-strong {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
     box-shadow:
       0 0 10px color-mix(in srgb, var(--bc-node-color, #38bdf8) 70%, white),
       0 0 18px color-mix(in srgb, var(--bc-node-color, #38bdf8) 38%, transparent);
   }
   50% {
-    transform: scale(1.22);
+    transform: translate(-50%, -50%) scale(1.22);
     box-shadow:
       0 0 14px color-mix(in srgb, var(--bc-node-color, #38bdf8) 85%, white),
       0 0 24px color-mix(in srgb, var(--bc-node-color, #38bdf8) 45%, transparent);
@@ -2632,13 +2652,13 @@
 @keyframes bc-node-execute-strong {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
     box-shadow:
       0 0 10px color-mix(in srgb, var(--bc-node-color, #38bdf8) 70%, white),
       0 0 18px color-mix(in srgb, var(--bc-node-color, #38bdf8) 38%, transparent);
   }
   50% {
-    transform: scale(1.22);
+    transform: translate(-50%, -50%) scale(1.22);
     box-shadow:
       0 0 14px color-mix(in srgb, var(--bc-node-color, #38bdf8) 85%, white),
       0 0 24px color-mix(in srgb, var(--bc-node-color, #38bdf8) 45%, transparent);
@@ -2653,11 +2673,11 @@
   0%,
   100% {
     opacity: 0.34;
-    transform: translate(-50%, -20%) scale(0.98);
+    transform: translate(-50%, -50%) scale(0.98);
   }
   50% {
     opacity: 0.52;
-    transform: translate(-50%, -20%) scale(1.1);
+    transform: translate(-50%, -50%) scale(1.1);
   }
 }
 
@@ -2665,7 +2685,7 @@
 .bc-node-mission-owner .bc-node-halo {
   width: 40px !important;
   height: 40px !important;
-  transform: translate(-50%, -20%) scale(1);
+  transform: translate(-50%, -50%) scale(1);
   opacity: 0.58 !important;
   background: radial-gradient(
     circle,
@@ -2692,16 +2712,16 @@
 /* CEO gold — command pulse */
 .bc-node-ceo-event .bc-node-halo,
 .bc-node-feed-event-ceo .bc-node-halo {
-  width: 44px !important;
-  height: 44px !important;
+  width: 38px !important;
+  height: 38px !important;
   background: radial-gradient(
     circle,
-    rgb(255 209 102 / 0.5) 0%,
-    rgb(255 209 102 / 0.22) 38%,
-    rgb(255 180 50 / 0.06) 58%,
+    rgb(255 209 102 / 0.42) 0%,
+    rgb(255 209 102 / 0.18) 38%,
+    rgb(255 180 50 / 0.05) 58%,
     transparent 74%
   ) !important;
-  filter: drop-shadow(0 0 12px rgb(255 209 102 / 0.45));
+  filter: drop-shadow(0 0 10px rgb(255 209 102 / 0.36));
   animation: bc-personality-gold 3.6s ease-in-out infinite;
 }
 
@@ -2711,8 +2731,8 @@
   height: 10px;
   background: #ffe08a !important;
   box-shadow:
-    0 0 12px rgb(255 209 102 / 0.75),
-    0 0 22px rgb(255 209 102 / 0.35) !important;
+    0 0 10px rgb(255 209 102 / 0.62),
+    0 0 18px rgb(255 209 102 / 0.28) !important;
   animation: bc-ceo-pulse 1.8s ease-in-out infinite;
 }
 
@@ -2737,21 +2757,21 @@
   0%,
   100% {
     opacity: 0.85;
-    transform: translate(-50%, -20%) scale(1.05);
+    transform: translate(-50%, -50%) scale(1.05);
   }
   50% {
     opacity: 1;
-    transform: translate(-50%, -20%) scale(1.35);
+    transform: translate(-50%, -50%) scale(1.35);
   }
 }
 
 @keyframes bc-ceo-pulse-strong {
   0%,
   100% {
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
   50% {
-    transform: scale(1.55);
+    transform: translate(-50%, -50%) scale(1.55);
   }
 }
 
@@ -2784,20 +2804,19 @@
 }
 
 .bc-node-feed-event-design .bc-node-halo {
-  background: radial-gradient(circle, rgb(248 250 252 / 0.45) 0%, rgb(186 230 253 / 0.18) 50%, transparent 72%);
-  filter: drop-shadow(0 0 8px rgb(186 230 253 / 0.35));
-  animation: bc-personality-design-glow 3.8s ease-in-out infinite;
+  background: radial-gradient(circle, rgb(186 230 253 / 0.38) 0%, rgb(186 230 253 / 0.14) 50%, transparent 72%);
+  filter: drop-shadow(0 0 8px rgb(186 230 253 / 0.28));
+  animation: bc-personality-teal-pulse 2.8s ease-in-out infinite;
 }
 
 .bc-node-feed-event-design .bc-node-dot {
-  background: #f8fafc;
-  box-shadow: 0 0 10px rgb(248 250 252 / 0.7), 0 0 16px rgb(186 230 253 / 0.35);
+  box-shadow: 0 0 10px rgb(186 230 253 / 0.58), 0 0 16px rgb(186 230 253 / 0.26);
 }
 
 .bc-node-feed-event-marketing .bc-node-halo {
-  background: radial-gradient(circle, rgb(251 146 60 / 0.42) 0%, rgb(251 146 60 / 0.14) 50%, transparent 72%);
-  filter: drop-shadow(0 0 8px rgb(251 146 60 / 0.32));
-  animation: bc-personality-orange-wave 3s ease-in-out infinite;
+  background: radial-gradient(circle, rgb(251 146 60 / 0.38) 0%, rgb(251 146 60 / 0.14) 50%, transparent 72%);
+  filter: drop-shadow(0 0 8px rgb(251 146 60 / 0.28));
+  animation: bc-personality-teal-pulse 2.8s ease-in-out infinite;
 }
 
 .bc-node-feed-event-marketing .bc-node-dot {
@@ -2882,7 +2901,12 @@
 
 .bc-ambient-packet-active {
   opacity: 1;
-  filter: drop-shadow(0 0 6px rgb(103 232 249 / 0.9)) drop-shadow(0 0 14px rgb(56 189 248 / 0.5));
+  filter: drop-shadow(0 0 5px rgb(103 232 249 / 0.75)) drop-shadow(0 0 12px rgb(56 189 248 / 0.4));
+}
+
+.bc-ambient-packet-agent.bc-ambient-packet-active {
+  opacity: 0.88;
+  filter: url(#bc-packet-bloom);
 }
 
 .bc-chamber-mode-cascade .bc-neural-link-active,
@@ -2897,11 +2921,11 @@
   0%,
   100% {
     opacity: 0.38;
-    transform: translate(-50%, -20%) scale(0.96);
+    transform: translate(-50%, -50%) scale(0.96);
   }
   50% {
     opacity: 0.58;
-    transform: translate(-50%, -20%) scale(1.08);
+    transform: translate(-50%, -50%) scale(1.08);
   }
 }
 
@@ -2921,15 +2945,15 @@
   0%,
   100% {
     opacity: 0.32;
-    transform: translate(-50%, -20%) scale(0.94);
+    transform: translate(-50%, -50%) scale(0.94);
   }
   40% {
     opacity: 0.5;
-    transform: translate(-50%, -20%) scale(1.06);
+    transform: translate(-50%, -50%) scale(1.06);
   }
   70% {
     opacity: 0.42;
-    transform: translate(-50%, -20%) scale(1.02);
+    transform: translate(-50%, -50%) scale(1.02);
   }
 }
 
@@ -2937,19 +2961,19 @@
   0%,
   100% {
     opacity: 0.3;
-    transform: translate(-50%, -20%) scale(0.95);
+    transform: translate(-50%, -50%) scale(0.95);
   }
   25% {
     opacity: 0.48;
-    transform: translate(-50%, -20%) scale(1.04);
+    transform: translate(-50%, -50%) scale(1.04);
   }
   50% {
     opacity: 0.36;
-    transform: translate(-50%, -20%) scale(0.98);
+    transform: translate(-50%, -50%) scale(0.98);
   }
   75% {
     opacity: 0.46;
-    transform: translate(-50%, -20%) scale(1.06);
+    transform: translate(-50%, -50%) scale(1.06);
   }
 }
 
@@ -2957,15 +2981,15 @@
   0%,
   100% {
     opacity: 0.3;
-    transform: translate(-50%, -22%) scale(0.94);
+    transform: translate(-50%, -50%) scale(0.94);
   }
   33% {
     opacity: 0.46;
-    transform: translate(-50%, -18%) scale(1.08);
+    transform: translate(-50%, -50%) scale(1.08);
   }
   66% {
     opacity: 0.38;
-    transform: translate(-50%, -20%) scale(1.02);
+    transform: translate(-50%, -50%) scale(1.02);
   }
 }
 
@@ -2984,11 +3008,11 @@
 .bc-v4 .bc-node-id-ceo.bc-node-live-active .bc-node-halo {
   background: radial-gradient(
     circle,
-    rgb(255 209 102 / 0.42) 0%,
-    rgb(255 209 102 / 0.16) 45%,
+    rgb(255 209 102 / 0.36) 0%,
+    rgb(255 209 102 / 0.14) 45%,
     transparent 72%
   );
-  filter: drop-shadow(0 0 10px rgb(255 209 102 / 0.35));
+  filter: drop-shadow(0 0 8px rgb(255 209 102 / 0.28));
   animation: bc-personality-gold 3.6s ease-in-out infinite;
 }
 
@@ -3035,7 +3059,7 @@
     transparent 72%
   );
   filter: drop-shadow(0 0 8px rgb(251 146 60 / 0.28));
-  animation: bc-personality-orange-wave 3s ease-in-out infinite;
+  animation: bc-personality-teal-pulse 2.8s ease-in-out infinite;
 }
 
 .bc-v4 .bc-node-id-marketing.bc-node-live-active .bc-node-ring {
@@ -3045,11 +3069,12 @@
 .bc-v4 .bc-node-id-designer.bc-node-live-active .bc-node-halo {
   background: radial-gradient(
     circle,
-    rgb(248 250 252 / 0.38) 0%,
-    rgb(186 230 253 / 0.16) 45%,
+    rgb(186 230 253 / 0.38) 0%,
+    rgb(186 230 253 / 0.14) 45%,
     transparent 72%
   );
-  animation: bc-personality-design-glow 3.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgb(186 230 253 / 0.28));
+  animation: bc-personality-teal-pulse 2.8s ease-in-out infinite;
 }
 
 .bc-v4 .bc-node-id-designer.bc-node-live-active .bc-node-ring {
@@ -3058,8 +3083,8 @@
 
 .bc-v4 .bc-node-id-designer.bc-node-live-active .bc-node-dot {
   box-shadow:
-    0 0 10px rgb(248 250 252 / 0.65),
-    0 0 16px rgb(186 230 253 / 0.3);
+    0 0 10px color-mix(in srgb, var(--bc-node-color) 70%, transparent),
+    0 0 16px color-mix(in srgb, var(--bc-node-color) 32%, transparent);
 }
 
 .bc-v4 .bc-node-id-content.bc-node-live-active .bc-node-halo {
@@ -3069,8 +3094,8 @@
     rgb(167 139 250 / 0.16) 45%,
     transparent 72%
   );
-  filter: drop-shadow(0 0 10px rgb(167 139 250 / 0.35));
-  animation: bc-personality-purple-pulse 3.4s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgb(167 139 250 / 0.32));
+  animation: bc-personality-teal-pulse 2.8s ease-in-out infinite;
 }
 
 .bc-v4 .bc-node-id-content.bc-node-live-active .bc-node-ring {
@@ -3084,8 +3109,8 @@
     rgb(244 114 182 / 0.16) 45%,
     transparent 72%
   );
-  filter: drop-shadow(0 0 10px rgb(244 114 182 / 0.35));
-  animation: bc-personality-pink-pulse 3s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgb(244 114 182 / 0.32));
+  animation: bc-personality-teal-pulse 2.8s ease-in-out infinite;
 }
 
 .bc-v4 .bc-node-id-image.bc-node-live-active .bc-node-ring {
@@ -3099,7 +3124,7 @@
     rgb(45 212 191 / 0.16) 45%,
     transparent 72%
   );
-  filter: drop-shadow(0 0 10px rgb(45 212 191 / 0.35));
+  filter: drop-shadow(0 0 8px rgb(45 212 191 / 0.32));
   animation: bc-personality-teal-pulse 2.8s ease-in-out infinite;
 }
 
@@ -3107,9 +3132,38 @@
   border-color: rgb(45 212 191 / 0.3);
 }
 
+/* Specialist signal — restrained orbit glow (Shopify reference) */
+.bc-v4 .bc-node-id-shopify.bc-node-live-active .bc-node-orbit-glow,
+.bc-v4 .bc-node-id-image.bc-node-live-active .bc-node-orbit-glow,
+.bc-v4 .bc-node-id-content.bc-node-live-active .bc-node-orbit-glow,
+.bc-v4 .bc-node-id-designer.bc-node-live-active .bc-node-orbit-glow,
+.bc-v4 .bc-node-id-marketing.bc-node-live-active .bc-node-orbit-glow,
+.bc-v4 .bc-node-id-shopify.bc-node-live-recent .bc-node-orbit-glow,
+.bc-v4 .bc-node-id-image.bc-node-live-recent .bc-node-orbit-glow,
+.bc-v4 .bc-node-id-content.bc-node-live-recent .bc-node-orbit-glow,
+.bc-v4 .bc-node-id-designer.bc-node-live-recent .bc-node-orbit-glow,
+.bc-v4 .bc-node-id-marketing.bc-node-live-recent .bc-node-orbit-glow {
+  opacity: 0.62;
+  width: 58px;
+  height: 58px;
+}
+
+.bc-v4 .bc-node-id-designer.bc-node-live-active .bc-node-orbit-glow,
+.bc-v4 .bc-node-id-designer.bc-node-live-recent .bc-node-orbit-glow {
+  opacity: 0.48;
+  width: 52px;
+  height: 52px;
+}
+
+.bc-node-id-marketing .bc-node-body {
+  top: 18px;
+}
+
 .bc-v4 .bc-node-id-content.bc-node-light-standby .bc-node-dot,
 .bc-v4 .bc-node-id-image.bc-node-light-standby .bc-node-dot,
-.bc-v4 .bc-node-id-shopify.bc-node-light-standby .bc-node-dot {
+.bc-v4 .bc-node-id-shopify.bc-node-light-standby .bc-node-dot,
+.bc-v4 .bc-node-id-designer.bc-node-light-standby .bc-node-dot,
+.bc-v4 .bc-node-id-marketing.bc-node-light-standby .bc-node-dot {
   background: color-mix(
     in srgb,
     var(--bc-node-color) calc(35% + var(--bc-node-light, 0.25) * 65%),
@@ -3121,11 +3175,11 @@
   0%,
   100% {
     opacity: calc(0.28 + var(--bc-node-light, 1) * 0.42);
-    transform: translate(-50%, -20%) scale(0.96);
+    transform: translate(-50%, -50%) scale(0.96);
   }
   50% {
     opacity: calc(0.42 + var(--bc-node-light, 1) * 0.52);
-    transform: translate(-50%, -20%) scale(1.08);
+    transform: translate(-50%, -50%) scale(1.08);
   }
 }
 
@@ -3133,11 +3187,11 @@
   0%,
   100% {
     opacity: calc(0.28 + var(--bc-node-light, 1) * 0.42);
-    transform: translate(-50%, -20%) scale(0.95);
+    transform: translate(-50%, -50%) scale(0.95);
   }
   50% {
     opacity: calc(0.44 + var(--bc-node-light, 1) * 0.52);
-    transform: translate(-50%, -20%) scale(1.1);
+    transform: translate(-50%, -50%) scale(1.1);
   }
 }
 
@@ -3145,15 +3199,15 @@
   0%,
   100% {
     opacity: calc(0.28 + var(--bc-node-light, 1) * 0.42);
-    transform: translate(-50%, -20%) scale(0.96);
+    transform: translate(-50%, -50%) scale(0.96);
   }
   40% {
     opacity: calc(0.4 + var(--bc-node-light, 1) * 0.5);
-    transform: translate(-50%, -20%) scale(1.05);
+    transform: translate(-50%, -50%) scale(1.05);
   }
   70% {
     opacity: calc(0.34 + var(--bc-node-light, 1) * 0.46);
-    transform: translate(-50%, -20%) scale(1.02);
+    transform: translate(-50%, -50%) scale(1.02);
   }
 }
 

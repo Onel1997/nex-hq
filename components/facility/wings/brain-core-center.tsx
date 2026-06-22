@@ -121,6 +121,27 @@ const FEEDBACK_LINKS: Array<{ from: AgentNodeId; to: AgentNodeId }> = [
   { from: "shopify", to: "ceo" },
 ];
 
+/** Specialist orbit routes — continuous ambient signal flow (Shopify reference). */
+const SPECIALIST_SIGNAL_ROUTE_IDS = new Set([
+  "intel-commerce-shopify",
+  "intel-designer-image",
+  "intel-designer-content",
+  "intel-image-content",
+  "intel-content-marketing",
+  "intel-content-image",
+  "intel-shopify-research",
+  "fb-shopify-ceo",
+  "fb-marketing-ceo",
+]);
+
+const SPECIALIST_AGENT_IDS = new Set<AgentNodeId>([
+  "shopify",
+  "image",
+  "content",
+  "designer",
+  "marketing",
+]);
+
 function pointOnCircle(angleDeg: number, radius: number) {
   const rad = ((angleDeg - 90) * Math.PI) / 180;
   return {
@@ -381,7 +402,7 @@ function useBrainCoreLiving(
 
     const ambientInterval = setInterval(() => {
       setLiving((prev) => (prev ? spawnAmbientPacket(prev, linkPaths) : prev));
-    }, 2800);
+    }, 2200);
 
     const emergencyClear = setInterval(() => {
       setMission((prev) => {
@@ -1038,11 +1059,34 @@ function NeuralLinkLayer({
             style={{ ["--bc-link-delay" as string]: `${link.delay}s` }}
             fill="none"
           />
-          {link.active || alwaysAmbient ? (
+          {link.active || alwaysAmbient || SPECIALIST_SIGNAL_ROUTE_IDS.has(link.id) ? (
             <>
-              <AmbientRingParticle link={link} />
+              <AmbientRingParticle
+                link={link}
+                color={signalColorForLink(link)}
+                signalRoute={SPECIALIST_SIGNAL_ROUTE_IDS.has(link.id)}
+              />
+              <AmbientRingParticle
+                link={link}
+                phaseOffset={1.35}
+                color={signalColorForLink(link)}
+                signalRoute={SPECIALIST_SIGNAL_ROUTE_IDS.has(link.id)}
+                variant="soft"
+              />
+              <AmbientRingParticle
+                link={link}
+                phaseOffset={2.8}
+                color={signalColorForLink(link)}
+                signalRoute={SPECIALIST_SIGNAL_ROUTE_IDS.has(link.id)}
+                variant="soft"
+              />
               {link.active && link.type !== "command" ? (
-                <AmbientRingParticle link={link} phaseOffset={2.8} />
+                <AmbientRingParticle
+                  link={link}
+                  phaseOffset={4.2}
+                  color={signalColorForLink(link)}
+                  signalRoute={SPECIALIST_SIGNAL_ROUTE_IDS.has(link.id)}
+                />
               ) : null}
             </>
           ) : null}
@@ -1052,23 +1096,50 @@ function NeuralLinkLayer({
   );
 }
 
+function signalColorForLink(link: NeuralLink): string | undefined {
+  if (!link.fromId) return undefined;
+  return AGENT_COLORS[link.fromId];
+}
+
 function AmbientRingParticle({
   link,
   phaseOffset = 0,
+  color,
+  signalRoute = false,
+  variant = "default",
 }: {
   link: NeuralLink;
   phaseOffset?: number;
+  color?: string;
+  signalRoute?: boolean;
+  variant?: "default" | "soft";
 }) {
-  const delay = 1.2 + (linkHash(link.id) % 40) / 5 + phaseOffset;
+  const energized = link.active || signalRoute;
+  const delay = 0.8 + (linkHash(link.id) % 40) / 5 + phaseOffset;
   const duration =
     (10 + (linkHash(link.id) % 24)) /
-    (link.type === "command" ? 1 : link.active ? 1.15 : 1.5);
+    (link.type === "command" ? 1 : energized ? 1.15 : 1.5);
+  const radius =
+    variant === "soft"
+      ? energized
+        ? 2.2
+        : 1.5
+      : energized
+        ? 3.2
+        : 1.8;
 
   return (
     <circle
-      r={link.active ? 3.2 : 1.8}
-      className={cn("bc-ambient-packet", link.active && "bc-ambient-packet-active")}
-      opacity={link.active ? 0.7 : 0.45}
+      r={radius}
+      className={cn(
+        "bc-ambient-packet",
+        energized && "bc-ambient-packet-active",
+        signalRoute && "bc-ambient-packet-signal",
+        color && "bc-ambient-packet-agent",
+      )}
+      fill={color}
+      opacity={energized ? 0.72 : 0.42}
+      filter={color ? "url(#bc-packet-bloom)" : undefined}
     >
       <animateMotion
         dur={`${duration}s`}
@@ -1185,6 +1256,8 @@ function AgentNode({
   const isCeoEvent = agentId === "ceo" && chamberMode === "ceo-event" && node.isLiveActive;
   const isActive = node.isLiveActive || isMissionOwner || Boolean(feedEventKind);
   const isRecent = !isActive && previousActiveId === agentId;
+  const isSpecialist = SPECIALIST_AGENT_IDS.has(agentId);
+  const showSignalParticles = isActive || (isSpecialist && isRecent);
   const lightTier = isActive ? "active" : isRecent ? "recent" : "standby";
 
   return (
@@ -1212,10 +1285,10 @@ function AgentNode({
       <span className="bc-node-orbit-glow" aria-hidden />
       <span className="bc-node-halo" aria-hidden />
       <span className="bc-node-aura" aria-hidden />
-      {isActive ? <span className="bc-node-ring" aria-hidden /> : null}
-      {isActive ? (
+      {showSignalParticles ? <span className="bc-node-ring" aria-hidden /> : null}
+      {showSignalParticles ? (
         <span className="bc-node-particles" aria-hidden>
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: isSpecialist ? 8 : 6 }).map((_, i) => (
             <span
               key={i}
               className="bc-node-particle"
