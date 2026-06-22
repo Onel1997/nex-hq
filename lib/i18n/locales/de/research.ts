@@ -1,0 +1,192 @@
+export const research = {
+  page: {
+    title: "Research-Agent",
+    description:
+      "Markt-Intelligence für deinen aktiven Workspace — Wettbewerber, Trends und Signale als strukturierte Berichte.",
+  },
+  interface: {
+    label: "Research-Anfrage",
+    headline: "Was soll recherchiert werden?",
+    placeholder:
+      "z. B. Analysiere Corteiz, finde Sommer-Streetwear-Trends, recherchiere Oversized-Silhouetten …",
+    submit: "Bericht erstellen",
+    running: "Research-Agent analysiert …",
+    poweredBy: "Research-Agent · Berichte werden im Wissensspeicher gespeichert",
+    tryExamples: "Beispiel-Anfragen",
+    savedDomains: "Gespeichert in: {domains}",
+    viewReports: "Berichte ansehen",
+    success: "Bericht erstellt und gespeichert",
+    executiveSummary: "Executive Summary",
+    keyFindings: "Kernaussagen",
+    recommendations: "Empfehlungen",
+    confidence: "Konfidenz",
+  },
+  heroStatus: {
+    label: "Intelligence Status",
+    loading: "Intelligence wird synchronisiert …",
+    savedReports: "{count} Reports gespeichert",
+    activeTrends: "{count} Trendanalysen aktiv",
+    competitorRunning: "{count} Wettbewerbsanalyse läuft",
+    knowledgeOnline: "Knowledge Base online",
+  },
+  missions: {
+    label: "Research Missions",
+    summerTrends: "Sommertrends analysieren",
+    summerTrendsAction:
+      "Analysiere die wichtigsten Sommer-Streetwear-Trends für die kommende Saison",
+    competitors: "Wettbewerber untersuchen",
+    competitorsAction:
+      "Untersuche die wichtigsten Wettbewerber im Luxury-Streetwear-Segment",
+    audience: "Zielgruppe analysieren",
+    audienceAction:
+      "Analysiere die Zielgruppe und demografische Erkenntnisse für Streetwear",
+    streetwear: "Streetwear Trends finden",
+    streetwearAction:
+      "Finde aktuelle Streetwear-Trends und aufkommende Silhouetten",
+    productOpportunities: "Neue Produktchancen entdecken",
+    productOpportunitiesAction:
+      "Entdecke neue Produktchancen basierend auf Marktsignalen und Trends",
+  },
+  dashboard: {
+    label: "Intelligence Dashboard",
+    marketSignals: "Market Signals",
+    liveTrendAlerts: "Live Trend Alerts",
+    intelligenceGrid: "Intelligence Grid",
+    recentReports: "Recent Reports",
+    competitorMonitor: "Competitor Monitor",
+    signals: {
+      streetwearRising: "Streetwear Trend Rising",
+      earthTones: "Earth Tones Growing",
+      oversizedDemand: "Oversized Demand",
+      premiumExpanding: "Premium Segment Expanding",
+    },
+    trendAlerts: {
+      oversizedDemand: "Oversized Demand",
+      earthTonesRising: "Earth Tones Rising",
+      premiumGrowth: "Premium Segment Growth",
+      slimFitDeclining: "Slim Fit Declining",
+    },
+    grid: {
+      trendReports: "Trend Reports",
+      competitorWatch: "Competitor Watch",
+      consumerSignals: "Consumer Signals",
+      knowledgeBase: "Knowledge Base",
+    },
+    gridTrendMeta: "{count} active reports",
+    gridCompetitorMeta: "{count} tracked",
+    gridConsumerMeta: "{count} live signals",
+    gridKnowledgeMeta: "{count} stored",
+    reports: {
+      premiumStreetwear: "Premium Streetwear 2026",
+      oversizedGrowth: "Oversized Market Growth",
+      colorTrends: "Color Trends SS26",
+      consumerDemand: "Consumer Demand Analysis",
+    },
+    competitorStatus: {
+      watching: "Watching",
+      tracked: "Tracked",
+      analyzing: "Analyzing",
+      stable: "Stable",
+    },
+    competitorIntel: {
+      corteizTrend: "+18% oversized demand",
+      corteizSignal: "2 neue Drops",
+      representTrend: "+12% premium positioning",
+      representSignal: "Neue Kollektion erkannt",
+      fogTrend: "Luxury segment shift",
+      fogSignal: "Preisanpassung beobachtet",
+      essentialsTrend: "Stable market share",
+      essentialsSignal: "Volume konstant",
+      coleBuxtonTrend: "+9% UK streetwear growth",
+      coleBuxtonSignal: "Capsule drop frequency rising",
+    },
+    knowledge: {
+      recentReports: "Zuletzt genutzt",
+      savedInsights: "Gespeicherte Insights",
+      lastAnalysis: "Letzte Analyse",
+      lastAnalysisDefault: "Premium Streetwear 2026",
+      insights: {
+        insightOversized: "Oversized Silhouettes dominieren SS26",
+        insightEarthTones: "Earth Tones gewinnen an Momentum",
+        insightPremium: "Premium Segment wächst +14%",
+      },
+    },
+  },
+  context: {
+    label: "Live Context",
+    live: "Intelligence stream active",
+    brandDna: "Milaene Brand DNA",
+    podSupplier: "POD Supplier",
+    signalConfidence: "Signal confidence",
+    activeTrends: "Active trends",
+    reportsStored: "Reports stored",
+    competitorsTracked: "Competitors tracked",
+    latestSignal: "Latest signal",
+  },
+  brain: {
+    label: "Intelligence Brain",
+    subtitle: "Das Gehirn von Milaene — Brand, Markt, Produkte & Chancen",
+    loading: "Intelligence Brain synchronisiert …",
+    marketIntelligence: "Market Intelligence",
+    competitorIntelligence: "Competitor Intelligence",
+    productIntelligence: "Product Intelligence",
+    opportunityEngine: "Opportunity Engine",
+    brand: {
+      style: "Stil",
+      audience: "Zielgruppe",
+    },
+    market: {
+      trends: "Trends",
+      demand: "Nachfrage",
+      colors: "Farben",
+      categories: "Kategorien",
+    },
+    products: {
+      bestsellers: "Bestseller",
+      weak: "Schwache Produkte",
+      opportunities: "Chancen",
+    },
+    pod: {
+      products: "Produkte",
+    },
+    opportunity: {
+      products: "Produkte",
+      confidence: "Confidence",
+    },
+  },
+  feed: {
+    label: "Intelligence Feed",
+    events: {
+      trend_detected: "Trend detected",
+      competitor_updated: "Competitor updated",
+      consumer_signal: "Consumer signal received",
+    },
+  },
+  indicators: {
+    label: "Research System Status",
+    trendEngine: "Trend Engine Active",
+    knowledgeBase: "Knowledge Base Synced",
+    consumerSignals: "Consumer Signals Live",
+    marketScan: "Market Scan Running",
+  },
+  activity: {
+    label: "Research Activity",
+  },
+  examples: {
+    represent: "Analysiere Represent",
+    corteiz: "Analysiere Corteiz",
+    summerTrends: "Finde Sommer-Streetwear-Trends",
+    oversized: "Recherchiere Oversized-Silhouetten",
+    luxuryPricing: "Analysiere Luxury-Streetwear-Preise",
+  },
+  errors: {
+    noResponse: "Keine Antwort vom Research-Agenten erhalten.",
+    invalidResponse: "Ungültiges Berichtsformat vom Research-Agenten.",
+    supabaseNotConfigured:
+      "Supabase ist nicht konfiguriert. Brain-Persistenz erforderlich.",
+    openaiNotConfigured:
+      "OpenAI ist nicht konfiguriert. OPENAI_API_KEY in .env.local hinzufügen.",
+    invalidRequest: "Ungültige Anfrage",
+    unexpected: "Ein unerwarteter Fehler ist aufgetreten",
+  },
+} as const;

@@ -1,4 +1,6 @@
 import type { MilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
+import { MILAENE_PROFILE } from "@/lib/business/business-profile";
+import { buildDesignIntelligenceDashboard } from "@/lib/design/product-intelligence";
 import type { CommerceInsight } from "@/lib/shopify/operations";
 import { formatPrice } from "@/lib/shopify/operations";
 
@@ -154,8 +156,67 @@ export function formatCommerceLabSignals(baseline: MilaeneCommerceBaseline): str
   return lines.join("\n");
 }
 
+/** Sales, catalog, POD and trend signals for Research Agent context. */
+export function formatResearchCommerceSignals(
+  baseline: MilaeneCommerceBaseline,
+): string {
+  const {
+    insights,
+    commerceIntelligence,
+    productKnowledge,
+    marketPrintIntelligence,
+    businessMeta,
+    kpis,
+  } = baseline;
+
+  const designIntel = buildDesignIntelligenceDashboard(
+    baseline.knowledge.products,
+    undefined,
+    commerceIntelligence,
+  );
+
+  const lines = [
+    "RESEARCH INTELLIGENCE (Milaene Commerce + POD baseline)",
+    `Brand context: Premium minimalist streetwear · POD via ${businessMeta.primarySupplier}`,
+    `Catalog: ${kpis.products} products · ${kpis.activeProducts} active · ${kpis.collections} collections`,
+    "",
+    "Bestsellers:",
+    ...commerceIntelligence.topUnits
+      .slice(0, 6)
+      .map((p) => `- ${p.title}: ${p.unitsSold} units · score ${p.commerceScore}`),
+    "",
+    "Weak / low-priority products:",
+    ...designIntel.lowestPerforming
+      .slice(0, 4)
+      .map((p) => `- ${p.title} (${p.badges.join(", ") || "review"})`),
+    "",
+    "Category gaps:",
+    ...productKnowledge.categoryGaps.map((g) => `- ${g}`),
+    "",
+    "MarketPrint POD:",
+    `Matched: ${marketPrintIntelligence.summary.matchedProducts} · Premium: ${marketPrintIntelligence.summary.premiumCount} · Embroidery: ${marketPrintIntelligence.summary.embroideryCount}`,
+    ...marketPrintIntelligence.premiumProducts
+      .slice(0, 4)
+      .map((p) => `- ${p.title}: ${p.match.suitability}% fit`),
+    "",
+    "Secondary suppliers:",
+    ...MILAENE_PROFILE.secondarySuppliers.map((s) => `- ${s}`),
+    "",
+    "Commerce signals for research:",
+    ...insightLines(insights, [
+      "bestseller",
+      "category",
+      "expansion",
+      "marketprint",
+      "supplier",
+    ]),
+  ];
+
+  return lines.join("\n");
+}
+
 export function formatDepartmentCommerceSignals(
-  department: "ceo" | "design" | "marketing" | "image" | "commerce-lab",
+  department: "ceo" | "design" | "marketing" | "image" | "commerce-lab" | "research",
   baseline: MilaeneCommerceBaseline,
 ): string {
   switch (department) {
@@ -169,5 +230,7 @@ export function formatDepartmentCommerceSignals(
       return formatImageCommerceSignals(baseline);
     case "commerce-lab":
       return formatCommerceLabSignals(baseline);
+    case "research":
+      return formatResearchCommerceSignals(baseline);
   }
 }

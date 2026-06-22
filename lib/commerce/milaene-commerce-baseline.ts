@@ -48,7 +48,8 @@ export type CommerceDepartmentId =
   | "design"
   | "marketing"
   | "image"
-  | "commerce-lab";
+  | "commerce-lab"
+  | "research";
 
 export interface MilaeneCommerceBaseline {
   baseline: typeof MILAENE_COMMERCE_BASELINE;
@@ -158,6 +159,7 @@ export async function loadMilaeneCommerceBaseline(): Promise<MilaeneCommerceBase
       marketing: "/agents/marketing",
       image: "/agents/image",
       "commerce-lab": "/agents/commerce",
+      research: "/agents/research",
     },
   };
 }

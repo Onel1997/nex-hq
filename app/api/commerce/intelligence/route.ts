@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const baseline = await loadMilaeneCommerceBaseline();
 
     if (department) {
-      const valid = ["ceo", "design", "marketing", "image", "commerce-lab"] as const;
+      const valid = ["ceo", "design", "marketing", "image", "commerce-lab", "research"] as const;
       if (!valid.includes(department as (typeof valid)[number])) {
         return NextResponse.json(
           { ok: false, error: `Unknown department: ${department}` },
