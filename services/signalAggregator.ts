@@ -3,6 +3,7 @@ import type { CompetitorIntel } from "@/services/competitorScanner";
 import {
   flattenExternalSignals,
   scanExternalSources,
+  type ConnectorIntelligenceScores,
   type ExternalIntelligence,
   type IntelligenceSignal,
 } from "@/services/connectors";
@@ -25,6 +26,7 @@ export interface AggregatedSignals {
   consumer: SignalLayer;
   all: IntelligenceSignal[];
   external: ExternalIntelligence;
+  connectorScores: ConnectorIntelligenceScores;
 }
 
 function buildLayer(
@@ -126,6 +128,35 @@ export interface AggregateSignalsInput {
   region?: string;
 }
 
+function mergeConnectorScores(
+  external: ExternalIntelligence,
+): ConnectorIntelligenceScores {
+  const reddit = external.reddit.scores;
+  const trends = external.googleTrends.scores;
+
+  if (!reddit && !trends) {
+    return {
+      socialScore: 55,
+      demandScore: 55,
+      trendScore: 55,
+      confidence: 60,
+    };
+  }
+
+  const sources = [reddit, trends].filter(Boolean) as ConnectorIntelligenceScores[];
+  const avg = (pick: (s: ConnectorIntelligenceScores) => number) =>
+    Math.round(
+      sources.reduce((sum, s) => sum + pick(s), 0) / sources.length,
+    );
+
+  return {
+    socialScore: reddit?.socialScore ?? avg((s) => s.socialScore),
+    demandScore: trends?.demandScore ?? avg((s) => s.demandScore),
+    trendScore: trends?.trendScore ?? avg((s) => s.trendScore),
+    confidence: avg((s) => s.confidence),
+  };
+}
+
 /** Aggregate social, trend, commerce, competitor and consumer signals. */
 export async function aggregateSignals(
   input: AggregateSignalsInput,
@@ -183,5 +214,6 @@ export async function aggregateSignals(
     consumer: buildLayer("consumer", "Consumer Signals", consumerSignals),
     all: deduped,
     external,
+    connectorScores: mergeConnectorScores(external),
   };
 }

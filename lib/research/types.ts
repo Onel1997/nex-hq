@@ -8,8 +8,17 @@ export interface ResearchDesignBrief {
   silhouettes: string[];
   designs?: string[];
   trendScore: number;
+  socialScore?: number;
+  demandScore?: number;
   competitorScore: number;
   confidence: number;
+  connectorScores?: {
+    socialScore?: number;
+    demandScore?: number;
+    trendScore?: number;
+    confidence?: number;
+  };
+  intelligenceMode?: "live" | "simulated";
   priority?: string;
   rationale: string;
   opportunityId?: string;

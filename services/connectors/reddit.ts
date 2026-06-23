@@ -1,3 +1,12 @@
+import {
+  fetchLiveRedditIntelligence,
+  isRedditLiveConfigured,
+} from "./clients/reddit-client";
+import {
+  aggregateConnectorScores,
+  computeConfidence,
+  normalizeSignals,
+} from "./signal-utils";
 import type { ConnectorInput, IntelligenceSignal, SourceIntelligence } from "./types";
 
 export interface RedditThreadSignal {
@@ -99,7 +108,29 @@ function toSignals(data: RedditIntelligenceData): IntelligenceSignal[] {
     message: t.insight,
     score: Math.min(100, Math.round(t.upvotes / 15)),
     direction: t.sentiment === "negative" ? ("down" as const) : ("up" as const),
-    tags: [t.subreddit, t.sentiment],
+    tags: [t.subreddit, t.sentiment, "buying-behavior"],
+  }));
+
+  const complaintSignals = data.problems.slice(0, 2).map((problem, i) => ({
+    id: `reddit-complaint-${i}`,
+    category: "consumer" as const,
+    source: "reddit" as const,
+    label: "Community Complaint",
+    message: problem,
+    score: 62 - i * 4,
+    direction: "down" as const,
+    tags: ["complaint", "consumer"],
+  }));
+
+  const demandSignals = data.recommendations.slice(0, 2).map((rec, i) => ({
+    id: `reddit-demand-${i}`,
+    category: "consumer" as const,
+    source: "reddit" as const,
+    label: "Product Demand",
+    message: rec,
+    score: 72 + i * 4,
+    direction: "up" as const,
+    tags: ["demand", "product"],
   }));
 
   const trendSignals = data.trends.slice(0, 3).map((trend, i) => ({
@@ -113,18 +144,45 @@ function toSignals(data: RedditIntelligenceData): IntelligenceSignal[] {
     tags: ["trend"],
   }));
 
-  return [...threadSignals, ...trendSignals];
+  return [...threadSignals, ...complaintSignals, ...demandSignals, ...trendSignals];
+}
+
+function buildResult(
+  data: RedditIntelligenceData,
+  mode: "live" | "simulated",
+): SourceIntelligence<RedditIntelligenceData> {
+  const rawSignals = toSignals(data);
+  const confidence = computeConfidence({
+    mode,
+    sampleSize: data.threads.length + data.trends.length,
+    freshness: mode === "live" ? 0.95 : 0.7,
+    dataQuality: mode === "live" ? 0.92 : 0.85,
+  });
+  const signals = normalizeSignals(rawSignals, confidence);
+  const scores = aggregateConnectorScores(signals, { social: 0.7, demand: 0.3 }, confidence);
+
+  return {
+    source: "reddit",
+    mode,
+    loadedAt: new Date().toISOString(),
+    signals,
+    data,
+    scores,
+  };
 }
 
 /** Scan Reddit streetwear communities for consumer intelligence. */
 export async function scanReddit(
   _input: ConnectorInput = {},
 ): Promise<SourceIntelligence<RedditIntelligenceData>> {
-  return {
-    source: "reddit",
-    mode: process.env.REDDIT_CLIENT_ID ? "live" : "simulated",
-    loadedAt: new Date().toISOString(),
-    signals: toSignals(BASE_DATA),
-    data: BASE_DATA,
-  };
+  if (isRedditLiveConfigured()) {
+    try {
+      const data = await fetchLiveRedditIntelligence();
+      return buildResult(data, "live");
+    } catch {
+      return buildResult(BASE_DATA, "simulated");
+    }
+  }
+
+  return buildResult(BASE_DATA, "simulated");
 }

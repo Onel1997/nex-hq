@@ -3,7 +3,7 @@ import { enrichResearchPayload } from "./enrich-output";
 import { researchOutputSchema, type ResearchOutput } from "./types";
 
 export const EXPECTED_RESEARCH_SCHEMA = {
-  title: "string (required)",
+  title: "string (required; fallback from trendReport.headline, designBrief.collectionIdea, or 'Research Report')",
   executiveSummary: "string (required, min 80 chars)",
   reportType: "competitor | trend | design | pricing | audience (required)",
   keyFindings: "string[] (required, 5–12 detailed items)",
@@ -17,7 +17,10 @@ export const EXPECTED_RESEARCH_SCHEMA = {
   competitorIntelligence: "optional { competitors, competitiveEdge, ... }",
   marketingMemory: "optional { name, objective, notes, ... }",
   designMemory: "optional { silhouettes, moodKeywords, ... }",
-  designBrief: "auto-generated server-side — collectionIdea, productSuggestions, colorPalette, trendScore, competitorScore",
+  connectorIntelligence:
+    "optional { scores: { socialScore, demandScore, trendScore, confidence }, connectors, mode }",
+  designBrief:
+    "auto-generated server-side — collectionIdea, scores, connectorScores, intelligenceMode",
 } as const;
 
 export class ResearchParseError extends Error {
@@ -297,6 +300,49 @@ function normalizeTrendReport(
   return report;
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function deriveFallbackTitle(parsed: Record<string, unknown>): string {
+  const trendReport = parsed.trendReport;
+  if (trendReport && typeof trendReport === "object" && !Array.isArray(trendReport)) {
+    const headline = (trendReport as Record<string, unknown>).headline;
+    if (isNonEmptyString(headline)) return headline.trim();
+  }
+
+  const designBrief = parsed.designBrief;
+  if (designBrief && typeof designBrief === "object" && !Array.isArray(designBrief)) {
+    const collectionIdea = (designBrief as Record<string, unknown>).collectionIdea;
+    if (isNonEmptyString(collectionIdea)) return collectionIdea.trim();
+  }
+
+  return "Research Report";
+}
+
+function ensureReportTitle(
+  normalized: Record<string, unknown>,
+  adjustments: string[],
+): void {
+  if (isNonEmptyString(normalized.title)) {
+    normalized.title = normalized.title.trim();
+    return;
+  }
+
+  for (const alias of ["reportTitle", "name", "headline"] as const) {
+    if (isNonEmptyString(normalized[alias])) {
+      normalized.title = String(normalized[alias]).trim();
+      adjustments.push(`mapped ${alias} → title`);
+      return;
+    }
+  }
+
+  const fallback = deriveFallbackTitle(normalized);
+  normalized.title = fallback;
+  adjustments.push(`generated fallback title: ${fallback}`);
+  console.info("[Research Run] Generated fallback title", { title: fallback });
+}
+
 /** Normalize common OpenAI field-name and type deviations before schema validation. */
 export function normalizeResearchPayload(
   parsed: Record<string, unknown>,
@@ -408,16 +454,224 @@ export function normalizeResearchPayload(
     normalized.competitorIntelligence = ci;
   }
 
+  for (const alias of [
+    "connectorIntelligence",
+    "intelligenceSignals",
+  ] as const) {
+    if (normalized[alias]) {
+      normalized[alias] = normalizeConnectorIntelligence(
+        normalized[alias],
+        adjustments,
+      );
+    }
+  }
+
+  if (normalized.connectorScores) {
+    const scores = normalizeConnectorScores(normalized.connectorScores);
+    if (scores) normalized.connectorScores = scores;
+  }
+
+  if (normalized.designBrief) {
+    normalized.designBrief = normalizeDesignBrief(
+      normalized.designBrief,
+      adjustments,
+    );
+  }
+
+  for (const field of ["opportunities"] as const) {
+    const coerced = normalizeOpportunityStrings(
+      normalized[field],
+      adjustments,
+      field,
+    );
+    if (coerced) normalized[field] = coerced;
+  }
+
+  ensureReportTitle(normalized, adjustments);
+
   return { normalized, adjustments };
+}
+
+function normalizePercentScore(value: unknown, fallback = 55): number {
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value.replace("%", "").trim());
+    if (!Number.isNaN(parsed)) return normalizePercentScore(parsed, fallback);
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (value > 0 && value <= 1) return Math.round(value * 100);
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function normalizeConnectorScores(raw: unknown): Record<string, number> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const source = raw as Record<string, unknown>;
+  return {
+    socialScore: normalizePercentScore(source.socialScore),
+    demandScore: normalizePercentScore(source.demandScore),
+    trendScore: normalizePercentScore(source.trendScore),
+    confidence: normalizePercentScore(source.confidence, 60),
+  };
+}
+
+function normalizeConnectorIntelligence(
+  raw: unknown,
+  adjustments: string[],
+): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+
+  const source = { ...(raw as Record<string, unknown>) };
+  const scores = normalizeConnectorScores(source.scores ?? source.connectorScores);
+  if (scores) {
+    source.scores = scores;
+    adjustments.push("normalized connector intelligence scores");
+  }
+
+  if (Array.isArray(source.connectors)) {
+    source.connectors = source.connectors.map((entry) => {
+      if (!entry || typeof entry !== "object") return entry;
+      const connector = { ...(entry as Record<string, unknown>) };
+      if (typeof connector.mode === "string") {
+        const mode = connector.mode.toLowerCase();
+        connector.mode = mode === "live" ? "live" : "simulated";
+      }
+      for (const key of [
+        "socialScore",
+        "demandScore",
+        "trendScore",
+        "confidence",
+      ] as const) {
+        if (connector[key] !== undefined) {
+          connector[key] = normalizePercentScore(connector[key]);
+        }
+      }
+      return connector;
+    });
+  }
+
+  return source;
+}
+
+function normalizeDesignBrief(
+  raw: unknown,
+  adjustments: string[],
+): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+
+  const brief = { ...(raw as Record<string, unknown>) };
+
+  for (const key of [
+    "trendScore",
+    "competitorScore",
+    "socialScore",
+    "demandScore",
+    "confidence",
+  ] as const) {
+    if (brief[key] !== undefined) {
+      brief[key] = normalizePercentScore(brief[key]);
+    }
+  }
+
+  if (brief.connectorScores) {
+    const scores = normalizeConnectorScores(brief.connectorScores);
+    if (scores) brief.connectorScores = scores;
+  } else if (brief.socialScore || brief.demandScore || brief.trendScore) {
+    brief.connectorScores = {
+      socialScore: normalizePercentScore(brief.socialScore),
+      demandScore: normalizePercentScore(brief.demandScore),
+      trendScore: normalizePercentScore(brief.trendScore),
+      confidence: normalizePercentScore(brief.confidence, 60),
+    };
+    adjustments.push("synthesized designBrief.connectorScores from score fields");
+  }
+
+  if (typeof brief.intelligenceMode === "string") {
+    brief.intelligenceMode =
+      brief.intelligenceMode.toLowerCase() === "live" ? "live" : "simulated";
+  }
+
+  if (!brief.generatedAt) {
+    brief.generatedAt = new Date().toISOString();
+    adjustments.push("defaulted designBrief.generatedAt");
+  }
+
+  if (typeof brief.rationale === "string" && brief.rationale.length < 20) {
+    brief.rationale = `${brief.rationale} Basierend auf Live-Intelligence und Marktsignalen.`;
+    adjustments.push("padded designBrief.rationale");
+  }
+
+  return brief;
+}
+
+function normalizeOpportunityStrings(
+  value: unknown,
+  adjustments: string[],
+  field: string,
+): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const normalized = value
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (item && typeof item === "object") {
+        const obj = item as Record<string, unknown>;
+        const title = obj.title ?? obj.name ?? obj.collection;
+        const scores = obj.scores as Record<string, unknown> | undefined;
+        const scoreNote = scores
+          ? ` — Demand ${normalizePercentScore(scores.demandScore)}% · Social ${normalizePercentScore(scores.socialScore)}%`
+          : "";
+        if (typeof title === "string") {
+          adjustments.push(`coerced ${field} object → string`);
+          return `${title}${scoreNote}`.trim();
+        }
+      }
+      return "";
+    })
+    .filter(Boolean);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function logValidationIssues(
+  issues: z.ZodIssue[],
+  parsed: Record<string, unknown>,
+  label: string,
+): void {
+  const details = issues.map((issue) => ({
+    path: issue.path.join(".") || "(root)",
+    code: issue.code,
+    message: issue.message,
+    expected: "expected" in issue ? issue.expected : undefined,
+  }));
+
+  console.error(`[Research Run] ${label}`, {
+    issueCount: issues.length,
+    issues: details,
+    zodIssues: issues,
+    parsedPreview: JSON.stringify(parsed, null, 2).slice(0, 4000),
+  });
 }
 
 function isOptionalNestedRoot(path: string): boolean {
   return (
     path === "competitorIntelligence" ||
     path === "marketingMemory" ||
-    path === "designMemory"
+    path === "designMemory" ||
+    path === "designBrief" ||
+    path === "connectorIntelligence" ||
+    path === "intelligenceSignals" ||
+    path === "connectorScores"
   );
 }
+
+const OPTIONAL_STRIP_KEYS = [
+  "competitorIntelligence",
+  "marketingMemory",
+  "designMemory",
+  "designBrief",
+  "connectorIntelligence",
+  "intelligenceSignals",
+  "connectorScores",
+] as const;
 
 function hasCompetitorReportIssues(
   issues: z.ZodIssue[],
@@ -456,6 +710,8 @@ function validateResearchPayload(
     return result.data;
   }
 
+  logValidationIssues(result.error.issues, parsed, "Schema validation issues");
+
   if (hasCompetitorReportIssues(result.error.issues, parsed.reportType)) {
     const partial =
       parsed.competitorReport &&
@@ -478,6 +734,11 @@ function validateResearchPayload(
     if (result.success) {
       return result.data;
     }
+    logValidationIssues(
+      result.error.issues,
+      parsed,
+      "Schema validation issues after competitorReport enrich",
+    );
   }
 
   if (hasTrendReportIssues(result.error.issues, parsed.reportType)) {
@@ -502,6 +763,11 @@ function validateResearchPayload(
     if (result.success) {
       return result.data;
     }
+    logValidationIssues(
+      result.error.issues,
+      parsed,
+      "Schema validation issues after trendReport enrich",
+    );
   }
 
   const validationIssues = result.error.issues.map((issue) =>
@@ -515,6 +781,11 @@ function validateResearchPayload(
 
   if (onlyOptionalNestedFailures) {
     if (context.strippedOptionalBlocks) {
+      logValidationIssues(
+        result.error.issues,
+        parsed,
+        "Schema validation failed after stripping optional blocks",
+      );
       throw new ResearchParseError({
         message: `Schema validation failed with ${result.error.issues.length} issue(s) after stripping optional blocks`,
         stage: "validation",
@@ -528,17 +799,13 @@ function validateResearchPayload(
 
     const stripped = { ...parsed };
     const removed: string[] = [];
-    for (const key of [
-      "competitorIntelligence",
-      "marketingMemory",
-      "designMemory",
-    ] as const) {
+    for (const key of OPTIONAL_STRIP_KEYS) {
       if (stripped[key] !== undefined && isOptionalNestedRoot(key)) {
         removed.push(key);
         delete stripped[key];
       }
     }
-    console.warn("[Research Run] Stripped invalid optional domain blocks", {
+    console.warn("[Research Run] Stripped invalid optional intelligence blocks", {
       removed,
       validationIssues,
     });
@@ -547,6 +814,12 @@ function validateResearchPayload(
       strippedOptionalBlocks: true,
     });
   }
+
+  logValidationIssues(
+    result.error.issues,
+    parsed,
+    "Schema validation failed — unrecoverable",
+  );
 
   throw new ResearchParseError({
     message: `Schema validation failed with ${result.error.issues.length} issue(s)`,

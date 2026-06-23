@@ -104,16 +104,52 @@ export const RESEARCH_DATA_SOURCES: DataSourceConnector[] = [
   },
 ];
 
+export function isLiveConnector(id: DataSourceId): boolean {
+  switch (id) {
+    case "google_trends":
+      return Boolean(process.env.GOOGLE_TRENDS_API_KEY);
+    case "reddit":
+      return Boolean(
+        process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET,
+      );
+    case "pinterest":
+      return Boolean(process.env.PINTEREST_ACCESS_TOKEN);
+    case "tiktok":
+      return Boolean(process.env.TIKTOK_API_KEY);
+    case "etsy":
+      return Boolean(process.env.ETSY_API_KEY);
+    case "amazon":
+      return Boolean(process.env.AMAZON_API_KEY);
+    default:
+      return false;
+  }
+}
+
+export function resolveDataSourceStatus(
+  source: DataSourceConnector,
+): DataSourceStatus {
+  if (source.status === "planned") return "planned";
+  if (source.status === "connected") return "connected";
+  return isLiveConnector(source.id) ? "connected" : "ready";
+}
+
+export function getResolvedDataSources(): DataSourceConnector[] {
+  return RESEARCH_DATA_SOURCES.map((source) => ({
+    ...source,
+    status: resolveDataSourceStatus(source),
+  }));
+}
+
 export function getActiveSourceLabels(): string[] {
-  return RESEARCH_DATA_SOURCES.filter((s) => s.status === "connected").map(
-    (s) => s.label,
-  );
+  return getResolvedDataSources()
+    .filter((s) => s.status === "connected")
+    .map((s) => s.label);
 }
 
 export function getReadySourceLabels(): string[] {
-  return RESEARCH_DATA_SOURCES.filter(
-    (s) => s.status === "connected" || s.status === "ready",
-  ).map((s) => s.label);
+  return getResolvedDataSources()
+    .filter((s) => s.status === "connected" || s.status === "ready")
+    .map((s) => s.label);
 }
 
 export function getPlannedSourceLabels(): string[] {

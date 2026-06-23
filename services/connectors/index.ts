@@ -12,6 +12,7 @@ export type {
   IntelligenceSignalCategory,
   SourceIntelligence,
   ConnectorMode,
+  ConnectorIntelligenceScores,
 } from "./types";
 
 export type ExternalIntelligence = {

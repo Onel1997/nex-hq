@@ -205,10 +205,22 @@ function scoreTemplate(
     ) + Math.min(12, trendBoost / 8),
   );
 
+  const connectorDemand = signals?.connectorScores?.demandScore;
+  const blendedDemand =
+    connectorDemand != null
+      ? Math.round(demandScore * 0.7 + connectorDemand * 0.3)
+      : demandScore;
+
   const socialScore = Math.min(
     98,
     matchSignalScore(signals, template.socialKeywords, "social"),
   );
+
+  const connectorSocial = signals?.connectorScores?.socialScore;
+  const blendedSocial =
+    connectorSocial != null
+      ? Math.round(socialScore * 0.65 + connectorSocial * 0.35)
+      : socialScore;
 
   const rising = trends.filter((t) => t.direction === "up");
   const trendScore = Math.min(
@@ -220,6 +232,12 @@ function scoreTemplate(
         )
       : 70,
   );
+
+  const connectorTrend = signals?.connectorScores?.trendScore;
+  const blendedTrend =
+    connectorTrend != null
+      ? Math.round(trendScore * 0.6 + connectorTrend * 0.4)
+      : trendScore;
 
   const competitorThreat = competitors.filter((c) =>
     ["watching", "analyzing", "tracked"].includes(c.status),
@@ -240,9 +258,9 @@ function scoreTemplate(
   const estimatedPotential = Math.min(
     98,
     Math.round(
-      demandScore * 0.3 +
-        socialScore * 0.2 +
-        trendScore * 0.2 +
+      blendedDemand * 0.3 +
+        blendedSocial * 0.2 +
+        blendedTrend * 0.2 +
         dnaMatch * 0.2 +
         competitionScore * 0.1 +
         productGapBoost,
@@ -250,10 +268,10 @@ function scoreTemplate(
   );
 
   return {
-    demandScore,
+    demandScore: blendedDemand,
     competitionScore,
-    socialScore,
-    trendScore,
+    socialScore: blendedSocial,
+    trendScore: blendedTrend,
     dnaMatch,
     estimatedPotential,
   };

@@ -25,10 +25,13 @@ Jede Analyse MUSS gegen die Milaene Brand DNA geprüft werden.
 
 ## Ausgabeformat
 - Antworte NUR mit gültigem JSON
+- title: kurzer strategischer Report-Titel (PFLICHT)
+  Beispiel: "Herbstkollektion 2026 – Premium Earth Capsule"
 - confidence: 0.0–1.0 basierend auf Datenqualität
 - reportType: "competitor" | "trend" | "design" | "pricing" | "audience"
 
 ## Pflichtabschnitte
+- title: kurzer strategischer Report-Titel
 - executiveSummary: 4–6 Sätze mit strategischer Kernaussage
 - keyFindings: 5–8 detaillierte Erkenntnisse
 - opportunities: 3–6 konkrete Chancen für Milaene
@@ -106,9 +109,12 @@ export async function runResearch(
   }
 
   let output;
+  console.log("[Research] Before parse");
   try {
     output = parseResearchOutput(raw);
+    console.log("[Research] After parse");
   } catch (error) {
+    console.log("[Research] Parse threw");
     if (error instanceof ResearchParseError) {
       console.error("[Research Run] Parse failed", error.toLogPayload());
       throw error;
@@ -117,22 +123,32 @@ export async function runResearch(
   }
 
   const reportId = crypto.randomUUID();
+  console.log("[Research] Before design brief");
   const designBrief = generateDesignBrief({
     intelligence: knowledge.intelligence,
     report: output,
     sourceReportId: reportId,
   });
+  console.log("[Research] After design brief");
 
   output.designBrief = designBrief;
 
-  const saved = await saveResearchToBrain({
-    workspaceId: input.workspaceId,
-    workspaceName: input.workspaceName,
-    request: input.request,
-    output,
-    originTaskId: input.originTaskId,
-    reportId,
-  });
+  console.log("[Research] Before save");
+  let saved;
+  try {
+    saved = await saveResearchToBrain({
+      workspaceId: input.workspaceId,
+      workspaceName: input.workspaceName,
+      request: input.request,
+      output,
+      originTaskId: input.originTaskId,
+      reportId,
+    });
+    console.log("[Research] After save");
+  } catch (error) {
+    console.error("[Research] Save failed", error);
+    throw error;
+  }
 
   console.info("[Research Run] Saved to Brain", {
     reportId: saved.reportId,

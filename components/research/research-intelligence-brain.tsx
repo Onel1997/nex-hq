@@ -162,6 +162,37 @@ export function ResearchIntelligenceBrain({
               </span>
             ))}
           </div>
+          <div className="research-brain-connectors">
+            <p className="research-brain-quad-label">
+              {t("research.brain.market.connectors")}
+            </p>
+            <ul className="research-brain-connector-list">
+              {snapshot.connectorIntelligence.connectors.map((connector) => (
+                <li key={connector.id} className="research-brain-connector-item">
+                  <span className="research-brain-connector-name">
+                    {connector.label}
+                  </span>
+                  <span
+                    className={cn(
+                      "research-status-badge",
+                      connector.mode === "live"
+                        ? "research-status-badge-watching"
+                        : "research-status-badge-stable",
+                    )}
+                  >
+                    {connector.mode === "live"
+                      ? t("research.brain.market.live")
+                      : t("research.brain.market.simulated")}
+                  </span>
+                  <span className="research-brain-connector-scores">
+                    {t("research.brain.opportunity.social")} {connector.socialScore}% ·{" "}
+                    {t("research.brain.opportunity.demand")} {connector.demandScore}% ·{" "}
+                    {t("research.brain.opportunity.trend")} {connector.trendScore}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </section>
 
         {/* Competitor Intelligence */}
@@ -268,6 +299,7 @@ export function ResearchIntelligenceBrain({
                 <li>
                   {t("research.brain.opportunity.demand")}: {featured.scores.demandScore}%
                   · {t("research.brain.opportunity.social")}: {featured.scores.socialScore}%
+                  · {t("research.brain.opportunity.trend")}: {featured.scores.trendScore}%
                   · {t("research.brain.opportunity.dna")}: {featured.scores.dnaMatch}%
                 </li>
                 <li>{featured.rationale}</li>

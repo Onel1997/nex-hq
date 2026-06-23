@@ -11,6 +11,37 @@ const detailedString = (min: number) => z.string().min(min);
 const bulletList = (min: number, max: number) =>
   z.array(z.string().min(20)).min(min).max(max);
 
+const intelligenceScore = z.number().min(0).max(100);
+
+export const connectorScoresSchema = z.object({
+  socialScore: intelligenceScore.optional(),
+  demandScore: intelligenceScore.optional(),
+  trendScore: intelligenceScore.optional(),
+  confidence: intelligenceScore.optional(),
+});
+
+export type ConnectorScoresOutput = z.infer<typeof connectorScoresSchema>;
+
+export const connectorStatusSchema = z.object({
+  id: z.string(),
+  label: z.string().optional(),
+  mode: z.enum(["live", "simulated"]).optional(),
+  socialScore: intelligenceScore.optional(),
+  demandScore: intelligenceScore.optional(),
+  trendScore: intelligenceScore.optional(),
+  confidence: intelligenceScore.optional(),
+});
+
+export const connectorIntelligenceSchema = z.object({
+  scores: connectorScoresSchema.optional(),
+  connectors: z.array(connectorStatusSchema).optional(),
+  mode: z.enum(["live", "simulated"]).optional(),
+});
+
+export type ConnectorIntelligenceOutput = z.infer<
+  typeof connectorIntelligenceSchema
+>;
+
 const designColorSchema = z.object({
   name: z.string(),
   hex: z.string().optional(),
@@ -24,13 +55,19 @@ export const designBriefSchema = z.object({
   colorPalette: z.array(designColorSchema).min(2).max(8),
   styleDirection: z.string().min(20),
   silhouettes: z.array(z.string()).min(1).max(6),
-  trendScore: z.number().min(0).max(100),
-  competitorScore: z.number().min(0).max(100),
-  confidence: z.number().min(0).max(100),
-  rationale: z.string().min(40),
+  trendScore: intelligenceScore,
+  competitorScore: intelligenceScore,
+  socialScore: intelligenceScore.optional(),
+  demandScore: intelligenceScore.optional(),
+  confidence: intelligenceScore,
+  rationale: z.string().min(20),
   opportunityId: z.string().optional(),
   sourceReportId: z.string().optional(),
-  generatedAt: z.string(),
+  generatedAt: z.string().optional(),
+  connectorScores: connectorScoresSchema.optional(),
+  intelligenceMode: z.enum(["live", "simulated"]).optional(),
+  designs: z.array(z.string()).optional(),
+  priority: z.string().optional(),
 });
 
 export type ResearchDesignBriefOutput = z.infer<typeof designBriefSchema>;
@@ -110,7 +147,13 @@ export const researchOutputSchema = z
         dropVisualDirection: z.string().optional(),
       })
       .optional(),
+    /** Optional LLM echo — regenerated server-side when missing or invalid. */
     designBrief: designBriefSchema.optional(),
+    /** Live connector intelligence snapshot (optional). */
+    connectorIntelligence: connectorIntelligenceSchema.optional(),
+    /** Alias some models use for connector intelligence. */
+    intelligenceSignals: connectorIntelligenceSchema.optional(),
+    connectorScores: connectorScoresSchema.optional(),
   });
 
 export type ResearchOutput = z.infer<typeof researchOutputSchema>;

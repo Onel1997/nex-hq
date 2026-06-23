@@ -27,8 +27,8 @@ Competitor Scanner
 
 | Connector | Status | Env Key |
 |-----------|--------|---------|
-| Google Trends | ready | `GOOGLE_TRENDS_API_KEY` |
-| Reddit | ready | `REDDIT_CLIENT_ID` |
+| Google Trends | ready | `GOOGLE_TRENDS_API_KEY` (SerpAPI) |
+| Reddit | ready | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT` |
 | Pinterest | ready | `PINTEREST_ACCESS_TOKEN` |
 | TikTok | ready | `TIKTOK_API_KEY` |
 | Etsy | ready | `ETSY_API_KEY` |

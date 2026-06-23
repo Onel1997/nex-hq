@@ -618,8 +618,17 @@ export interface BrainResearchSections {
     styleDirection: string;
     silhouettes: string[];
     trendScore: number;
+    socialScore?: number;
+    demandScore?: number;
     competitorScore: number;
     confidence: number;
+    connectorScores?: {
+      socialScore?: number;
+      demandScore?: number;
+      trendScore?: number;
+      confidence?: number;
+    };
+    intelligenceMode?: "live" | "simulated";
     rationale: string;
     opportunityId?: string;
     generatedAt: string;

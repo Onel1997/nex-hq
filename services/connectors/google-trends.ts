@@ -1,4 +1,13 @@
 import type { MilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
+import {
+  fetchLiveGoogleTrends,
+  isGoogleTrendsLiveConfigured,
+} from "./clients/google-trends-client";
+import {
+  aggregateConnectorScores,
+  computeConfidence,
+  normalizeSignals,
+} from "./signal-utils";
 import type { ConnectorInput, IntelligenceSignal, SourceIntelligence } from "./types";
 
 export interface GoogleTrendKeyword {
@@ -22,20 +31,21 @@ const STREETWEAR_KEYWORDS = [
   { keyword: "boxy tee", demand: 61, change: 12, seasonality: "rising" as const },
   { keyword: "wide leg cargo", demand: 58, change: 14, seasonality: "rising" as const },
   { keyword: "embroidered hoodie", demand: 52, change: 11, seasonality: "rising" as const },
+  { keyword: "sage green outfit", demand: 48, change: 9, seasonality: "rising" as const },
   { keyword: "slim fit jeans", demand: 34, change: -8, seasonality: "declining" as const },
   { keyword: "graphic tee loud", demand: 29, change: -6, seasonality: "declining" as const },
 ];
 
 function toSignals(data: GoogleTrendsData): IntelligenceSignal[] {
-  return data.keywords.slice(0, 6).map((k) => ({
+  return data.keywords.slice(0, 8).map((k) => ({
     id: `gt-${k.keyword.replace(/\s+/g, "-")}`,
-    category: "trend",
-    source: "google_trends",
+    category: "trend" as const,
+    source: "google_trends" as const,
     label: k.keyword,
-    message: `${k.keyword}: Nachfrage ${k.demand}/100, ${k.change >= 0 ? "+" : ""}${k.change}% · ${k.seasonality}`,
+    message: `${k.keyword}: Nachfrage ${k.demand}/100, ${k.change >= 0 ? "+" : ""}${k.change}% · ${k.seasonality} · ${k.region}`,
     score: k.demand,
-    direction: k.change >= 0 ? "up" : "down",
-    tags: ["keyword", k.seasonality],
+    direction: k.change >= 0 ? ("up" as const) : ("down" as const),
+    tags: ["keyword", k.seasonality, k.region],
   }));
 }
 
@@ -69,6 +79,46 @@ function buildFromBaseline(
   };
 }
 
+function buildResult(
+  data: GoogleTrendsData,
+  mode: "live" | "simulated",
+): SourceIntelligence<GoogleTrendsData> {
+  const rawSignals = toSignals(data);
+  const confidence = computeConfidence({
+    mode,
+    sampleSize: data.keywords.length,
+    freshness: mode === "live" ? 0.9 : 0.65,
+    dataQuality: mode === "live" ? 0.9 : 0.8,
+  });
+  const signals = normalizeSignals(rawSignals, confidence);
+  const scores = aggregateConnectorScores(
+    signals,
+    { demand: 0.6, trend: 0.4 },
+    confidence,
+  );
+
+  return {
+    source: "google_trends",
+    mode,
+    loadedAt: new Date().toISOString(),
+    signals,
+    data,
+    scores: {
+      ...scores,
+      demandScore: Math.round(
+        data.keywords.reduce((sum, k) => sum + k.demand, 0) /
+          Math.max(1, data.keywords.length),
+      ),
+      trendScore: Math.round(
+        data.keywords
+          .filter((k) => k.seasonality === "rising" || k.change > 0)
+          .reduce((sum, k) => sum + k.change, 0) /
+          Math.max(1, data.keywords.filter((k) => k.change > 0).length || 1),
+      ),
+    },
+  };
+}
+
 export interface GoogleTrendsInput extends ConnectorInput {
   baseline?: MilaeneCommerceBaseline | null;
 }
@@ -78,13 +128,19 @@ export async function scanGoogleTrends(
   input: GoogleTrendsInput = {},
 ): Promise<SourceIntelligence<GoogleTrendsData>> {
   const region = input.region ?? "DE";
-  const data = buildFromBaseline(input.baseline ?? null, region);
+  const extraKeywords =
+    input.baseline?.commerceIntelligence.topUnits
+      .slice(0, 2)
+      .map((u) => u.title.toLowerCase()) ?? [];
 
-  return {
-    source: "google_trends",
-    mode: process.env.GOOGLE_TRENDS_API_KEY ? "live" : "simulated",
-    loadedAt: new Date().toISOString(),
-    signals: toSignals(data),
-    data,
-  };
+  if (isGoogleTrendsLiveConfigured()) {
+    try {
+      const data = await fetchLiveGoogleTrends(region, extraKeywords);
+      return buildResult(data, "live");
+    } catch {
+      return buildResult(buildFromBaseline(input.baseline ?? null, region), "simulated");
+    }
+  }
+
+  return buildResult(buildFromBaseline(input.baseline ?? null, region), "simulated");
 }

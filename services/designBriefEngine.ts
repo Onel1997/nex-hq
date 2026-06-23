@@ -67,9 +67,27 @@ export function generateDesignBrief(input: DesignBriefInput): ResearchDesignBrie
     .sort((a, b) => b.change - a.change)[0];
 
   const trendScore = featured?.scores.trendScore ?? topTrend?.dnaMatch ?? 85;
+  const socialScore =
+    featured?.scores.socialScore ??
+    intelligence.signalLayers.connectorScores.socialScore;
+  const demandScore =
+    featured?.scores.demandScore ??
+    intelligence.signalLayers.connectorScores.demandScore;
   const competitorScore =
     featured?.scores.competitionScore ??
     100 - averageCompetitorThreat(intelligence.competitors);
+
+  const redditMode = intelligence.external.reddit.mode;
+  const trendsMode = intelligence.external.googleTrends.mode;
+  const intelligenceMode =
+    redditMode === "live" || trendsMode === "live" ? "live" : "simulated";
+
+  const connectorScores = {
+    socialScore: intelligence.signalLayers.connectorScores.socialScore,
+    demandScore: intelligence.signalLayers.connectorScores.demandScore,
+    trendScore: intelligence.signalLayers.connectorScores.trendScore,
+    confidence: intelligence.signalLayers.connectorScores.confidence,
+  };
 
   const styleDirection = [
     MILAENE_DNA.style,
@@ -109,8 +127,12 @@ export function generateDesignBrief(input: DesignBriefInput): ResearchDesignBrie
     styleDirection,
     silhouettes: [...MILAENE_DNA.silhouettes],
     trendScore,
+    socialScore,
+    demandScore,
     competitorScore,
     confidence,
+    connectorScores,
+    intelligenceMode,
     rationale,
     opportunityId: featured?.id,
     sourceReportId,

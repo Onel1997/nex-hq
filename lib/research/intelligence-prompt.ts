@@ -3,6 +3,22 @@ import { formatTrendChange } from "@/services/trendScanner";
 import { formatMilaeneDnaForPrompt } from "@/services/milaene-dna";
 import { getReadySourceLabels } from "@/services/data-sources";
 
+function formatConnectorScores(
+  label: string,
+  mode: string,
+  scores?: {
+    socialScore: number;
+    demandScore: number;
+    trendScore: number;
+    confidence: number;
+  },
+): string {
+  if (!scores) {
+    return `${label} [${mode}]`;
+  }
+  return `${label} [${mode}] — Social ${scores.socialScore}% · Demand ${scores.demandScore}% · Trend ${scores.trendScore}% · Confidence ${scores.confidence}%`;
+}
+
 /** Format live intelligence bundle for Research Agent system prompt. */
 export function formatResearchIntelligencePrompt(
   bundle: ResearchIntelligenceBundle,
@@ -18,6 +34,18 @@ export function formatResearchIntelligencePrompt(
     "",
     `Commerce: ${bundle.commerceConnected ? "verbunden" : "offline"} · Store: ${bundle.storeDomain || "—"}`,
     `Datenquellen: ${getReadySourceLabels().join(", ")}`,
+    "",
+    "### Connector Intelligence",
+    formatConnectorScores(
+      "Google Trends (DE)",
+      external.googleTrends.mode,
+      external.googleTrends.scores,
+    ),
+    formatConnectorScores(
+      "Reddit Streetwear",
+      external.reddit.mode,
+      external.reddit.scores,
+    ),
     "",
     "### Signal Layers",
     `Social (${signalLayers.social.avgScore}/100): ${signalLayers.social.signals.slice(0, 3).map((s) => s.message).join(" · ")}`,

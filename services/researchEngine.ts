@@ -6,7 +6,7 @@ import type { TrendIntelligence } from "@/lib/research/types";
 import { scanCompetitors, type CompetitorIntel } from "@/services/competitorScanner";
 import type { ExternalIntelligence } from "@/services/connectors";
 import {
-  RESEARCH_DATA_SOURCES,
+  getResolvedDataSources,
   type DataSourceConnector,
 } from "@/services/data-sources";
 import { loadKnowledgeBase, type KnowledgeSnapshot } from "@/services/knowledgeEngine";
@@ -86,7 +86,7 @@ async function composeBundle(
     loadedAt: new Date().toISOString(),
     commerceConnected: baseline != null,
     storeDomain: baseline?.storeDomain ?? "",
-    dataSources: RESEARCH_DATA_SOURCES,
+    dataSources: getResolvedDataSources(),
     products,
     trends,
     trendIntelligence,

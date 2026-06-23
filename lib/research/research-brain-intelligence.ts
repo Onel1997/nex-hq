@@ -4,8 +4,8 @@ import type { MilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-ba
 import { MILAENE_DNA } from "@/services/milaene-dna";
 import { getActiveSourceLabels, getReadySourceLabels } from "@/services/data-sources";
 import { analyzeProducts } from "@/services/productAnalyzer";
+import type { ConnectorIntelligenceScores } from "@/services/connectors";
 import type { AiRecommendation, ResearchOpportunity } from "@/services/opportunityEngine";
-import type { ProductIntelligence } from "@/services/productAnalyzer";
 import type { LiveSignal } from "@/services/signalEngine";
 import { formatTrendChange, type TrendScore } from "@/services/trendScanner";
 
@@ -81,6 +81,16 @@ export interface MarketSignalCard {
   active: boolean;
 }
 
+export interface ConnectorIntelligenceSnapshot {
+  id: string;
+  label: string;
+  mode: "live" | "simulated";
+  socialScore: number;
+  demandScore: number;
+  trendScore: number;
+  confidence: number;
+}
+
 export interface ResearchBrainSnapshot {
   loadedAt: string;
   commerceConnected: boolean;
@@ -95,6 +105,10 @@ export interface ResearchBrainSnapshot {
   knowledge: ResearchKnowledgeBrain;
   signals: LiveSignal[];
   recommendation: AiRecommendation;
+  connectorIntelligence: {
+    scores: ConnectorIntelligenceScores;
+    connectors: ConnectorIntelligenceSnapshot[];
+  };
 }
 
 function buildBrandBrain(): ResearchBrandBrain {
@@ -199,6 +213,35 @@ function buildMarketSignalCards(trends: TrendScore[]): MarketSignalCard[] {
   ];
 }
 
+function buildConnectorIntelligence(
+  bundle: Awaited<ReturnType<typeof import("@/services/researchEngine").loadResearchIntelligence>>,
+): ResearchBrainSnapshot["connectorIntelligence"] {
+  const { external, connectorScores } = bundle.signalLayers;
+
+  const connectors: ConnectorIntelligenceSnapshot[] = [
+    {
+      id: "google_trends",
+      label: "Google Trends",
+      mode: external.googleTrends.mode,
+      socialScore: external.googleTrends.scores?.socialScore ?? 0,
+      demandScore: external.googleTrends.scores?.demandScore ?? 0,
+      trendScore: external.googleTrends.scores?.trendScore ?? 0,
+      confidence: external.googleTrends.scores?.confidence ?? 0,
+    },
+    {
+      id: "reddit",
+      label: "Reddit",
+      mode: external.reddit.mode,
+      socialScore: external.reddit.scores?.socialScore ?? 0,
+      demandScore: external.reddit.scores?.demandScore ?? 0,
+      trendScore: external.reddit.scores?.trendScore ?? 0,
+      confidence: external.reddit.scores?.confidence ?? 0,
+    },
+  ];
+
+  return { scores: connectorScores, connectors };
+}
+
 async function composeSnapshot(
   bundle: Awaited<ReturnType<typeof import("@/services/researchEngine").loadResearchIntelligence>>,
 ): Promise<ResearchBrainSnapshot> {
@@ -229,6 +272,7 @@ async function composeSnapshot(
     knowledge,
     signals,
     recommendation,
+    connectorIntelligence: buildConnectorIntelligence(bundle),
   };
 }
 

@@ -6,6 +6,7 @@ import type { CompetitorIntelligenceContent } from "@/brain/domains/competitor-i
 import type { DesignMemoryContent } from "@/brain/domains/design-memory";
 import type { MarketingMemoryContent } from "@/brain/domains/marketing-memory";
 import { getBrainClient } from "@/brain/client";
+import { reportSourceTag } from "@/lib/reports/report-source";
 import { slugify } from "@/brain/client/utils";
 import type { BrainDomain } from "@/brain/types";
 import { resolveReportTaskIds } from "@/lib/reports/task-link";
@@ -71,11 +72,15 @@ function buildResearchSections(
       styleDirection: output.designBrief.styleDirection,
       silhouettes: output.designBrief.silhouettes,
       trendScore: output.designBrief.trendScore,
+      socialScore: output.designBrief.socialScore,
+      demandScore: output.designBrief.demandScore,
       competitorScore: output.designBrief.competitorScore,
       confidence: output.designBrief.confidence,
+      connectorScores: output.designBrief.connectorScores,
+      intelligenceMode: output.designBrief.intelligenceMode,
       rationale: output.designBrief.rationale,
       opportunityId: output.designBrief.opportunityId,
-      generatedAt: output.designBrief.generatedAt,
+      generatedAt: output.designBrief.generatedAt ?? new Date().toISOString(),
     };
   }
 
@@ -133,6 +138,7 @@ export async function saveResearchToBrain(
       "research",
       input.output.reportType,
       "agent-generated",
+      reportSourceTag("live"),
       "design-brief-handoff",
       input.output.reportType === "trend" ? "trend" : "",
       input.output.reportType === "competitor" ? "competitor" : "",

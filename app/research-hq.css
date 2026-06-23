@@ -1198,6 +1198,41 @@
   color: var(--research-accent);
 }
 
+.research-brain-connectors {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgb(255 255 255 / 0.04);
+}
+
+.research-brain-connector-list {
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.research-brain-connector-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.68rem;
+  color: rgb(203 213 225 / 0.82);
+}
+
+.research-brain-connector-name {
+  font-weight: 600;
+  color: rgb(226 232 240 / 0.92);
+}
+
+.research-brain-connector-scores {
+  flex-basis: 100%;
+  font-size: 0.62rem;
+  color: rgb(148 163 184 / 0.85);
+}
+
 .research-brain-competitors {
   margin: 0;
   padding: 0;
