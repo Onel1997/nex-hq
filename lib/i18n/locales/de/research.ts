@@ -20,6 +20,16 @@ export const research = {
     keyFindings: "Kernaussagen",
     recommendations: "Empfehlungen",
     confidence: "Konfidenz",
+    designConcepts: "Design-Konzepte",
+    designReport: "Design-Bericht",
+    designConcept: {
+      product: "Produkt",
+      color: "Farbe",
+      printPosition: "Printfläche",
+      styleDirection: "Stilrichtung",
+      emotion: "Emotion",
+      targetAudience: "Zielgruppe",
+    },
   },
   heroStatus: {
     label: "Intelligence Status",

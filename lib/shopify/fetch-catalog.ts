@@ -110,6 +110,7 @@ interface RawProductNode {
 }
 
 const COLOR_OPTION_NAMES = /^(color|colour|farbe|couleur)$/i;
+const SIZE_OPTION_NAMES = /^(size|größe|groesse|groesse|taille)$/i;
 
 function extractVariantColors(node: RawProductNode): string[] {
   const colors = new Set<string>();
@@ -135,6 +136,30 @@ function extractVariantColors(node: RawProductNode): string[] {
   return [...colors];
 }
 
+function extractVariantSizes(node: RawProductNode): string[] {
+  const sizes = new Set<string>();
+
+  for (const option of node.options ?? []) {
+    if (SIZE_OPTION_NAMES.test(option.name.trim())) {
+      for (const value of option.values ?? []) {
+        const trimmed = value.trim();
+        if (trimmed) sizes.add(trimmed);
+      }
+    }
+  }
+
+  for (const edge of node.variants?.edges ?? []) {
+    for (const selected of edge.node.selectedOptions ?? []) {
+      if (SIZE_OPTION_NAMES.test(selected.name.trim())) {
+        const trimmed = selected.value.trim();
+        if (trimmed) sizes.add(trimmed);
+      }
+    }
+  }
+
+  return [...sizes];
+}
+
 function mapProductNode(node: RawProductNode): ShopifyCatalogProduct {
   return {
     id: node.id,
@@ -155,6 +180,7 @@ function mapProductNode(node: RawProductNode): ShopifyCatalogProduct {
       values: o.values ?? [],
     })),
     variantColors: extractVariantColors(node),
+    variantSizes: extractVariantSizes(node),
   };
 }
 

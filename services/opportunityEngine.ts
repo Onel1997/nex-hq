@@ -2,6 +2,13 @@ import { MILAENE_DNA, scoreDnaAlignment } from "@/services/milaene-dna";
 import type { CompetitorIntel } from "@/services/competitorScanner";
 import type { AggregatedSignals } from "@/services/signalAggregator";
 import type { ProductIntelligence } from "@/services/productAnalyzer";
+import type { ProductIntelligenceCatalog } from "@/services/productIntelligenceEngine";
+import {
+  findProductByTitle,
+  isColorAvailable,
+  isProductAvailable,
+  resolveAvailableColors,
+} from "@/services/productIntelligenceEngine";
 import type { TrendScore } from "@/services/trendScanner";
 
 export type OpportunityPriority = "critical" | "high" | "medium" | "low";
@@ -139,6 +146,53 @@ export interface OpportunityEngineInput {
   trends: TrendScore[];
   competitors: CompetitorIntel[];
   signals?: AggregatedSignals;
+  productIntelligence?: ProductIntelligenceCatalog;
+}
+
+function scoreProductAvailability(
+  template: OpportunityTemplate,
+  catalog?: ProductIntelligenceCatalog,
+): { boost: number; penalty: number; resolvedProducts: string[]; resolvedColors: string[] } {
+  if (!catalog?.commerceConnected || catalog.products.length === 0) {
+    return { boost: 0, penalty: 0, resolvedProducts: template.products, resolvedColors: template.colors };
+  }
+
+  let boost = 0;
+  let penalty = 0;
+  const resolvedProducts: string[] = [];
+  const resolvedColors: string[] = [];
+
+  for (const product of template.products) {
+    const match = findProductByTitle(catalog, product);
+    if (match) {
+      resolvedProducts.push(match.title);
+      boost += match.bestseller ? 8 : 4;
+      if (match.unitsSold && match.unitsSold > 20) boost += 3;
+    } else if (!isProductAvailable(catalog, product)) {
+      penalty += 10;
+    }
+  }
+
+  for (const color of template.colors) {
+    const available = template.products.some((product) =>
+      isColorAvailable(catalog, color, product),
+    ) || isColorAvailable(catalog, color);
+
+    if (available) {
+      const resolved = resolveAvailableColors(catalog, [color], template.products);
+      resolvedColors.push(...resolved);
+      boost += 4;
+    } else {
+      penalty += 8;
+    }
+  }
+
+  return {
+    boost,
+    penalty,
+    resolvedProducts,
+    resolvedColors: [...new Set(resolvedColors)],
+  };
 }
 
 function matchSignalScore(
@@ -172,7 +226,9 @@ function scoreTemplate(
   template: OpportunityTemplate,
   input: OpportunityEngineInput,
 ): OpportunityScores {
-  const { products, trends, competitors, signals } = input;
+  const { products, trends, competitors, signals, productIntelligence } = input;
+
+  const availability = scoreProductAvailability(template, productIntelligence);
 
   const trendBoost = trends
     .filter((t) => t.direction === "up")
@@ -257,13 +313,18 @@ function scoreTemplate(
 
   const estimatedPotential = Math.min(
     98,
-    Math.round(
-      blendedDemand * 0.3 +
-        blendedSocial * 0.2 +
-        blendedTrend * 0.2 +
-        dnaMatch * 0.2 +
-        competitionScore * 0.1 +
-        productGapBoost,
+    Math.max(
+      20,
+      Math.round(
+        blendedDemand * 0.3 +
+          blendedSocial * 0.2 +
+          blendedTrend * 0.2 +
+          dnaMatch * 0.2 +
+          competitionScore * 0.1 +
+          productGapBoost +
+          availability.boost -
+          availability.penalty,
+      ),
     ),
   );
 
@@ -291,25 +352,38 @@ export function generateOpportunities(
   return TEMPLATES.map((template) => {
     const scores = scoreTemplate(template, input);
     const priority = toPriority(scores.estimatedPotential);
+    const availability = scoreProductAvailability(
+      template,
+      input.productIntelligence,
+    );
+
+    const resolvedProducts =
+      availability.resolvedProducts.length > 0
+        ? availability.resolvedProducts
+        : template.products;
+    const resolvedColors =
+      availability.resolvedColors.length > 0
+        ? availability.resolvedColors
+        : template.colors;
 
     return {
       id: template.id,
       title: template.title,
       confidence: scores.estimatedPotential,
-      products: template.products,
-      colors: template.colors,
+      products: resolvedProducts,
+      colors: resolvedColors,
       targetAudience: template.targetAudience,
       marketPotential: template.marketPotential,
       competitorStrength: template.competitorStrength,
       rationale: template.rationale,
-      productCount: template.products.length,
+      productCount: resolvedProducts.length,
       themes: template.themes,
       highlights: template.highlights,
       featured: template.featured,
       scores,
       decisions: {
-        products: template.products,
-        colors: template.colors,
+        products: resolvedProducts,
+        colors: resolvedColors,
         targetAudience: template.targetAudience,
         collection: template.title,
         designs: template.designs,

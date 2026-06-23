@@ -10,6 +10,8 @@ import { buildPromptContext } from "@/brain/context/prompt-builder";
 import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { formatResearchCommerceSignals } from "@/lib/commerce/department-signals";
 import { formatResearchIntelligencePrompt } from "@/lib/research/intelligence-prompt";
+import { formatProductIntelligencePrompt } from "@/services/productIntelligenceEngine";
+import type { ProductIntelligenceCatalog } from "@/services/productIntelligenceEngine";
 import { loadResearchIntelligence } from "@/services/researchEngine";
 import type { ResearchIntelligenceBundle } from "@/services/researchEngine";
 import type { BrainRecord } from "@/brain/types";
@@ -39,7 +41,9 @@ export const RESEARCH_INTELLIGENCE_TAGS = [
 ] as const;
 
 export interface ResearchKnowledgeContext {
-  brainContext: BrainAgentContext;
+  brainContext: BrainAgentContext & {
+    productIntelligence: ProductIntelligenceCatalog;
+  };
   intelligence: ResearchIntelligenceBundle;
   intelligenceReportCount: number;
   reportTitles: string[];
@@ -149,21 +153,27 @@ export async function retrieveResearchKnowledge(input: {
 
   const livePrompt = formatResearchIntelligencePrompt(intelligence);
 
+  const productPrompt = formatProductIntelligencePrompt(
+    intelligence.productIntelligence,
+  );
+
   const promptContext = [
     livePrompt,
     commercePrompt ? `\n\n${commercePrompt}` : "",
+    `\n\n${productPrompt}`,
     "\n\n",
     formatAgentBusinessRules("research", businessProfile),
     "\n\n## Workspace-Kontext\n\n",
     buildPromptContext(slices),
   ].join("");
 
-  const brainContext: BrainAgentContext = {
+  const brainContext: ResearchKnowledgeContext["brainContext"] = {
     workspaceId: input.workspaceId,
     agentId: "research",
     assembledAt: new Date().toISOString(),
     slices,
     promptContext,
+    productIntelligence: intelligence.productIntelligence,
     sourceRecordIds: [
       ...baseContext.sourceRecordIds,
       ...reportRecords.map((r) => r.id),

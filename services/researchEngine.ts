@@ -18,6 +18,10 @@ import {
 } from "@/services/opportunityEngine";
 import { analyzeProducts, type ProductIntelligence } from "@/services/productAnalyzer";
 import {
+  buildProductIntelligenceCatalog,
+  type ProductIntelligenceCatalog,
+} from "@/services/productIntelligenceEngine";
+import {
   aggregateSignals,
   type AggregatedSignals,
 } from "@/services/signalAggregator";
@@ -31,6 +35,7 @@ export interface ResearchIntelligenceBundle {
   storeDomain: string;
   dataSources: DataSourceConnector[];
   products: ProductIntelligence;
+  productIntelligence: ProductIntelligenceCatalog;
   trends: TrendScore[];
   trendIntelligence: TrendIntelligence;
   competitors: CompetitorIntel[];
@@ -47,6 +52,7 @@ async function composeBundle(
   baseline: MilaeneCommerceBaseline | null,
 ): Promise<ResearchIntelligenceBundle> {
   const products = analyzeProducts({ baseline });
+  const productIntelligence = buildProductIntelligenceCatalog({ baseline });
   const trends = scanTrends({ baseline });
   const trendIntelligence = analyzeTrendIntelligence({ trendScores: trends, baseline });
   const competitors = scanCompetitors();
@@ -64,6 +70,7 @@ async function composeBundle(
     trends,
     competitors,
     signals: signalLayers,
+    productIntelligence,
   });
 
   const knowledge = await loadKnowledgeBase();
@@ -88,6 +95,7 @@ async function composeBundle(
     storeDomain: baseline?.storeDomain ?? "",
     dataSources: getResolvedDataSources(),
     products,
+    productIntelligence,
     trends,
     trendIntelligence,
     competitors,

@@ -45,6 +45,7 @@ function toProductSummary(
     inventory: product.inventory,
     collections: product.collections,
     colors: product.colors,
+    sizes: product.sizes,
     materials: product.materials,
   };
 }

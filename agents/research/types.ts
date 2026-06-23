@@ -160,6 +160,32 @@ export type ResearchOutput = z.infer<typeof researchOutputSchema>;
 export type CompetitorReportSections = z.infer<typeof competitorReportSchema>;
 export type TrendReportSections = z.infer<typeof trendReportSchema>;
 
+/** Lightweight design-idea output for Design Studio requests. */
+export const designResearchOutputSchema = z.object({
+  title: z.string().min(1),
+  designs: z.array(z.string().min(5)).min(1).max(12),
+  products: z.array(z.string()).optional(),
+  colors: z.array(z.string()).optional(),
+  materials: z.array(z.string()).optional(),
+  printAreas: z.array(z.string()).optional(),
+  collectionIdea: z.string().optional(),
+  rationale: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  designBrief: designBriefSchema.optional(),
+});
+
+export type DesignResearchOutput = z.infer<typeof designResearchOutputSchema>;
+
+export type ParsedResearchOutput =
+  | { kind: "research"; output: ResearchOutput }
+  | { kind: "design"; output: DesignResearchOutput };
+
+export function isDesignResearchOutput(
+  value: ResearchOutput | DesignResearchOutput,
+): value is DesignResearchOutput {
+  return "designs" in value && Array.isArray(value.designs);
+}
+
 export interface ResearchRunInput {
   request: string;
   workspaceId: string;
@@ -171,13 +197,20 @@ export interface ResearchRunResult {
   reportId: string;
   reportRecordId: string;
   title: string;
-  executiveSummary: string;
-  keyFindings: string[];
-  opportunities: string[];
-  risks: string[];
-  recommendations: string[];
-  confidence: number;
-  reportType: ResearchType;
+  outputKind: "research" | "design";
+  designs?: string[];
+  products?: string[];
+  colors?: string[];
+  materials?: string[];
+  printAreas?: string[];
+  rationale?: string;
+  executiveSummary?: string;
+  keyFindings?: string[];
+  opportunities?: string[];
+  risks?: string[];
+  recommendations?: string[];
+  confidence?: number;
+  reportType?: ResearchType;
   savedDomains: string[];
   designBrief: ResearchDesignBriefOutput;
 }

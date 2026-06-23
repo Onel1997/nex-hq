@@ -10,13 +10,17 @@ import { reportSourceTag } from "@/lib/reports/report-source";
 import { slugify } from "@/brain/client/utils";
 import type { BrainDomain } from "@/brain/types";
 import { resolveReportTaskIds } from "@/lib/reports/task-link";
-import type { ResearchOutput } from "./types";
+import {
+  isDesignResearchOutput,
+  type DesignResearchOutput,
+  type ResearchOutput,
+} from "./types";
 
 export interface SaveResearchInput {
   workspaceId: string;
   workspaceName: string;
   request: string;
-  output: ResearchOutput;
+  output: ResearchOutput | DesignResearchOutput;
   originTaskId?: string;
   reportId?: string;
 }
@@ -87,8 +91,145 @@ function buildResearchSections(
   return sections;
 }
 
+function buildDesignResearchSections(
+  output: DesignResearchOutput,
+): BrainResearchSections {
+  const summary =
+    output.rationale ??
+    `Design-Ideen für ${output.title}: ${output.designs.slice(0, 3).join(" · ")}`;
+
+  const sections: BrainResearchSections = {
+    executiveSummary: summary,
+    keyFindings: output.designs,
+    opportunities: output.designs,
+    risks: [
+      "Design-Umsetzung muss auf verfügbare Katalogvarianten und MarketPrint-Produktion abgestimmt bleiben.",
+    ],
+    recommendations: output.designs,
+  };
+
+  if (output.designBrief) {
+    sections.designBrief = {
+      collectionIdea: output.designBrief.collectionIdea,
+      productSuggestions: output.designBrief.productSuggestions,
+      targetAudience: output.designBrief.targetAudience,
+      colorPalette: output.designBrief.colorPalette,
+      styleDirection: output.designBrief.styleDirection,
+      silhouettes: output.designBrief.silhouettes,
+      trendScore: output.designBrief.trendScore,
+      socialScore: output.designBrief.socialScore,
+      demandScore: output.designBrief.demandScore,
+      competitorScore: output.designBrief.competitorScore,
+      confidence: output.designBrief.confidence,
+      connectorScores: output.designBrief.connectorScores,
+      intelligenceMode: output.designBrief.intelligenceMode,
+      rationale: output.designBrief.rationale,
+      opportunityId: output.designBrief.opportunityId,
+      generatedAt: output.designBrief.generatedAt ?? new Date().toISOString(),
+    };
+  }
+
+  return sections;
+}
+
 export async function saveResearchToBrain(
   input: SaveResearchInput,
+): Promise<SaveResearchResult> {
+  if (isDesignResearchOutput(input.output)) {
+    return saveDesignResearchToBrain(input, input.output);
+  }
+  return saveClassicResearchToBrain(input, input.output);
+}
+
+async function saveDesignResearchToBrain(
+  input: SaveResearchInput,
+  output: DesignResearchOutput,
+): Promise<SaveResearchResult> {
+  const brain = getBrainClient();
+  const reportId = input.reportId ?? crypto.randomUUID();
+  const { taskId, originTaskId } = resolveReportTaskIds(
+    input.originTaskId,
+    reportId,
+    "research",
+  );
+  const baseSlug = slugify(output.title).slice(0, 48) || "research";
+  const slugSuffix = reportId.slice(0, 8);
+  const researchSections = buildDesignResearchSections(output);
+  const executiveSummary = researchSections.executiveSummary;
+  const confidence = output.confidence ?? 0.75;
+  const fullAnalysis = [
+    `# ${output.title}`,
+    "",
+    "## Design-Ideen",
+    ...output.designs.map((design) => `- ${design}`),
+    "",
+    output.products?.length
+      ? `## Produkte\n${output.products.map((p) => `- ${p}`).join("\n")}`
+      : "",
+    output.colors?.length
+      ? `## Farben\n${output.colors.map((c) => `- ${c}`).join("\n")}`
+      : "",
+    output.rationale ? `## Begründung\n${output.rationale}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const reportContent: BrainReportContent = {
+    kind: "reports",
+    reportId,
+    taskId,
+    ...(originTaskId ? { originTaskId } : {}),
+    agentId: "research",
+    status: "submitted",
+    summary: executiveSummary,
+    confidence,
+    keyFindings: output.designs,
+    reportType: "design",
+    researchSections,
+    notes: `Anfrage: ${input.request}`,
+    artifacts: [
+      {
+        id: `${reportId}-analysis`,
+        type: "markdown",
+        label: "Design-Ideen",
+        content: fullAnalysis,
+      },
+    ],
+  };
+
+  const reportWrite = await brain.createRecord({
+    workspaceId: input.workspaceId,
+    domain: "reports",
+    slug: `report-${baseSlug}-${slugSuffix}`,
+    title: output.title,
+    summary: executiveSummary,
+    content: reportContent,
+    status: "pending_review",
+    tags: [
+      "research",
+      "design",
+      "agent-generated",
+      reportSourceTag("live"),
+      "design-brief-handoff",
+      "design-ideas",
+    ],
+    provenance: {
+      createdBy: { type: "agent", id: "research" },
+      sourceTaskId: taskId,
+      confidence,
+    },
+  });
+
+  return {
+    reportId,
+    reportRecordId: reportWrite.record.id,
+    savedDomains: ["reports"],
+  };
+}
+
+async function saveClassicResearchToBrain(
+  input: SaveResearchInput,
+  output: ResearchOutput,
 ): Promise<SaveResearchResult> {
   const brain = getBrainClient();
   const reportId = input.reportId ?? crypto.randomUUID();
@@ -98,10 +239,10 @@ export async function saveResearchToBrain(
     "research",
   );
   const timestamp = new Date().toISOString();
-  const baseSlug = slugify(input.output.title).slice(0, 48) || "research";
+  const baseSlug = slugify(output.title).slice(0, 48) || "research";
   const slugSuffix = reportId.slice(0, 8);
   const savedDomains: BrainDomain[] = [];
-  const researchSections = buildResearchSections(input.output);
+  const researchSections = buildResearchSections(output);
 
   const reportContent: BrainReportContent = {
     kind: "reports",
@@ -110,10 +251,10 @@ export async function saveResearchToBrain(
     ...(originTaskId ? { originTaskId } : {}),
     agentId: "research",
     status: "submitted",
-    summary: input.output.executiveSummary,
-    confidence: input.output.confidence,
-    keyFindings: input.output.keyFindings,
-    reportType: input.output.reportType,
+    summary: output.executiveSummary,
+    confidence: output.confidence,
+    keyFindings: output.keyFindings,
+    reportType: output.reportType,
     researchSections,
     notes: `Anfrage: ${input.request}`,
     artifacts: [
@@ -121,7 +262,7 @@ export async function saveResearchToBrain(
         id: `${reportId}-analysis`,
         type: "markdown",
         label: "Vollständige Analyse",
-        content: input.output.fullAnalysis,
+        content: output.fullAnalysis,
       },
     ],
   };
@@ -130,31 +271,31 @@ export async function saveResearchToBrain(
     workspaceId: input.workspaceId,
     domain: "reports",
     slug: `report-${baseSlug}-${slugSuffix}`,
-    title: input.output.title,
-    summary: input.output.executiveSummary,
+    title: output.title,
+    summary: output.executiveSummary,
     content: reportContent,
     status: "pending_review",
     tags: [
       "research",
-      input.output.reportType,
+      output.reportType,
       "agent-generated",
       reportSourceTag("live"),
       "design-brief-handoff",
-      input.output.reportType === "trend" ? "trend" : "",
-      input.output.reportType === "competitor" ? "competitor" : "",
-      input.output.reportType === "audience" ? "audience" : "",
+      output.reportType === "trend" ? "trend" : "",
+      output.reportType === "competitor" ? "competitor" : "",
+      output.reportType === "audience" ? "audience" : "",
     ].filter(Boolean),
     provenance: {
       createdBy: { type: "agent", id: "research" },
       sourceTaskId: taskId,
-      confidence: input.output.confidence,
+      confidence: output.confidence,
     },
   });
 
   savedDomains.push("reports");
 
-  if (input.output.competitorIntelligence) {
-    const ci = input.output.competitorIntelligence;
+  if (output.competitorIntelligence) {
+    const ci = output.competitorIntelligence;
     const content: CompetitorIntelligenceContent = {
       kind: "competitor_intelligence",
       competitors: ci.competitors.map((c) => ({
@@ -167,24 +308,24 @@ export async function saveResearchToBrain(
         relevance: s.relevance,
         observedAt: timestamp,
       })),
-      analysisSummary: ci.analysisSummary ?? input.output.executiveSummary,
+      analysisSummary: ci.analysisSummary ?? output.executiveSummary,
       recommendedActions:
-        ci.recommendedActions ?? input.output.recommendations,
+        ci.recommendedActions ?? output.recommendations,
     };
 
     await brain.createRecord({
       workspaceId: input.workspaceId,
       domain: "competitor_intelligence",
       slug: `ci-${baseSlug}-${slugSuffix}`,
-      title: `${input.output.title} — Wettbewerber`,
-      summary: input.output.executiveSummary,
+      title: `${output.title} — Wettbewerber`,
+      summary: output.executiveSummary,
       content,
       status: "pending_review",
       tags: ["research", "competitor", "agent-generated"],
       provenance: {
         createdBy: { type: "agent", id: "research" },
         sourceReportId: reportId,
-        confidence: input.output.confidence,
+        confidence: output.confidence,
       },
       relations: [
         {
@@ -198,14 +339,14 @@ export async function saveResearchToBrain(
     savedDomains.push("competitor_intelligence");
   }
 
-  if (input.output.marketingMemory) {
-    const mm = input.output.marketingMemory;
+  if (output.marketingMemory) {
+    const mm = output.marketingMemory;
     const content: MarketingMemoryContent = {
       kind: "marketing_memory",
       name: mm.name,
       status: "planned",
       objective: mm.objective,
-      notes: mm.notes ?? input.output.executiveSummary,
+      notes: mm.notes ?? output.executiveSummary,
       launchSequence: mm.launchSequence,
     };
 
@@ -214,14 +355,14 @@ export async function saveResearchToBrain(
       domain: "marketing_memory",
       slug: `mm-${baseSlug}-${slugSuffix}`,
       title: mm.name,
-      summary: input.output.executiveSummary,
+      summary: output.executiveSummary,
       content,
       status: "pending_review",
       tags: ["research", "marketing", "agent-generated"],
       provenance: {
         createdBy: { type: "agent", id: "research" },
         sourceReportId: reportId,
-        confidence: input.output.confidence,
+        confidence: output.confidence,
       },
       relations: [
         {
@@ -235,8 +376,8 @@ export async function saveResearchToBrain(
     savedDomains.push("marketing_memory");
   }
 
-  if (input.output.designMemory) {
-    const dm = input.output.designMemory;
+  if (output.designMemory) {
+    const dm = output.designMemory;
     const content: DesignMemoryContent = {
       kind: "design_memory",
       silhouettes: dm.silhouettes,
@@ -249,15 +390,15 @@ export async function saveResearchToBrain(
       workspaceId: input.workspaceId,
       domain: "design_memory",
       slug: `dm-${baseSlug}-${slugSuffix}`,
-      title: `${input.output.title} — Design`,
-      summary: input.output.executiveSummary,
+      title: `${output.title} — Design`,
+      summary: output.executiveSummary,
       content,
       status: "pending_review",
       tags: ["research", "design", "agent-generated"],
       provenance: {
         createdBy: { type: "agent", id: "research" },
         sourceReportId: reportId,
-        confidence: input.output.confidence,
+        confidence: output.confidence,
       },
       relations: [
         {

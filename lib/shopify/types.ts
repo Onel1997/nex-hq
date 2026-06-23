@@ -15,6 +15,7 @@ export interface ShopifyCatalogProduct {
   collections: string[];
   options: Array<{ name: string; values: string[] }>;
   variantColors: string[];
+  variantSizes: string[];
 }
 
 export interface ShopifyCatalogCollection {
@@ -42,6 +43,7 @@ export interface ShopifyKnowledgeProduct {
   collections: string[];
   tags: string[];
   colors: string[];
+  sizes?: string[];
   materials: string[];
 }
 
@@ -91,6 +93,7 @@ export interface ShopifyProductSummary {
   inventory: number;
   collections: string[];
   colors: string[];
+  sizes?: string[];
   materials: string[];
 }
 

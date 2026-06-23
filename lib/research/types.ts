@@ -2,6 +2,10 @@
 export interface ResearchDesignBrief {
   collectionIdea: string;
   productSuggestions: string[];
+  recommendedProducts?: string[];
+  recommendedColors?: string[];
+  recommendedMaterials?: string[];
+  recommendedPrintAreas?: string[];
   targetAudience: string;
   colorPalette: Array<{ name: string; hex?: string; role: string }>;
   styleDirection: string;

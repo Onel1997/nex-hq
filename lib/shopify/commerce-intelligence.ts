@@ -924,6 +924,7 @@ export function mergeHistoricalProducts(
       collections: record.collections,
       tags: ["historical-sales"],
       colors: [],
+      sizes: [],
       materials: [],
     });
   }

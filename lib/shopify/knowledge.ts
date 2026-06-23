@@ -161,6 +161,12 @@ function buildPriceRanges(
   });
 }
 
+function extractVariantSizes(
+  product: Awaited<ReturnType<typeof fetchShopifyCatalog>>["products"][number],
+): string[] {
+  return uniqueSorted(product.variantSizes ?? []);
+}
+
 function mapKnowledgeProduct(
   product: Awaited<ReturnType<typeof fetchShopifyCatalog>>["products"][number],
 ): ShopifyKnowledgeProduct {
@@ -181,6 +187,7 @@ function mapKnowledgeProduct(
     collections: product.collections,
     tags: product.tags,
     colors: uniqueSorted([...product.variantColors, ...tagColors]),
+    sizes: extractVariantSizes(product),
     materials: uniqueSorted([...tagMaterials, ...descMaterials]),
   };
 }

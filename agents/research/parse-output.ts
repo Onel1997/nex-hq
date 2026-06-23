@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { enrichResearchPayload } from "./enrich-output";
-import { researchOutputSchema, type ResearchOutput } from "./types";
+import {
+  designResearchOutputSchema,
+  researchOutputSchema,
+  type DesignResearchOutput,
+  type ParsedResearchOutput,
+  type ResearchOutput,
+} from "./types";
 
 export const EXPECTED_RESEARCH_SCHEMA = {
   title: "string (required; fallback from trendReport.headline, designBrief.collectionIdea, or 'Research Report')",
@@ -23,12 +29,29 @@ export const EXPECTED_RESEARCH_SCHEMA = {
     "auto-generated server-side — collectionIdea, scores, connectorScores, intelligenceMode",
 } as const;
 
+export const EXPECTED_DESIGN_RESEARCH_SCHEMA = {
+  title: "string (required)",
+  designs: "string[] (required, 1–12 design ideas)",
+  products: "string[] (optional — real catalog products only)",
+  colors: "string[] (optional — available variant colors only)",
+  materials: "string[] (optional)",
+  printAreas: "string[] (optional)",
+  collectionIdea: "string (optional)",
+  rationale: "string (optional)",
+  confidence: "number 0–1 (optional)",
+  designBrief: "optional — server-side design brief handoff",
+} as const;
+
+export type ExpectedResearchSchema =
+  | typeof EXPECTED_RESEARCH_SCHEMA
+  | typeof EXPECTED_DESIGN_RESEARCH_SCHEMA;
+
 export class ResearchParseError extends Error {
   readonly stage: "json" | "validation";
   readonly rawResponse?: string;
   readonly strippedJson?: string;
   readonly parsed?: unknown;
-  readonly expectedSchema: typeof EXPECTED_RESEARCH_SCHEMA;
+  readonly expectedSchema: ExpectedResearchSchema;
   readonly receivedKeys?: string[];
   readonly missingFields?: string[];
   readonly validationIssues?: Array<{
@@ -46,6 +69,7 @@ export class ResearchParseError extends Error {
     parsed?: unknown;
     missingFields?: string[];
     validationIssues?: ResearchParseError["validationIssues"];
+    expectedSchema?: ExpectedResearchSchema;
   }) {
     super(params.message);
     this.name = "ResearchParseError";
@@ -53,7 +77,7 @@ export class ResearchParseError extends Error {
     this.rawResponse = params.rawResponse;
     this.strippedJson = params.strippedJson;
     this.parsed = params.parsed;
-    this.expectedSchema = EXPECTED_RESEARCH_SCHEMA;
+    this.expectedSchema = params.expectedSchema ?? EXPECTED_RESEARCH_SCHEMA;
     this.receivedKeys =
       params.parsed && typeof params.parsed === "object" && params.parsed !== null
         ? Object.keys(params.parsed as Record<string, unknown>)
@@ -602,6 +626,97 @@ function normalizeDesignBrief(
   return brief;
 }
 
+/** Detect design-idea payloads before classic research normalization. */
+export function isDesignResearchPayload(
+  parsed: Record<string, unknown>,
+): boolean {
+  return Array.isArray(parsed.designs) && parsed.designs.length > 0;
+}
+
+function normalizeDesignResearchPayload(
+  parsed: Record<string, unknown>,
+): { normalized: Record<string, unknown>; adjustments: string[] } {
+  const adjustments: string[] = [];
+  const normalized: Record<string, unknown> = { ...parsed };
+
+  ensureReportTitle(normalized, adjustments);
+
+  const designs = normalizeStringArray(normalized.designs);
+  if (designs) {
+    normalized.designs = designs;
+  }
+
+  for (const field of [
+    "products",
+    "colors",
+    "materials",
+    "printAreas",
+  ] as const) {
+    const coerced = normalizeStringArray(normalized[field]);
+    if (coerced) normalized[field] = coerced;
+  }
+
+  if (normalized.confidence !== undefined) {
+    if (typeof normalized.confidence === "string") {
+      const coerced = Number.parseFloat(normalized.confidence);
+      if (!Number.isNaN(coerced)) {
+        adjustments.push(`coerced confidence string → number: ${normalized.confidence} → ${coerced}`);
+        normalized.confidence = coerced;
+      }
+    }
+    if (
+      typeof normalized.confidence === "number" &&
+      normalized.confidence > 1 &&
+      normalized.confidence <= 100
+    ) {
+      const scaled = normalized.confidence / 100;
+      adjustments.push(`scaled confidence percent → ratio: ${normalized.confidence} → ${scaled}`);
+      normalized.confidence = scaled;
+    }
+  }
+
+  if (!normalized.collectionIdea && isNonEmptyString(normalized.title)) {
+    normalized.collectionIdea = normalized.title;
+    adjustments.push("defaulted collectionIdea from title");
+  }
+
+  if (normalized.designBrief) {
+    normalized.designBrief = normalizeDesignBrief(
+      normalized.designBrief,
+      adjustments,
+    );
+  }
+
+  return { normalized, adjustments };
+}
+
+function validateDesignResearchPayload(
+  parsed: Record<string, unknown>,
+  context: ValidateContext,
+): DesignResearchOutput {
+  const result = designResearchOutputSchema.safeParse(parsed);
+
+  if (result.success) {
+    return result.data;
+  }
+
+  logValidationIssues(result.error.issues, parsed, "Design schema validation issues");
+
+  const validationIssues = result.error.issues.map((issue) =>
+    zodIssueToDetail(issue, parsed),
+  );
+
+  throw new ResearchParseError({
+    message: `Design schema validation failed with ${result.error.issues.length} issue(s)`,
+    stage: "validation",
+    rawResponse: context.rawResponse,
+    strippedJson: context.strippedJson,
+    parsed,
+    validationIssues,
+    expectedSchema: EXPECTED_DESIGN_RESEARCH_SCHEMA,
+  });
+}
+
 function normalizeOpportunityStrings(
   value: unknown,
   adjustments: string[],
@@ -832,7 +947,7 @@ function validateResearchPayload(
   });
 }
 
-export function parseResearchOutput(raw: string): ResearchOutput {
+export function parseResearchOutput(raw: string): ParsedResearchOutput {
   const strippedJson = stripMarkdownJsonFences(raw);
 
   let parsed: unknown;
@@ -857,9 +972,32 @@ export function parseResearchOutput(raw: string): ResearchOutput {
     });
   }
 
-  const { normalized, adjustments } = normalizeResearchPayload(
-    parsed as Record<string, unknown>,
-  );
+  const record = parsed as Record<string, unknown>;
+
+  if (isDesignResearchPayload(record)) {
+    const { normalized, adjustments } = normalizeDesignResearchPayload(record);
+
+    if (adjustments.length > 0) {
+      console.info("[Research Run] Normalized design model output", {
+        adjustments,
+      });
+    }
+
+    console.info(
+      "[Research Run] Parsed design JSON (pre-validation):",
+      JSON.stringify(normalized, null, 2),
+    );
+
+    return {
+      kind: "design",
+      output: validateDesignResearchPayload(normalized, {
+        rawResponse: raw,
+        strippedJson,
+      }),
+    };
+  }
+
+  const { normalized, adjustments } = normalizeResearchPayload(record);
 
   const enrichAdjustments = enrichResearchPayload(normalized);
   const allAdjustments = [...adjustments, ...enrichAdjustments];
@@ -872,5 +1010,8 @@ export function parseResearchOutput(raw: string): ResearchOutput {
 
   console.info("[Research Run] Parsed JSON (pre-validation):", JSON.stringify(normalized, null, 2));
 
-  return validateResearchPayload(normalized, { rawResponse: raw, strippedJson });
+  return {
+    kind: "research",
+    output: validateResearchPayload(normalized, { rawResponse: raw, strippedJson }),
+  };
 }

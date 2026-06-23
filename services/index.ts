@@ -47,5 +47,21 @@ export { analyzeTrendIntelligence } from "./trendIntelligence";
 export { generateDesignBrief } from "./designBriefEngine";
 export type { DesignBriefInput } from "./designBriefEngine";
 
+export {
+  buildProductIntelligenceCatalog,
+  formatProductIntelligencePrompt,
+  findProductByTitle,
+  isColorAvailable,
+  isProductAvailable,
+  resolveAvailableColors,
+  resolveAvailableProducts,
+} from "./productIntelligenceEngine";
+export type {
+  ProductIntelligence as CatalogProductIntelligence,
+  ProductIntelligenceCatalog,
+  ProductCategory,
+  ProductIntelligenceEngineInput,
+} from "./productIntelligenceEngine";
+
 export { generateLiveSignals, SIGNAL_CATEGORY_LABELS } from "./signalEngine";
 export type { LiveSignal, SignalCategory, SignalEngineInput } from "./signalEngine";

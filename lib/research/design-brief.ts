@@ -9,8 +9,14 @@ import { loadResearchIntelligence } from "@/services/researchEngine";
 
 /** Format design brief as Design Studio prefill text. */
 export function formatDesignBriefForStudio(brief: ResearchDesignBrief): string {
-  const colors = brief.colorPalette.map((c) => c.name).join(", ");
-  const products = brief.productSuggestions.join(", ");
+  const colors =
+    brief.recommendedColors && brief.recommendedColors.length > 0
+      ? brief.recommendedColors.join(", ")
+      : brief.colorPalette.map((c) => c.name).join(", ");
+  const products =
+    brief.recommendedProducts && brief.recommendedProducts.length > 0
+      ? brief.recommendedProducts.join(", ")
+      : brief.productSuggestions.join(", ");
 
   return [
     `Kollektion: ${brief.collectionIdea}`,
@@ -20,6 +26,12 @@ export function formatDesignBriefForStudio(brief: ResearchDesignBrief): string {
     `Silhouetten: ${brief.silhouettes.join(", ")}`,
     `Farbpalette: ${colors}`,
     `Produkte: ${products}`,
+    brief.recommendedMaterials?.length
+      ? `Materialien: ${brief.recommendedMaterials.join(", ")}`
+      : "",
+    brief.recommendedPrintAreas?.length
+      ? `Printflächen: ${brief.recommendedPrintAreas.join(", ")}`
+      : "",
     brief.designs?.length ? `Designs: ${brief.designs.join(", ")}` : "",
     `Scores — Potential: ${brief.confidence}% · Trend: ${brief.trendScore}% · Konkurrenz: ${brief.competitorScore}%`,
     "",

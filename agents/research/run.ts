@@ -16,21 +16,38 @@ Deine Aufgabe: echte Business Intelligence sammeln, analysieren und konkrete Ent
 Du erhältst LIVE-DATEN aus Shopify, MarketPrint POD, Verkaufsdaten und Intelligence Engines.
 Jede Analyse MUSS gegen die Milaene Brand DNA geprüft werden.
 
+## Produkt-Regeln (PFLICHT)
+- Empfehle AUSSCHLIESSLICH Produkte, Farben, Größen und Materialien aus dem Abschnitt VERFÜGBARE PRODUKTE
+- Erfinde KEINE Produkte (z.B. keine Purple Hoodies wenn nicht im Katalog)
+- Erfinde KEINE Farben (z.B. kein Earth Brown wenn nicht verfügbar)
+- Priorisiere Bestseller und verfügbare Varianten
+- Berücksichtige Printflächen und Materialien aus dem Katalog
+
 ## Entscheidungsstandard
 - Schreibe AUSSCHLIESSLICH auf Deutsch
 - Nutze die LIVE-DATEN als primäre Quelle — keine generischen Aussagen
-- Nenne konkrete Produkte (Faith Tee, Dream Tee, Heavy Hoodies, …)
+- Nenne nur konkrete Produkte aus dem VERFÜGBARE PRODUKTE Katalog
 - Leite Chancen aus echten Bestsellern, Schwächen und Kategorie-Lücken ab
 - Jeder Report endet mit umsetzbaren Empfehlungen für Design Studio
 
 ## Ausgabeformat
 - Antworte NUR mit gültigem JSON
-- title: kurzer strategischer Report-Titel (PFLICHT)
-  Beispiel: "Herbstkollektion 2026 – Premium Earth Capsule"
-- confidence: 0.0–1.0 basierend auf Datenqualität
-- reportType: "competitor" | "trend" | "design" | "pricing" | "audience"
 
-## Pflichtabschnitte
+### Vollständiger Research-Report (Standard)
+- title, executiveSummary, reportType, keyFindings, opportunities, risks, recommendations, confidence, fullAnalysis
+
+### Design-Ideen (bei Design-Anfragen)
+Wenn die Anfrage konkrete Design-Ideen verlangt, darf stattdessen geliefert werden:
+{
+  "title": "Kollektion / Drop Name",
+  "designs": ["Design-Idee 1", "Design-Idee 2", ...],
+  "products": ["echte Katalogprodukte"],
+  "colors": ["verfügbare Farben"]
+}
+- designs[] ist Pflicht (1–12 Einträge)
+- Nur Produkte/Farben aus VERFÜGBARE PRODUKTE verwenden
+
+## Pflichtabschnitte (nur Vollständiger Research-Report)
 - title: kurzer strategischer Report-Titel
 - executiveSummary: 4–6 Sätze mit strategischer Kernaussage
 - keyFindings: 5–8 detaillierte Erkenntnisse
@@ -108,11 +125,11 @@ export async function runResearch(
     throw new Error(dict.research.errors.noResponse);
   }
 
-  let output;
+  let parsed;
   console.log("[Research] Before parse");
   try {
-    output = parseResearchOutput(raw);
-    console.log("[Research] After parse");
+    parsed = parseResearchOutput(raw);
+    console.log("[Research] After parse", { kind: parsed.kind });
   } catch (error) {
     console.log("[Research] Parse threw");
     if (error instanceof ResearchParseError) {
@@ -126,12 +143,12 @@ export async function runResearch(
   console.log("[Research] Before design brief");
   const designBrief = generateDesignBrief({
     intelligence: knowledge.intelligence,
-    report: output,
+    report: parsed.output,
     sourceReportId: reportId,
   });
   console.log("[Research] After design brief");
 
-  output.designBrief = designBrief;
+  parsed.output.designBrief = designBrief;
 
   console.log("[Research] Before save");
   let saved;
@@ -140,7 +157,7 @@ export async function runResearch(
       workspaceId: input.workspaceId,
       workspaceName: input.workspaceName,
       request: input.request,
-      output,
+      output: parsed.output,
       originTaskId: input.originTaskId,
       reportId,
     });
@@ -154,19 +171,39 @@ export async function runResearch(
     reportId: saved.reportId,
     savedDomains: saved.savedDomains,
     designBrief: designBrief.collectionIdea,
+    outputKind: parsed.kind,
   });
+
+  if (parsed.kind === "design") {
+    return {
+      reportId: saved.reportId,
+      reportRecordId: saved.reportRecordId,
+      title: parsed.output.title,
+      outputKind: "design",
+      designs: parsed.output.designs,
+      products: parsed.output.products,
+      colors: parsed.output.colors,
+      materials: parsed.output.materials,
+      printAreas: parsed.output.printAreas,
+      rationale: parsed.output.rationale,
+      confidence: parsed.output.confidence,
+      savedDomains: saved.savedDomains,
+      designBrief,
+    };
+  }
 
   return {
     reportId: saved.reportId,
     reportRecordId: saved.reportRecordId,
-    title: output.title,
-    executiveSummary: output.executiveSummary,
-    keyFindings: output.keyFindings,
-    opportunities: output.opportunities,
-    risks: output.risks,
-    recommendations: output.recommendations,
-    confidence: output.confidence,
-    reportType: output.reportType,
+    title: parsed.output.title,
+    outputKind: "research",
+    executiveSummary: parsed.output.executiveSummary,
+    keyFindings: parsed.output.keyFindings,
+    opportunities: parsed.output.opportunities,
+    risks: parsed.output.risks,
+    recommendations: parsed.output.recommendations,
+    confidence: parsed.output.confidence,
+    reportType: parsed.output.reportType,
     savedDomains: saved.savedDomains,
     designBrief,
   };

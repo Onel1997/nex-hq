@@ -4,8 +4,15 @@
  */
 
 export { runResearch } from "./run";
-export { parseResearchOutput, ResearchParseError } from "./parse-output";
+export { parseResearchOutput, ResearchParseError, isDesignResearchPayload } from "./parse-output";
 export { saveResearchToBrain } from "./save";
 export { retrieveResearchKnowledge } from "./retrieve-context";
-export type { ResearchRunInput, ResearchRunResult, ResearchDesignBriefOutput } from "./types";
-export type { ResearchOutput, ResearchType } from "./types";
+export type {
+  ResearchRunInput,
+  ResearchRunResult,
+  ResearchDesignBriefOutput,
+  ResearchOutput,
+  DesignResearchOutput,
+  ParsedResearchOutput,
+  ResearchType,
+} from "./types";
