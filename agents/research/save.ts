@@ -11,6 +11,10 @@ import { slugify } from "@/brain/client/utils";
 import type { BrainDomain } from "@/brain/types";
 import { resolveReportTaskIds } from "@/lib/reports/task-link";
 import {
+  formatDesignConceptMarkdown,
+  summarizeDesignConcepts,
+} from "./design-concept";
+import {
   isDesignResearchOutput,
   type DesignResearchOutput,
   type ResearchOutput,
@@ -94,18 +98,19 @@ function buildResearchSections(
 function buildDesignResearchSections(
   output: DesignResearchOutput,
 ): BrainResearchSections {
+  const designSummaries = summarizeDesignConcepts(output.designs);
   const summary =
     output.rationale ??
-    `Design-Ideen für ${output.title}: ${output.designs.slice(0, 3).join(" · ")}`;
+    `Design-Ideen für ${output.title}: ${designSummaries.slice(0, 3).join(" · ")}`;
 
   const sections: BrainResearchSections = {
     executiveSummary: summary,
-    keyFindings: output.designs,
-    opportunities: output.designs,
+    keyFindings: designSummaries,
+    opportunities: designSummaries,
     risks: [
       "Design-Umsetzung muss auf verfügbare Katalogvarianten und MarketPrint-Produktion abgestimmt bleiben.",
     ],
-    recommendations: output.designs,
+    recommendations: designSummaries,
   };
 
   if (output.designBrief) {
@@ -160,8 +165,10 @@ async function saveDesignResearchToBrain(
   const fullAnalysis = [
     `# ${output.title}`,
     "",
-    "## Design-Ideen",
-    ...output.designs.map((design) => `- ${design}`),
+    "## Design-Konzepte",
+    ...output.designs.map((design, index) =>
+      formatDesignConceptMarkdown(design, index),
+    ),
     "",
     output.products?.length
       ? `## Produkte\n${output.products.map((p) => `- ${p}`).join("\n")}`
@@ -183,7 +190,7 @@ async function saveDesignResearchToBrain(
     status: "submitted",
     summary: executiveSummary,
     confidence,
-    keyFindings: output.designs,
+    keyFindings: summarizeDesignConcepts(output.designs),
     reportType: "design",
     researchSections,
     notes: `Anfrage: ${input.request}`,

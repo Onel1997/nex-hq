@@ -14,6 +14,12 @@ import { useLocale, useT, useWorkspace } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { ArrowRight, CheckCircle2, Loader2, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import type { DesignConcept } from "@/agents/research/types";
+import {
+  coerceConceptField,
+  formatColorBreakdown,
+  normalizeDesignConcepts,
+} from "@/agents/research/design-concept";
 import { Progress } from "@/components/ui/progress";
 
 interface DesignBriefSummary {
@@ -25,20 +31,25 @@ interface DesignBriefSummary {
   recommendedPrintAreas?: string[];
   targetAudience?: string;
   styleDirection?: string;
-  designs?: string[];
+  designs?: unknown[];
   trendScore?: number;
   competitorScore?: number;
   confidence?: number;
 }
 
-interface DesignConcept {
-  product?: string;
-  color?: string;
-  printPosition?: string;
-  styleDirection?: string;
-  emotion?: string;
-  targetAudience?: string;
-  summary: string;
+interface DesignReportResult {
+  outputKind: "design";
+  reportId: string;
+  title: string;
+  designs?: DesignConcept[];
+  products?: string[];
+  colors?: string[];
+  materials?: string[];
+  printAreas?: string[];
+  rationale?: string;
+  confidence?: number;
+  savedDomains: string[];
+  designBrief?: DesignBriefSummary;
 }
 
 interface ResearchReportResult {
@@ -52,21 +63,6 @@ interface ResearchReportResult {
   recommendations?: string[];
   confidence?: number;
   reportType?: ResearchReportType;
-  savedDomains: string[];
-  designBrief?: DesignBriefSummary;
-}
-
-interface DesignReportResult {
-  outputKind: "design";
-  reportId: string;
-  title: string;
-  designs?: string[];
-  products?: string[];
-  colors?: string[];
-  materials?: string[];
-  printAreas?: string[];
-  rationale?: string;
-  confidence?: number;
   savedDomains: string[];
   designBrief?: DesignBriefSummary;
 }
@@ -85,57 +81,29 @@ function asOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function pickAt<T>(values: T[] | undefined, index: number): T | undefined {
-  if (!values || values.length === 0) return undefined;
-  return values[index] ?? values[0];
+function buildDesignConceptContext(result: DesignReportResult) {
+  const brief = result.designBrief;
+  return {
+    title: result.title,
+    products:
+      result.products ??
+      brief?.recommendedProducts ??
+      brief?.productSuggestions,
+    colors: result.colors ?? brief?.recommendedColors,
+    printAreas: result.printAreas ?? brief?.recommendedPrintAreas,
+    styleDirection: brief?.styleDirection,
+    targetAudience: brief?.targetAudience,
+    collectionIdea: brief?.collectionIdea,
+  };
 }
 
-function normalizeDesignConcept(
-  entry: unknown,
-  index: number,
+function parseDesignConcepts(
+  designs: unknown[] | undefined,
   result: DesignReportResult,
-): DesignConcept {
-  const brief = result.designBrief;
-  const fallbackProducts =
-    result.products ??
-    brief?.recommendedProducts ??
-    brief?.productSuggestions ??
-    [];
-  const fallbackColors = result.colors ?? brief?.recommendedColors ?? [];
-  const fallbackPrintAreas =
-    result.printAreas ?? brief?.recommendedPrintAreas ?? [];
-  const fallbackAudience = brief?.targetAudience;
-
-  if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-    const concept = entry as Record<string, unknown>;
-    return {
-      product: asOptionalString(concept.product),
-      color: asOptionalString(concept.color),
-      printPosition: asOptionalString(
-        concept.printPosition ?? concept.printArea ?? concept.printAreas,
-      ),
-      styleDirection: asOptionalString(
-        concept.styleDirection ?? concept.style ?? concept.direction,
-      ),
-      emotion: asOptionalString(concept.emotion ?? concept.mood),
-      targetAudience: asOptionalString(concept.targetAudience),
-      summary:
-        asOptionalString(
-          concept.summary ?? concept.title ?? concept.description ?? concept.concept,
-        ) ?? "",
-    };
-  }
-
-  const summary = String(entry ?? "").trim();
-
-  return {
-    product: pickAt(fallbackProducts, index),
-    color: pickAt(fallbackColors, index),
-    printPosition: pickAt(fallbackPrintAreas, index),
-    styleDirection: summary || brief?.styleDirection,
-    targetAudience: fallbackAudience,
-    summary: summary || brief?.collectionIdea || result.title,
-  };
+): DesignConcept[] {
+  return (
+    normalizeDesignConcepts(designs, buildDesignConceptContext(result)) ?? []
+  );
 }
 
 function parseResearchApiResponse(data: Record<string, unknown>): ResearchResult {
@@ -144,7 +112,7 @@ function parseResearchApiResponse(data: Record<string, unknown>): ResearchResult
 
   const base = {
     reportId: String(data.reportId ?? ""),
-    title: String(data.title ?? "Research Report"),
+    title: coerceConceptField(data.title ?? "Research Report"),
     savedDomains: Array.isArray(data.savedDomains)
       ? data.savedDomains.map(String)
       : [],
@@ -154,10 +122,9 @@ function parseResearchApiResponse(data: Record<string, unknown>): ResearchResult
   };
 
   if (outputKind === "design") {
-    return {
+    const designResult: DesignReportResult = {
       ...base,
       outputKind: "design",
-      designs: Array.isArray(data.designs) ? data.designs.map(String) : [],
       products: Array.isArray(data.products)
         ? data.products.map(String)
         : undefined,
@@ -169,6 +136,16 @@ function parseResearchApiResponse(data: Record<string, unknown>): ResearchResult
         ? data.printAreas.map(String)
         : undefined,
       rationale: asOptionalString(data.rationale),
+      designs: [],
+      savedDomains: base.savedDomains,
+    };
+
+    return {
+      ...designResult,
+      designs: parseDesignConcepts(
+        Array.isArray(data.designs) ? data.designs : [],
+        designResult,
+      ),
     };
   }
 
@@ -198,34 +175,203 @@ function DesignConceptCard({
   concept: DesignConcept;
   index: number;
   labels: {
+    creativeApproach: string;
+    emotion: string;
+    visualConcept: string;
+    designDescription: string;
+    message: string;
+    typography: string;
+    printTechnique: string;
+    printSize: string;
+    placementDimensions: string;
+    productionDifficulty: string;
+    garmentInspiration: string;
+    brandInspiration: string;
+    visualReferences: string;
+    production: string;
+    inspiration: string;
+    artDirection: string;
+    exactComposition: string;
+    graphicElements: string;
+    elementCount: string;
+    layoutDescription: string;
+    visualHierarchy: string;
+    colorBreakdown: string;
+    materialEffects: string;
+    negativeSpaceUsage: string;
+    designInstructions: string;
+    mockupDescription: string;
     product: string;
     color: string;
-    printPosition: string;
-    styleDirection: string;
-    emotion: string;
+    printArea: string;
     targetAudience: string;
   };
 }) {
-  const fields = [
+  const narrativeFields = [
+    { label: labels.emotion, value: concept.emotion },
+    { label: labels.visualConcept, value: concept.visualConcept },
+    { label: labels.designDescription, value: concept.designDescription },
+    { label: labels.message, value: concept.message },
+    { label: labels.typography, value: concept.typography },
+  ].filter((field) => field.value);
+
+  const productionFields = [
+    { label: labels.printTechnique, value: concept.printTechnique },
+    { label: labels.printSize, value: concept.printSize },
+    { label: labels.placementDimensions, value: concept.placementDimensions },
+    {
+      label: labels.productionDifficulty,
+      value: concept.productionDifficulty,
+    },
+  ].filter((field) => field.value);
+
+  const inspirationFields = [
+    { label: labels.garmentInspiration, value: concept.garmentInspiration },
+    { label: labels.brandInspiration, value: concept.brandInspiration },
+    { label: labels.visualReferences, value: concept.visualReferences },
+  ].filter((field) => field.value);
+
+  const artDirectionFields = [
+    { label: labels.exactComposition, value: concept.exactComposition },
+    { label: labels.elementCount, value: concept.elementCount },
+    { label: labels.layoutDescription, value: concept.layoutDescription },
+    { label: labels.visualHierarchy, value: concept.visualHierarchy },
+    {
+      label: labels.colorBreakdown,
+      value:
+        concept.colorBreakdown.length > 0
+          ? formatColorBreakdown(concept.colorBreakdown)
+          : "",
+    },
+    { label: labels.materialEffects, value: concept.materialEffects },
+    { label: labels.negativeSpaceUsage, value: concept.negativeSpaceUsage },
+    { label: labels.mockupDescription, value: concept.mockupDescription },
+  ].filter((field) => field.value);
+
+  const productFields = [
     { label: labels.product, value: concept.product },
     { label: labels.color, value: concept.color },
-    { label: labels.printPosition, value: concept.printPosition },
-    { label: labels.styleDirection, value: concept.styleDirection },
-    { label: labels.emotion, value: concept.emotion },
+    { label: labels.printArea, value: concept.printArea },
     { label: labels.targetAudience, value: concept.targetAudience },
   ].filter((field) => field.value);
 
   return (
-    <article className="space-y-3 rounded-xl border border-border bg-muted/20 p-5">
-      <p className="text-label text-primary/80">Konzept {index + 1}</p>
-      {concept.summary ? (
-        <p className="font-display text-lg font-medium leading-snug">
-          {concept.summary}
-        </p>
+    <article className="space-y-4 rounded-xl border border-border bg-muted/20 p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-label text-primary/80">Konzept {index + 1}</p>
+        <Badge variant="secondary" className="font-normal">
+          {concept.creativeApproach}
+        </Badge>
+      </div>
+      <h4 className="font-display text-xl font-medium leading-snug">
+        {concept.title}
+      </h4>
+      {narrativeFields.length > 0 ? (
+        <dl className="space-y-3">
+          {narrativeFields.map((field) => (
+            <div key={field.label} className="space-y-1">
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                {field.label}
+              </dt>
+              <dd className="text-sm leading-relaxed text-foreground">
+                {field.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
       ) : null}
-      {fields.length > 0 ? (
-        <dl className="grid gap-2 sm:grid-cols-2">
-          {fields.map((field) => (
+      {productionFields.length > 0 ? (
+        <div className="space-y-2 border-t border-border/70 pt-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            {labels.production}
+          </p>
+          <dl className="grid gap-2 sm:grid-cols-2">
+            {productionFields.map((field) => (
+              <div key={field.label} className="space-y-0.5">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {field.label}
+                </dt>
+                <dd className="text-sm text-foreground">{field.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
+      {inspirationFields.length > 0 ? (
+        <div className="space-y-2 border-t border-border/70 pt-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            {labels.inspiration}
+          </p>
+          <dl className="space-y-2">
+            {inspirationFields.map((field) => (
+              <div key={field.label} className="space-y-0.5">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {field.label}
+                </dt>
+                <dd className="text-sm leading-relaxed text-foreground">
+                  {field.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
+      {concept.graphicElements.length > 0 ||
+      concept.designInstructions.length > 0 ||
+      artDirectionFields.length > 0 ? (
+        <div className="space-y-3 border-t border-primary/20 bg-primary/5 p-4 pt-4">
+          <p className="text-label text-primary">{labels.artDirection}</p>
+          {concept.graphicElements.length > 0 ? (
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {labels.graphicElements}
+              </p>
+              <ul className="space-y-1 text-sm leading-relaxed text-foreground">
+                {concept.graphicElements.map((element) => (
+                  <li key={element} className="flex gap-2">
+                    <span className="text-primary">•</span>
+                    <span>{element}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {artDirectionFields.length > 0 ? (
+            <dl className="space-y-3">
+              {artDirectionFields.map((field) => (
+                <div key={field.label} className="space-y-1">
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {field.label}
+                  </dt>
+                  <dd className="text-sm leading-relaxed text-foreground">
+                    {field.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {concept.designInstructions.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {labels.designInstructions}
+              </p>
+              <ol className="space-y-2 text-sm leading-relaxed text-foreground">
+                {concept.designInstructions.map((step, stepIndex) => (
+                  <li key={`${stepIndex}-${step}`} className="flex gap-3">
+                    <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                      {stepIndex + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {productFields.length > 0 ? (
+        <dl className="grid gap-2 border-t border-border/70 pt-4 sm:grid-cols-2">
+          {productFields.map((field) => (
             <div key={field.label} className="space-y-0.5">
               <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                 {field.label}
@@ -374,16 +520,44 @@ function DesignReportPanel({
   t: ReturnType<typeof useT>;
 }) {
   const rawDesigns = result.designs ?? result.designBrief?.designs ?? [];
-  const concepts = rawDesigns.map((entry, index) =>
-    normalizeDesignConcept(entry, index, result),
-  );
+  const concepts =
+    result.designs && result.designs.length > 0
+      ? result.designs
+      : parseDesignConcepts(
+          Array.isArray(rawDesigns) ? rawDesigns : [],
+          result,
+        );
   const confidence = result.confidence ?? (result.designBrief?.confidence ?? 0) / 100;
   const conceptLabels = {
+    creativeApproach: t("research.interface.designConcept.creativeApproach"),
+    emotion: t("research.interface.designConcept.emotion"),
+    visualConcept: t("research.interface.designConcept.visualConcept"),
+    designDescription: t("research.interface.designConcept.designDescription"),
+    message: t("research.interface.designConcept.message"),
+    typography: t("research.interface.designConcept.typography"),
+    printTechnique: t("research.interface.designConcept.printTechnique"),
+    printSize: t("research.interface.designConcept.printSize"),
+    placementDimensions: t("research.interface.designConcept.placementDimensions"),
+    productionDifficulty: t("research.interface.designConcept.productionDifficulty"),
+    garmentInspiration: t("research.interface.designConcept.garmentInspiration"),
+    brandInspiration: t("research.interface.designConcept.brandInspiration"),
+    visualReferences: t("research.interface.designConcept.visualReferences"),
+    production: t("research.interface.designConcept.production"),
+    inspiration: t("research.interface.designConcept.inspiration"),
+    artDirection: t("research.interface.designConcept.artDirection"),
+    exactComposition: t("research.interface.designConcept.exactComposition"),
+    graphicElements: t("research.interface.designConcept.graphicElements"),
+    elementCount: t("research.interface.designConcept.elementCount"),
+    layoutDescription: t("research.interface.designConcept.layoutDescription"),
+    visualHierarchy: t("research.interface.designConcept.visualHierarchy"),
+    colorBreakdown: t("research.interface.designConcept.colorBreakdown"),
+    materialEffects: t("research.interface.designConcept.materialEffects"),
+    negativeSpaceUsage: t("research.interface.designConcept.negativeSpaceUsage"),
+    designInstructions: t("research.interface.designConcept.designInstructions"),
+    mockupDescription: t("research.interface.designConcept.mockupDescription"),
     product: t("research.interface.designConcept.product"),
     color: t("research.interface.designConcept.color"),
-    printPosition: t("research.interface.designConcept.printPosition"),
-    styleDirection: t("research.interface.designConcept.styleDirection"),
-    emotion: t("research.interface.designConcept.emotion"),
+    printArea: t("research.interface.designConcept.printArea"),
     targetAudience: t("research.interface.designConcept.targetAudience"),
   };
 
@@ -442,7 +616,7 @@ function DesignReportPanel({
           <div className="grid gap-4">
             {concepts.map((concept, index) => (
               <DesignConceptCard
-                key={`${concept.summary}-${index}`}
+                key={`${concept.title}-${index}`}
                 concept={concept}
                 index={index}
                 labels={conceptLabels}
@@ -675,7 +849,7 @@ export function ResearchInterface() {
                 {t("research.interface.success")}
               </p>
               <h3 className="font-display text-3xl font-medium">
-                {result.title}
+                {coerceConceptField(result.title)}
               </h3>
             </div>
           </div>

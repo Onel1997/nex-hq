@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { enrichResearchPayload } from "./enrich-output";
 import {
+  coerceConceptField,
+  normalizeDesignConcepts,
+} from "./design-concept";
+import {
   designResearchOutputSchema,
   researchOutputSchema,
   type DesignResearchOutput,
@@ -31,7 +35,8 @@ export const EXPECTED_RESEARCH_SCHEMA = {
 
 export const EXPECTED_DESIGN_RESEARCH_SCHEMA = {
   title: "string (required)",
-  designs: "string[] (required, 1–12 design ideas)",
+  designs:
+    "DesignConcept[] (required, 5–8 concepts; each with unique creativeApproach; art-direction fields: exactComposition, graphicElements, elementCount, layoutDescription, visualHierarchy, colorBreakdown[], materialEffects, negativeSpaceUsage, designInstructions[], mockupDescription; measurable specs required — no vague moodboard language)",
   products: "string[] (optional — real catalog products only)",
   colors: "string[] (optional — available variant colors only)",
   materials: "string[] (optional)",
@@ -348,14 +353,19 @@ function ensureReportTitle(
   normalized: Record<string, unknown>,
   adjustments: string[],
 ): void {
-  if (isNonEmptyString(normalized.title)) {
-    normalized.title = normalized.title.trim();
+  const coercedTitle = coerceConceptField(normalized.title);
+  if (coercedTitle) {
+    if (normalized.title !== coercedTitle) {
+      adjustments.push("coerced title object → string");
+    }
+    normalized.title = coercedTitle;
     return;
   }
 
   for (const alias of ["reportTitle", "name", "headline"] as const) {
-    if (isNonEmptyString(normalized[alias])) {
-      normalized.title = String(normalized[alias]).trim();
+    const coercedAlias = coerceConceptField(normalized[alias]);
+    if (coercedAlias) {
+      normalized.title = coercedAlias;
       adjustments.push(`mapped ${alias} → title`);
       return;
     }
@@ -641,7 +651,21 @@ function normalizeDesignResearchPayload(
 
   ensureReportTitle(normalized, adjustments);
 
-  const designs = normalizeStringArray(normalized.designs);
+  const context = {
+    title: coerceConceptField(normalized.title),
+    products: normalizeStringArray(normalized.products),
+    colors: normalizeStringArray(normalized.colors),
+    printAreas: normalizeStringArray(normalized.printAreas),
+    styleDirection: coerceConceptField(normalized.styleDirection),
+    targetAudience: coerceConceptField(normalized.targetAudience),
+    collectionIdea: coerceConceptField(normalized.collectionIdea),
+  };
+
+  const designs = normalizeDesignConcepts(
+    normalized.designs,
+    context,
+    adjustments,
+  );
   if (designs) {
     normalized.designs = designs;
   }

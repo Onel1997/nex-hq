@@ -160,10 +160,70 @@ export type ResearchOutput = z.infer<typeof researchOutputSchema>;
 export type CompetitorReportSections = z.infer<typeof competitorReportSchema>;
 export type TrendReportSections = z.infer<typeof trendReportSchema>;
 
+const conceptText = (min: number) => z.string().min(min);
+
+export const CREATIVE_APPROACHES = [
+  "Typography Design",
+  "Symbolic Illustration",
+  "Abstract Graphic",
+  "Minimal Back Print",
+  "Photography Style",
+  "Japanese Editorial",
+  "Vintage Archive",
+  "Luxury Minimalism",
+] as const;
+
+export type CreativeApproach = (typeof CREATIVE_APPROACHES)[number];
+
+export const PRODUCTION_DIFFICULTY_LEVELS = ["Low", "Medium", "High"] as const;
+
+export const colorBreakdownEntrySchema = z.object({
+  color: z.string().min(2),
+  usage: z.string().min(2),
+});
+
+export type ColorBreakdownEntry = z.infer<typeof colorBreakdownEntrySchema>;
+
+export const designConceptSchema = z.object({
+  title: conceptText(3),
+  creativeApproach: z.enum(CREATIVE_APPROACHES),
+  product: conceptText(1),
+  color: conceptText(1),
+  printArea: conceptText(1),
+  styleDirection: conceptText(5),
+  emotion: conceptText(2),
+  targetAudience: conceptText(10),
+  visualConcept: conceptText(10),
+  designDescription: conceptText(10),
+  symbolism: conceptText(5),
+  typography: conceptText(5),
+  message: conceptText(3),
+  rationale: conceptText(10),
+  printTechnique: conceptText(5),
+  printSize: conceptText(3),
+  placementDimensions: conceptText(5),
+  garmentInspiration: conceptText(5),
+  brandInspiration: conceptText(5),
+  productionDifficulty: z.enum(PRODUCTION_DIFFICULTY_LEVELS),
+  visualReferences: conceptText(10),
+  exactComposition: conceptText(20),
+  graphicElements: z.array(z.string().min(3)).min(1).max(12),
+  elementCount: conceptText(3),
+  layoutDescription: conceptText(20),
+  visualHierarchy: conceptText(15),
+  colorBreakdown: z.array(colorBreakdownEntrySchema).min(2).max(6),
+  materialEffects: conceptText(10),
+  negativeSpaceUsage: conceptText(10),
+  designInstructions: z.array(z.string().min(10)).min(3).max(10),
+  mockupDescription: conceptText(20),
+});
+
+export type DesignConcept = z.infer<typeof designConceptSchema>;
+
 /** Lightweight design-idea output for Design Studio requests. */
 export const designResearchOutputSchema = z.object({
   title: z.string().min(1),
-  designs: z.array(z.string().min(5)).min(1).max(12),
+  designs: z.array(designConceptSchema).min(5).max(8),
   products: z.array(z.string()).optional(),
   colors: z.array(z.string()).optional(),
   materials: z.array(z.string()).optional(),
@@ -198,7 +258,7 @@ export interface ResearchRunResult {
   reportRecordId: string;
   title: string;
   outputKind: "research" | "design";
-  designs?: string[];
+  designs?: DesignConcept[];
   products?: string[];
   colors?: string[];
   materials?: string[];

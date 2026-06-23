@@ -4,6 +4,7 @@ import { getBrainClient } from "@/brain/client";
 import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
 import type { BrainReportContent } from "@/brain/domains/reports";
 import type { ResearchDesignBrief } from "@/lib/research/types";
+import { summarizeDesignConcept } from "@/agents/research/design-concept";
 import { generateDesignBrief } from "@/services/designBriefEngine";
 import { loadResearchIntelligence } from "@/services/researchEngine";
 
@@ -32,7 +33,13 @@ export function formatDesignBriefForStudio(brief: ResearchDesignBrief): string {
     brief.recommendedPrintAreas?.length
       ? `Printflächen: ${brief.recommendedPrintAreas.join(", ")}`
       : "",
-    brief.designs?.length ? `Designs: ${brief.designs.join(", ")}` : "",
+    brief.designs?.length
+      ? `Designs: ${brief.designs
+          .map((design) =>
+            typeof design === "string" ? design : summarizeDesignConcept(design),
+          )
+          .join(", ")}`
+      : "",
     `Scores — Potential: ${brief.confidence}% · Trend: ${brief.trendScore}% · Konkurrenz: ${brief.competitorScore}%`,
     "",
     brief.rationale,

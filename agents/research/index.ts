@@ -13,6 +13,22 @@ export type {
   ResearchDesignBriefOutput,
   ResearchOutput,
   DesignResearchOutput,
+  DesignConcept,
+  CreativeApproach,
   ParsedResearchOutput,
   ResearchType,
 } from "./types";
+export { CREATIVE_APPROACHES, PRODUCTION_DIFFICULTY_LEVELS, colorBreakdownEntrySchema } from "./types";
+export type { ColorBreakdownEntry } from "./types";
+export {
+  coerceConceptField,
+  normalizeDesignConcept,
+  normalizeDesignConcepts,
+  diversifyDesignConcepts,
+  normalizeCreativeApproach,
+  summarizeDesignConcept,
+  summarizeDesignConcepts,
+  formatDesignConceptMarkdown,
+  formatColorBreakdown,
+  visualConceptFingerprint,
+} from "./design-concept";

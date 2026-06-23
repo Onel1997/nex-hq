@@ -2,6 +2,7 @@ import { MILAENE_DNA } from "@/services/milaene-dna";
 import type { ResearchDesignBrief } from "@/lib/research/types";
 import type { ResearchIntelligenceBundle } from "@/services/researchEngine";
 import type { ResearchOutput, DesignResearchOutput } from "@/agents/research/types";
+import { summarizeDesignConcepts } from "@/agents/research/design-concept";
 import {
   findProductByTitle,
   resolveAvailableColors,
@@ -165,7 +166,9 @@ export function generateDesignBrief(input: DesignBriefInput): ResearchDesignBrie
   const styleDirection = [
     MILAENE_DNA.style,
     MILAENE_DNA.silhouettes.join(", "),
-    designReport?.designs?.join(", "),
+    designReport?.designs
+      ? summarizeDesignConcepts(designReport.designs).join(", ")
+      : undefined,
     featured?.decisions.designs.join(", "),
     classicReport?.trendReport?.designImplications?.[0],
   ]
@@ -245,7 +248,9 @@ export function generateDesignBrief(input: DesignBriefInput): ResearchDesignBrie
     rationale,
     opportunityId: featured?.id,
     sourceReportId,
-    designs: designReport?.designs ?? featured?.decisions.designs,
+    designs: designReport?.designs
+      ? summarizeDesignConcepts(designReport.designs)
+      : featured?.decisions.designs,
     priority: featured?.decisions.priority,
     generatedAt: new Date().toISOString(),
   };
