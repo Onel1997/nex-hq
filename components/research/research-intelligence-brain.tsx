@@ -9,6 +9,7 @@ import {
   Loader2,
   Package,
   Radar,
+  Sparkles,
   Swords,
   TrendingUp,
 } from "lucide-react";
@@ -50,6 +51,7 @@ export function ResearchIntelligenceBrain({
   const otherOpportunities = snapshot.opportunities.filter(
     (o) => o.id !== featured?.id,
   );
+  const rec = snapshot.recommendation;
 
   return (
     <div className="research-intelligence-brain" aria-label={t("research.brain.label")}>
@@ -85,6 +87,46 @@ export function ResearchIntelligenceBrain({
           </div>
         </div>
       </div>
+
+      {/* AI Strategic Advice */}
+      {rec ? (
+        <section className="research-ai-recommendation" aria-label={t("research.brain.aiRecommendation.label")}>
+          <header className="research-ai-recommendation-head">
+            <Sparkles className="research-ai-recommendation-icon size-4" aria-hidden />
+            <h4>{t("research.brain.aiRecommendation.label")}</h4>
+          </header>
+          <div className="research-ai-recommendation-body">
+            <div className="research-ai-recommendation-main">
+              <p className="research-ai-recommendation-label">
+                {t("research.brain.aiRecommendation.nextCollection")}
+              </p>
+              <p className="research-ai-recommendation-value">{rec.nextCollection}</p>
+            </div>
+            <div className="research-ai-recommendation-metrics">
+              <div>
+                <span className="research-ai-metric-label">
+                  {t("research.brain.aiRecommendation.fit")}
+                </span>
+                <span className="research-ai-metric-value">{rec.fitScore}%</span>
+              </div>
+              <div>
+                <span className="research-ai-metric-label">
+                  {t("research.brain.aiRecommendation.demand")}
+                </span>
+                <span className="research-ai-metric-value">
+                  +{rec.demandChange}%
+                </span>
+              </div>
+            </div>
+            <div>
+              <p className="research-brain-quad-label">
+                {t("research.brain.aiRecommendation.products")}
+              </p>
+              <IntelList items={rec.recommendedProducts} />
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <div className="research-brain-grid">
         {/* Market Intelligence */}
@@ -211,18 +253,28 @@ export function ResearchIntelligenceBrain({
               </div>
               <ul className="research-opportunity-highlights">
                 <li>
-                  {featured.productCount} {t("research.brain.opportunity.products")}
+                  {featured.scores.estimatedPotential}%{" "}
+                  {t("research.brain.opportunity.potential")} ·{" "}
+                  {featured.decisions.priority.toUpperCase()}
                 </li>
-                {featured.themes.map((theme) => (
-                  <li key={theme}>{theme}</li>
-                ))}
-                {featured.highlights.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
+                <li>
+                  {t("research.brain.opportunity.productsLabel")}:{" "}
+                  {featured.products.join(", ")}
+                </li>
+                <li>
+                  {t("research.brain.opportunity.colorsLabel")}:{" "}
+                  {featured.colors.join(", ")}
+                </li>
+                <li>
+                  {t("research.brain.opportunity.demand")}: {featured.scores.demandScore}%
+                  · {t("research.brain.opportunity.social")}: {featured.scores.socialScore}%
+                  · {t("research.brain.opportunity.dna")}: {featured.scores.dnaMatch}%
+                </li>
+                <li>{featured.rationale}</li>
               </ul>
               <p className="research-opportunity-confidence">
                 {t("research.brain.opportunity.confidence")}:{" "}
-                <span>{featured.confidence}%</span>
+                <span>{featured.scores.estimatedPotential}%</span>
               </p>
             </article>
           ) : null}
@@ -232,7 +284,9 @@ export function ResearchIntelligenceBrain({
               {otherOpportunities.map((opp) => (
                 <li key={opp.id} className="research-opportunity-item">
                   <span className="research-opportunity-name">{opp.title}</span>
-                  <span className="research-opportunity-score">{opp.confidence}%</span>
+                  <span className="research-opportunity-score">
+                    {opp.scores.estimatedPotential}%
+                  </span>
                 </li>
               ))}
             </ul>

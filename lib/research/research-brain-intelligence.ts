@@ -1,15 +1,29 @@
 import "server-only";
 
-import { MILAENE_PROFILE } from "@/lib/business/business-profile";
-import { loadMilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
-import { buildDesignIntelligenceDashboard } from "@/lib/design/product-intelligence";
 import type { MilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
+import { MILAENE_DNA } from "@/services/milaene-dna";
+import { getActiveSourceLabels, getReadySourceLabels } from "@/services/data-sources";
+import { analyzeProducts } from "@/services/productAnalyzer";
+import type { AiRecommendation, ResearchOpportunity } from "@/services/opportunityEngine";
+import type { ProductIntelligence } from "@/services/productAnalyzer";
+import type { LiveSignal } from "@/services/signalEngine";
+import { formatTrendChange, type TrendScore } from "@/services/trendScanner";
+
+export type {
+  AiRecommendation,
+  LiveSignal,
+  ResearchOpportunity,
+  TrendScore,
+};
 
 export interface ResearchBrandBrain {
   style: string;
   audience: string;
   colors: string[];
   positioning: string;
+  silhouettes: string[];
+  fulfillment: string;
+  quality: string;
 }
 
 export interface ResearchMarketBrain {
@@ -25,6 +39,11 @@ export interface ResearchCompetitorBrain {
   status: "watching" | "tracked" | "analyzing" | "stable";
   trendChange: string;
   signal: string;
+  positioning: string;
+  styleDirection: string;
+  growth: string;
+  newCollections: string;
+  marketMovement: string;
 }
 
 export interface ResearchProductBrain {
@@ -32,6 +51,9 @@ export interface ResearchProductBrain {
   weakProducts: string[];
   opportunities: string[];
   categories: string[];
+  colors: string[];
+  salesTrends: string[];
+  podProducts: string[];
 }
 
 export interface ResearchPodBrain {
@@ -43,14 +65,20 @@ export interface ResearchPodBrain {
   embroideryReady: number;
 }
 
-export interface ResearchOpportunity {
+export interface ResearchKnowledgeBrain {
+  recentlyUsed: string[];
+  savedInsights: string[];
+  lastAnalysis: string;
+  reportCount: number;
+  trendReportCount: number;
+  competitorCount: number;
+  signalCount: number;
+}
+
+export interface MarketSignalCard {
   id: string;
-  title: string;
-  productCount: number;
-  themes: string[];
-  highlights: string[];
-  confidence: number;
-  featured?: boolean;
+  label: string;
+  active: boolean;
 }
 
 export interface ResearchBrainSnapshot {
@@ -62,241 +90,151 @@ export interface ResearchBrainSnapshot {
   products: ResearchProductBrain;
   pod: ResearchPodBrain;
   opportunities: ResearchOpportunity[];
+  trendScores: TrendScore[];
+  marketSignals: MarketSignalCard[];
+  knowledge: ResearchKnowledgeBrain;
+  signals: LiveSignal[];
+  recommendation: AiRecommendation;
 }
 
-const DEFAULT_COMPETITORS: ResearchCompetitorBrain[] = [
-  {
-    name: "Corteiz",
-    status: "watching",
-    trendChange: "+18% oversized demand",
-    signal: "2 neue Drops",
-  },
-  {
-    name: "Represent",
-    status: "tracked",
-    trendChange: "+12% premium positioning",
-    signal: "Neue Kollektion erkannt",
-  },
-  {
-    name: "Fear of God",
-    status: "analyzing",
-    trendChange: "Luxury segment shift",
-    signal: "Preisanpassung beobachtet",
-  },
-  {
-    name: "Essentials",
-    status: "stable",
-    trendChange: "Stable market share",
-    signal: "Volume konstant",
-  },
-  {
-    name: "Cole Buxton",
-    status: "watching",
-    trendChange: "+9% UK streetwear growth",
-    signal: "Capsule drop frequency rising",
-  },
-];
-
-const DEFAULT_OPPORTUNITIES: ResearchOpportunity[] = [
-  {
-    id: "urban-earth-capsule",
-    title: "Urban Earth Capsule",
-    productCount: 4,
-    themes: ["Earth Tones", "Oversized Fits"],
-    highlights: ["Premium Hoodie", "Embroidery"],
-    confidence: 89,
-    featured: true,
-  },
-  {
-    id: "signal-green-drop",
-    title: "Signal Green Micro-Drop",
-    productCount: 3,
-    themes: ["Accent Color", "Scarcity"],
-    highlights: ["Boxy Tee", "Structured Cap"],
-    confidence: 82,
-  },
-  {
-    id: "premium-embroidery-line",
-    title: "Premium Embroidery Line",
-    productCount: 5,
-    themes: ["MarketPrint", "Hero Products"],
-    highlights: ["Hoodie", "Crewneck", "Cap"],
-    confidence: 76,
-  },
-];
-
-function buildFromBaseline(baseline: MilaeneCommerceBaseline): ResearchBrainSnapshot {
-  const { productKnowledge, commerceIntelligence, marketPrintIntelligence, knowledge } =
-    baseline;
-
-  const designIntel = buildDesignIntelligenceDashboard(
-    knowledge.products,
-    undefined,
-    commerceIntelligence,
-  );
-
-  const bestsellers =
-    commerceIntelligence.topUnits.length > 0
-      ? commerceIntelligence.topUnits.slice(0, 5).map((p) => p.title)
-      : productKnowledge.bestsellerCandidates.slice(0, 5).map((p) => p.title);
-
-  const weakProducts = designIntel.lowestPerforming
-    .slice(0, 4)
-    .map((p) => p.title);
-
-  const opportunities = [
-    ...productKnowledge.categoryGaps.slice(0, 3).map((g) => `${g} expansion`),
-    ...baseline.insights
-      .filter((i) => i.kind === "expansion" || i.kind === "marketprint")
-      .slice(0, 2)
-      .map((i) => i.message),
-  ].slice(0, 5);
-
-  const categories =
-    productKnowledge.availableCategories.length > 0
-      ? productKnowledge.availableCategories.slice(0, 6)
-      : ["Hoodies", "Tees", "Cargos", "Caps"];
-
-  const marketColors =
-    productKnowledge.availableColors.length > 0
-      ? productKnowledge.availableColors.slice(0, 5)
-      : ["Obsidian Black", "Off-White", "Concrete Grey", "Earth Brown", "Signal Green"];
-
-  const trendInsights = baseline.insights
-    .filter((i) => /trend|season|streetwear|oversized|earth/i.test(i.message))
-    .slice(0, 4)
-    .map((i) => i.message);
-
-  const demandSignals = [
-    commerceIntelligence.allTimeBestseller
-      ? `${commerceIntelligence.allTimeBestseller.title} — top demand`
-      : "Oversized hoodies — rising demand",
-    ...baseline.insights
-      .filter((i) => i.kind === "bestseller" || i.kind === "category")
-      .slice(0, 3)
-      .map((i) => i.message),
-  ].slice(0, 4);
-
-  const newPodProducts = marketPrintIntelligence.catalogMatches
-    .filter((m) => m.match.suitability >= 75)
-    .slice(0, 4)
-    .map((m) => m.title);
-
+function buildBrandBrain(): ResearchBrandBrain {
   return {
-    loadedAt: new Date().toISOString(),
-    commerceConnected: true,
-    brand: {
-      style: "Premium minimalist streetwear — oversized silhouettes, editorial drops",
-      audience: MILAENE_PROFILE.targetAudience,
-      colors: ["Obsidian Black", "Off-White", "Concrete Grey", "Signal Green"],
-      positioning: MILAENE_PROFILE.positioning,
-    },
-    market: {
-      trends:
-        trendInsights.length > 0
-          ? trendInsights
-          : [
-              "Oversized silhouettes accelerating",
-              "Earth tones gaining SS26 momentum",
-              "Premium streetwear segment expanding",
-              "Embroidery as differentiation signal",
-            ],
-      demand: demandSignals,
-      colors: marketColors,
-      categories,
-      sources: ["Reddit", "TikTok", "Pinterest", "Google Trends"],
-    },
-    competitors: DEFAULT_COMPETITORS,
-    products: {
-      bestsellers,
-      weakProducts:
-        weakProducts.length > 0
-          ? weakProducts
-          : ["Low-inventory basics", "Legacy tee variants"],
-      opportunities:
-        opportunities.length > 0
-          ? opportunities
-          : ["Wide-leg cargo expansion", "Premium hoodie embroidery", "Earth tone capsule"],
-      categories,
-    },
-    pod: {
-      primarySupplier: baseline.businessMeta.primarySupplier,
-      secondarySuppliers: MILAENE_PROFILE.secondarySuppliers,
-      availableProducts: productKnowledge.productCount,
-      newProducts:
-        newPodProducts.length > 0
-          ? newPodProducts
-          : ["Premium Hoodie", "Oversized Tee", "Structured Cap"],
-      marketPrintMatches: marketPrintIntelligence.summary.matchedProducts,
-      embroideryReady: marketPrintIntelligence.summary.embroideryCount,
-    },
-    opportunities: DEFAULT_OPPORTUNITIES,
+    style: MILAENE_DNA.style,
+    audience: MILAENE_DNA.audience,
+    positioning: MILAENE_DNA.positioning,
+    colors: MILAENE_DNA.colors.map(
+      (c) => c.charAt(0).toUpperCase() + c.slice(1),
+    ),
+    silhouettes: [...MILAENE_DNA.silhouettes],
+    fulfillment: MILAENE_DNA.fulfillment,
+    quality: MILAENE_DNA.quality,
   };
 }
 
-function buildFallbackSnapshot(): ResearchBrainSnapshot {
+function buildMarketBrain(
+  trends: TrendScore[],
+  products: ReturnType<typeof analyzeProducts>,
+  baseline?: MilaeneCommerceBaseline | null,
+): ResearchMarketBrain {
+  const trendLabels = trends
+    .filter((t) => t.direction === "up")
+    .slice(0, 4)
+    .map((t) => `${t.label} ${formatTrendChange(t)} — DNA ${t.dnaMatch}%`);
+
+  const demandSignals = products.salesTrends.slice(0, 4);
+
   return {
-    loadedAt: new Date().toISOString(),
-    commerceConnected: false,
-    brand: {
-      style: "Premium minimalist streetwear — oversized silhouettes, editorial drops",
-      audience:
-        "18–30 urban creatives — authenticity over hype, underground before mainstream",
-      colors: ["Obsidian Black", "Off-White", "Concrete Grey", "Signal Green"],
-      positioning: MILAENE_PROFILE.positioning,
-    },
-    market: {
-      trends: [
-        "Oversized silhouettes accelerating",
-        "Earth tones gaining SS26 momentum",
-        "Premium streetwear segment expanding",
-        "Embroidery as differentiation signal",
-      ],
-      demand: [
-        "Oversized hoodies — +18% demand signal",
-        "Earth tone palette — rising search volume",
-        "Premium segment — expanding AOV",
-        "Wide-leg cargos — category gap opportunity",
-      ],
-      colors: ["Obsidian Black", "Off-White", "Earth Brown", "Sage", "Signal Green"],
-      categories: ["Hoodies", "Tees", "Cargos", "Caps", "Outerwear"],
-      sources: ["Reddit", "TikTok", "Pinterest", "Google Trends"],
-    },
-    competitors: DEFAULT_COMPETITORS,
-    products: {
-      bestsellers: [
-        "Premium Oversized Hoodie",
-        "Boxy Logo Tee",
-        "Wide-Leg Cargo",
-        "Structured Cap",
-      ],
-      weakProducts: ["Basic Tee Legacy", "Low-conversion sweatpants"],
-      opportunities: [
-        "Earth tone capsule",
-        "Embroidery hero hoodie",
-        "SS26 wide-leg expansion",
-      ],
-      categories: ["Hoodies", "Tees", "Cargos", "Caps"],
-    },
-    pod: {
-      primarySupplier: MILAENE_PROFILE.primarySupplier,
-      secondarySuppliers: MILAENE_PROFILE.secondarySuppliers,
+    trends:
+      trendLabels.length > 0
+        ? trendLabels
+        : [
+            "Oversized +18%",
+            "Earth Tones +22%",
+            "Premium Streetwear +15%",
+            "Embroidery +12%",
+          ],
+    demand:
+      demandSignals.length > 0
+        ? demandSignals
+        : [
+            "Faith Oversized Tee — Top-Nachfrage",
+            "Dream Oversized Tee — stabil",
+            "Heavy Hoodies — Wachstumspotenzial",
+            "Earth tone palette — steigende Suche",
+          ],
+    colors: products.colors,
+    categories: products.categories,
+    sources: baseline
+      ? [...getReadySourceLabels()]
+      : getReadySourceLabels(),
+  };
+}
+
+function buildPodBrain(baseline?: MilaeneCommerceBaseline | null): ResearchPodBrain {
+  if (!baseline) {
+    return {
+      primarySupplier: "MarketPrint Print On Demand",
+      secondarySuppliers: ["Shirtee Cloud", "Printful", "Brandsky"],
       availableProducts: 0,
       newProducts: ["Premium Hoodie", "Oversized Tee", "Embroidery Crewneck"],
       marketPrintMatches: 0,
       embroideryReady: 0,
+    };
+  }
+
+  const { productKnowledge, marketPrintIntelligence } = baseline;
+
+  return {
+    primarySupplier: baseline.businessMeta.primarySupplier,
+    secondarySuppliers: ["Shirtee Cloud", "Printful", "Brandsky", "Brand Canyon"],
+    availableProducts: productKnowledge.productCount,
+    newProducts: analyzeProducts({ baseline }).podProducts,
+    marketPrintMatches: marketPrintIntelligence.summary.matchedProducts,
+    embroideryReady: marketPrintIntelligence.summary.embroideryCount,
+  };
+}
+
+function buildMarketSignalCards(trends: TrendScore[]): MarketSignalCard[] {
+  return [
+    {
+      id: "streetwear",
+      label: "Streetwear Trend Rising",
+      active: trends.some((t) => /streetwear|premium/i.test(t.label) && t.direction === "up"),
     },
-    opportunities: DEFAULT_OPPORTUNITIES,
+    {
+      id: "earth-tones",
+      label: "Earth Tones Growing",
+      active: trends.some((t) => /earth/i.test(t.label) && t.direction === "up"),
+    },
+    {
+      id: "oversized",
+      label: "Oversized Demand",
+      active: trends.some((t) => /oversized|boxy/i.test(t.label) && t.direction === "up"),
+    },
+    {
+      id: "premium",
+      label: "Premium Segment Expanding",
+      active: trends.some((t) => /premium|embroidery/i.test(t.label) && t.direction === "up"),
+    },
+  ];
+}
+
+async function composeSnapshot(
+  bundle: Awaited<ReturnType<typeof import("@/services/researchEngine").loadResearchIntelligence>>,
+): Promise<ResearchBrainSnapshot> {
+  const { products, trends, competitors, opportunities, knowledge, recommendation, signals, baseline } =
+    bundle;
+
+  return {
+    loadedAt: bundle.loadedAt,
+    commerceConnected: bundle.commerceConnected,
+    brand: buildBrandBrain(),
+    market: buildMarketBrain(trends, products, baseline),
+    competitors: competitors.map((c) => ({
+      name: c.name,
+      status: c.status,
+      trendChange: c.trendChange,
+      signal: c.signal,
+      positioning: c.positioning,
+      styleDirection: c.styleDirection,
+      growth: c.growth,
+      newCollections: c.newCollections,
+      marketMovement: c.marketMovement,
+    })),
+    products,
+    pod: buildPodBrain(baseline),
+    opportunities,
+    trendScores: trends,
+    marketSignals: buildMarketSignalCards(trends),
+    knowledge,
+    signals,
+    recommendation,
   };
 }
 
 /** Aggregate Milaene brand, commerce, POD and market intelligence for Research HQ. */
 export async function loadResearchBrainIntelligence(): Promise<ResearchBrainSnapshot> {
-  try {
-    const baseline = await loadMilaeneCommerceBaseline();
-    return buildFromBaseline(baseline);
-  } catch (error) {
-    console.warn("[Research Brain] Commerce baseline unavailable, using fallback", error);
-    return buildFallbackSnapshot();
-  }
+  const { loadResearchIntelligence } = await import("@/services/researchEngine");
+  const bundle = await loadResearchIntelligence();
+  return composeSnapshot(bundle);
 }

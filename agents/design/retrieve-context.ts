@@ -10,6 +10,8 @@ import { buildPromptContext } from "@/brain/context/prompt-builder";
 import { loadBusinessProfile } from "@/lib/business/load-profile";
 import { buildDesignStudioIntelligence } from "@/lib/design/studio-intelligence";
 import { formatDesignStudioPrompt } from "@/lib/design/studio-prompt";
+import { formatDesignBriefForStudio } from "@/lib/research/design-brief";
+import type { BrainReportContent } from "@/brain/domains/reports";
 import { loadShopifyAgentContext } from "@/lib/shopify/agent-context";
 import { loadCommerceIntelligenceSafe } from "@/lib/shopify/commerce-intelligence";
 import { buildShopifyPerformanceIntelligence } from "@/lib/shopify/performance";
@@ -35,10 +37,13 @@ export const DESIGN_CONTEXT_DOMAINS = [
 
 /** Intelligence report tags the Design Agent must consult. */
 export const DESIGN_INTELLIGENCE_TAGS = [
+  "research",
   "trend",
   "competitor",
   "pricing",
+  "audience",
   "ceo-report",
+  "design-brief-handoff",
 ] as const;
 
 export class DesignKnowledgeError extends Error {
@@ -96,6 +101,28 @@ function extractReportTitles(slices: BrainContextSlice[]): string[] {
 function isIntelligenceReport(record: BrainRecord): boolean {
   const tags = record.tags ?? [];
   return DESIGN_INTELLIGENCE_TAGS.some((tag) => tags.includes(tag));
+}
+
+function extractLatestDesignBriefPrompt(slices: BrainContextSlice[]): string | null {
+  const reportSlice = slices.find((s) => s.domain === "reports");
+  if (!reportSlice) return null;
+
+  for (const record of reportSlice.records) {
+    const content = record.content as BrainReportContent;
+    const brief = content.researchSections?.designBrief;
+    if (!brief) continue;
+
+    return [
+      "## RESEARCH HQ DESIGN BRIEF (automatische Übergabe)",
+      formatDesignBriefForStudio({
+        ...brief,
+        sourceReportId: content.reportId,
+        generatedAt: brief.generatedAt,
+      }),
+    ].join("\n");
+  }
+
+  return null;
 }
 
 type ReportSearchBase = Pick<
@@ -284,6 +311,9 @@ export async function retrieveDesignKnowledge(input: {
     performanceIntelligence,
     commerceIntelligence,
   );
+
+  const designBriefSection = extractLatestDesignBriefPrompt(slices);
+
   const promptContext =
     buildPromptContext(
       slices,
@@ -293,6 +323,7 @@ export async function retrieveDesignKnowledge(input: {
       null,
       marketPrintIntelligence,
     ) +
+    (designBriefSection ? `\n\n${designBriefSection}` : "") +
     "\n\n" +
     formatDesignStudioPrompt(studio);
   const reportTitles = extractReportTitles(slices);

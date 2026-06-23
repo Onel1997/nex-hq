@@ -133,7 +133,16 @@ export function ResearchContextPanel({
               </div>
             ) : null}
 
-            {data?.reports[0] ? (
+            {brain?.signals[0] ? (
+              <div className="workspace-context-block research-context-latest">
+                <p className="workspace-context-block-label">
+                  {t("research.context.latestSignal")}
+                </p>
+                <p className="workspace-context-block-text">
+                  {brain.signals[0].message}
+                </p>
+              </div>
+            ) : data?.reports[0] ? (
               <div className="workspace-context-block research-context-latest">
                 <p className="workspace-context-block-label">
                   {t("research.context.latestSignal")}

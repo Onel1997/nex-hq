@@ -25,6 +25,13 @@ interface ResearchResult {
   confidence: number;
   reportType: ResearchReportType;
   savedDomains: string[];
+  designBrief?: {
+    collectionIdea: string;
+    productSuggestions: string[];
+    trendScore: number;
+    competitorScore: number;
+    confidence: number;
+  };
 }
 
 const REPORT_TYPE_STYLES: Record<ResearchReportType, string> = {
@@ -102,6 +109,7 @@ export function ResearchInterface() {
           confidence: data.confidence,
           reportType: data.reportType,
           savedDomains: data.savedDomains,
+          designBrief: data.designBrief,
         });
         setRequest("");
       } catch (err) {
@@ -293,6 +301,25 @@ export function ResearchInterface() {
               ))}
             </ul>
           </div>
+
+          {result.designBrief ? (
+            <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-5">
+              <p className="text-label text-primary">
+                {t("research.brain.aiRecommendation.label")}
+              </p>
+              <p className="font-display text-xl font-medium">
+                {result.designBrief.collectionIdea}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {result.designBrief.productSuggestions.join(" · ")}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t("research.brain.aiRecommendation.fit")}: {result.designBrief.confidence}%
+                · Trend: {result.designBrief.trendScore}% · Konkurrenz:{" "}
+                {result.designBrief.competitorScore}%
+              </p>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6">
             <p className="text-sm text-muted-foreground">

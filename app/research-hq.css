@@ -1373,3 +1373,127 @@
   color: rgb(203 213 225 / 0.78);
 }
 
+/* ── Live signal cards ── */
+.research-signal-card-active {
+  border-color: var(--research-border-subtle);
+  box-shadow: 0 0 12px rgb(168 85 247 / 0.08);
+}
+
+.research-signal-card-active .research-signal-icon {
+  opacity: 1;
+}
+
+/* ── AI Strategic Advice ── */
+.research-ai-recommendation {
+  padding: 1rem 1.1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--research-border-subtle);
+  background: rgb(168 85 247 / 0.04);
+}
+
+.research-ai-recommendation-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.85rem;
+}
+
+.research-ai-recommendation-head h4 {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(196 181 253 / 0.85);
+}
+
+.research-ai-recommendation-icon {
+  color: var(--research-primary);
+}
+
+.research-ai-recommendation-body {
+  display: grid;
+  gap: 0.85rem;
+}
+
+@media (min-width: 640px) {
+  .research-ai-recommendation-body {
+    grid-template-columns: 1.4fr 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.research-ai-recommendation-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--research-status-muted);
+}
+
+.research-ai-recommendation-value {
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: rgb(236 240 245 / 0.95);
+}
+
+.research-ai-recommendation-metrics {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.research-ai-metric-label {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--research-status-muted);
+  margin-bottom: 0.2rem;
+}
+
+.research-ai-metric-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--research-accent);
+}
+
+/* ── Live feed enhancements ── */
+.research-intelligence-feed .workspace-timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.research-feed-live-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--research-accent);
+  box-shadow: 0 0 8px rgb(52 211 153 / 0.45);
+  animation: research-feed-pulse 2s ease-in-out infinite;
+}
+
+@keyframes research-feed-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.research-feed-category {
+  font-weight: 600;
+  color: rgb(196 181 253 / 0.75);
+}
+
+.research-feed-item {
+  transition: opacity 0.35s ease;
+}
+

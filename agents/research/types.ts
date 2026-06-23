@@ -11,6 +11,30 @@ const detailedString = (min: number) => z.string().min(min);
 const bulletList = (min: number, max: number) =>
   z.array(z.string().min(20)).min(min).max(max);
 
+const designColorSchema = z.object({
+  name: z.string(),
+  hex: z.string().optional(),
+  role: z.string(),
+});
+
+export const designBriefSchema = z.object({
+  collectionIdea: z.string().min(3),
+  productSuggestions: z.array(z.string()).min(1).max(8),
+  targetAudience: z.string().min(10),
+  colorPalette: z.array(designColorSchema).min(2).max(8),
+  styleDirection: z.string().min(20),
+  silhouettes: z.array(z.string()).min(1).max(6),
+  trendScore: z.number().min(0).max(100),
+  competitorScore: z.number().min(0).max(100),
+  confidence: z.number().min(0).max(100),
+  rationale: z.string().min(40),
+  opportunityId: z.string().optional(),
+  sourceReportId: z.string().optional(),
+  generatedAt: z.string(),
+});
+
+export type ResearchDesignBriefOutput = z.infer<typeof designBriefSchema>;
+
 const competitorProfileSchema = z.object({
   name: z.string(),
   tier: z.enum(["direct", "aspirational", "emerging", "watchlist"]),
@@ -86,6 +110,7 @@ export const researchOutputSchema = z
         dropVisualDirection: z.string().optional(),
       })
       .optional(),
+    designBrief: designBriefSchema.optional(),
   });
 
 export type ResearchOutput = z.infer<typeof researchOutputSchema>;
@@ -111,4 +136,5 @@ export interface ResearchRunResult {
   confidence: number;
   reportType: ResearchType;
   savedDomains: string[];
+  designBrief: ResearchDesignBriefOutput;
 }

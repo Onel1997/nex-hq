@@ -131,6 +131,13 @@ export const research = {
     competitorIntelligence: "Competitor Intelligence",
     productIntelligence: "Product Intelligence",
     opportunityEngine: "Opportunity Engine",
+    aiRecommendation: {
+      label: "AI Recommendation",
+      nextCollection: "Nächste Kollektion",
+      fit: "Passung",
+      demand: "Nachfrage",
+      products: "Empfohlene Produkte",
+    },
     brand: {
       style: "Stil",
       audience: "Zielgruppe",
@@ -152,10 +159,26 @@ export const research = {
     opportunity: {
       products: "Produkte",
       confidence: "Confidence",
+      match: "Match",
+      productsLabel: "Produkte",
+      colorsLabel: "Farben",
+      potential: "Potential",
+      demand: "Demand",
+      social: "Social",
+      dna: "DNA Match",
+      priority: "Priorität",
     },
   },
   feed: {
     label: "Intelligence Feed",
+    categories: {
+      trend: "Trend",
+      competitor: "Competitor",
+      opportunity: "Opportunity",
+      product: "Product",
+      social: "Social",
+      consumer: "Consumer",
+    },
     events: {
       trend_detected: "Trend detected",
       competitor_updated: "Competitor updated",
@@ -165,9 +188,13 @@ export const research = {
   indicators: {
     label: "Research System Status",
     trendEngine: "Trend Engine Active",
+    trendEngineLive: "Trend Engine · {count} Scores",
     knowledgeBase: "Knowledge Base Synced",
+    knowledgeBaseLive: "Knowledge Base · {count} Reports",
     consumerSignals: "Consumer Signals Live",
+    consumerSignalsLive: "Live Signals · {count}",
     marketScan: "Market Scan Running",
+    marketScanLive: "Market Scan · Shopify Live",
   },
   activity: {
     label: "Research Activity",

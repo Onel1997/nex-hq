@@ -17,6 +17,7 @@ export const EXPECTED_RESEARCH_SCHEMA = {
   competitorIntelligence: "optional { competitors, competitiveEdge, ... }",
   marketingMemory: "optional { name, objective, notes, ... }",
   designMemory: "optional { silhouettes, moodKeywords, ... }",
+  designBrief: "auto-generated server-side — collectionIdea, productSuggestions, colorPalette, trendScore, competitorScore",
 } as const;
 
 export class ResearchParseError extends Error {

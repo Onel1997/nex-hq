@@ -17,6 +17,7 @@ export interface SaveResearchInput {
   request: string;
   output: ResearchOutput;
   originTaskId?: string;
+  reportId?: string;
 }
 
 export interface SaveResearchResult {
@@ -61,6 +62,23 @@ function buildResearchSections(
     };
   }
 
+  if (output.designBrief) {
+    sections.designBrief = {
+      collectionIdea: output.designBrief.collectionIdea,
+      productSuggestions: output.designBrief.productSuggestions,
+      targetAudience: output.designBrief.targetAudience,
+      colorPalette: output.designBrief.colorPalette,
+      styleDirection: output.designBrief.styleDirection,
+      silhouettes: output.designBrief.silhouettes,
+      trendScore: output.designBrief.trendScore,
+      competitorScore: output.designBrief.competitorScore,
+      confidence: output.designBrief.confidence,
+      rationale: output.designBrief.rationale,
+      opportunityId: output.designBrief.opportunityId,
+      generatedAt: output.designBrief.generatedAt,
+    };
+  }
+
   return sections;
 }
 
@@ -68,7 +86,7 @@ export async function saveResearchToBrain(
   input: SaveResearchInput,
 ): Promise<SaveResearchResult> {
   const brain = getBrainClient();
-  const reportId = crypto.randomUUID();
+  const reportId = input.reportId ?? crypto.randomUUID();
   const { taskId, originTaskId } = resolveReportTaskIds(
     input.originTaskId,
     reportId,
@@ -111,7 +129,15 @@ export async function saveResearchToBrain(
     summary: input.output.executiveSummary,
     content: reportContent,
     status: "pending_review",
-    tags: ["research", input.output.reportType, "agent-generated"],
+    tags: [
+      "research",
+      input.output.reportType,
+      "agent-generated",
+      "design-brief-handoff",
+      input.output.reportType === "trend" ? "trend" : "",
+      input.output.reportType === "competitor" ? "competitor" : "",
+      input.output.reportType === "audience" ? "audience" : "",
+    ].filter(Boolean),
     provenance: {
       createdBy: { type: "agent", id: "research" },
       sourceTaskId: taskId,
