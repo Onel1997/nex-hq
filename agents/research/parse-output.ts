@@ -2,8 +2,11 @@ import { z } from "zod";
 import { enrichResearchPayload } from "./enrich-output";
 import {
   coerceConceptField,
+  finalizeDesignConceptsForValidation,
   normalizeDesignConcepts,
 } from "./design-concept";
+import { MILAENE_BRAND_DNA } from "./brand-dna";
+import { applyCollectionEngine } from "./collection-engine";
 import {
   designResearchOutputSchema,
   researchOutputSchema,
@@ -36,7 +39,11 @@ export const EXPECTED_RESEARCH_SCHEMA = {
 export const EXPECTED_DESIGN_RESEARCH_SCHEMA = {
   title: "string (required)",
   designs:
-    "DesignConcept[] (required, 5–8 concepts; each with unique creativeApproach; art-direction fields: exactComposition, graphicElements, elementCount, layoutDescription, visualHierarchy, colorBreakdown[], materialEffects, negativeSpaceUsage, designInstructions[], mockupDescription; measurable specs required — no vague moodboard language)",
+    "DesignConcept[] (required, 5–8 connected concepts in one capsule; designId, supportsDesignId, collectionRole; brand-DNA + visual-DNA fields; concepts below 65% DNA fit rejected server-side)",
+  collection:
+    "ResearchCollection (optional in LLM output — server builds: name, type, story, mood, philosophy, heroDesignId, supportingDesignIds[], colorDirection[], targetAudience, dropStrategy, collectionScore, ceoRecommendation, collectionImagePrompt, campaignTheme, heroProduct)",
+  brandDNA:
+    "BrandDna object (optional — server attaches Milaene core DNA: philosophy, forbiddenStyles, preferredSilhouettes, preferredPlacements, signatureElements, emotionalGoals, materialLanguage, typographyRules)",
   products: "string[] (optional — real catalog products only)",
   colors: "string[] (optional — available variant colors only)",
   materials: "string[] (optional)",
@@ -667,8 +674,42 @@ function normalizeDesignResearchPayload(
     adjustments,
   );
   if (designs) {
-    normalized.designs = designs;
+    const collectionResult = applyCollectionEngine(
+      designs,
+      {
+        title: context.title,
+        collectionIdea: context.collectionIdea,
+        targetAudience: context.targetAudience,
+        colors: context.colors,
+        rationale: coerceConceptField(normalized.rationale),
+        collection:
+          normalized.collection && typeof normalized.collection === "object"
+            ? (normalized.collection as Partial<import("./types").ResearchCollection>)
+            : undefined,
+      },
+      adjustments,
+    );
+    const finalizedDesigns = finalizeDesignConceptsForValidation(
+      collectionResult.designs,
+      context,
+    );
+    const heroDesign = finalizedDesigns.find(
+      (design) => design.designId === collectionResult.collection.heroDesignId,
+    );
+    normalized.designs = finalizedDesigns;
+    normalized.collection = {
+      ...collectionResult.collection,
+      heroProduct: {
+        ...collectionResult.collection.heroProduct,
+        product:
+          collectionResult.collection.heroProduct.product.trim() ||
+          heroDesign?.product ||
+          "Faith Oversized Hoodie",
+      },
+    };
   }
+
+  normalized.brandDNA = MILAENE_BRAND_DNA;
 
   for (const field of [
     "products",
@@ -723,6 +764,8 @@ function validateDesignResearchPayload(
   if (result.success) {
     return result.data;
   }
+
+  console.log(JSON.stringify(result.error.issues, null, 2));
 
   logValidationIssues(result.error.issues, parsed, "Design schema validation issues");
 

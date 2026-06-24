@@ -14,6 +14,7 @@ import {
   formatDesignConceptMarkdown,
   summarizeDesignConcepts,
 } from "./design-concept";
+import { formatCollectionMarkdown } from "./collection-engine";
 import {
   isDesignResearchOutput,
   type DesignResearchOutput,
@@ -164,6 +165,8 @@ async function saveDesignResearchToBrain(
   const confidence = output.confidence ?? 0.75;
   const fullAnalysis = [
     `# ${output.title}`,
+    "",
+    formatCollectionMarkdown(output.collection),
     "",
     "## Design-Konzepte",
     ...output.designs.map((design, index) =>

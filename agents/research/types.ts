@@ -177,6 +177,14 @@ export type CreativeApproach = (typeof CREATIVE_APPROACHES)[number];
 
 export const PRODUCTION_DIFFICULTY_LEVELS = ["Low", "Medium", "High"] as const;
 
+export const CONTRAST_LEVELS = ["Low", "Medium", "High"] as const;
+export const VISUAL_WEIGHTS = ["Heavy", "Balanced", "Light"] as const;
+export const BALANCE_TYPES = ["Symmetrical", "Asymmetrical"] as const;
+
+export type ContrastLevel = (typeof CONTRAST_LEVELS)[number];
+export type VisualWeight = (typeof VISUAL_WEIGHTS)[number];
+export type BalanceType = (typeof BALANCE_TYPES)[number];
+
 export const colorBreakdownEntrySchema = z.object({
   color: z.string().min(2),
   usage: z.string().min(2),
@@ -184,7 +192,74 @@ export const colorBreakdownEntrySchema = z.object({
 
 export type ColorBreakdownEntry = z.infer<typeof colorBreakdownEntrySchema>;
 
+export const brandDnaSchema = z.object({
+  philosophy: z.array(z.string().min(2)).min(1),
+  forbiddenStyles: z.array(z.string().min(2)).min(1),
+  preferredSilhouettes: z.array(z.string().min(2)).min(1),
+  preferredPlacements: z.array(z.string().min(2)).min(1),
+  signatureElements: z.array(z.string().min(2)).min(1),
+  emotionalGoals: z.array(z.string().min(2)).min(1),
+  materialLanguage: z.array(z.string().min(2)).min(1),
+  typographyRules: z.array(z.string().min(2)).min(1),
+});
+
+export type BrandDna = z.infer<typeof brandDnaSchema>;
+
+export const COLLECTION_ROLES = [
+  "Hero Piece",
+  "Core Essential",
+  "Statement Piece",
+  "Supporting Piece",
+  "Limited Piece",
+] as const;
+
+export const COLLECTION_TYPES = [
+  "Editorial Capsule",
+  "Quiet Luxury Capsule",
+  "Seasonal Drop",
+  "Minimal Essentials",
+  "Nature Collection",
+  "Symbolic Collection",
+  "Limited Capsule",
+] as const;
+
+export const REPEATABILITY_SCORES = ["Low", "Medium", "High"] as const;
+
+export type CollectionRole = (typeof COLLECTION_ROLES)[number];
+export type CollectionType = (typeof COLLECTION_TYPES)[number];
+export type RepeatabilityScore = (typeof REPEATABILITY_SCORES)[number];
+
+export const heroProductSchema = z.object({
+  product: z.string().min(1),
+  estimatedRetailPrice: z.string().min(2),
+  productionComplexity: z.enum(PRODUCTION_DIFFICULTY_LEVELS),
+  commercialConfidence: z.number().min(0).max(100),
+});
+
+export type HeroProduct = z.infer<typeof heroProductSchema>;
+
+export const researchCollectionSchema = z.object({
+  name: z.string().min(3),
+  type: z.enum(COLLECTION_TYPES),
+  story: z.string().min(20),
+  mood: z.string().min(5),
+  philosophy: z.string().min(10),
+  heroDesignId: z.string().min(1),
+  supportingDesignIds: z.array(z.string().min(1)).min(1),
+  colorDirection: z.array(z.string().min(2)).min(2).max(6),
+  targetAudience: z.string().min(10),
+  dropStrategy: z.string().min(20),
+  collectionScore: z.number().min(0).max(100),
+  ceoRecommendation: z.string().min(5),
+  collectionImagePrompt: conceptText(20),
+  campaignTheme: z.string().min(3),
+  heroProduct: heroProductSchema,
+});
+
+export type ResearchCollection = z.infer<typeof researchCollectionSchema>;
+
 export const designConceptSchema = z.object({
+  designId: z.string().min(1),
   title: conceptText(3),
   creativeApproach: z.enum(CREATIVE_APPROACHES),
   product: conceptText(1),
@@ -216,6 +291,29 @@ export const designConceptSchema = z.object({
   negativeSpaceUsage: conceptText(10),
   designInstructions: z.array(z.string().min(10)).min(3).max(10),
   mockupDescription: conceptText(20),
+  geometry: conceptText(5),
+  dimensions: conceptText(5),
+  coordinates: conceptText(5),
+  rotation: conceptText(3),
+  spacing: conceptText(3),
+  strokeWidth: conceptText(3),
+  opacity: conceptText(3),
+  layerOrder: conceptText(5),
+  contrastLevel: z.enum(CONTRAST_LEVELS),
+  textureIntensity: conceptText(3),
+  visualWeight: z.enum(VISUAL_WEIGHTS),
+  balance: z.enum(BALANCE_TYPES),
+  alignment: conceptText(3),
+  focalPoint: conceptText(5),
+  edgeTreatment: conceptText(5),
+  dnaScore: z.number().min(0).max(100),
+  dnaMatches: z.array(z.string().min(3)).min(1).max(8),
+  dnaConflicts: z.array(z.string().min(3)).max(6),
+  whyFitsMilaene: z.array(z.string().min(10)).min(2).max(8),
+  collectionRole: z.enum(COLLECTION_ROLES),
+  repeatabilityScore: z.enum(REPEATABILITY_SCORES),
+  imagePromptCore: conceptText(20),
+  supportsDesignId: z.string().optional(),
 });
 
 export type DesignConcept = z.infer<typeof designConceptSchema>;
@@ -224,6 +322,8 @@ export type DesignConcept = z.infer<typeof designConceptSchema>;
 export const designResearchOutputSchema = z.object({
   title: z.string().min(1),
   designs: z.array(designConceptSchema).min(5).max(8),
+  collection: researchCollectionSchema,
+  brandDNA: brandDnaSchema.optional(),
   products: z.array(z.string()).optional(),
   colors: z.array(z.string()).optional(),
   materials: z.array(z.string()).optional(),
@@ -259,6 +359,7 @@ export interface ResearchRunResult {
   title: string;
   outputKind: "research" | "design";
   designs?: DesignConcept[];
+  collection?: ResearchCollection;
   products?: string[];
   colors?: string[];
   materials?: string[];

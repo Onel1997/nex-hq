@@ -1,10 +1,21 @@
 import {
+  BALANCE_TYPES,
+  CONTRAST_LEVELS,
   CREATIVE_APPROACHES,
   PRODUCTION_DIFFICULTY_LEVELS,
+  VISUAL_WEIGHTS,
+  type BalanceType,
   type ColorBreakdownEntry,
+  type ContrastLevel,
   type CreativeApproach,
   type DesignConcept,
+  type VisualWeight,
 } from "./types";
+import {
+  applyBrandDnaAnalysis,
+  DNA_MIN_SCORE,
+} from "./brand-dna";
+import type { CollectionRole, RepeatabilityScore } from "./types";
 
 export interface NormalizeDesignConceptContext {
   title?: string;
@@ -44,6 +55,24 @@ type ArtDirectionProfile = {
   negativeSpaceUsage: string;
   designInstructions: string[];
   mockupDescription: string;
+};
+
+type VisualDnaProfile = {
+  geometry: string;
+  dimensions: string;
+  coordinates: string;
+  rotation: string;
+  spacing: string;
+  strokeWidth: string;
+  opacity: string;
+  layerOrder: string;
+  contrastLevel: ContrastLevel;
+  textureIntensity: string;
+  visualWeight: VisualWeight;
+  balance: BalanceType;
+  alignment: string;
+  focalPoint: string;
+  edgeTreatment: string;
 };
 
 const APPROACH_ALIASES: Record<string, CreativeApproach> = {
@@ -475,11 +504,168 @@ const ART_DIRECTION_BY_APPROACH: Record<CreativeApproach, ArtDirectionProfile> =
   },
 };
 
+const VISUAL_DNA_BY_APPROACH: Record<CreativeApproach, VisualDnaProfile> = {
+  "Typography Design": {
+    geometry: "2 rectangular type blocks + 1 rectangular distress overlay",
+    dimensions: "26 cm wide × 12 cm tall bounding box",
+    coordinates: "centered on chest vertical axis, top edge 8 cm below collar seam",
+    rotation: "0° — perfectly horizontal",
+    spacing: "1.2 cm between headline baseline and subline",
+    strokeWidth: "headline raised 0.3 mm; subline flat ink",
+    opacity: "distress overlay 15%",
+    layerOrder: "1) garment base 2) headline plastisol 3) subline 4) distress texture",
+    contrastLevel: "High",
+    textureIntensity: "15%",
+    visualWeight: "Heavy",
+    balance: "Symmetrical",
+    alignment: "center",
+    focalPoint: "condensed headline at 8.5 cm cap height",
+    edgeTreatment: "soft fade on right distress edge (40% over final 3 cm)",
+  },
+  "Symbolic Illustration": {
+    geometry: "1 crown icon (arc-based crest) + 1 rose silhouette + 1 caption line",
+    dimensions: "emblem 18 cm tall × 9 cm wide (crown 9 cm, rose 7 cm)",
+    coordinates: "spine-centered on back, emblem top 10 cm below yoke seam",
+    rotation: "0° — vertical emblem stack",
+    spacing: "4 cm between crown and rose centers; 1.5 cm crown-to-caption gap",
+    strokeWidth: "outer stroke 2.5 mm; inner detail strokes 1 mm",
+    opacity: "100% flat fills — no transparency on icons",
+    layerOrder: "1) garment base 2) rose fill 3) crown outline 4) caption line",
+    contrastLevel: "High",
+    textureIntensity: "0% — flat vector, no grain",
+    visualWeight: "Heavy",
+    balance: "Symmetrical",
+    alignment: "center",
+    focalPoint: "cracked crown icon at upper emblem position",
+    edgeTreatment: "hard cut vector edges — no feather or fade",
+  },
+  "Abstract Graphic": {
+    geometry: "4 angular polygon shards + 1 halftone gradient field + 1 grain overlay",
+    dimensions: "38 cm wide × 42 cm tall front panel zone",
+    coordinates: "inset 5 cm from side seams, centered on front torso",
+    rotation: "shards rotated 18°–32° diagonal",
+    spacing: "2–3 cm overlap at shard intersections only",
+    strokeWidth: "shard edges 0 mm — color-to-color hard boundary",
+    opacity: "largest shard 70%; grain overlay 12%",
+    layerOrder: "1) garment base 2) halftone field 3) shard fills (back to front) 4) grain overlay",
+    contrastLevel: "High",
+    textureIntensity: "12% grain across full panel",
+    visualWeight: "Heavy",
+    balance: "Asymmetrical",
+    alignment: "diagonal",
+    focalPoint: "upper-left shard at 70% opacity — largest color mass",
+    edgeTreatment: "hard cut shard boundaries — no feather",
+  },
+  "Minimal Back Print": {
+    geometry: "1 monoline eye icon (ellipse + arc strokes) + 1 caption line",
+    dimensions: "eye icon 4 cm wide; caption line 6 cm wide",
+    coordinates: "upper back spine-centered, icon top 12 cm below collar",
+    rotation: "0° — perfectly horizontal icon and caption",
+    spacing: "0.8 cm between icon bottom and caption top",
+    strokeWidth: "uniform 1.2 mm monoline stroke, 0.3 mm terminal radius",
+    opacity: "100% — single-pass matte ink",
+    layerOrder: "1) garment base 2) eye icon stroke 3) caption microtype",
+    contrastLevel: "Low",
+    textureIntensity: "0% — zero distress, zero grain",
+    visualWeight: "Light",
+    balance: "Symmetrical",
+    alignment: "center",
+    focalPoint: "monoline eye icon at 4 cm scale",
+    edgeTreatment: "hard cut stroke terminals — no fade",
+  },
+  "Photography Style": {
+    geometry: "1 rectangular photo panel + 1 irregular torn-edge mask + 1 grain overlay",
+    dimensions: "34 cm wide × 38 cm tall back panel",
+    coordinates: "spine-centered on back, 6 cm margins from side seams",
+    rotation: "0° — vertical photo panel, figure grounded bottom",
+    spacing: "horizon line at upper third; figure occupies lower two-thirds",
+    strokeWidth: "torn mask irregular shave max 0.5 cm on left border",
+    opacity: "grain overlay 20%; photo panel 100%",
+    layerOrder: "1) garment base 2) B&W photo panel 3) torn-edge mask 4) grain overlay 5) credit microline",
+    contrastLevel: "High",
+    textureIntensity: "20% halftone grain at 40 LPI",
+    visualWeight: "Heavy",
+    balance: "Asymmetrical",
+    alignment: "center",
+    focalPoint: "lone figure silhouette in lower two-thirds of frame",
+    edgeTreatment: "distressed torn edge on left border (max 0.5 cm irregular)",
+  },
+  "Japanese Editorial": {
+    geometry: "1 vertical kanji column (rectangle) + 1 narrow photo strip (rectangle) + 1 date stamp line",
+    dimensions: "kanji 3.2 cm × 14 cm; photo strip 2.8 cm × 16 cm; date stamp 4 cm × 0.6 cm",
+    coordinates: "kanji 5 cm left of chest center, top 9 cm below collar; photo strip 1.5 cm right of kanji",
+    rotation: "0° — vertical column alignment, no rotation",
+    spacing: "1.5 cm between kanji column and photo strip; date stamp flush under kanji baseline",
+    strokeWidth: "kanji strokes 1.5 mm equivalent weight; date stamp 0.4 mm",
+    opacity: "kanji 100% matte black; photo strip 100%; date stamp flat grey",
+    layerOrder: "1) garment base 2) DTG photo strip 3) kanji screen print 4) date stamp",
+    contrastLevel: "High",
+    textureIntensity: "5% — soft gradient only in blossom petals",
+    visualWeight: "Balanced",
+    balance: "Asymmetrical",
+    alignment: "left",
+    focalPoint: "kanji column — darkest ink mass on left chest",
+    edgeTreatment: "hard cut column edges — editorial margin, no fade",
+  },
+  "Vintage Archive": {
+    geometry: "1 collegiate arch (curved text path) + 1 inner date arc + 2 texture overlays",
+    dimensions: "arch 26 cm wide × 11 cm tall bounding box",
+    coordinates: "center chest, arch apex 7 cm below collar seam",
+    rotation: "0° — symmetrical arch on vertical chest axis",
+    spacing: "1.8 cm radial offset between outer arch and inner date arc",
+    strokeWidth: "arch letterforms 2 mm plastisol; crack overlay 0.5 mm hairlines",
+    opacity: "crack overlay 25%; discharge fade targets 20% opacity loss",
+    layerOrder: "1) garment base 2) discharge underbase 3) arch wordmark 4) date arc 5) crack overlay 6) flock apex",
+    contrastLevel: "Medium",
+    textureIntensity: "25% crack distress + flock on apex 6 cm segment",
+    visualWeight: "Heavy",
+    balance: "Symmetrical",
+    alignment: "center",
+    focalPoint: "collegiate arch outer wordmark at apex",
+    edgeTreatment: "distressed crack texture at 25% across full arch box",
+  },
+  "Luxury Minimalism": {
+    geometry: "1 spaced-caps wordmark (single horizontal line of letterforms)",
+    dimensions: "12 cm wide × 1.1 cm cap height",
+    coordinates: "left chest 7 cm below collar, 6 cm in from left shoulder seam",
+    rotation: "0° — perfectly horizontal tracked caps",
+    spacing: "+240 letter tracking across wordmark",
+    strokeWidth: "0.8 mm embroidery stitch height or tone-on-tone flat ink",
+    opacity: "tone-on-tone ink within 8% ΔE of garment — effectively 6% visual contrast",
+    layerOrder: "1) garment fleece base 2) tone-on-tone wordmark only",
+    contrastLevel: "Low",
+    textureIntensity: "0% — zero distress, zero gloss",
+    visualWeight: "Light",
+    balance: "Asymmetrical",
+    alignment: "left",
+    focalPoint: "first letterform of spaced-caps wordmark on heart line",
+    edgeTreatment: "hard cut letterforms — matte hand, no fade",
+  },
+};
+
+const MILAENE_PREFERRED_APPROACHES: CreativeApproach[] = [
+  "Luxury Minimalism",
+  "Minimal Back Print",
+  "Japanese Editorial",
+  "Typography Design",
+];
+
+const DEFAULT_CATALOG_PRODUCT = "Faith Oversized Hoodie";
+const DEFAULT_MILAENE_COLORS = [
+  "Natural Raw",
+  "Sand",
+  "Soft Black",
+  "washed black",
+] as const;
+
 const REPETITIVE_MOTIFS =
   /\b(line drawing|line drawings|fading lines?|memory|memories|silhouette|silhouettes|hands reaching|broken connection|ghosted outline|fading hands?)\b/i;
 
 const VAGUE_ART_DIRECTION =
-  /\b(minimal lines?|abstract shapes?|soft pattern|flowing forms?|flows across|subtle pattern|gentle curves?|ethereal|soft graphic|abstract motif)\b/i;
+  /\b(minimal lines?|abstract shapes?|soft pattern|flowing forms?|flows across|subtle pattern|gentle curves?|ethereal|soft graphic|abstract motif|minimal pattern|subtle effect|artistic lines?)\b/i;
+
+const VAGUE_VISUAL_DNA =
+  /\b(abstract shapes?|flowing forms?|minimal pattern|subtle effect|artistic lines?|organic form|soft curves?|gentle waves?|vague|approximate|roughly)\b/i;
 
 /** Safely coerce nested AI values to displayable strings — never `[object Object]`. */
 export function coerceConceptField(value: unknown): string {
@@ -525,6 +711,43 @@ function ensureMinLength(value: string, min: number, fallback: string): string {
   return fallback.trim().length >= min ? fallback : `${fallback} ${trimmed}`.trim();
 }
 
+function resolveConceptProduct(
+  value: string,
+  context: NormalizeDesignConceptContext,
+  index: number,
+): string {
+  return ensureMinLength(
+    value || pickAt(context.products, index),
+    1,
+    DEFAULT_CATALOG_PRODUCT,
+  );
+}
+
+function resolveConceptColor(
+  value: string,
+  context: NormalizeDesignConceptContext,
+  index: number,
+): string {
+  return ensureMinLength(
+    value || pickAt(context.colors, index),
+    1,
+    DEFAULT_MILAENE_COLORS[index % DEFAULT_MILAENE_COLORS.length],
+  );
+}
+
+export function finalizeDesignConceptsForValidation(
+  designs: DesignConcept[],
+  context: NormalizeDesignConceptContext,
+): DesignConcept[] {
+  return designs.map((design, index) => ({
+    ...design,
+    product: resolveConceptProduct(design.product, context, index),
+    color: resolveConceptColor(design.color, context, index),
+    printArea: ensureMinLength(design.printArea, 1, "Front"),
+    supportsDesignId: design.supportsDesignId?.trim() || undefined,
+  }));
+}
+
 export function normalizeCreativeApproach(value: unknown): CreativeApproach | undefined {
   const raw = coerceConceptField(value);
   if (!raw) return undefined;
@@ -538,6 +761,35 @@ export function normalizeCreativeApproach(value: unknown): CreativeApproach | un
 function normalizeProductionDifficulty(
   value: unknown,
 ): (typeof PRODUCTION_DIFFICULTY_LEVELS)[number] {
+  const raw = coerceConceptField(value).toLowerCase();
+  if (raw.includes("high") || raw.includes("hoch")) return "High";
+  if (raw.includes("low") || raw.includes("niedrig")) return "Low";
+  return "Medium";
+}
+
+function normalizeCollectionRole(value: unknown): CollectionRole {
+  const raw = coerceConceptField(value);
+  if (raw.toLowerCase().includes("limited")) return "Limited Piece";
+  const roles = [
+    "Hero Piece",
+    "Core Essential",
+    "Statement Piece",
+    "Supporting Piece",
+    "Limited Piece",
+  ] as const;
+  const hit = roles.find((role) => raw.toLowerCase().includes(role.toLowerCase()));
+  return hit ?? "Supporting Piece";
+}
+
+function slugDesignId(title: string, index: number): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return slug || `design-${index + 1}`;
+}
+
+function normalizeRepeatabilityScore(value: unknown): RepeatabilityScore {
   const raw = coerceConceptField(value).toLowerCase();
   if (raw.includes("high") || raw.includes("hoch")) return "High";
   if (raw.includes("low") || raw.includes("niedrig")) return "Low";
@@ -561,6 +813,94 @@ function isRepetitiveVisual(text: string): boolean {
 
 function isVagueArtDirection(...texts: string[]): boolean {
   return texts.some((text) => text.trim() && VAGUE_ART_DIRECTION.test(text));
+}
+
+function isVagueVisualDna(...texts: string[]): boolean {
+  return texts.some((text) => text.trim() && VAGUE_VISUAL_DNA.test(text));
+}
+
+function normalizeContrastLevel(value: unknown): ContrastLevel {
+  const raw = coerceConceptField(value).toLowerCase();
+  if (raw.includes("low") || raw.includes("niedrig")) return "Low";
+  if (raw.includes("high") || raw.includes("hoch")) return "High";
+  return "Medium";
+}
+
+function normalizeVisualWeight(value: unknown): VisualWeight {
+  const raw = coerceConceptField(value).toLowerCase();
+  if (raw.includes("light") || raw.includes("leicht")) return "Light";
+  if (raw.includes("heavy") || raw.includes("schwer")) return "Heavy";
+  return "Balanced";
+}
+
+function normalizeBalance(value: unknown): BalanceType {
+  const raw = coerceConceptField(value).toLowerCase();
+  if (raw.includes("asym")) return "Asymmetrical";
+  return "Symmetrical";
+}
+
+function pickVisualDnaFields(source: Record<string, unknown>): Partial<VisualDnaProfile> {
+  const nested =
+    source.visualDna && typeof source.visualDna === "object" && !Array.isArray(source.visualDna)
+      ? (source.visualDna as Record<string, unknown>)
+      : {};
+  const merged = { ...source, ...nested };
+
+  return {
+    geometry: pickField(merged, ["geometry", "shapes", "form"]),
+    dimensions: pickField(merged, ["dimensions", "size", "measurements"]),
+    coordinates: pickField(merged, ["coordinates", "position", "placement", "positioning"]),
+    rotation: pickField(merged, ["rotation", "angle", "orientation"]),
+    spacing: pickField(merged, ["spacing", "gap", "distance"]),
+    strokeWidth: pickField(merged, ["strokeWidth", "stroke", "lineThickness", "lineWeight"]),
+    opacity: pickField(merged, ["opacity", "transparency", "alpha"]),
+    layerOrder: pickField(merged, ["layerOrder", "layers", "layering", "zOrder"]),
+    contrastLevel: normalizeContrastLevel(merged.contrastLevel ?? merged.contrast),
+    textureIntensity: pickField(merged, ["textureIntensity", "texture", "grainIntensity"]),
+    visualWeight: normalizeVisualWeight(merged.visualWeight ?? merged.weight),
+    balance: normalizeBalance(merged.balance ?? merged.symmetry),
+    alignment: pickField(merged, ["alignment", "align"]),
+    focalPoint: pickField(merged, ["focalPoint", "focus", "eyePath", "primaryFocus"]),
+    edgeTreatment: pickField(merged, ["edgeTreatment", "edges", "edgeFinish", "edgeFade"]),
+  };
+}
+
+function applyVisualDna(
+  concept: DesignConcept,
+  dna: VisualDnaProfile,
+  overwrite = false,
+): DesignConcept {
+  const vague = isVagueVisualDna(
+    concept.geometry,
+    concept.coordinates,
+    concept.dimensions,
+    concept.focalPoint,
+  );
+  const shouldOverwrite = overwrite || vague;
+
+  const pick = (current: string, fallback: string, min = 3) =>
+    shouldOverwrite || !current.trim() || current.trim().length < min || isVagueVisualDna(current)
+      ? fallback
+      : current;
+
+  return {
+    ...concept,
+    geometry: pick(concept.geometry, dna.geometry, 5),
+    dimensions: pick(concept.dimensions, dna.dimensions, 5),
+    coordinates: pick(concept.coordinates, dna.coordinates, 5),
+    rotation: pick(concept.rotation, dna.rotation, 3),
+    spacing: pick(concept.spacing, dna.spacing, 3),
+    strokeWidth: pick(concept.strokeWidth, dna.strokeWidth, 3),
+    opacity: pick(concept.opacity, dna.opacity, 3),
+    layerOrder: pick(concept.layerOrder, dna.layerOrder, 5),
+    contrastLevel: shouldOverwrite ? dna.contrastLevel : concept.contrastLevel || dna.contrastLevel,
+    textureIntensity: pick(concept.textureIntensity, dna.textureIntensity, 3),
+    visualWeight: shouldOverwrite ? dna.visualWeight : concept.visualWeight || dna.visualWeight,
+    balance: shouldOverwrite ? dna.balance : concept.balance || dna.balance,
+    alignment: pick(concept.alignment, dna.alignment, 3),
+    focalPoint: pick(concept.focalPoint, dna.focalPoint, 5),
+    edgeTreatment: pick(concept.edgeTreatment, dna.edgeTreatment, 5),
+  };
 }
 
 function normalizeStringList(value: unknown, minLength = 3): string[] {
@@ -636,6 +976,7 @@ function mergeApproachProfile(
   overwriteVisual = false,
 ): DesignConcept {
   const art = ART_DIRECTION_BY_APPROACH[concept.creativeApproach];
+  const dna = VISUAL_DNA_BY_APPROACH[concept.creativeApproach];
   const vague = isVagueArtDirection(
     concept.exactComposition,
     concept.layoutDescription,
@@ -656,45 +997,49 @@ function mergeApproachProfile(
     fallback: ColorBreakdownEntry[],
   ) => (overwriteArt || current.length < 2 ? fallback : current);
 
-  return {
-    ...concept,
-    styleDirection: concept.styleDirection || profile.styleDirection,
-    emotion: concept.emotion || profile.emotion,
-    visualConcept:
-      overwriteVisual || !concept.visualConcept || isVagueArtDirection(concept.visualConcept)
-        ? profile.visualConcept
-        : concept.visualConcept,
-    designDescription:
-      overwriteVisual || !concept.designDescription
-        ? profile.designDescription
-        : concept.designDescription,
-    message: concept.message || profile.message,
-    typography: concept.typography || profile.typography,
-    symbolism: concept.symbolism || profile.symbolism,
-    printTechnique: concept.printTechnique || profile.printTechnique,
-    printSize: concept.printSize || profile.printSize,
-    placementDimensions:
-      concept.placementDimensions || profile.placementDimensions,
-    garmentInspiration:
-      concept.garmentInspiration || profile.garmentInspiration,
-    brandInspiration: concept.brandInspiration || profile.brandInspiration,
-    productionDifficulty:
-      concept.productionDifficulty || profile.productionDifficulty,
-    visualReferences: concept.visualReferences || profile.visualReferences,
-    exactComposition: pickArtString(concept.exactComposition, art.exactComposition),
-    graphicElements: pickArtList(concept.graphicElements, art.graphicElements),
-    elementCount: pickArtString(concept.elementCount, art.elementCount),
-    layoutDescription: pickArtString(concept.layoutDescription, art.layoutDescription),
-    visualHierarchy: pickArtString(concept.visualHierarchy, art.visualHierarchy),
-    colorBreakdown: pickColorBreakdown(concept.colorBreakdown, art.colorBreakdown),
-    materialEffects: pickArtString(concept.materialEffects, art.materialEffects),
-    negativeSpaceUsage: pickArtString(
-      concept.negativeSpaceUsage,
-      art.negativeSpaceUsage,
-    ),
-    designInstructions: pickArtList(concept.designInstructions, art.designInstructions),
-    mockupDescription: pickArtString(concept.mockupDescription, art.mockupDescription),
-  };
+  return applyVisualDna(
+    {
+      ...concept,
+      styleDirection: concept.styleDirection || profile.styleDirection,
+      emotion: concept.emotion || profile.emotion,
+      visualConcept:
+        overwriteVisual || !concept.visualConcept || isVagueArtDirection(concept.visualConcept)
+          ? profile.visualConcept
+          : concept.visualConcept,
+      designDescription:
+        overwriteVisual || !concept.designDescription
+          ? profile.designDescription
+          : concept.designDescription,
+      message: concept.message || profile.message,
+      typography: concept.typography || profile.typography,
+      symbolism: concept.symbolism || profile.symbolism,
+      printTechnique: concept.printTechnique || profile.printTechnique,
+      printSize: concept.printSize || profile.printSize,
+      placementDimensions:
+        concept.placementDimensions || profile.placementDimensions,
+      garmentInspiration:
+        concept.garmentInspiration || profile.garmentInspiration,
+      brandInspiration: concept.brandInspiration || profile.brandInspiration,
+      productionDifficulty:
+        concept.productionDifficulty || profile.productionDifficulty,
+      visualReferences: concept.visualReferences || profile.visualReferences,
+      exactComposition: pickArtString(concept.exactComposition, art.exactComposition),
+      graphicElements: pickArtList(concept.graphicElements, art.graphicElements),
+      elementCount: pickArtString(concept.elementCount, art.elementCount),
+      layoutDescription: pickArtString(concept.layoutDescription, art.layoutDescription),
+      visualHierarchy: pickArtString(concept.visualHierarchy, art.visualHierarchy),
+      colorBreakdown: pickColorBreakdown(concept.colorBreakdown, art.colorBreakdown),
+      materialEffects: pickArtString(concept.materialEffects, art.materialEffects),
+      negativeSpaceUsage: pickArtString(
+        concept.negativeSpaceUsage,
+        art.negativeSpaceUsage,
+      ),
+      designInstructions: pickArtList(concept.designInstructions, art.designInstructions),
+      mockupDescription: pickArtString(concept.mockupDescription, art.mockupDescription),
+    },
+    dna,
+    overwriteVisual || vague,
+  );
 }
 
 function enrichDesignConcept(
@@ -707,6 +1052,7 @@ function enrichDesignConcept(
     CREATIVE_APPROACHES[index % CREATIVE_APPROACHES.length];
   const profile = APPROACH_PROFILES[creativeApproach];
   const art = ART_DIRECTION_BY_APPROACH[creativeApproach];
+  const dna = VISUAL_DNA_BY_APPROACH[creativeApproach];
 
   const title =
     concept.title ||
@@ -720,10 +1066,14 @@ function enrichDesignConcept(
       ...concept,
       creativeApproach,
       title,
-      product: concept.product || pickAt(context.products, index),
-      color: concept.color || pickAt(context.colors, index),
+      product: resolveConceptProduct(concept.product, context, index),
+      color: resolveConceptColor(concept.color, context, index),
       printArea:
-        concept.printArea || pickAt(context.printAreas, index) || "Back",
+        ensureMinLength(
+          concept.printArea || pickAt(context.printAreas, index),
+          1,
+          "Front",
+        ),
       targetAudience: ensureMinLength(
         concept.targetAudience ||
           context.targetAudience ||
@@ -741,6 +1091,8 @@ function enrichDesignConcept(
 
   return {
     ...merged,
+    product: resolveConceptProduct(merged.product, context, index),
+    color: resolveConceptColor(merged.color, context, index),
     styleDirection: ensureMinLength(merged.styleDirection, 5, profile.styleDirection),
     emotion: ensureMinLength(merged.emotion, 2, profile.emotion),
     visualConcept: ensureMinLength(merged.visualConcept, 10, profile.visualConcept),
@@ -817,6 +1169,21 @@ function enrichDesignConcept(
       20,
       art.mockupDescription,
     ),
+    geometry: ensureMinLength(merged.geometry, 5, dna.geometry),
+    dimensions: ensureMinLength(merged.dimensions, 5, dna.dimensions),
+    coordinates: ensureMinLength(merged.coordinates, 5, dna.coordinates),
+    rotation: ensureMinLength(merged.rotation, 3, dna.rotation),
+    spacing: ensureMinLength(merged.spacing, 3, dna.spacing),
+    strokeWidth: ensureMinLength(merged.strokeWidth, 3, dna.strokeWidth),
+    opacity: ensureMinLength(merged.opacity, 3, dna.opacity),
+    layerOrder: ensureMinLength(merged.layerOrder, 5, dna.layerOrder),
+    contrastLevel: merged.contrastLevel || dna.contrastLevel,
+    textureIntensity: ensureMinLength(merged.textureIntensity, 3, dna.textureIntensity),
+    visualWeight: merged.visualWeight || dna.visualWeight,
+    balance: merged.balance || dna.balance,
+    alignment: ensureMinLength(merged.alignment, 3, dna.alignment),
+    focalPoint: ensureMinLength(merged.focalPoint, 5, dna.focalPoint),
+    edgeTreatment: ensureMinLength(merged.edgeTreatment, 5, dna.edgeTreatment),
   };
 }
 
@@ -881,7 +1248,16 @@ export function normalizeDesignConcept(
 
   if (entry && typeof entry === "object" && !Array.isArray(entry)) {
     const source = entry as Record<string, unknown>;
+    const visualDna = pickVisualDnaFields(source);
+    const designId =
+      pickField(source, ["designId", "id", "conceptId"]) ||
+      slugDesignId(
+        pickField(source, ["title", "name", "concept", "summary"]) ||
+          `Konzept ${index + 1}`,
+        index,
+      );
     const concept: DesignConcept = {
+      designId,
       title: pickField(source, ["title", "name", "concept", "summary"]),
       creativeApproach:
         normalizeCreativeApproach(
@@ -993,12 +1369,49 @@ export function normalizeDesignConcept(
         "productPhoto",
         "photoDirection",
       ]),
+      geometry: visualDna.geometry ?? "",
+      dimensions: visualDna.dimensions ?? "",
+      coordinates: visualDna.coordinates ?? "",
+      rotation: visualDna.rotation ?? "",
+      spacing: visualDna.spacing ?? "",
+      strokeWidth: visualDna.strokeWidth ?? "",
+      opacity: visualDna.opacity ?? "",
+      layerOrder: visualDna.layerOrder ?? "",
+      contrastLevel: visualDna.contrastLevel ?? "Medium",
+      textureIntensity: visualDna.textureIntensity ?? "",
+      visualWeight: visualDna.visualWeight ?? "Balanced",
+      balance: visualDna.balance ?? "Symmetrical",
+      alignment: visualDna.alignment ?? "",
+      focalPoint: visualDna.focalPoint ?? "",
+      edgeTreatment: visualDna.edgeTreatment ?? "",
+      dnaScore: typeof source.dnaScore === "number" ? source.dnaScore : 0,
+      dnaMatches: normalizeStringList(source.dnaMatches ?? source.matches, 3),
+      dnaConflicts: normalizeStringList(source.dnaConflicts ?? source.conflicts, 3),
+      whyFitsMilaene: normalizeStringList(
+        source.whyFitsMilaene ?? source.whyFits ?? source.milaeneFit,
+        10,
+      ),
+      collectionRole: normalizeCollectionRole(source.collectionRole),
+      repeatabilityScore: normalizeRepeatabilityScore(
+        source.repeatabilityScore ?? source.repeatability,
+      ),
+      imagePromptCore: pickField(source, [
+        "imagePromptCore",
+        "imagePrompt",
+        "visualPrompt",
+      ]),
+      supportsDesignId: pickField(source, [
+        "supportsDesignId",
+        "supportsDesign",
+        "supports",
+      ]) || undefined,
     };
     return enrichDesignConcept(concept, index, context);
   }
 
   const summary = coerceConceptField(entry);
   const concept: DesignConcept = {
+    designId: slugDesignId(summary || `Konzept ${index + 1}`, index),
     title: summary || context.collectionIdea || context.title || `Konzept ${index + 1}`,
     creativeApproach: defaultApproach,
     product: pickAt(context.products, index),
@@ -1030,6 +1443,29 @@ export function normalizeDesignConcept(
     negativeSpaceUsage: "",
     designInstructions: [],
     mockupDescription: "",
+    geometry: "",
+    dimensions: "",
+    coordinates: "",
+    rotation: "",
+    spacing: "",
+    strokeWidth: "",
+    opacity: "",
+    layerOrder: "",
+    contrastLevel: "Medium",
+    textureIntensity: "",
+    visualWeight: "Balanced",
+    balance: "Symmetrical",
+    alignment: "",
+    focalPoint: "",
+    edgeTreatment: "",
+    dnaScore: 0,
+    dnaMatches: [],
+    dnaConflicts: [],
+    whyFitsMilaene: [],
+    collectionRole: "Supporting Piece",
+    repeatabilityScore: "Medium",
+    imagePromptCore: "",
+    supportsDesignId: undefined,
   };
 
   return enrichDesignConcept(concept, index, context);
@@ -1053,7 +1489,50 @@ export function normalizeDesignConcepts(
 
   if (concepts.length === 0) return undefined;
 
-  return diversifyDesignConcepts(concepts, adjustments);
+  const diversified = diversifyDesignConcepts(concepts, adjustments);
+  return applyBrandDnaGate(diversified, context, adjustments);
+}
+
+function applyBrandDnaGate(
+  concepts: DesignConcept[],
+  context: NormalizeDesignConceptContext,
+  adjustments: string[],
+): DesignConcept[] {
+  const analyzed = concepts.map(applyBrandDnaAnalysis);
+
+  let passed = analyzed.filter((c) => c.dnaScore >= DNA_MIN_SCORE);
+  const rejected = analyzed.length - passed.length;
+  if (rejected > 0) {
+    adjustments.push(
+      `brand DNA gate: rejected ${rejected} concept(s) below ${DNA_MIN_SCORE}% fit`,
+    );
+  }
+
+  let fallbackIndex = 0;
+  while (passed.length < 5) {
+    const approach =
+      MILAENE_PREFERRED_APPROACHES[
+        fallbackIndex % MILAENE_PREFERRED_APPROACHES.length
+      ];
+    fallbackIndex += 1;
+    const fallback = applyBrandDnaAnalysis(
+      normalizeDesignConcept(
+        { creativeApproach: approach, title: `Milaene ${approach}` },
+        passed.length,
+        context,
+      ),
+    );
+    passed.push(fallback);
+    adjustments.push(
+      `brand DNA gate: added Milaene-aligned fallback (${approach}, score ${fallback.dnaScore}%)`,
+    );
+    if (fallbackIndex > 12) break;
+  }
+
+  return passed
+    .sort((a, b) => b.dnaScore - a.dnaScore)
+    .slice(0, 8)
+    .map(applyBrandDnaAnalysis);
 }
 
 export function summarizeDesignConcept(concept: DesignConcept): string {
@@ -1133,6 +1612,50 @@ export function formatDesignConceptMarkdown(
       : "",
     concept.mockupDescription
       ? `**Mockup:** ${concept.mockupDescription}`
+      : "",
+    "",
+    "#### Visual DNA",
+    concept.geometry ? `**Geometry:** ${concept.geometry}` : "",
+    concept.dimensions ? `**Dimensions:** ${concept.dimensions}` : "",
+    concept.coordinates ? `**Coordinates:** ${concept.coordinates}` : "",
+    concept.rotation ? `**Rotation:** ${concept.rotation}` : "",
+    concept.spacing ? `**Spacing:** ${concept.spacing}` : "",
+    concept.strokeWidth ? `**Stroke width:** ${concept.strokeWidth}` : "",
+    concept.opacity ? `**Opacity:** ${concept.opacity}` : "",
+    concept.layerOrder ? `**Layer order:** ${concept.layerOrder}` : "",
+    concept.contrastLevel ? `**Contrast level:** ${concept.contrastLevel}` : "",
+    concept.textureIntensity
+      ? `**Texture intensity:** ${concept.textureIntensity}`
+      : "",
+    concept.visualWeight ? `**Visual weight:** ${concept.visualWeight}` : "",
+    concept.balance ? `**Balance:** ${concept.balance}` : "",
+    concept.alignment ? `**Alignment:** ${concept.alignment}` : "",
+    concept.focalPoint ? `**Focal point:** ${concept.focalPoint}` : "",
+    concept.edgeTreatment ? `**Edge treatment:** ${concept.edgeTreatment}` : "",
+    "",
+    "#### Milaene Brand DNA",
+    `**DNA Score:** ${concept.dnaScore}%`,
+    concept.dnaMatches.length
+      ? `**Matches:**\n${concept.dnaMatches.map((m) => `✓ ${m}`).join("\n")}`
+      : "",
+    concept.dnaConflicts.length
+      ? `**Conflicts:**\n${concept.dnaConflicts.map((c) => `− ${c}`).join("\n")}`
+      : "",
+    concept.whyFitsMilaene.length
+      ? `**Why this fits Milaene:**\n${concept.whyFitsMilaene.map((r) => `- ${r}`).join("\n")}`
+      : "",
+    concept.collectionRole
+      ? `**Collection role:** ${concept.collectionRole}`
+      : "",
+    concept.repeatabilityScore
+      ? `**Repeatability:** ${concept.repeatabilityScore}`
+      : "",
+    concept.imagePromptCore
+      ? `**Image prompt core:** ${concept.imagePromptCore}`
+      : "",
+    concept.designId ? `**Design ID:** ${concept.designId}` : "",
+    concept.supportsDesignId
+      ? `**Supports:** ${concept.supportsDesignId}`
       : "",
   ]
     .filter(Boolean)

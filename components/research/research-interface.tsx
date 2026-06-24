@@ -14,7 +14,7 @@ import { useLocale, useT, useWorkspace } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { ArrowRight, CheckCircle2, Loader2, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import type { DesignConcept } from "@/agents/research/types";
+import type { DesignConcept, ResearchCollection } from "@/agents/research/types";
 import {
   coerceConceptField,
   formatColorBreakdown,
@@ -42,6 +42,7 @@ interface DesignReportResult {
   reportId: string;
   title: string;
   designs?: DesignConcept[];
+  collection?: ResearchCollection;
   products?: string[];
   colors?: string[];
   materials?: string[];
@@ -136,6 +137,7 @@ function parseResearchApiResponse(data: Record<string, unknown>): ResearchResult
         ? data.printAreas.map(String)
         : undefined,
       rationale: asOptionalString(data.rationale),
+      collection: data.collection as ResearchCollection | undefined,
       designs: [],
       savedDomains: base.savedDomains,
     };
@@ -201,6 +203,31 @@ function DesignConceptCard({
     negativeSpaceUsage: string;
     designInstructions: string;
     mockupDescription: string;
+    visualDna: string;
+    geometry: string;
+    dimensions: string;
+    coordinates: string;
+    rotation: string;
+    spacing: string;
+    strokeWidth: string;
+    opacity: string;
+    layerOrder: string;
+    contrastLevel: string;
+    textureIntensity: string;
+    visualWeight: string;
+    balance: string;
+    alignment: string;
+    focalPoint: string;
+    edgeTreatment: string;
+    milaeneDna: string;
+    dnaScore: string;
+    dnaMatches: string;
+    dnaConflicts: string;
+    whyFitsMilaene: string;
+    collectionRole: string;
+    repeatabilityScore: string;
+    imagePromptCore: string;
+    supportsDesignId: string;
     product: string;
     color: string;
     printArea: string;
@@ -246,6 +273,24 @@ function DesignConceptCard({
     { label: labels.materialEffects, value: concept.materialEffects },
     { label: labels.negativeSpaceUsage, value: concept.negativeSpaceUsage },
     { label: labels.mockupDescription, value: concept.mockupDescription },
+  ].filter((field) => field.value);
+
+  const visualDnaFields = [
+    { label: labels.geometry, value: concept.geometry },
+    { label: labels.dimensions, value: concept.dimensions },
+    { label: labels.coordinates, value: concept.coordinates },
+    { label: labels.rotation, value: concept.rotation },
+    { label: labels.spacing, value: concept.spacing },
+    { label: labels.strokeWidth, value: concept.strokeWidth },
+    { label: labels.opacity, value: concept.opacity },
+    { label: labels.layerOrder, value: concept.layerOrder },
+    { label: labels.contrastLevel, value: concept.contrastLevel },
+    { label: labels.textureIntensity, value: concept.textureIntensity },
+    { label: labels.visualWeight, value: concept.visualWeight },
+    { label: labels.balance, value: concept.balance },
+    { label: labels.alignment, value: concept.alignment },
+    { label: labels.focalPoint, value: concept.focalPoint },
+    { label: labels.edgeTreatment, value: concept.edgeTreatment },
   ].filter((field) => field.value);
 
   const productFields = [
@@ -365,6 +410,132 @@ function DesignConceptCard({
                   </li>
                 ))}
               </ol>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {visualDnaFields.length > 0 ? (
+        <div className="space-y-3 border-t border-emerald-500/20 bg-emerald-500/5 p-4 pt-4">
+          <p className="text-label text-emerald-700 dark:text-emerald-300">
+            {labels.visualDna}
+          </p>
+          <dl className="grid gap-3 sm:grid-cols-2">
+            {visualDnaFields.map((field) => (
+              <div key={field.label} className="space-y-1">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {field.label}
+                </dt>
+                <dd className="text-sm leading-relaxed text-foreground">
+                  {field.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
+      {concept.dnaScore > 0 ? (
+        <div className="space-y-4 border-t border-violet-500/20 bg-violet-500/5 p-4 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-label text-violet-700 dark:text-violet-300">
+              {labels.milaeneDna}
+            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                {labels.dnaScore}
+              </span>
+              <span
+                className={cn(
+                  "rounded-full px-3 py-1 text-sm font-semibold",
+                  concept.dnaScore >= 80
+                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                    : concept.dnaScore >= 65
+                      ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                      : "bg-rose-500/15 text-rose-700 dark:text-rose-300",
+                )}
+              >
+                {concept.dnaScore}%
+              </span>
+            </div>
+          </div>
+          {concept.dnaMatches.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {labels.dnaMatches}
+              </p>
+              <ul className="space-y-1 text-sm leading-relaxed text-foreground">
+                {concept.dnaMatches.map((match) => (
+                  <li key={match} className="flex gap-2">
+                    <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+                    <span>{match}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {concept.dnaConflicts.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {labels.dnaConflicts}
+              </p>
+              <ul className="space-y-1 text-sm leading-relaxed text-foreground">
+                {concept.dnaConflicts.map((conflict) => (
+                  <li key={conflict} className="flex gap-2">
+                    <span className="text-amber-600 dark:text-amber-400">−</span>
+                    <span>{conflict}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {concept.whyFitsMilaene.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {labels.whyFitsMilaene}
+              </p>
+              <ul className="space-y-1 text-sm leading-relaxed text-foreground">
+                {concept.whyFitsMilaene.map((reason) => (
+                  <li key={reason} className="flex gap-2">
+                    <span className="text-violet-600 dark:text-violet-400">•</span>
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <dl className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                {labels.collectionRole}
+              </dt>
+              <dd className="text-sm text-foreground">{concept.collectionRole}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                {labels.repeatabilityScore}
+              </dt>
+              <dd className="text-sm text-foreground">
+                {concept.repeatabilityScore}
+              </dd>
+            </div>
+            {concept.supportsDesignId ? (
+              <div className="space-y-1 sm:col-span-2">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {labels.supportsDesignId}
+                </dt>
+                <dd className="text-sm text-foreground">
+                  {concept.title} → {concept.supportsDesignId}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+          {concept.imagePromptCore ? (
+            <div className="space-y-1 rounded-lg border border-violet-500/15 bg-background/60 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {labels.imagePromptCore}
+              </p>
+              <p className="text-sm leading-relaxed text-foreground">
+                {concept.imagePromptCore}
+              </p>
             </div>
           ) : null}
         </div>
@@ -510,6 +681,146 @@ function ResearchReportPanel({
   );
 }
 
+function CollectionOverviewPanel({
+  collection,
+  heroDesign,
+  t,
+}: {
+  collection: ResearchCollection;
+  heroDesign?: DesignConcept;
+  t: ReturnType<typeof useT>;
+}) {
+  return (
+    <div className="space-y-4 rounded-xl border border-amber-500/25 bg-gradient-to-br from-amber-500/10 via-background to-background p-5">
+      <p className="text-label text-amber-700 dark:text-amber-300">
+        {t("research.interface.collectionOverview")}
+      </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.name")}
+          </p>
+          <h3 className="font-display text-2xl font-medium leading-tight">
+            {collection.name}
+          </h3>
+          <Badge variant="secondary" className="mt-1 font-normal">
+            {collection.type}
+          </Badge>
+        </div>
+        <div className="text-right">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.score")}
+          </p>
+          <p
+            className={cn(
+              "font-display text-3xl font-semibold",
+              collection.collectionScore >= 85
+                ? "text-emerald-600 dark:text-emerald-400"
+                : collection.collectionScore >= 70
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-rose-600 dark:text-rose-400",
+            )}
+          >
+            {collection.collectionScore}%
+          </p>
+        </div>
+      </div>
+      <dl className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.mood")}
+          </dt>
+          <dd className="text-sm capitalize text-foreground">{collection.mood}</dd>
+        </div>
+        <div className="space-y-1">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.hero")}
+          </dt>
+          <dd className="text-sm text-foreground">
+            {heroDesign?.product ?? collection.heroProduct.product}
+          </dd>
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.story")}
+          </dt>
+          <dd className="text-sm leading-relaxed text-foreground">
+            {collection.story}
+          </dd>
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.philosophy")}
+          </dt>
+          <dd className="text-sm leading-relaxed text-foreground">
+            {collection.philosophy}
+          </dd>
+        </div>
+        <div className="space-y-1">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.campaignTheme")}
+          </dt>
+          <dd className="text-sm font-medium text-foreground">
+            {collection.campaignTheme}
+          </dd>
+        </div>
+        <div className="space-y-1">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.recommendation")}
+          </dt>
+          <dd className="text-sm font-medium text-foreground">
+            {collection.ceoRecommendation}
+          </dd>
+        </div>
+      </dl>
+      <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-4 sm:grid-cols-2">
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.heroProduct")}
+          </p>
+          <p className="text-sm font-medium">{collection.heroProduct.product}</p>
+          <p className="text-sm text-muted-foreground">
+            {t("research.interface.collection.retail")}:{" "}
+            {collection.heroProduct.estimatedRetailPrice}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {t("research.interface.collection.production")}:{" "}
+            {collection.heroProduct.productionComplexity}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {t("research.interface.collection.confidence")}:{" "}
+            {collection.heroProduct.commercialConfidence}%
+          </p>
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.dropStrategy")}
+          </p>
+          <p className="text-sm leading-relaxed text-foreground">
+            {collection.dropStrategy}
+          </p>
+        </div>
+      </div>
+      {collection.colorDirection.length > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {t("research.interface.collection.colorDirection")}:{" "}
+          {collection.colorDirection.join(" · ")}
+        </p>
+      ) : null}
+      {collection.collectionImagePrompt ? (
+        <div className="rounded-lg border border-amber-500/15 bg-background/60 p-3">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.imagePrompt")}
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-foreground">
+            {collection.collectionImagePrompt}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function DesignReportPanel({
   result,
   reportTypeLabels,
@@ -528,6 +839,7 @@ function DesignReportPanel({
           result,
         );
   const confidence = result.confidence ?? (result.designBrief?.confidence ?? 0) / 100;
+  const collection = result.collection;
   const conceptLabels = {
     creativeApproach: t("research.interface.designConcept.creativeApproach"),
     emotion: t("research.interface.designConcept.emotion"),
@@ -555,11 +867,40 @@ function DesignReportPanel({
     negativeSpaceUsage: t("research.interface.designConcept.negativeSpaceUsage"),
     designInstructions: t("research.interface.designConcept.designInstructions"),
     mockupDescription: t("research.interface.designConcept.mockupDescription"),
+    visualDna: t("research.interface.designConcept.visualDna"),
+    geometry: t("research.interface.designConcept.geometry"),
+    dimensions: t("research.interface.designConcept.dimensions"),
+    coordinates: t("research.interface.designConcept.coordinates"),
+    rotation: t("research.interface.designConcept.rotation"),
+    spacing: t("research.interface.designConcept.spacing"),
+    strokeWidth: t("research.interface.designConcept.strokeWidth"),
+    opacity: t("research.interface.designConcept.opacity"),
+    layerOrder: t("research.interface.designConcept.layerOrder"),
+    contrastLevel: t("research.interface.designConcept.contrastLevel"),
+    textureIntensity: t("research.interface.designConcept.textureIntensity"),
+    visualWeight: t("research.interface.designConcept.visualWeight"),
+    balance: t("research.interface.designConcept.balance"),
+    alignment: t("research.interface.designConcept.alignment"),
+    focalPoint: t("research.interface.designConcept.focalPoint"),
+    edgeTreatment: t("research.interface.designConcept.edgeTreatment"),
+    milaeneDna: t("research.interface.designConcept.milaeneDna"),
+    dnaScore: t("research.interface.designConcept.dnaScore"),
+    dnaMatches: t("research.interface.designConcept.dnaMatches"),
+    dnaConflicts: t("research.interface.designConcept.dnaConflicts"),
+    whyFitsMilaene: t("research.interface.designConcept.whyFitsMilaene"),
+    collectionRole: t("research.interface.designConcept.collectionRole"),
+    repeatabilityScore: t("research.interface.designConcept.repeatabilityScore"),
+    imagePromptCore: t("research.interface.designConcept.imagePromptCore"),
+    supportsDesignId: t("research.interface.designConcept.supportsDesignId"),
     product: t("research.interface.designConcept.product"),
     color: t("research.interface.designConcept.color"),
     printArea: t("research.interface.designConcept.printArea"),
     targetAudience: t("research.interface.designConcept.targetAudience"),
   };
+
+  const heroDesign = collection
+    ? concepts.find((c) => c.designId === collection.heroDesignId)
+    : undefined;
 
   return (
     <>
@@ -606,6 +947,14 @@ function DesignReportPanel({
             </p>
           ) : null}
         </div>
+      ) : null}
+
+      {collection ? (
+        <CollectionOverviewPanel
+          collection={collection}
+          heroDesign={heroDesign}
+          t={t}
+        />
       ) : null}
 
       {concepts.length > 0 ? (
