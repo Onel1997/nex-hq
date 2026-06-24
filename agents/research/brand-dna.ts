@@ -99,11 +99,14 @@ const COLOR_KEYWORDS: Record<string, string[]> = {
 };
 
 const FORBIDDEN_PATTERNS: Array<{ pattern: RegExp; label: string; penalty: number }> = [
-  { pattern: /\b(supreme|hypebeast|bape|y2k)\b/i, label: "hypebeast / street-hype reference", penalty: 18 },
-  { pattern: /\b(anime|manga|cartoon|graffiti)\b/i, label: "anime / cartoon / graffiti style", penalty: 20 },
-  { pattern: /\b(skull|neon|fluorescent|saturated)\b/i, label: "loud graphic or neon palette", penalty: 15 },
-  { pattern: /\b(maximal|chaotic collage|oversized logo)\b/i, label: "maximalist or chaotic composition", penalty: 14 },
-  { pattern: /\b(rave|acid yellow|electric cobalt)\b/i, label: "hyper-saturated color energy", penalty: 12 },
+  { pattern: /\b(supreme|hypebeast|bape|y2k)\b/i, label: "hypebeast / street-hype reference", penalty: 22 },
+  { pattern: /\b(anime|manga|cartoon|graffiti)\b/i, label: "anime / cartoon / graffiti style", penalty: 24 },
+  { pattern: /\b(skull|neon|fluorescent|saturated)\b/i, label: "loud graphic or neon palette", penalty: 18 },
+  { pattern: /\b(maximal|chaotic collage|oversized logo)\b/i, label: "maximalist or chaotic composition", penalty: 18 },
+  { pattern: /\b(rave|acid yellow|electric cobalt)\b/i, label: "hyper-saturated color energy", penalty: 15 },
+  { pattern: /\b(hustle|dream big|stay wild|never stop|rise again|speak louder|be strong)\b/i, label: "generic hype slogan energy", penalty: 16 },
+  { pattern: /\b(large logo|oversized branding|all-over print|graphic noise)\b/i, label: "loud branding or graphic noise", penalty: 14 },
+  { pattern: /\b(distressed headline|bold hierarchy|stacked oversized|condensed grotesk headline)\b/i, label: "loud typography treatment", penalty: 12 },
 ];
 
 function conceptCorpus(concept: DesignConcept): string {
@@ -179,17 +182,26 @@ function scorePlacementFit(concept: DesignConcept): { score: number; match?: str
 
 function scoreEmotionFit(concept: DesignConcept): { score: number; match?: string } {
   const emotion = concept.emotion.toLowerCase();
+  const message = concept.message.toLowerCase();
   const goals = MILAENE_BRAND_DNA.emotionalGoals;
   const direct = goals.find((g) => emotion.includes(g));
   if (direct) return { score: 15, match: direct };
+
+  const milaeneWords = [
+    "silence", "presence", "echo", "within", "memory", "distance",
+    "stillness", "becoming", "weight", "light", "reflection",
+    "connection", "depth", "calm", "poise",
+  ];
+  const preferred = milaeneWords.find((w) => emotion.includes(w) || message.includes(w));
+  if (preferred) return { score: 14, match: preferred };
 
   const calmEmotions = ["calm", "poise", "stillness", "serenity", "reflection", "quiet", "depth"];
   const hit = calmEmotions.find((e) => emotion.includes(e));
   if (hit) return { score: 12, match: hit };
 
-  const loudEmotions = ["energy", "defiance", "rebellion", "chaos", "rage"];
+  const loudEmotions = ["energy", "defiance", "rebellion", "chaos", "rage", "hustle"];
   if (loudEmotions.some((e) => emotion.includes(e))) {
-    return { score: 3, match: undefined };
+    return { score: 2, match: undefined };
   }
   return { score: 7 };
 }
@@ -208,7 +220,11 @@ function scoreSilhouetteFit(concept: DesignConcept): { score: number; match?: st
 
 function scoreTypographyFit(concept: DesignConcept): { score: number; match?: string } {
   const typo = concept.typography.toLowerCase();
-  if (/no type|pure graphic/i.test(typo)) return { score: 8, match: "typography-free restraint" };
+  if (/no type|pure graphic/i.test(typo)) return { score: 9, match: "typography-free restraint" };
+
+  if (/distress|bold hierarchy|stacked oversized|condensed grotesk|rave/i.test(typo)) {
+    return { score: 2, match: undefined };
+  }
 
   const hits: string[] = [];
   if (/track|spaced|wide|letter/i.test(typo)) hits.push("large tracking");
@@ -317,7 +333,14 @@ export function analyzeBrandDna(concept: DesignConcept): BrandDnaAnalysis {
 
   const dnaConflicts = [...forbidden.conflicts];
   if (emotion.score <= 5) dnaConflicts.push("emotion too loud for Milaene calm");
+  if (typography.score <= 3) dnaConflicts.push("typography too loud for Milaene restraint");
   if (color.score <= 5) dnaConflicts.push("palette not aligned with muted material language");
+  if (/speak louder|rise again|hustle|dream big|stay wild|never stop|be strong/i.test(corpus)) {
+    dnaConflicts.push("generic hype slogan detected");
+  }
+  if (concept.graphicElements.length > 5) {
+    dnaConflicts.push("graphic element count creates visual noise");
+  }
   if (concept.contrastLevel === "High" && concept.visualWeight === "Heavy") {
     dnaConflicts.push("graphic complexity slightly high");
   }

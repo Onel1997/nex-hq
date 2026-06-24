@@ -225,9 +225,21 @@ export const COLLECTION_TYPES = [
 
 export const REPEATABILITY_SCORES = ["Low", "Medium", "High"] as const;
 
+export const COLLECTION_ARC = [
+  "Introduction",
+  "Reflection",
+  "Tension",
+  "Resolution",
+  "Closure",
+] as const;
+
 export type CollectionRole = (typeof COLLECTION_ROLES)[number];
 export type CollectionType = (typeof COLLECTION_TYPES)[number];
 export type RepeatabilityScore = (typeof REPEATABILITY_SCORES)[number];
+export type StoryPosition = (typeof COLLECTION_ARC)[number];
+
+export const CAMPAIGN_POTENTIAL_LEVELS = ["low", "medium", "high"] as const;
+export type CampaignPotential = (typeof CAMPAIGN_POTENTIAL_LEVELS)[number];
 
 export const heroProductSchema = z.object({
   product: z.string().min(1),
@@ -237,6 +249,39 @@ export const heroProductSchema = z.object({
 });
 
 export type HeroProduct = z.infer<typeof heroProductSchema>;
+
+export const launchApprovalSchema = z.object({
+  approved: z.boolean(),
+  emotionalImpact: z.string().min(10),
+  commercialStrength: z.string().min(10),
+  adPerformanceExpectations: z.string().min(10),
+});
+
+export type LaunchApproval = z.infer<typeof launchApprovalSchema>;
+
+export const ceoAnalysisSchema = z.object({
+  strongestProduct: z.string().min(1),
+  weakestProduct: z.string().min(1),
+  recommendedLaunchOrder: z.array(z.string().min(1)).min(1),
+  productionRisk: z.string().min(10),
+  commercialConfidence: z.number().min(0).max(100),
+  adPotential: z.string().min(10),
+  launchApproval: launchApprovalSchema.optional(),
+});
+
+export type CeoAnalysis = z.infer<typeof ceoAnalysisSchema>;
+
+export const heroAnalysisSchema = z.object({
+  heroScore: z.number().min(0).max(100),
+  commercialScore: z.number().min(0).max(100),
+  campaignPotential: z.enum(CAMPAIGN_POTENTIAL_LEVELS),
+  whyHero: z.string().min(10),
+  visualStrength: z.string().min(10),
+  emotionalStrength: z.string().min(10),
+  adPotential: z.string().min(10),
+});
+
+export type HeroAnalysis = z.infer<typeof heroAnalysisSchema>;
 
 export const researchCollectionSchema = z.object({
   name: z.string().min(3),
@@ -254,6 +299,10 @@ export const researchCollectionSchema = z.object({
   collectionImagePrompt: conceptText(20),
   campaignTheme: z.string().min(3),
   heroProduct: heroProductSchema,
+  collectionArc: z.array(z.enum(COLLECTION_ARC)).length(5).optional(),
+  emotionalNarrative: z.string().min(20).optional(),
+  ceoAnalysis: ceoAnalysisSchema.optional(),
+  heroAnalysis: heroAnalysisSchema.optional(),
 });
 
 export type ResearchCollection = z.infer<typeof researchCollectionSchema>;
@@ -314,6 +363,14 @@ export const designConceptSchema = z.object({
   repeatabilityScore: z.enum(REPEATABILITY_SCORES),
   imagePromptCore: conceptText(20),
   supportsDesignId: z.string().optional(),
+  emotionalNarrative: conceptText(10).optional(),
+  emotionalKeyword: z.string().min(2).optional(),
+  emotionalPositionInCollection: z.string().min(5).optional(),
+  storyPosition: z.enum(COLLECTION_ARC).optional(),
+  relationshipReason: conceptText(10).optional(),
+  commercialScore: z.number().min(0).max(100).optional(),
+  campaignPotential: z.enum(CAMPAIGN_POTENTIAL_LEVELS).optional(),
+  heroScore: z.number().min(0).max(100).optional(),
 });
 
 export type DesignConcept = z.infer<typeof designConceptSchema>;
@@ -335,6 +392,45 @@ export const designResearchOutputSchema = z.object({
 });
 
 export type DesignResearchOutput = z.infer<typeof designResearchOutputSchema>;
+
+/** LLM may return collection metadata without designs[] — parser synthesizes concepts. */
+export const relationshipGraphNodeSchema = z.object({
+  designId: z.string().optional(),
+  id: z.string().optional(),
+  title: z.string().optional(),
+  name: z.string().optional(),
+  role: z.string().optional(),
+  collectionRole: z.string().optional(),
+  supportsDesignId: z.string().optional(),
+  supports: z.string().optional(),
+  relationshipReason: z.string().optional(),
+  emotion: z.string().optional(),
+  product: z.string().optional(),
+  color: z.string().optional(),
+  visualConcept: z.string().optional(),
+});
+
+export type RelationshipGraphNode = z.infer<typeof relationshipGraphNodeSchema>;
+
+export const collectionOnlyResearchInputSchema = z.object({
+  title: z.string().min(1),
+  collection: z.record(z.string(), z.unknown()),
+  relationshipGraph: z.array(relationshipGraphNodeSchema).optional(),
+  heroAnalysis: heroAnalysisSchema.optional(),
+  commercialScore: z.number().min(0).max(100).optional(),
+  campaignPotential: z.enum(CAMPAIGN_POTENTIAL_LEVELS).optional(),
+  products: z.array(z.string()).optional(),
+  colors: z.array(z.string()).optional(),
+  materials: z.array(z.string()).optional(),
+  printAreas: z.array(z.string()).optional(),
+  collectionIdea: z.string().optional(),
+  rationale: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+export type CollectionOnlyResearchInput = z.infer<
+  typeof collectionOnlyResearchInputSchema
+>;
 
 export type ParsedResearchOutput =
   | { kind: "research"; output: ResearchOutput }

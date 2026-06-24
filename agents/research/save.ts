@@ -15,6 +15,8 @@ import {
   summarizeDesignConcepts,
 } from "./design-concept";
 import { formatCollectionMarkdown } from "./collection-engine";
+import { formatCollectionIntelligenceMarkdown } from "./collection-intelligence";
+import { formatHeroEngineMarkdown } from "./hero-engine";
 import {
   isDesignResearchOutput,
   type DesignResearchOutput,
@@ -167,6 +169,15 @@ async function saveDesignResearchToBrain(
     `# ${output.title}`,
     "",
     formatCollectionMarkdown(output.collection),
+    "",
+    formatCollectionIntelligenceMarkdown(output.collection, output.designs),
+    "",
+    formatHeroEngineMarkdown(
+      output.collection,
+      output.designs.find(
+        (d) => d.designId === output.collection.heroDesignId,
+      ),
+    ),
     "",
     "## Design-Konzepte",
     ...output.designs.map((design, index) =>

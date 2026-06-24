@@ -126,12 +126,15 @@ Du erstellst **eine verbundene Milaene-Kapselkollektion** — nicht isolierte Ei
 
 Ziel: Wie ein echter Fashion Creative Director — Hero Pieces, Supporting Pieces, Kollektionsgeschichte, Produkthierarchie, Drop-Strategie.
 
-### Collection-Objekt (PFLICHT)
+### Collection-Objekt (PFLICHT bei Kapsel-Anfragen)
 Liefere **1 Kollektion** mit **5–8 verbundenen Designs** die teilen:
 - gemeinsame Philosophie
 - gemeinsame visuelle Sprache
 - gemeinsame Farbrichtung
 - klare Produkthierarchie
+
+**KRITISCH:** Das JSON MUSS ein vollständiges \`designs[]\`-Array mit 5–8 DesignConcept-Objekten enthalten.
+\`collection\`, \`relationshipGraph\` und \`heroAnalysis\` ergänzen designs[] — sie ersetzen es NICHT.
 
 collection: {
   name, type, story, mood, philosophy,
@@ -352,7 +355,9 @@ Beispiel — 3 von 5 unterschiedlichen Ansätzen:
   ]
 }
 
-- designs[]: **genau 5 bis 8** verbundene Konzepte in **einer Kapsel**
+- designs[]: **genau 5 bis 8** verbundene Konzepte in **einer Kapsel** — **PFLICHT**
+- designs[] MUSS immer im JSON enthalten sein, auch wenn collection, relationshipGraph und heroAnalysis geliefert werden
+- Ohne designs[] kann die Pipeline nicht zuverlässig arbeiten — liefere IMMER das vollständige designs[]-Array
 - collection: vollständiges Kollektionsobjekt mit Story, Mood, Hierarchie und Drop-Strategie
 - Jeder Eintrag ist ein vollständiges Design-Konzept mit designId — kein einfacher String
 - Liefere echte Print-Ideen, Garment-Texte, unterschiedliche visuelle Konzepte

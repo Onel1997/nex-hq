@@ -6,12 +6,16 @@ import {
   normalizeDesignConcepts,
 } from "./design-concept";
 import { MILAENE_BRAND_DNA } from "./brand-dna";
-import { applyCollectionEngine } from "./collection-engine";
+import { applyCollectionPipeline } from "./collection-pipeline";
 import {
   designResearchOutputSchema,
   researchOutputSchema,
+  COLLECTION_ROLES,
+  type CollectionRole,
+  type CreativeApproach,
   type DesignResearchOutput,
   type ParsedResearchOutput,
+  type RelationshipGraphNode,
   type ResearchOutput,
 } from "./types";
 
@@ -52,6 +56,11 @@ export const EXPECTED_DESIGN_RESEARCH_SCHEMA = {
   rationale: "string (optional)",
   confidence: "number 0–1 (optional)",
   designBrief: "optional — server-side design brief handoff",
+  relationshipGraph:
+    "optional RelationshipGraphNode[] — used when designs[] missing; server synthesizes concepts",
+  heroAnalysis: "optional — merged into collection; used for hero concept synthesis",
+  commercialScore: "optional number — applied to hero concept when synthesizing",
+  campaignPotential: "optional low|medium|high — applied to hero concept when synthesizing",
 } as const;
 
 export type ExpectedResearchSchema =
@@ -643,11 +652,257 @@ function normalizeDesignBrief(
   return brief;
 }
 
-/** Detect design-idea payloads before classic research normalization. */
+const ROLE_CREATIVE_APPROACH: Record<CollectionRole, CreativeApproach> = {
+  "Hero Piece": "Japanese Editorial",
+  "Core Essential": "Luxury Minimalism",
+  "Statement Piece": "Symbolic Illustration",
+  "Supporting Piece": "Minimal Back Print",
+  "Limited Piece": "Abstract Graphic",
+};
+
+function coerceCollectionRole(value: unknown): CollectionRole {
+  const raw = coerceConceptField(value).toLowerCase();
+  if (raw.includes("limited")) return "Limited Piece";
+  if (raw.includes("hero")) return "Hero Piece";
+  if (raw.includes("core") || raw.includes("essential")) return "Core Essential";
+  if (raw.includes("statement")) return "Statement Piece";
+  if (raw.includes("supporting")) return "Supporting Piece";
+  const hit = COLLECTION_ROLES.find((role) => raw.includes(role.toLowerCase()));
+  return hit ?? "Supporting Piece";
+}
+
+function coerceRelationshipGraph(value: unknown): RelationshipGraphNode[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (item): item is RelationshipGraphNode =>
+      Boolean(item) && typeof item === "object" && !Array.isArray(item),
+  );
+}
+
+function mergeCollectionIntelligenceFields(
+  normalized: Record<string, unknown>,
+  adjustments: string[],
+): void {
+  const collection =
+    normalized.collection && typeof normalized.collection === "object"
+      ? { ...(normalized.collection as Record<string, unknown>) }
+      : {};
+
+  if (normalized.heroAnalysis && typeof normalized.heroAnalysis === "object") {
+    collection.heroAnalysis = normalized.heroAnalysis;
+    adjustments.push("merged top-level heroAnalysis into collection");
+  }
+
+  if (Object.keys(collection).length > 0) {
+    normalized.collection = collection;
+  }
+}
+
+function stripCollectionOnlyParseFields(normalized: Record<string, unknown>): void {
+  delete normalized.relationshipGraph;
+  delete normalized.commercialScore;
+  delete normalized.campaignPotential;
+}
+
+/**
+ * When the LLM returns collection metadata without designs[], build 5 role-based
+ * concept stubs for normalizeDesignConcepts + applyCollectionPipeline.
+ */
+function synthesizeDesignsFromCollection(
+  parsed: Record<string, unknown>,
+  context: {
+    title?: string;
+    products?: string[];
+    colors?: string[];
+    targetAudience?: string;
+    collectionIdea?: string;
+  },
+  adjustments: string[],
+): unknown[] {
+  const collection = (parsed.collection ?? {}) as Record<string, unknown>;
+  const graph = coerceRelationshipGraph(parsed.relationshipGraph);
+  const heroAnalysis =
+    parsed.heroAnalysis && typeof parsed.heroAnalysis === "object"
+      ? (parsed.heroAnalysis as Record<string, unknown>)
+      : collection.heroAnalysis && typeof collection.heroAnalysis === "object"
+        ? (collection.heroAnalysis as Record<string, unknown>)
+        : undefined;
+
+  const collectionName =
+    coerceConceptField(collection.name) ||
+    context.collectionIdea ||
+    context.title ||
+    "Milaene Capsule";
+  const heroDesignId =
+    coerceConceptField(collection.heroDesignId) || "hero-piece";
+  const supportingIds = Array.isArray(collection.supportingDesignIds)
+    ? collection.supportingDesignIds.map((id) => String(id))
+    : [];
+
+  const mood = coerceConceptField(collection.mood) || "calm reflection";
+  const story =
+    coerceConceptField(collection.story) ||
+    `${collectionName} explores ${mood} through minimal Milaene symbolism.`;
+  const philosophy =
+    coerceConceptField(collection.philosophy) ||
+    MILAENE_BRAND_DNA.philosophy.slice(0, 3).join(", ");
+  const targetAudience =
+    coerceConceptField(collection.targetAudience) ||
+    context.targetAudience ||
+    "25-35 premium minimal streetwear consumers seeking emotional depth";
+
+  const heroProduct =
+    collection.heroProduct && typeof collection.heroProduct === "object"
+      ? (collection.heroProduct as Record<string, unknown>)
+      : undefined;
+  const defaultProduct =
+    coerceConceptField(heroProduct?.product) ||
+    context.products?.[0] ||
+    "Faith Oversized Hoodie";
+
+  const colorDirection = Array.isArray(collection.colorDirection)
+    ? collection.colorDirection.map((color) => String(color))
+    : context.colors?.length
+      ? context.colors
+      : ["washed black", "off-white", "concrete grey"];
+
+  const nodesById = new Map<string, RelationshipGraphNode>();
+  for (const node of graph) {
+    const id = coerceConceptField(node.designId ?? node.id);
+    if (id) nodesById.set(id, node);
+  }
+
+  const roleAssignments = new Map<
+    CollectionRole,
+    { id: string; node?: RelationshipGraphNode }
+  >();
+
+  for (const node of graph) {
+    const role = coerceCollectionRole(node.collectionRole ?? node.role);
+    if (roleAssignments.has(role)) continue;
+    const id =
+      coerceConceptField(node.designId ?? node.id) ||
+      `${role.toLowerCase().replace(/\s+/g, "-")}-1`;
+    roleAssignments.set(role, { id, node });
+  }
+
+  if (!roleAssignments.has("Hero Piece")) {
+    roleAssignments.set("Hero Piece", {
+      id: heroDesignId,
+      node: nodesById.get(heroDesignId),
+    });
+  }
+
+  let supportIndex = 0;
+  for (const role of COLLECTION_ROLES) {
+    if (role === "Hero Piece" || roleAssignments.has(role)) continue;
+    const supportId = supportingIds[supportIndex];
+    supportIndex += 1;
+    if (supportId) {
+      roleAssignments.set(role, {
+        id: supportId,
+        node: nodesById.get(supportId),
+      });
+    }
+  }
+
+  for (const role of COLLECTION_ROLES) {
+    if (roleAssignments.has(role)) continue;
+    const slug = role.toLowerCase().replace(/\s+/g, "-");
+    roleAssignments.set(role, {
+      id: `${slug}-${collectionName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 16)}`,
+    });
+  }
+
+  const topCommercial =
+    typeof parsed.commercialScore === "number" ? parsed.commercialScore : undefined;
+  const topCampaign = parsed.campaignPotential;
+
+  adjustments.push(
+    `synthesized ${COLLECTION_ROLES.length} design concept stubs from collection-only payload`,
+  );
+
+  return COLLECTION_ROLES.map((role, index) => {
+    const assignment = roleAssignments.get(role)!;
+    const { id, node } = assignment;
+    const isHero = role === "Hero Piece";
+    const approach = ROLE_CREATIVE_APPROACH[role];
+
+    const stub: Record<string, unknown> = {
+      designId: id,
+      title:
+        coerceConceptField(node?.title ?? node?.name) ||
+        `${collectionName} — ${role}`,
+      collectionRole: role,
+      creativeApproach: approach,
+      product: coerceConceptField(node?.product) || defaultProduct,
+      color:
+        coerceConceptField(node?.color) ||
+        colorDirection[index % colorDirection.length],
+      printArea: index % 2 === 0 ? "Front" : "Back",
+      emotion:
+        coerceConceptField(node?.emotion) ||
+        mood.split(/\s+/)[0] ||
+        "Silence",
+      targetAudience,
+      visualConcept:
+        coerceConceptField(node?.visualConcept) ||
+        `${mood} ${role.toLowerCase()} visual — editorial ${approach.toLowerCase()} with quiet luxury restraint and symbolic negative space`,
+      designDescription: `${story} ${role} expression for ${collectionName}.`,
+      symbolism: `${philosophy} — ${role.toLowerCase()} symbolism within the capsule narrative.`,
+      message: isHero ? mood.toUpperCase() : "",
+      typography: isHero
+        ? "Editorial serif, wide tracking, single restrained text block"
+        : "No type — pure graphic restraint",
+      rationale: `Synthesized ${role.toLowerCase()} for collection "${collectionName}" from collection metadata.`,
+      supportsDesignId: isHero
+        ? undefined
+        : coerceConceptField(node?.supportsDesignId ?? node?.supports) ||
+          heroDesignId,
+      relationshipReason: coerceConceptField(node?.relationshipReason),
+    };
+
+    if (isHero) {
+      if (heroAnalysis?.commercialScore !== undefined) {
+        stub.commercialScore = heroAnalysis.commercialScore;
+      } else if (topCommercial !== undefined) {
+        stub.commercialScore = topCommercial;
+      }
+      if (heroAnalysis?.campaignPotential) {
+        stub.campaignPotential = heroAnalysis.campaignPotential;
+      } else if (topCampaign) {
+        stub.campaignPotential = topCampaign;
+      }
+      if (heroAnalysis?.heroScore !== undefined) {
+        stub.heroScore = heroAnalysis.heroScore;
+      }
+    }
+
+    return stub;
+  });
+}
+
+/** Detect design/collection payloads before classic research normalization. */
 export function isDesignResearchPayload(
   parsed: Record<string, unknown>,
 ): boolean {
-  return Array.isArray(parsed.designs) && parsed.designs.length > 0;
+  if (Array.isArray(parsed.designs) && parsed.designs.length > 0) {
+    return true;
+  }
+  return (
+    parsed.collection !== undefined &&
+    typeof parsed.collection === "object" &&
+    parsed.collection !== null &&
+    !Array.isArray(parsed.collection)
+  );
+}
+
+/** Collection metadata without designs[] — concepts are synthesized server-side. */
+export function isCollectionOnlyResearchPayload(
+  parsed: Record<string, unknown>,
+): boolean {
+  if (!isDesignResearchPayload(parsed)) return false;
+  return !(Array.isArray(parsed.designs) && parsed.designs.length > 0);
 }
 
 function normalizeDesignResearchPayload(
@@ -657,6 +912,7 @@ function normalizeDesignResearchPayload(
   const normalized: Record<string, unknown> = { ...parsed };
 
   ensureReportTitle(normalized, adjustments);
+  mergeCollectionIntelligenceFields(normalized, adjustments);
 
   const context = {
     title: coerceConceptField(normalized.title),
@@ -668,13 +924,21 @@ function normalizeDesignResearchPayload(
     collectionIdea: coerceConceptField(normalized.collectionIdea),
   };
 
+  let rawDesigns = normalized.designs;
+  if (!Array.isArray(rawDesigns) || rawDesigns.length === 0) {
+    if (isCollectionOnlyResearchPayload(normalized)) {
+      rawDesigns = synthesizeDesignsFromCollection(normalized, context, adjustments);
+      normalized.designs = rawDesigns;
+    }
+  }
+
   const designs = normalizeDesignConcepts(
-    normalized.designs,
+    rawDesigns,
     context,
     adjustments,
   );
   if (designs) {
-    const collectionResult = applyCollectionEngine(
+    const collectionResult = applyCollectionPipeline(
       designs,
       {
         title: context.title,
@@ -709,6 +973,7 @@ function normalizeDesignResearchPayload(
     };
   }
 
+  stripCollectionOnlyParseFields(normalized);
   normalized.brandDNA = MILAENE_BRAND_DNA;
 
   for (const field of [
@@ -1042,11 +1307,13 @@ export function parseResearchOutput(raw: string): ParsedResearchOutput {
   const record = parsed as Record<string, unknown>;
 
   if (isDesignResearchPayload(record)) {
+    const collectionOnly = isCollectionOnlyResearchPayload(record);
     const { normalized, adjustments } = normalizeDesignResearchPayload(record);
 
     if (adjustments.length > 0) {
       console.info("[Research Run] Normalized design model output", {
         adjustments,
+        collectionOnly,
       });
     }
 

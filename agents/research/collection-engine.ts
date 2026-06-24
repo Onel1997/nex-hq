@@ -524,7 +524,7 @@ export function applyCollectionEngine(
 }
 
 export function formatCollectionMarkdown(collection: ResearchCollection): string {
-  return [
+  const base = [
     "## Collection Overview",
     `**Name:** ${collection.name}`,
     `**Type:** ${collection.type}`,
@@ -548,5 +548,11 @@ export function formatCollectionMarkdown(collection: ResearchCollection): string
     "",
     "### Image Studio Handoff",
     collection.collectionImagePrompt,
-  ].join("\n");
+  ];
+
+  if (collection.emotionalNarrative) {
+    base.push("", "### Emotional Narrative", collection.emotionalNarrative);
+  }
+
+  return base.join("\n");
 }

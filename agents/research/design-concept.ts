@@ -1657,6 +1657,27 @@ export function formatDesignConceptMarkdown(
     concept.supportsDesignId
       ? `**Supports:** ${concept.supportsDesignId}`
       : "",
+    concept.relationshipReason
+      ? `**Relationship:** ${concept.relationshipReason}`
+      : "",
+    concept.emotionalNarrative
+      ? `**Emotional narrative:** ${concept.emotionalNarrative}`
+      : "",
+    concept.emotionalKeyword
+      ? `**Emotional keyword:** ${concept.emotionalKeyword}`
+      : "",
+    concept.storyPosition
+      ? `**Story position:** ${concept.storyPosition}`
+      : "",
+    concept.commercialScore !== undefined
+      ? `**Commercial score:** ${concept.commercialScore}%`
+      : "",
+    concept.campaignPotential
+      ? `**Campaign potential:** ${concept.campaignPotential}`
+      : "",
+    concept.heroScore !== undefined
+      ? `**Hero score:** ${concept.heroScore}%`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");

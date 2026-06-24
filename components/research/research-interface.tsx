@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { ArrowRight, CheckCircle2, Loader2, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { DesignConcept, ResearchCollection } from "@/agents/research/types";
+import { COLLECTION_ARC } from "@/agents/research/types";
 import {
   coerceConceptField,
   formatColorBreakdown,
@@ -173,9 +174,11 @@ function DesignConceptCard({
   concept,
   index,
   labels,
+  heroDesignId,
 }: {
   concept: DesignConcept;
   index: number;
+  heroDesignId?: string;
   labels: {
     creativeApproach: string;
     emotion: string;
@@ -228,12 +231,27 @@ function DesignConceptCard({
     repeatabilityScore: string;
     imagePromptCore: string;
     supportsDesignId: string;
+    relationshipReason: string;
+    emotionalNarrative: string;
+    emotionalKeyword: string;
+    storyPosition: string;
+    commercialScore: string;
+    campaignPotential: string;
+    heroScore: string;
     product: string;
     color: string;
     printArea: string;
     targetAudience: string;
   };
 }) {
+  const isHero = concept.designId === heroDesignId;
+  const roleBadgeClass =
+    concept.collectionRole === "Hero Piece"
+      ? "border-amber-500/40 bg-amber-500/15 text-amber-800 dark:text-amber-200"
+      : concept.collectionRole === "Limited Piece"
+        ? "border-violet-500/30 bg-violet-500/10 text-violet-800 dark:text-violet-200"
+        : "";
+
   const narrativeFields = [
     { label: labels.emotion, value: concept.emotion },
     { label: labels.visualConcept, value: concept.visualConcept },
@@ -307,6 +325,21 @@ function DesignConceptCard({
         <Badge variant="secondary" className="font-normal">
           {concept.creativeApproach}
         </Badge>
+        {isHero ? (
+          <Badge className="border-amber-500/40 bg-amber-500/15 font-normal text-amber-800 dark:text-amber-200">
+            Hero Piece
+          </Badge>
+        ) : null}
+        {concept.collectionRole && !isHero ? (
+          <Badge variant="outline" className={cn("font-normal", roleBadgeClass)}>
+            {concept.collectionRole}
+          </Badge>
+        ) : null}
+        {concept.storyPosition ? (
+          <Badge variant="outline" className="font-normal text-muted-foreground">
+            {concept.storyPosition}
+          </Badge>
+        ) : null}
       </div>
       <h4 className="font-display text-xl font-medium leading-snug">
         {concept.title}
@@ -527,6 +560,66 @@ function DesignConceptCard({
                 </dd>
               </div>
             ) : null}
+            {concept.commercialScore !== undefined ? (
+              <div className="space-y-1">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {labels.commercialScore}
+                </dt>
+                <dd className="text-sm font-medium text-foreground">
+                  {concept.commercialScore}%
+                </dd>
+              </div>
+            ) : null}
+            {concept.campaignPotential ? (
+              <div className="space-y-1">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {labels.campaignPotential}
+                </dt>
+                <dd className="text-sm capitalize text-foreground">
+                  {concept.campaignPotential}
+                </dd>
+              </div>
+            ) : null}
+            {concept.heroScore !== undefined ? (
+              <div className="space-y-1">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {labels.heroScore}
+                </dt>
+                <dd className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                  {concept.heroScore}%
+                </dd>
+              </div>
+            ) : null}
+            {concept.relationshipReason ? (
+              <div className="space-y-1 sm:col-span-2">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {labels.relationshipReason}
+                </dt>
+                <dd className="text-sm leading-relaxed text-foreground">
+                  {concept.relationshipReason}
+                </dd>
+              </div>
+            ) : null}
+            {concept.emotionalKeyword ? (
+              <div className="space-y-1">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {labels.emotionalKeyword}
+                </dt>
+                <dd className="text-sm font-medium text-foreground">
+                  {concept.emotionalKeyword}
+                </dd>
+              </div>
+            ) : null}
+            {concept.emotionalNarrative ? (
+              <div className="space-y-1 sm:col-span-2">
+                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {labels.emotionalNarrative}
+                </dt>
+                <dd className="text-sm leading-relaxed text-foreground">
+                  {concept.emotionalNarrative}
+                </dd>
+              </div>
+            ) : null}
           </dl>
           {concept.imagePromptCore ? (
             <div className="space-y-1 rounded-lg border border-violet-500/15 bg-background/60 p-3">
@@ -678,6 +771,318 @@ function ResearchReportPanel({
         </Link>
       </div>
     </>
+  );
+}
+
+function HeroAnalysisPanel({
+  collection,
+  hero,
+  t,
+}: {
+  collection: ResearchCollection;
+  hero?: DesignConcept;
+  t: ReturnType<typeof useT>;
+}) {
+  const analysis = collection.heroAnalysis;
+  const launchApproval = collection.ceoAnalysis?.launchApproval;
+
+  if (!hero || !analysis) return null;
+
+  const campaignColor =
+    analysis.campaignPotential === "high"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : analysis.campaignPotential === "medium"
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-rose-600 dark:text-rose-400";
+
+  return (
+    <div className="space-y-5 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/12 via-background to-background p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
+          <p className="text-label text-amber-700 dark:text-amber-300">
+            {t("research.interface.heroAnalysis")}
+          </p>
+          <h3 className="font-display text-xl font-medium">{hero.title}</h3>
+          <Badge className="border-amber-500/40 bg-amber-500/15 font-normal text-amber-800 dark:text-amber-200">
+            {t("research.interface.collection.heroBadge")}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-3 gap-4 text-right">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {t("research.interface.collection.heroScore")}
+            </p>
+            <p className="font-display text-2xl font-semibold text-amber-600 dark:text-amber-400">
+              {analysis.heroScore}%
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {t("research.interface.collection.commercialScore")}
+            </p>
+            <p className="font-display text-2xl font-semibold">
+              {analysis.commercialScore}%
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              DNA
+            </p>
+            <p className="font-display text-2xl font-semibold">
+              {hero.dnaScore}%
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+          {t("research.interface.collection.campaignPotential")}
+        </span>
+        <Badge variant="outline" className={cn("font-normal capitalize", campaignColor)}>
+          {analysis.campaignPotential}
+        </Badge>
+      </div>
+
+      <dl className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1 sm:col-span-2">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.whyHero")}
+          </dt>
+          <dd className="text-sm leading-relaxed">{analysis.whyHero}</dd>
+        </div>
+        <div className="space-y-1">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.visualStrength")}
+          </dt>
+          <dd className="text-sm leading-relaxed">{analysis.visualStrength}</dd>
+        </div>
+        <div className="space-y-1">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.emotionalStrength")}
+          </dt>
+          <dd className="text-sm leading-relaxed">{analysis.emotionalStrength}</dd>
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.adPotential")}
+          </dt>
+          <dd className="text-sm leading-relaxed">{analysis.adPotential}</dd>
+        </div>
+      </dl>
+
+      {launchApproval ? (
+        <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {t("research.interface.collection.launchApproval")}
+            </p>
+            <Badge
+              variant={launchApproval.approved ? "default" : "destructive"}
+              className="font-normal"
+            >
+              {launchApproval.approved
+                ? t("research.interface.collection.launchApproved")
+                : t("research.interface.collection.launchRejected")}
+            </Badge>
+          </div>
+          <dl className="space-y-2 text-sm">
+            <div>
+              <dt className="text-xs text-muted-foreground">Emotional impact</dt>
+              <dd className="leading-relaxed">{launchApproval.emotionalImpact}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Commercial strength</dt>
+              <dd className="leading-relaxed">{launchApproval.commercialStrength}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Ad expectations</dt>
+              <dd className="leading-relaxed">
+                {launchApproval.adPerformanceExpectations}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CollectionIntelligencePanel({
+  collection,
+  designs,
+  t,
+}: {
+  collection: ResearchCollection;
+  designs: DesignConcept[];
+  t: ReturnType<typeof useT>;
+}) {
+  const arc = collection.collectionArc ?? [...COLLECTION_ARC];
+  const ranked = [...designs].sort((a, b) => b.dnaScore - a.dnaScore);
+  const hero = designs.find((d) => d.designId === collection.heroDesignId);
+  const analysis = collection.ceoAnalysis;
+
+  return (
+    <div className="space-y-5 rounded-xl border border-violet-500/25 bg-gradient-to-br from-violet-500/10 via-background to-background p-5">
+      <p className="text-label text-violet-700 dark:text-violet-300">
+        {t("research.interface.collectionIntelligence")}
+      </p>
+
+      <div className="space-y-2">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          {t("research.interface.collection.arc")}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {arc.map((step, index) => {
+            const assigned = designs.find((d) => d.storyPosition === step);
+            return (
+              <div
+                key={step}
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-sm",
+                  assigned
+                    ? "border-violet-500/30 bg-violet-500/10"
+                    : "border-border/60 bg-muted/20 text-muted-foreground",
+                )}
+              >
+                <span className="text-xs text-muted-foreground">{index + 1}.</span>{" "}
+                {step}
+                {assigned ? (
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {assigned.title}
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {collection.emotionalNarrative ? (
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.emotionalStory")}
+          </p>
+          <p className="text-sm leading-relaxed text-foreground">
+            {collection.emotionalNarrative}
+          </p>
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          {t("research.interface.collection.relationshipGraph")}
+        </p>
+        <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-4">
+          {hero ? (
+            <div className="flex items-center gap-2">
+              <Badge className="border-amber-500/40 bg-amber-500/15 font-normal text-amber-800 dark:text-amber-200">
+                {t("research.interface.collection.heroBadge")}
+              </Badge>
+              <span className="text-sm font-medium">{hero.title}</span>
+            </div>
+          ) : null}
+          {designs
+            .filter((d) => d.designId !== collection.heroDesignId)
+            .map((design) => (
+              <div
+                key={design.designId}
+                className="flex flex-wrap items-center gap-2 border-l-2 border-violet-500/30 pl-3"
+              >
+                <span className="text-xs text-muted-foreground">↳</span>
+                <span className="text-sm">{design.title}</span>
+                <Badge variant="outline" className="font-normal text-xs">
+                  {design.collectionRole}
+                </Badge>
+                {design.supportsDesignId ? (
+                  <span className="text-xs text-muted-foreground">
+                    {t("research.interface.collection.supports")} {design.supportsDesignId}
+                  </span>
+                ) : null}
+              </div>
+            ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          {t("research.interface.collection.dnaRanking")}
+        </p>
+        <div className="space-y-2">
+          {ranked.map((design, index) => (
+            <div key={design.designId} className="space-y-1">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span>
+                  {index + 1}. {design.title}
+                  <span className="ml-2 text-muted-foreground">
+                    ({design.collectionRole})
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    "tabular-nums font-medium",
+                    design.dnaScore >= 85
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : design.dnaScore >= 70
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-rose-600 dark:text-rose-400",
+                  )}
+                >
+                  {design.dnaScore}%
+                </span>
+              </div>
+              <Progress value={design.dnaScore} className="h-1" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {analysis ? (
+        <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.collection.ceoAnalysis")}
+          </p>
+          <dl className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">
+                {t("research.interface.collection.strongestProduct")}
+              </dt>
+              <dd className="text-sm font-medium">{analysis.strongestProduct}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">
+                {t("research.interface.collection.weakestProduct")}
+              </dt>
+              <dd className="text-sm font-medium">{analysis.weakestProduct}</dd>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <dt className="text-xs text-muted-foreground">
+                {t("research.interface.collection.launchOrder")}
+              </dt>
+              <dd className="text-sm">{analysis.recommendedLaunchOrder.join(" → ")}</dd>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <dt className="text-xs text-muted-foreground">
+                {t("research.interface.collection.productionRisk")}
+              </dt>
+              <dd className="text-sm leading-relaxed">{analysis.productionRisk}</dd>
+            </div>
+            <div className="space-y-1">
+              <dt className="text-xs text-muted-foreground">
+                {t("research.interface.collection.commercialConfidence")}
+              </dt>
+              <dd className="text-sm font-medium">{analysis.commercialConfidence}%</dd>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <dt className="text-xs text-muted-foreground">
+                {t("research.interface.collection.adPotential")}
+              </dt>
+              <dd className="text-sm leading-relaxed">{analysis.adPotential}</dd>
+            </div>
+          </dl>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -892,6 +1297,13 @@ function DesignReportPanel({
     repeatabilityScore: t("research.interface.designConcept.repeatabilityScore"),
     imagePromptCore: t("research.interface.designConcept.imagePromptCore"),
     supportsDesignId: t("research.interface.designConcept.supportsDesignId"),
+    emotionalNarrative: t("research.interface.designConcept.emotionalNarrative"),
+    emotionalKeyword: t("research.interface.designConcept.emotionalKeyword"),
+    storyPosition: t("research.interface.designConcept.storyPosition"),
+    relationshipReason: t("research.interface.designConcept.relationshipReason"),
+    commercialScore: t("research.interface.designConcept.commercialScore"),
+    campaignPotential: t("research.interface.designConcept.campaignPotential"),
+    heroScore: t("research.interface.designConcept.heroScore"),
     product: t("research.interface.designConcept.product"),
     color: t("research.interface.designConcept.color"),
     printArea: t("research.interface.designConcept.printArea"),
@@ -950,11 +1362,23 @@ function DesignReportPanel({
       ) : null}
 
       {collection ? (
-        <CollectionOverviewPanel
-          collection={collection}
-          heroDesign={heroDesign}
-          t={t}
-        />
+        <>
+          <CollectionOverviewPanel
+            collection={collection}
+            heroDesign={heroDesign}
+            t={t}
+          />
+          <HeroAnalysisPanel
+            collection={collection}
+            hero={heroDesign}
+            t={t}
+          />
+          <CollectionIntelligencePanel
+            collection={collection}
+            designs={concepts}
+            t={t}
+          />
+        </>
       ) : null}
 
       {concepts.length > 0 ? (
@@ -968,6 +1392,7 @@ function DesignReportPanel({
                 key={`${concept.title}-${index}`}
                 concept={concept}
                 index={index}
+                heroDesignId={collection?.heroDesignId}
                 labels={conceptLabels}
               />
             ))}
