@@ -25,6 +25,7 @@ export const research = {
     collectionOverview: "Kollektion Overview",
     collectionIntelligence: "Collection Intelligence",
     heroAnalysis: "Hero Analysis",
+    heroRegeneration: "Hero Regeneration",
     collection: {
       name: "Kollektion",
       mood: "Mood",
@@ -63,6 +64,14 @@ export const research = {
       launchApproval: "CEO Launch-Freigabe",
       launchApproved: "Freigegeben",
       launchRejected: "Nicht freigegeben",
+    },
+    heroRegenerationPanel: {
+      previousHero: "Previous Hero",
+      whyFailed: "Why it failed",
+      newHero: "New Hero",
+      improvements: "Improvements",
+      ceoApproval: "CEO Approval",
+      regenerated: "Regenerated",
     },
     designConcept: {
       title: "Konzept",

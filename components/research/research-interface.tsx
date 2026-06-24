@@ -23,6 +23,19 @@ import {
 } from "@/agents/research/design-concept";
 import { Progress } from "@/components/ui/progress";
 
+function resolveCollectionRole(
+  design: DesignConcept,
+  heroDesignId?: string,
+): string {
+  if (heroDesignId && design.designId === heroDesignId) {
+    return "Hero Piece";
+  }
+  if (design.collectionRole === "Hero Piece" && design.designId !== heroDesignId) {
+    return "Supporting Piece";
+  }
+  return design.collectionRole;
+}
+
 interface DesignBriefSummary {
   collectionIdea: string;
   productSuggestions?: string[];
@@ -244,11 +257,12 @@ function DesignConceptCard({
     targetAudience: string;
   };
 }) {
-  const isHero = concept.designId === heroDesignId;
+  const displayRole = resolveCollectionRole(concept, heroDesignId);
+  const isHero = displayRole === "Hero Piece";
   const roleBadgeClass =
-    concept.collectionRole === "Hero Piece"
+    displayRole === "Hero Piece"
       ? "border-amber-500/40 bg-amber-500/15 text-amber-800 dark:text-amber-200"
-      : concept.collectionRole === "Limited Piece"
+      : displayRole === "Limited Piece"
         ? "border-violet-500/30 bg-violet-500/10 text-violet-800 dark:text-violet-200"
         : "";
 
@@ -329,10 +343,9 @@ function DesignConceptCard({
           <Badge className="border-amber-500/40 bg-amber-500/15 font-normal text-amber-800 dark:text-amber-200">
             Hero Piece
           </Badge>
-        ) : null}
-        {concept.collectionRole && !isHero ? (
+        ) : displayRole ? (
           <Badge variant="outline" className={cn("font-normal", roleBadgeClass)}>
-            {concept.collectionRole}
+            {displayRole}
           </Badge>
         ) : null}
         {concept.storyPosition ? (
@@ -540,7 +553,7 @@ function DesignConceptCard({
               <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                 {labels.collectionRole}
               </dt>
-              <dd className="text-sm text-foreground">{concept.collectionRole}</dd>
+              <dd className="text-sm text-foreground">{displayRole}</dd>
             </div>
             <div className="space-y-1">
               <dt className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -908,6 +921,94 @@ function HeroAnalysisPanel({
   );
 }
 
+function HeroRegenerationPanel({
+  collection,
+  hero,
+  t,
+}: {
+  collection: ResearchCollection;
+  hero?: DesignConcept;
+  t: ReturnType<typeof useT>;
+}) {
+  const regen = collection.heroRegeneration;
+  const launchApproval = collection.ceoAnalysis?.launchApproval;
+
+  if (!regen?.required) return null;
+
+  return (
+    <div className="space-y-5 rounded-xl border border-sky-500/30 bg-gradient-to-br from-sky-500/10 via-background to-background p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-label text-sky-700 dark:text-sky-300">
+          {t("research.interface.heroRegeneration")}
+        </p>
+        <Badge variant="outline" className="font-normal border-sky-500/30 text-sky-800 dark:text-sky-200">
+          {t("research.interface.heroRegenerationPanel.regenerated")}
+        </Badge>
+      </div>
+
+      <dl className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.heroRegenerationPanel.previousHero")}
+          </dt>
+          <dd className="text-sm font-medium text-foreground">
+            {regen.previousHeroTitle}
+          </dd>
+        </div>
+        <div className="space-y-1">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.heroRegenerationPanel.newHero")}
+          </dt>
+          <dd className="text-sm font-medium text-foreground">
+            {hero?.title ?? regen.newHeroTitle}
+          </dd>
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+            {t("research.interface.heroRegenerationPanel.whyFailed")}
+          </dt>
+          <dd className="text-sm leading-relaxed text-foreground">{regen.reason}</dd>
+        </div>
+      </dl>
+
+      <div className="space-y-2">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          {t("research.interface.heroRegenerationPanel.improvements")}
+        </p>
+        <ul className="space-y-1 text-sm leading-relaxed text-foreground">
+          {regen.improvements.map((item) => (
+            <li key={item} className="flex gap-2">
+              <span className="text-sky-600 dark:text-sky-400">•</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {launchApproval ? (
+        <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {t("research.interface.heroRegenerationPanel.ceoApproval")}
+            </p>
+            <Badge
+              variant={launchApproval.approved ? "default" : "destructive"}
+              className="font-normal"
+            >
+              {launchApproval.approved
+                ? t("research.interface.collection.launchApproved")
+                : t("research.interface.collection.launchRejected")}
+            </Badge>
+          </div>
+          <p className="text-sm leading-relaxed text-foreground">
+            {collection.ceoRecommendation}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CollectionIntelligencePanel({
   collection,
   designs,
@@ -984,7 +1085,9 @@ function CollectionIntelligencePanel({
           ) : null}
           {designs
             .filter((d) => d.designId !== collection.heroDesignId)
-            .map((design) => (
+            .map((design) => {
+              const role = resolveCollectionRole(design, collection.heroDesignId);
+              return (
               <div
                 key={design.designId}
                 className="flex flex-wrap items-center gap-2 border-l-2 border-violet-500/30 pl-3"
@@ -992,7 +1095,7 @@ function CollectionIntelligencePanel({
                 <span className="text-xs text-muted-foreground">↳</span>
                 <span className="text-sm">{design.title}</span>
                 <Badge variant="outline" className="font-normal text-xs">
-                  {design.collectionRole}
+                  {role}
                 </Badge>
                 {design.supportsDesignId ? (
                   <span className="text-xs text-muted-foreground">
@@ -1000,7 +1103,8 @@ function CollectionIntelligencePanel({
                   </span>
                 ) : null}
               </div>
-            ))}
+            );
+            })}
         </div>
       </div>
 
@@ -1009,13 +1113,15 @@ function CollectionIntelligencePanel({
           {t("research.interface.collection.dnaRanking")}
         </p>
         <div className="space-y-2">
-          {ranked.map((design, index) => (
+          {ranked.map((design, index) => {
+            const role = resolveCollectionRole(design, collection.heroDesignId);
+            return (
             <div key={design.designId} className="space-y-1">
               <div className="flex items-center justify-between gap-2 text-sm">
                 <span>
                   {index + 1}. {design.title}
                   <span className="ml-2 text-muted-foreground">
-                    ({design.collectionRole})
+                    ({role})
                   </span>
                 </span>
                 <span
@@ -1033,7 +1139,8 @@ function CollectionIntelligencePanel({
               </div>
               <Progress value={design.dnaScore} className="h-1" />
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
 
@@ -1369,6 +1476,11 @@ function DesignReportPanel({
             t={t}
           />
           <HeroAnalysisPanel
+            collection={collection}
+            hero={heroDesign}
+            t={t}
+          />
+          <HeroRegenerationPanel
             collection={collection}
             hero={heroDesign}
             t={t}

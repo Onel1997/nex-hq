@@ -5,8 +5,14 @@ import {
   finalizeDesignConceptsForValidation,
   normalizeDesignConcepts,
 } from "./design-concept";
+import {
+  compactDesignConceptsForDetailMode,
+  DEFAULT_RESEARCH_DETAIL_MODE,
+  type ResearchDetailMode,
+} from "./detail-mode";
 import { MILAENE_BRAND_DNA } from "./brand-dna";
 import { applyCollectionPipeline } from "./collection-pipeline";
+import { assertCompleteJsonResponse } from "./response-guard";
 import {
   designResearchOutputSchema,
   researchOutputSchema,
@@ -907,6 +913,7 @@ export function isCollectionOnlyResearchPayload(
 
 function normalizeDesignResearchPayload(
   parsed: Record<string, unknown>,
+  detailMode: ResearchDetailMode = DEFAULT_RESEARCH_DETAIL_MODE,
 ): { normalized: Record<string, unknown>; adjustments: string[] } {
   const adjustments: string[] = [];
   const normalized: Record<string, unknown> = { ...parsed };
@@ -922,6 +929,7 @@ function normalizeDesignResearchPayload(
     styleDirection: coerceConceptField(normalized.styleDirection),
     targetAudience: coerceConceptField(normalized.targetAudience),
     collectionIdea: coerceConceptField(normalized.collectionIdea),
+    detailMode,
   };
 
   let rawDesigns = normalized.designs;
@@ -953,9 +961,9 @@ function normalizeDesignResearchPayload(
       },
       adjustments,
     );
-    const finalizedDesigns = finalizeDesignConceptsForValidation(
-      collectionResult.designs,
-      context,
+    const finalizedDesigns = compactDesignConceptsForDetailMode(
+      finalizeDesignConceptsForValidation(collectionResult.designs, context),
+      detailMode,
     );
     const heroDesign = finalizedDesigns.find(
       (design) => design.designId === collectionResult.collection.heroDesignId,
@@ -1279,7 +1287,16 @@ function validateResearchPayload(
   });
 }
 
-export function parseResearchOutput(raw: string): ParsedResearchOutput {
+export interface ParseResearchOutputOptions {
+  detailMode?: ResearchDetailMode;
+}
+
+export function parseResearchOutput(
+  raw: string,
+  options: ParseResearchOutputOptions = {},
+): ParsedResearchOutput {
+  const detailMode = options.detailMode ?? DEFAULT_RESEARCH_DETAIL_MODE;
+  assertCompleteJsonResponse(raw);
   const strippedJson = stripMarkdownJsonFences(raw);
 
   let parsed: unknown;
@@ -1308,19 +1325,21 @@ export function parseResearchOutput(raw: string): ParsedResearchOutput {
 
   if (isDesignResearchPayload(record)) {
     const collectionOnly = isCollectionOnlyResearchPayload(record);
-    const { normalized, adjustments } = normalizeDesignResearchPayload(record);
+    const { normalized, adjustments } = normalizeDesignResearchPayload(record, detailMode);
 
     if (adjustments.length > 0) {
       console.info("[Research Run] Normalized design model output", {
-        adjustments,
+        adjustments: adjustments.slice(0, 20),
+        adjustmentCount: adjustments.length,
         collectionOnly,
+        detailMode,
       });
     }
 
-    console.info(
-      "[Research Run] Parsed design JSON (pre-validation):",
-      JSON.stringify(normalized, null, 2),
-    );
+    console.info("[Research Run] Parsed design JSON (pre-validation)", {
+      designCount: Array.isArray(normalized.designs) ? normalized.designs.length : 0,
+      detailMode,
+    });
 
     return {
       kind: "design",
@@ -1338,11 +1357,14 @@ export function parseResearchOutput(raw: string): ParsedResearchOutput {
 
   if (allAdjustments.length > 0) {
     console.info("[Research Run] Normalized model output", {
-      adjustments: allAdjustments,
+      adjustments: allAdjustments.slice(0, 20),
+      adjustmentCount: allAdjustments.length,
     });
   }
 
-  console.info("[Research Run] Parsed JSON (pre-validation):", JSON.stringify(normalized, null, 2));
+  console.info("[Research Run] Parsed JSON (pre-validation)", {
+    keys: Object.keys(normalized),
+  });
 
   return {
     kind: "research",

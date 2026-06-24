@@ -450,14 +450,9 @@ export function enrichDesignRelationships(
       };
     }
 
-    const supports =
-      design.collectionRole === "Core Essential"
-        ? undefined
-        : heroDesignId;
-
     return {
       ...design,
-      supportsDesignId: supports,
+      supportsDesignId: heroDesignId,
       relationshipReason: RELATIONSHIP_REASONS[design.collectionRole](heroTitle),
     };
   });

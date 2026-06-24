@@ -60,12 +60,37 @@ export {
   calculateCommercialScore,
   calculateHeroScore,
   assessCampaignPotential,
+  assessHeroFailure,
+  qualifiesAsHeroCandidate,
   validateExactCollectionRoles,
   isWeakHeroVisual,
   hasStrongVisualIdentity,
   formatHeroEngineMarkdown,
   HERO_DNA_TARGET,
+  HERO_SCORE_TARGET,
+  HERO_EMOTIONAL_TARGET,
+  HERO_VISUAL_TARGET,
 } from "./hero-engine";
+export {
+  regenerateHeroDesign,
+  applyHeroRegeneration,
+  REGEN_DNA_TARGET,
+  REGEN_HERO_SCORE_TARGET,
+} from "./hero-regeneration";
+export {
+  RESEARCH_DETAIL_MODES,
+  DEFAULT_RESEARCH_DETAIL_MODE,
+  buildDetailModePromptSection,
+  compactDesignConceptDetail,
+  compactDesignConceptsForDetailMode,
+  type ResearchDetailMode,
+} from "./detail-mode";
+export {
+  assertCompleteJsonResponse,
+  logResearchResponseSize,
+  LARGE_RESEARCH_RESPONSE_THRESHOLD,
+} from "./response-guard";
+export { finalizeCollectionDesigns } from "./collection-pipeline";
 export {
   applyBrandDnaAnalysis,
   analyzeBrandDna,

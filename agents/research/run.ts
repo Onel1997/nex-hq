@@ -1,14 +1,29 @@
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { generateDesignBrief } from "@/services/designBriefEngine";
+import {
+  buildDetailModePromptSection,
+  DEFAULT_RESEARCH_DETAIL_MODE,
+  type ResearchDetailMode,
+} from "./detail-mode";
 import { parseResearchOutput, ResearchParseError } from "./parse-output";
+import { assertCompleteJsonResponse } from "./response-guard";
 import { retrieveResearchKnowledge } from "./retrieve-context";
 import { saveResearchToBrain } from "./save";
-import type { ResearchRunInput, ResearchRunResult } from "./types";
+import type { ParsedResearchOutput, ResearchRunInput, ResearchRunResult } from "./types";
 
 const dict = getDictionary(DEFAULT_LOCALE);
+const RESEARCH_MAX_OUTPUT_TOKENS = 16_384;
+const RETRY_USER_MESSAGE = "Return only valid JSON. Omit optional sections.";
 
-function buildResearchSystemPrompt(workspaceName: string): string {
+function buildResearchSystemPrompt(
+  workspaceName: string,
+  detailMode: ResearchDetailMode = DEFAULT_RESEARCH_DETAIL_MODE,
+): string {
+  return `${buildResearchSystemPromptBody(workspaceName)}\n\n${buildDetailModePromptSection(detailMode)}`;
+}
+
+function buildResearchSystemPromptBody(workspaceName: string): string {
   return `Du bist der Research-Agent von NexHQ — das strategische Gehirn der Marke Milaene im Workspace "${workspaceName}".
 
 Deine Aufgabe: echte Business Intelligence sammeln, analysieren und konkrete Entscheidungen ableiten.
@@ -410,49 +425,101 @@ export async function runResearch(
 
   const { getOpenAIClient } = await import("@/lib/openai/client");
   const openai = getOpenAIClient();
+  const detailMode = input.detailMode ?? DEFAULT_RESEARCH_DETAIL_MODE;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    temperature: 0.4,
-    max_tokens: 16000,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          buildResearchSystemPrompt(input.workspaceName) +
-          "\n\n" +
-          knowledge.brainContext.promptContext,
-      },
-      {
-        role: "user",
-        content: input.request,
-      },
-    ],
-  });
+  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    {
+      role: "system",
+      content:
+        buildResearchSystemPrompt(input.workspaceName, detailMode) +
+        "\n\n" +
+        knowledge.brainContext.promptContext,
+    },
+    {
+      role: "user",
+      content: input.request,
+    },
+  ];
 
-  const raw = completion.choices[0]?.message?.content?.trim();
+  async function requestCompletion(
+    requestMessages: typeof messages,
+  ): Promise<{ raw: string; finishReason: string | null }> {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.4,
+      max_tokens: RESEARCH_MAX_OUTPUT_TOKENS,
+      response_format: { type: "json_object" },
+      messages: requestMessages,
+    });
+
+    const raw = completion.choices[0]?.message?.content?.trim() ?? "";
+    return {
+      raw,
+      finishReason: completion.choices[0]?.finish_reason ?? null,
+    };
+  }
+
+  let { raw, finishReason } = await requestCompletion(messages);
   console.info("[Research Run] OpenAI response received", {
-    finishReason: completion.choices[0]?.finish_reason,
-    rawLength: raw?.length ?? 0,
+    finishReason,
+    rawLength: raw.length,
+    detailMode,
   });
 
   if (!raw) {
     throw new Error(dict.research.errors.noResponse);
   }
 
-  let parsed;
+  let parsed: ParsedResearchOutput;
   console.log("[Research] Before parse");
   try {
-    parsed = parseResearchOutput(raw);
+    assertCompleteJsonResponse(raw);
+    parsed = parseResearchOutput(raw, { detailMode });
     console.log("[Research] After parse", { kind: parsed.kind });
   } catch (error) {
-    console.log("[Research] Parse threw");
-    if (error instanceof ResearchParseError) {
-      console.error("[Research Run] Parse failed", error.toLogPayload());
+    const shouldRetry =
+      error instanceof ResearchParseError ||
+      (error instanceof Error && error.message === "Incomplete JSON response");
+
+    if (!shouldRetry) {
+      console.log("[Research] Parse threw");
       throw error;
     }
-    throw error;
+
+    console.warn("[Research Run] Parse failed — retrying with compact JSON instruction", {
+      message: error instanceof Error ? error.message : "unknown",
+      finishReason,
+    });
+
+    const retry = await requestCompletion([
+      ...messages,
+      { role: "assistant", content: raw },
+      { role: "user", content: RETRY_USER_MESSAGE },
+    ]);
+
+    raw = retry.raw;
+    finishReason = retry.finishReason;
+    console.info("[Research Run] Retry response received", {
+      finishReason,
+      rawLength: raw.length,
+    });
+
+    if (!raw) {
+      throw new Error(dict.research.errors.noResponse);
+    }
+
+    try {
+      assertCompleteJsonResponse(raw);
+      parsed = parseResearchOutput(raw, { detailMode });
+      console.log("[Research] After retry parse", { kind: parsed.kind });
+    } catch (retryError) {
+      console.log("[Research] Parse threw on retry");
+      if (retryError instanceof ResearchParseError) {
+        console.error("[Research Run] Parse failed", retryError.toLogPayload());
+        throw retryError;
+      }
+      throw retryError;
+    }
   }
 
   const reportId = crypto.randomUUID();

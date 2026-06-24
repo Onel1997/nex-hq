@@ -25,6 +25,7 @@ export interface NormalizeDesignConceptContext {
   styleDirection?: string;
   targetAudience?: string;
   collectionIdea?: string;
+  detailMode?: import("./detail-mode").ResearchDetailMode;
 }
 
 type ApproachProfile = {
@@ -735,17 +736,55 @@ function resolveConceptColor(
   );
 }
 
+const BACK_PLACEMENT_PATTERN =
+  /\b(upper back|full back|center back|back print|back graphic|spine|yoke|between shoulder)\b/i;
+const FRONT_PLACEMENT_PATTERN =
+  /\b(center chest|upper chest|left chest|chest|front print|front graphic)\b/i;
+
+/** Align printArea with placement copy in composition fields. */
+export function normalizeDesignPrintArea(design: DesignConcept): DesignConcept {
+  const corpus = [
+    design.placementDimensions,
+    design.exactComposition,
+    design.visualConcept,
+    design.focalPoint,
+    design.printArea,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const backSignals = BACK_PLACEMENT_PATTERN.test(corpus);
+  const frontSignals = FRONT_PLACEMENT_PATTERN.test(corpus);
+
+  let printArea = design.printArea.trim();
+  if (backSignals && !frontSignals) {
+    printArea = "Back";
+  } else if (frontSignals && !backSignals) {
+    printArea = "Front";
+  } else if (backSignals && frontSignals) {
+    printArea = /spine|yoke|full back|upper back|center back/i.test(corpus)
+      ? "Back"
+      : "Front";
+  } else if (!printArea) {
+    printArea = "Front";
+  }
+
+  return { ...design, printArea };
+}
+
 export function finalizeDesignConceptsForValidation(
   designs: DesignConcept[],
   context: NormalizeDesignConceptContext,
 ): DesignConcept[] {
-  return designs.map((design, index) => ({
-    ...design,
-    product: resolveConceptProduct(design.product, context, index),
-    color: resolveConceptColor(design.color, context, index),
-    printArea: ensureMinLength(design.printArea, 1, "Front"),
-    supportsDesignId: design.supportsDesignId?.trim() || undefined,
-  }));
+  return designs.map((design, index) =>
+    normalizeDesignPrintArea({
+      ...design,
+      product: resolveConceptProduct(design.product, context, index),
+      color: resolveConceptColor(design.color, context, index),
+      printArea: ensureMinLength(design.printArea, 1, "Front"),
+      supportsDesignId: design.supportsDesignId?.trim() || undefined,
+    }),
+  );
 }
 
 export function normalizeCreativeApproach(value: unknown): CreativeApproach | undefined {

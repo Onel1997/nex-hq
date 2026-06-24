@@ -4,49 +4,53 @@ import {
   applyCollectionIntelligence,
   enrichDesignRelationships,
 } from "./collection-intelligence";
+import { normalizeDesignPrintArea } from "./design-concept";
 import { applyHeroEngine } from "./hero-engine";
+import { applyHeroRegeneration } from "./hero-regeneration";
 import type { DesignConcept, ResearchCollection } from "./types";
+
+/** Keep only the final approved hero — drop stale pre-regeneration hero entries. */
+export function finalizeCollectionDesigns(
+  designs: DesignConcept[],
+  collection: ResearchCollection,
+): DesignConcept[] {
+  const heroId = collection.heroDesignId;
+  const previousHeroId = collection.heroRegeneration?.previousHeroId;
+
+  const filtered = designs.filter((design) => {
+    if (previousHeroId && design.designId === previousHeroId && design.designId !== heroId) {
+      return false;
+    }
+    return true;
+  });
+
+  return filtered.map((design) => ({
+    ...design,
+    collectionRole:
+      design.designId === heroId
+        ? "Hero Piece"
+        : design.collectionRole === "Hero Piece"
+          ? "Supporting Piece"
+          : design.collectionRole,
+  }));
+}
 
 export interface CollectionPipelineResult {
   designs: DesignConcept[];
   collection: ResearchCollection;
 }
 
-/** Break supportsDesignId cycles — hero never supports another piece. */
+/** Ensure hero is root — every other design supports collection.heroDesignId. */
 export function breakRelationshipCycles(
   designs: DesignConcept[],
   heroDesignId: string,
 ): DesignConcept[] {
-  const byId = new Map(designs.map((d) => [d.designId, d]));
-
   return designs.map((design) => {
     if (design.designId === heroDesignId) {
       return { ...design, supportsDesignId: undefined };
     }
 
-    let supports = design.supportsDesignId?.trim();
-    if (!supports || supports === design.designId) {
-      supports = undefined;
-    }
-
-    // Hero must never be listed as supporting another design
-    if (supports && supports !== heroDesignId) {
-      const target = byId.get(supports);
-      if (target?.supportsDesignId === design.designId) {
-        supports = heroDesignId;
-      }
-    }
-
-    // Non-core pieces should anchor to hero, not create chains back to hero
-    if (
-      supports &&
-      supports !== heroDesignId &&
-      design.collectionRole !== "Core Essential"
-    ) {
-      supports = heroDesignId;
-    }
-
-    return { ...design, supportsDesignId: supports };
+    return { ...design, supportsDesignId: heroDesignId };
   });
 }
 
@@ -73,12 +77,26 @@ export function applyCollectionPipeline(
   console.log("INTELLIGENCE done");
 
   console.log("HERO");
-  const heroResult = applyHeroEngine(
+  let heroResult = applyHeroEngine(
     intelligenceResult.designs,
     intelligenceResult.collection,
     adjustments,
   );
   console.log("HERO done");
+
+  if (heroResult.collection.heroRegenerationRequired) {
+    console.log("HERO REGENERATION");
+    const regenResult = applyHeroRegeneration(
+      heroResult.designs,
+      heroResult.collection,
+      adjustments,
+    );
+    heroResult = {
+      designs: regenResult.designs,
+      collection: regenResult.collection,
+    };
+    console.log("HERO REGENERATION done");
+  }
 
   let finalDesigns = enrichDesignRelationships(
     heroResult.designs,
@@ -88,6 +106,8 @@ export function applyCollectionPipeline(
     finalDesigns,
     heroResult.collection.heroDesignId,
   );
+  finalDesigns = finalDesigns.map((design) => normalizeDesignPrintArea(design));
+  finalDesigns = finalizeCollectionDesigns(finalDesigns, heroResult.collection);
 
   const intelligenceCeo = intelligenceResult.collection.ceoAnalysis;
   const heroCeo = heroResult.collection.ceoAnalysis;
@@ -110,8 +130,10 @@ export function applyCollectionPipeline(
         : heroCeo ?? intelligenceCeo,
     ceoRecommendation: heroCeo?.launchApproval?.approved
       ? "Proceed to Design Studio — CEO approves hero as launch piece."
-      : heroResult.collection.ceoRecommendation ??
-        intelligenceResult.collection.ceoRecommendation,
+      : "Do not launch yet — refine Hero Piece.",
+    collectionScore: heroCeo?.launchApproval?.approved
+      ? heroResult.collection.collectionScore
+      : Math.min(heroResult.collection.collectionScore, 69),
   };
 
   return { designs: finalDesigns, collection };

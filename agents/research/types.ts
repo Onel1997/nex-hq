@@ -283,6 +283,21 @@ export const heroAnalysisSchema = z.object({
 
 export type HeroAnalysis = z.infer<typeof heroAnalysisSchema>;
 
+export const HERO_STATUSES = ["approved", "rejected"] as const;
+export type HeroStatus = (typeof HERO_STATUSES)[number];
+
+export const heroRegenerationSchema = z.object({
+  required: z.boolean(),
+  reason: z.string().min(10),
+  previousHeroId: z.string().min(1),
+  previousHeroTitle: z.string().min(1),
+  newHeroId: z.string().min(1),
+  newHeroTitle: z.string().min(1),
+  improvements: z.array(z.string().min(5)).min(1),
+});
+
+export type HeroRegeneration = z.infer<typeof heroRegenerationSchema>;
+
 export const researchCollectionSchema = z.object({
   name: z.string().min(3),
   type: z.enum(COLLECTION_TYPES),
@@ -303,6 +318,9 @@ export const researchCollectionSchema = z.object({
   emotionalNarrative: z.string().min(20).optional(),
   ceoAnalysis: ceoAnalysisSchema.optional(),
   heroAnalysis: heroAnalysisSchema.optional(),
+  heroStatus: z.enum(HERO_STATUSES).optional(),
+  heroRegenerationRequired: z.boolean().optional(),
+  heroRegeneration: heroRegenerationSchema.optional(),
 });
 
 export type ResearchCollection = z.infer<typeof researchCollectionSchema>;
@@ -447,6 +465,7 @@ export interface ResearchRunInput {
   workspaceId: string;
   workspaceName: string;
   originTaskId?: string;
+  detailMode?: import("./detail-mode").ResearchDetailMode;
 }
 
 export interface ResearchRunResult {
