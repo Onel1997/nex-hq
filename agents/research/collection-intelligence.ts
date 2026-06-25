@@ -50,7 +50,8 @@ const RELATIONSHIP_REASONS: Record<
   (heroTitle: string) => string
 > = {
   "Hero Piece": () => "anchors the collection narrative",
-  "Core Essential": () => "stands alone as the repeatable commercial foundation",
+  "Core Essential": (hero) =>
+    `supports ${hero} with the repeatable commercial foundation of the capsule`,
   "Statement Piece": (hero) =>
     `extends the visual language of ${hero} with stronger artistic expression`,
   "Supporting Piece": (hero) =>

@@ -15,8 +15,12 @@ import {
 import {
   applyEmotionalVisualLanguage,
 } from "./emotional-visual";
-import { normalizeDesignPrintArea } from "./design-concept";
 import { MILAENE_EMOTIONAL_VOCABULARY } from "./emotional-vocabulary";
+import { normalizeDesignPrintArea } from "./design-concept";
+import {
+  applyHeroProductionSafety,
+  clampHeroPrintSize,
+} from "./milaene-translation";
 import { roundPercent } from "./score-coercion";
 import {
   pickThemeEmotion,
@@ -478,12 +482,9 @@ export function strengthenHeroCandidate(
     collectionRole: "Hero Piece",
     emotion,
     emotionalKeyword: resolvedTheme?.emotionalKeyword ?? emotion,
-    printSize:
-      design.printSize?.includes("cm")
-        ? design.printSize.replace(/\d+/, (n) =>
-            String(Math.max(Number.parseInt(n, 10) || 28, 28)),
-          )
-        : "28 cm wide editorial graphic",
+    printSize: design.printSize?.includes("cm")
+      ? clampHeroPrintSize(design.printSize)
+      : "32 cm wide editorial graphic",
     printArea: useBackPlacement ? "Back" : "Front",
     placementDimensions: useBackPlacement
       ? "Center back, 10 cm below yoke — full spine alignment"
@@ -523,7 +524,7 @@ export function strengthenHeroCandidate(
     };
   }
 
-  return normalizeDesignPrintArea(applyBrandDnaAnalysis(strengthened));
+  return normalizeDesignPrintArea(applyHeroProductionSafety(applyBrandDnaAnalysis(strengthened)));
 }
 
 export function qualifiesAsHeroCandidate(design: DesignConcept): boolean {

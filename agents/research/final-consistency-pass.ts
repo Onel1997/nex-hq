@@ -17,8 +17,10 @@ import {
 } from "./emotional-visual";
 import {
   assertDnaScoreDiversity,
+  applyHeroProductionSafety,
   ensureCollectionDnaDiversity,
 } from "./milaene-translation";
+import { calculateCommercialScore } from "./hero-engine";
 import {
   visualConceptFingerprint,
 } from "./design-concept";
@@ -126,6 +128,17 @@ export function mergeHeroAnalysisIntoDesign(
         ? roundPercent(heroAnalysis.commercialScore)
         : undefined,
     campaignPotential: heroAnalysis.campaignPotential,
+  };
+}
+
+function syncHeroProductionAndCommercial(design: DesignConcept): DesignConcept {
+  const safeHero = applyHeroProductionSafety({
+    ...design,
+    collectionRole: "Hero Piece",
+  });
+  return {
+    ...safeHero,
+    commercialScore: roundPercent(calculateCommercialScore(safeHero)),
   };
 }
 
@@ -463,6 +476,61 @@ export function rebuildCollectionFromFinalizedDesigns(
   };
 }
 
+export function assertRelationshipTargets(
+  designs: DesignConcept[],
+  collection: ResearchCollection,
+): void {
+  const hero = designs.find((design) => design.designId === collection.heroDesignId);
+
+  for (const design of designs) {
+    if (design.designId === collection.heroDesignId) {
+      if (design.supportsDesignId !== undefined) {
+        throw new Error(
+          `RELATIONSHIP_TARGET_MISMATCH: title="${design.title}" role="${design.collectionRole}" supportsDesignId="${design.supportsDesignId}" expectedHeroDesignId="${collection.heroDesignId}"`,
+        );
+      }
+      continue;
+    }
+
+    if (design.supportsDesignId !== collection.heroDesignId) {
+      throw new Error(
+        `RELATIONSHIP_TARGET_MISMATCH: title="${design.title}" role="${design.collectionRole}" supportsDesignId="${design.supportsDesignId ?? ""}" expectedHeroDesignId="${collection.heroDesignId}"`,
+      );
+    }
+  }
+
+  for (const node of collection.relationshipGraph ?? []) {
+    if (node.designId === collection.heroDesignId) {
+      if (node.supportsDesignId !== undefined) {
+        throw new Error(
+          `RELATIONSHIP_TARGET_MISMATCH: title="${node.title}" role="${node.role}" supportsDesignId="${node.supportsDesignId}" expectedHeroDesignId="${collection.heroDesignId}"`,
+        );
+      }
+      continue;
+    }
+
+    if (node.supportsDesignId !== collection.heroDesignId) {
+      throw new Error(
+        `RELATIONSHIP_TARGET_MISMATCH: title="${node.title}" role="${node.role}" supportsDesignId="${node.supportsDesignId ?? ""}" expectedHeroDesignId="${collection.heroDesignId}"`,
+      );
+    }
+  }
+
+  if (hero) {
+    for (const node of collection.relationshipGraph ?? []) {
+      if (
+        node.designId !== collection.heroDesignId &&
+        node.relationshipReason &&
+        !node.relationshipReason.includes(hero.title)
+      ) {
+        throw new Error(
+          `RELATIONSHIP_TARGET_MISMATCH: title="${node.title}" role="${node.role}" relationshipReason must reference hero "${hero.title}"`,
+        );
+      }
+    }
+  }
+}
+
 export function assertFinalCollectionConsistency(
   output: DesignResearchOutput,
 ): void {
@@ -478,6 +546,8 @@ export function assertFinalCollectionConsistency(
   }
 
   assertRoleConsistency(designs);
+
+  assertRelationshipTargets(designs, collection);
 
   for (const design of designs) {
     if (design.designId === collection.heroDesignId) {
@@ -569,68 +639,267 @@ export function assertFinalCollectionConsistency(
   }
 }
 
+export function pipelineStepSnapshot(
+  designs: DesignConcept[],
+  collection: ResearchCollection | undefined,
+) {
+  const hero =
+    designs.find((design) => design.collectionRole === "Hero Piece") ??
+    (collection
+      ? designs.find((design) => design.designId === collection.heroDesignId)
+      : undefined);
+
+  return {
+    designCount: designs.length,
+    roles: designs.map((design) => ({
+      title: design.title,
+      role: design.collectionRole,
+      id: design.designId,
+    })),
+    heroDesignId: collection?.heroDesignId,
+    heroTitle: hero?.title,
+    dnaScores: designs.map((design) => design.dnaScore),
+    commercialScores: designs.map((design) => design.commercialScore),
+    campaignPotentials: designs.map((design) => design.campaignPotential),
+    relationshipTargets: designs.map((design) => ({
+      id: design.designId,
+      supportsDesignId: design.supportsDesignId,
+    })),
+  };
+}
+
+export function logFinalPipelineCrash(
+  step: number,
+  stepName: string,
+  designs: DesignConcept[] | undefined,
+  collection: ResearchCollection | undefined,
+  error: unknown,
+): void {
+  console.error(`[FINAL PIPELINE] CRASH AT STEP ${step}: ${stepName}`, {
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    designSummary: designs?.map((design) => ({
+      id: design.designId,
+      title: design.title,
+      role: design.collectionRole,
+      dnaScore: design.dnaScore,
+      heroScore: design.heroScore,
+      commercialScore: design.commercialScore,
+      campaignPotential: design.campaignPotential,
+      supportsDesignId: design.supportsDesignId,
+      product: design.product,
+      color: design.color,
+      printArea: design.printArea,
+    })),
+    collectionSummary: {
+      heroDesignId: collection?.heroDesignId,
+      collectionScore: collection?.collectionScore,
+      scoreLocked: collection?.scoreLocked,
+      heroStatus: collection?.heroStatus,
+      ceoRecommendation: collection?.ceoRecommendation,
+    },
+  });
+}
+
 export function applyFinalConsistencyToDesignOutput(
   output: DesignResearchOutput,
   adjustments: string[] = [],
 ): DesignResearchOutput {
-  const consistency = finalConsistencyPass(
-    output.designs,
-    output.collection,
-    adjustments,
-  );
-  let designs = applyEmotionalRepairPass(
-    consistency.designs,
-    consistency.collection,
-    adjustments,
-  );
-  designs = normalizeCollectionRoles(designs, adjustments);
-  assertRoleConsistency(designs);
-  designs = applyCollectionEmotionalVisualLanguage(designs, consistency.collection);
-  designs = designs.map((design) => applyBrandDnaAnalysis(design));
-  designs = ensureCollectionDnaDiversity(designs, adjustments);
-  designs = applyRoleMetadata(designs);
+  console.log("[FINAL PIPELINE] STEP 1 start: input", {
+    designCount: output.designs?.length,
+    heroDesignId: output.collection?.heroDesignId,
+    roles: output.designs?.map((design) => ({
+      title: design.title,
+      role: design.collectionRole,
+      id: design.designId,
+    })),
+  });
+
+  let designs = output.designs;
+  let collection = output.collection;
+  const snapshot = () => pipelineStepSnapshot(designs, collection);
+
+  console.log("[FINAL PIPELINE] STEP 1 before", snapshot());
+  let consistency: FinalConsistencyResult;
+  try {
+    consistency = finalConsistencyPass(designs, collection, adjustments);
+    designs = consistency.designs;
+    collection = consistency.collection;
+    console.log("[FINAL PIPELINE] STEP 1 after", snapshot());
+  } catch (error) {
+    logFinalPipelineCrash(
+      1,
+      "final consistency base pass",
+      designs,
+      collection,
+      error,
+    );
+    throw error;
+  }
+
+  console.log("[FINAL PIPELINE] STEP 2 before", snapshot());
+  try {
+    designs = applyEmotionalRepairPass(designs, collection, adjustments);
+    console.log("[FINAL PIPELINE] STEP 2 after", snapshot());
+  } catch (error) {
+    logFinalPipelineCrash(2, "emotional repair pass", designs, collection, error);
+    throw error;
+  }
+
+  console.log("[FINAL PIPELINE] STEP 3 before", snapshot());
+  try {
+    designs = normalizeCollectionRoles(designs, adjustments);
+    assertRoleConsistency(designs);
+    console.log("[FINAL PIPELINE] STEP 3 after", snapshot());
+  } catch (error) {
+    logFinalPipelineCrash(3, "role normalization", designs, collection, error);
+    throw error;
+  }
+
+  console.log("[FINAL PIPELINE] STEP 4 before", snapshot());
+  try {
+    designs = applyCollectionEmotionalVisualLanguage(designs, collection);
+    console.log("[FINAL PIPELINE] STEP 4 after", snapshot());
+  } catch (error) {
+    logFinalPipelineCrash(
+      4,
+      "applyCollectionEmotionalVisualLanguage",
+      designs,
+      collection,
+      error,
+    );
+    throw error;
+  }
+
+  console.log("[FINAL PIPELINE] STEP 5 before", snapshot());
+  try {
+    designs = designs.map((design) => applyBrandDnaAnalysis(design));
+    console.log("[FINAL PIPELINE] STEP 5 after", snapshot());
+  } catch (error) {
+    logFinalPipelineCrash(5, "applyBrandDnaAnalysis", designs, collection, error);
+    throw error;
+  }
+
+  console.log("[FINAL PIPELINE] STEP 6 before", snapshot());
+  try {
+    designs = ensureCollectionDnaDiversity(designs, adjustments);
+    designs = applyRoleMetadata(designs);
+    console.log("[FINAL PIPELINE] STEP 6 after", snapshot());
+  } catch (error) {
+    logFinalPipelineCrash(
+      6,
+      "ensureCollectionDnaDiversity",
+      designs,
+      collection,
+      error,
+    );
+    throw error;
+  }
+
   const heroDesignId =
     designs.find((design) => design.collectionRole === "Hero Piece")?.designId ??
-    consistency.collection.heroDesignId;
-  designs = ensureRelationshipGraph(designs, heroDesignId);
-  let collection = rebuildCollectionFromFinalizedDesigns(
-    consistency.collection,
-    designs,
-  );
+    collection.heroDesignId;
 
-  const hero = designs.find((design) => design.designId === collection.heroDesignId);
+  console.log("[FINAL PIPELINE] STEP 7 before", snapshot());
+  try {
+    designs = ensureRelationshipGraph(designs, heroDesignId);
+    console.log("[FINAL PIPELINE] STEP 7 after", snapshot());
+  } catch (error) {
+    logFinalPipelineCrash(7, "ensureRelationshipGraph", designs, collection, error);
+    throw error;
+  }
+
+  console.log("[FINAL PIPELINE] STEP 8 before", snapshot());
+  try {
+    collection = rebuildCollectionFromFinalizedDesigns(collection, designs);
+    console.log("[FINAL PIPELINE] STEP 8 after", snapshot());
+  } catch (error) {
+    logFinalPipelineCrash(
+      8,
+      "rebuildCollectionFromFinalizedDesigns",
+      designs,
+      collection,
+      error,
+    );
+    throw error;
+  }
+
+  let hero = designs.find((design) => design.designId === collection.heroDesignId);
   const heroAnalysis = collection.heroAnalysis;
 
-  if (hero && heroAnalysis) {
-    const rawBreakdown = computeDynamicCollectionScore(designs, collection);
-    const ceoResult = applyCeoConsistency(
-      collection,
-      hero,
-      heroAnalysis,
-      designs,
-      rawBreakdown.collectionScore,
-    );
+  if (hero) {
     designs = designs.map((design) =>
-      design.designId === ceoResult.hero.designId ? ceoResult.hero : design,
+      design.designId === hero!.designId
+        ? syncHeroProductionAndCommercial(design)
+        : design,
     );
-    const finalResult = applyFinalCollectionScore(
-      ceoResult.collection,
-      ceoResult.hero,
-      ceoResult.heroAnalysis,
-      ceoResult.rawCollectionScore,
-      adjustments,
-    );
-    designs = designs.map((design) =>
-      design.designId === finalResult.hero.designId ? finalResult.hero : design,
-    );
-    collection = finalResult.collection;
+    hero = designs.find((design) => design.designId === collection.heroDesignId) ?? hero;
   }
+
+  if (hero && heroAnalysis) {
+    let ceoResult: Awaited<ReturnType<typeof applyCeoConsistency>>;
+
+    console.log("[FINAL PIPELINE] STEP 9 before", snapshot());
+    try {
+      const rawBreakdown = computeDynamicCollectionScore(designs, collection);
+      ceoResult = applyCeoConsistency(
+        collection,
+        hero,
+        heroAnalysis,
+        designs,
+        rawBreakdown.collectionScore,
+      );
+      designs = designs.map((design) =>
+        design.designId === ceoResult.hero.designId ? ceoResult.hero : design,
+      );
+      console.log("[FINAL PIPELINE] STEP 9 after", snapshot());
+    } catch (error) {
+      logFinalPipelineCrash(9, "applyCeoConsistency", designs, collection, error);
+      throw error;
+    }
+
+    console.log("[FINAL PIPELINE] STEP 10 before", snapshot());
+    try {
+      const finalResult = applyFinalCollectionScore(
+        ceoResult.collection,
+        ceoResult.hero,
+        ceoResult.heroAnalysis,
+        ceoResult.rawCollectionScore,
+        adjustments,
+      );
+      designs = designs.map((design) =>
+        design.designId === finalResult.hero.designId ? finalResult.hero : design,
+      );
+      collection = finalResult.collection;
+      console.log("[FINAL PIPELINE] STEP 10 after", snapshot());
+    } catch (error) {
+      logFinalPipelineCrash(
+        10,
+        "applyFinalCollectionScore",
+        designs,
+        collection,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  designs = finalizeRelationshipTargets(designs, collection);
+  collection = rebuildCollectionFromFinalizedDesigns(collection, designs);
 
   return {
     ...output,
     designs,
     collection,
   };
+}
+
+export function finalizeRelationshipTargets(
+  designs: DesignConcept[],
+  collection: ResearchCollection,
+): DesignConcept[] {
+  const heroDesignId = collection.heroDesignId;
+  return ensureRelationshipGraph(designs, heroDesignId);
 }
 
 function ensureRelationshipGraph(
@@ -654,10 +923,8 @@ export function finalConsistencyPass(
 ): FinalConsistencyResult {
   let working = removeStaleHeroEntries(designs, collection);
   const heroDraft = resolveHeroDesign(working, collection);
-  const hero = mergeHeroAnalysisIntoDesign(
-    heroDraft,
-    collection.heroAnalysis,
-    collection,
+  const hero = syncHeroProductionAndCommercial(
+    mergeHeroAnalysisIntoDesign(heroDraft, collection.heroAnalysis, collection),
   );
 
   working = deduplicateDesignPool(working, hero.designId, adjustments);

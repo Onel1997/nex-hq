@@ -751,6 +751,85 @@ export function ensureCollectionDnaDiversity(
   }));
 }
 
+const HERO_SPECIALTY_PRODUCTION_PATTERN =
+  /\b(specialty ink|metallic ink|foil|puff ink|discharge ink|multi-?layer|(?:3|4|5)-layer|embroidery|chenille|sequin|sublimation overprint)\b/i;
+
+const HERO_PRINT_TECHNIQUE_PATTERN =
+  /\b(screen print|spot palette|plastisol|water-based)\b/i;
+
+const PRINT_TECHNIQUE_SIGNATURES = [
+  /\bscreen print/i,
+  /\bdtg\b/i,
+  /\bdirect[- ]to[- ]garment/i,
+  /\bembroidery/i,
+  /\bheat transfer/i,
+  /\bsublimation/i,
+  /\bfoil/i,
+  /\bpuff\b/i,
+] as const;
+
+function heroProductionCorpus(design: DesignConcept): string {
+  return [
+    design.printTechnique,
+    design.materialEffects,
+    design.exactComposition,
+    design.designInstructions?.join(" ") ?? "",
+    design.printSize,
+  ].join(" ");
+}
+
+function countDistinctPrintTechniques(corpus: string): number {
+  return PRINT_TECHNIQUE_SIGNATURES.filter((pattern) => pattern.test(corpus)).length;
+}
+
+/** Hero may stay High only when specialty production is genuinely required. */
+export function requiresHighHeroProduction(design: DesignConcept): boolean {
+  const corpus = heroProductionCorpus(design);
+  if (HERO_SPECIALTY_PRODUCTION_PATTERN.test(corpus)) return true;
+  if (/\bembroidery\b/i.test(corpus)) return true;
+  if (countDistinctPrintTechniques(corpus) > 2) return true;
+  return false;
+}
+
+export function clampHeroPrintSize(printSize: string): string {
+  const match = printSize.match(/(\d{1,2})\s*cm/i);
+  if (!match) return "32 cm wide editorial graphic";
+
+  let width = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(width)) return "32 cm wide editorial graphic";
+  if (width > 34) width = 32;
+  if (width < 30) width = 30;
+
+  return printSize.replace(/\d{1,2}/, String(width));
+}
+
+function normalizeHeroPrintTechnique(design: DesignConcept): string {
+  if (HERO_PRINT_TECHNIQUE_PATTERN.test(design.printTechnique)) {
+    return design.printTechnique;
+  }
+  return "Screen print, 1–2 color spot palette, water-based ink";
+}
+
+/** Keep hero production commercially safe without blocking CEO approval. */
+export function applyHeroProductionSafety(design: DesignConcept): DesignConcept {
+  if (design.collectionRole !== "Hero Piece") return design;
+
+  const printSize = clampHeroPrintSize(design.printSize);
+  const productionDifficulty = requiresHighHeroProduction(design)
+    ? design.productionDifficulty
+    : "Medium";
+
+  return {
+    ...design,
+    printSize,
+    dimensions: printSize,
+    productionDifficulty,
+    printTechnique: normalizeHeroPrintTechnique(design),
+    repeatabilityScore:
+      productionDifficulty === "High" ? "Medium" : design.repeatabilityScore,
+  };
+}
+
 export function assertDnaScoreDiversity(designs: DesignConcept[]): void {
   if (designs.length <= 1) return;
 

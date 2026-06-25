@@ -5,6 +5,7 @@ import {
   translateEmotionToMilaeneVisuals,
   buildMilaeneTranslation,
   applyMilaeneDnaCaps,
+  applyHeroProductionSafety,
   createMotifTokenCounts,
   type MilaeneVisualLanguage,
   type MilaeneTranslationResult,
@@ -492,7 +493,10 @@ function applyVisualLanguageToDesign(
     ),
   };
 
-  return demoteDominantStyleReferences(enriched);
+  const styled = demoteDominantStyleReferences(enriched);
+  return design.collectionRole === "Hero Piece"
+    ? applyHeroProductionSafety(styled)
+    : styled;
 }
 
 function uniqueStrings(values: string[]): string[] {

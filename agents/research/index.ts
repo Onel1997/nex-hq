@@ -96,6 +96,8 @@ export {
   finalConsistencyPass,
   applyFinalConsistencyToDesignOutput,
   assertFinalCollectionConsistency,
+  assertRelationshipTargets,
+  finalizeRelationshipTargets,
   rebuildCollectionFromFinalizedDesigns,
   mergeHeroAnalysisIntoDesign,
 } from "./final-consistency-pass";
@@ -119,6 +121,9 @@ export {
   createMotifTokenCounts,
   extractTrackedMotifTokens,
   ensureCollectionDnaDiversity,
+  applyHeroProductionSafety,
+  clampHeroPrintSize,
+  requiresHighHeroProduction,
   assertDnaScoreDiversity,
   rescoreDnaForRole,
   ROLE_DNA_RANGES,

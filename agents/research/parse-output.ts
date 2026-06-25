@@ -15,6 +15,8 @@ import { applyCollectionPipeline } from "./collection-pipeline";
 import {
   applyFinalConsistencyToDesignOutput,
   assertFinalCollectionConsistency,
+  logFinalPipelineCrash,
+  pipelineStepSnapshot,
 } from "./final-consistency-pass";
 import { coercePercentScore, coerceRetailPrice, coerceCampaignPotential, coerceRepeatabilityScore } from "./score-coercion";
 import { assertCompleteJsonResponse } from "./response-guard";
@@ -1521,7 +1523,27 @@ export function parseResearchOutput(
       strippedJson,
     });
     const finalized = applyFinalConsistencyToDesignOutput(validated, adjustments);
-    assertFinalCollectionConsistency(finalized);
+
+    console.log(
+      "[FINAL PIPELINE] STEP 11 before",
+      pipelineStepSnapshot(finalized.designs, finalized.collection),
+    );
+    try {
+      assertFinalCollectionConsistency(finalized);
+      console.log(
+        "[FINAL PIPELINE] STEP 11 after",
+        pipelineStepSnapshot(finalized.designs, finalized.collection),
+      );
+    } catch (error) {
+      logFinalPipelineCrash(
+        11,
+        "final assertions",
+        finalized.designs,
+        finalized.collection,
+        error,
+      );
+      throw error;
+    }
 
     if (adjustments.length > 0) {
       console.info("[Research Run] Final consistency adjustments", {
