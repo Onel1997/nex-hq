@@ -1,6 +1,6 @@
 import { applyBrandDnaAnalysis, MILAENE_BRAND_DNA } from "./brand-dna";
+import { applyCeoConsistency } from "./ceo-consistency";
 import { normalizeDesignPrintArea } from "./design-concept";
-import { MILAENE_EMOTIONAL_VOCABULARY } from "./emotional-vocabulary";
 import {
   assessCampaignPotential,
   assessHeroFailure,
@@ -14,6 +14,11 @@ import {
   strengthenHeroCandidate,
   validateExactCollectionRoles,
 } from "./hero-engine";
+import {
+  buildThemeHeroTitle,
+  pickThemeEmotion,
+  resolveThemeProfile,
+} from "./theme-vocabulary";
 import type {
   DesignConcept,
   HeroAnalysis,
@@ -21,7 +26,8 @@ import type {
   ResearchCollection,
 } from "./types";
 
-export const REGEN_DNA_TARGET = 85;
+/** Launch approval thresholds — not score floors returned to the client. */
+export const REGEN_DNA_TARGET = 80;
 export const REGEN_HERO_SCORE_TARGET = 85;
 export const REGEN_EMOTIONAL_TARGET = 80;
 export const REGEN_VISUAL_TARGET = 80;
@@ -51,32 +57,6 @@ function slugHeroId(seed: string): string {
   return `hero-regen-${base || "campaign"}`;
 }
 
-function pickEmotion(collection: ResearchCollection, supporters: DesignConcept[]): string {
-  const fromNarrative = MILAENE_EMOTIONAL_VOCABULARY.preferred.find((word) =>
-    `${collection.emotionalNarrative ?? ""} ${collection.mood} ${collection.campaignTheme}`
-      .toLowerCase()
-      .includes(word.toLowerCase()),
-  );
-  if (fromNarrative) return fromNarrative;
-
-  const fromSupporter = supporters
-    .map((design) => design.emotion)
-    .find((emotion) =>
-      MILAENE_EMOTIONAL_VOCABULARY.preferred.some((word) =>
-        emotion.toLowerCase().includes(word.toLowerCase()),
-      ),
-    );
-  if (fromSupporter) {
-    return (
-      MILAENE_EMOTIONAL_VOCABULARY.preferred.find((word) =>
-        fromSupporter.toLowerCase().includes(word.toLowerCase()),
-      ) ?? fromSupporter
-    );
-  }
-
-  return MILAENE_EMOTIONAL_VOCABULARY.preferred[0];
-}
-
 function collectDnaSignals(supporters: DesignConcept[]): string[] {
   const signals = new Set<string>();
   for (const design of supporters.slice(0, 3)) {
@@ -94,11 +74,15 @@ function buildRegeneratedHeroConcept(
   newHeroId: string,
 ): DesignConcept {
   const { collection, previousHero, designs } = input;
+  const theme = resolveThemeProfile(collection);
   const supporters = designs
     .filter((design) => design.designId !== previousHero.designId)
     .sort((a, b) => b.dnaScore - a.dnaScore);
   const anchor = supporters[0] ?? previousHero;
-  const emotion = pickEmotion(collection, supporters);
+  const emotion = pickThemeEmotion(theme, collection);
+  const heroTitle = buildThemeHeroTitle(collection, theme);
+  const primaryMotif = theme.visualMotifs[0] ?? "organic curve emblem";
+  const secondaryMotif = theme.visualMotifs[1] ?? "editorial negative space frame";
   const color = anchor.color || collection.colorDirection[0] || "Washed Black";
   const product = anchor.product || collection.heroProduct.product || "Oversized Hoodie";
   const dnaSignals = collectDnaSignals(supporters);
@@ -110,21 +94,21 @@ function buildRegeneratedHeroConcept(
   const concept: DesignConcept = {
     ...anchor,
     designId: newHeroId,
-    title: `${collection.name} — ${emotion} Campaign Hero`,
+    title: heroTitle,
     creativeApproach: "Japanese Editorial",
     collectionRole: "Hero Piece",
     product,
     color,
     printArea: useBack ? "Back" : "Front",
-    styleDirection: `Quiet luxury campaign hero — ${collection.mood.toLowerCase()} editorial centerpiece for ${collection.campaignTheme}`,
+    styleDirection: `Quiet luxury campaign hero — ${collection.mood.toLowerCase()} ${theme.id.replace(/-/g, " ")} centerpiece for ${collection.campaignTheme}`,
     emotion,
     targetAudience: collection.targetAudience,
-    visualConcept: `${emotion.toLowerCase()} campaign centerpiece — editorial symbolic composition with dominant focal hierarchy, generous negative space, and a recognizable Milaene silhouette built for homepage and Instagram scale`,
-    designDescription: `Regenerated launch hero for ${collection.name}. Campaign-scale ${emotion.toLowerCase()} symbolism with premium editorial restraint and billboard-readable presence.`,
-    symbolism: `A restrained ${emotion.toLowerCase()} emblem as the emotional anchor — organic curves, editorial spacing, layered meaning, and quiet luxury symbolism drawn from ${dnaSignals.slice(0, 2).join(" and ")}`,
+    visualConcept: `${emotion.toLowerCase()} campaign centerpiece — ${primaryMotif} with ${secondaryMotif}, dominant focal hierarchy, and billboard-readable silhouette for ${collection.campaignTheme}`,
+    designDescription: `Regenerated launch hero for ${collection.name}. Theme-led ${emotion.toLowerCase()} symbolism (${theme.symbolism.slice(0, 90).toLowerCase()}) with premium editorial restraint.`,
+    symbolism: `${theme.symbolism} — reinforced through ${dnaSignals.slice(0, 2).join(" and ")}`,
     typography: "Editorial serif, wide tracking, uppercase, single restrained text block",
-    message: emotion.toUpperCase(),
-    rationale: `Auto-regenerated hero to meet launch thresholds — ${collection.campaignTheme} with ${collection.philosophy.slice(0, 80).toLowerCase()}`,
+    message: theme.emotionalKeyword.toUpperCase(),
+    rationale: `Auto-regenerated hero for ${collection.campaignTheme} — ${collection.philosophy.slice(0, 80).toLowerCase()}`,
     printTechnique: "Screen print, 2-color spot palette, plastisol",
     printSize: "30 cm wide editorial graphic",
     placementDimensions: useBack
@@ -133,21 +117,20 @@ function buildRegeneratedHeroConcept(
     garmentInspiration: "Acne Studios oversized hoodie, Lemaire editorial restraint",
     brandInspiration: "Milaene calm luxury — meaning over hype",
     productionDifficulty: "Low",
-    visualReferences: "Calvin Klein 90s editorial, Jil Sander campaign spacing, Milaene symbolic language",
-    exactComposition:
-      "Vertical editorial centerpiece with dominant focal symbol, wide negative space margins, calm luxury hierarchy, and campaign-scale silhouette readable at 3 meters",
+    visualReferences: `Theme: ${theme.id}, Calvin Klein 90s editorial, Jil Sander campaign spacing`,
+    exactComposition: `Vertical editorial centerpiece featuring ${primaryMotif} — wide negative space margins, calm luxury hierarchy, campaign-scale silhouette readable at 3 meters`,
     graphicElements: [
-      `${emotion.toLowerCase()} heraldic emblem`,
-      "editorial negative space frame",
-      "organic curve silhouette",
-      "symbolic focal anchor",
+      `${emotion.toLowerCase()} ${theme.id.replace(/-/g, " ")} emblem`,
+      secondaryMotif,
+      theme.visualMotifs[2] ?? "symbolic focal anchor",
       "muted tonal ink layer",
+      "editorial spacing frame",
     ],
     elementCount: "5 layered elements",
     layoutDescription:
       "Single dominant campaign symbol centered on generous negative space with editorial vertical rhythm and premium spacing discipline",
     visualHierarchy:
-      "Primary emblem → negative space frame → tonal ink layer → symbolic accent → garment silhouette",
+      `Primary ${theme.emotionalKeyword.toLowerCase()} emblem → negative space frame → tonal ink layer → symbolic accent → garment silhouette`,
     colorBreakdown: [
       { color, usage: "garment base" },
       { color: "Soft Black Ink", usage: "primary graphic" },
@@ -157,12 +140,12 @@ function buildRegeneratedHeroConcept(
     negativeSpaceUsage:
       "Generous negative space with muted tonal restraint and editorial breathing room around the campaign centerpiece",
     designInstructions: [
-      "Build a campaign-scale symbolic centerpiece — never a micro graphic or tiny chest mark",
-      "Maintain calm luxury hierarchy with editorial spacing and recognizable silhouette at thumbnail scale",
-      "Use muted tonal ink layers with organic curves and restrained Milaene symbolism",
+      `Build a campaign-scale symbolic centerpiece for "${collection.campaignTheme}" — never a micro graphic or tiny chest mark`,
+      `Express ${theme.emotionalKeyword.toLowerCase()} through ${primaryMotif} with calm luxury hierarchy`,
+      "Maintain billboard readability at thumbnail and homepage banner scale",
     ],
     mockupDescription:
-      "Hero campaign mockup — oversized hoodie in washed black with dominant 30 cm editorial graphic readable at 3 meters, studio lighting, homepage banner and Instagram ad crop",
+      "Hero campaign mockup — oversized hoodie with dominant 30 cm editorial graphic readable at 3 meters, studio lighting, homepage banner and Instagram ad crop",
     geometry: "Vertical editorial axis with centered organic emblem",
     dimensions: "30 cm x 38 cm campaign graphic zone",
     coordinates: "Centered on chest or spine with 8 cm collar offset",
@@ -176,20 +159,20 @@ function buildRegeneratedHeroConcept(
     visualWeight: "Balanced",
     balance: "Symmetrical",
     alignment: "Center",
-    focalPoint: `Dominant ${emotion.toLowerCase()} emblem centered as campaign anchor`,
+    focalPoint: `Dominant ${theme.emotionalKeyword.toLowerCase()} emblem centered as campaign anchor`,
     edgeTreatment: "Clean vector edges with soft tonal falloff",
     dnaScore: 0,
     dnaMatches: [],
     dnaConflicts: [],
     whyFitsMilaene: [
-      "Channels calm luxury editorial symbolism with campaign-scale presence",
+      `Channels ${collection.campaignTheme} through calm luxury editorial symbolism`,
       "Uses negative space, organic curves, and muted tonal restraint",
       "Avoids hype aesthetics and supports long-term Milaene collection building",
     ],
     repeatabilityScore: "High",
-    imagePromptCore: `${emotion} editorial campaign hero, 30cm symbolic centerpiece, washed black oversized hoodie, calm luxury, negative space, Milaene DNA`,
-    emotionalNarrative: `${collection.emotionalNarrative ?? collection.story} — regenerated hero anchors the ${collection.campaignTheme} launch narrative.`,
-    emotionalKeyword: emotion,
+    imagePromptCore: `${theme.emotionalKeyword} editorial campaign hero, ${primaryMotif}, washed black oversized hoodie, calm luxury, negative space, Milaene DNA, ${collection.campaignTheme}`,
+    emotionalNarrative: `${collection.emotionalNarrative ?? collection.story} — regenerated hero anchors the ${collection.campaignTheme} launch narrative through ${theme.emotionalKeyword.toLowerCase()}.`,
+    emotionalKeyword: theme.emotionalKeyword,
     supportsDesignId: undefined,
   };
 
@@ -210,66 +193,39 @@ function meetsRegenerationTargets(
   );
 }
 
-function calibrateRegeneratedHero(
+function ensureRegenerationTargets(
   design: DesignConcept,
-  analysis: HeroAnalysis,
-): { design: DesignConcept; analysis: HeroAnalysis } {
-  const emotional = Math.max(scoreEmotionalStrength(design), REGEN_EMOTIONAL_TARGET);
-  const calibratedDesign: DesignConcept = {
-    ...design,
-    dnaScore: Math.max(design.dnaScore, REGEN_DNA_TARGET),
-    commercialScore: Math.max(design.commercialScore ?? 0, 82),
-    campaignPotential: "high",
-    heroScore: Math.max(design.heroScore ?? 0, REGEN_HERO_SCORE_TARGET),
-    emotionalNarrative:
-      design.emotionalNarrative ??
-      `${design.emotion} anchors the regenerated campaign narrative with editorial symbolism, calm luxury restraint, and launch-ready emotional depth.`,
-  };
-
-  const calibratedAnalysis: HeroAnalysis = {
-    ...analysis,
-    heroScore: Math.max(analysis.heroScore, REGEN_HERO_SCORE_TARGET),
-    commercialScore: Math.max(analysis.commercialScore, 82),
-    campaignPotential: "high",
-    visualStrength: `Campaign-scale ${calibratedDesign.creativeApproach.toLowerCase()} composition with ${Math.max(scoreVisualMemorability(calibratedDesign), REGEN_VISUAL_TARGET)}% visual memorability and billboard-readable focal hierarchy`,
-    emotionalStrength: `${calibratedDesign.emotion} — ${emotional}% emotional resonance through Milaene symbolic language`,
-    adPotential:
-      "High — suitable for homepage banner, Instagram ads, and launch hero product",
-    whyHero: `"${calibratedDesign.title}" leads the regenerated capsule with a ${Math.max(analysis.heroScore, REGEN_HERO_SCORE_TARGET)}% hero score — ${calibratedDesign.emotion.toLowerCase()} emotional anchor with campaign-scale editorial presence and ${calibratedDesign.dnaScore}% Milaene DNA alignment`,
-  };
-
-  return { design: calibratedDesign, analysis: calibratedAnalysis };
-}
-
-function ensureRegenerationTargets(design: DesignConcept): DesignConcept {
-  const premiumEmotion = MILAENE_EMOTIONAL_VOCABULARY.preferred.slice(0, 3).join(" ");
+  collection: ResearchCollection,
+  peers: DesignConcept[],
+): DesignConcept {
+  const theme = resolveThemeProfile(collection);
   let working = normalizeDesignPrintArea(
-    strengthenHeroCandidate({
-      ...design,
-      emotion: design.emotion,
-      message: `${design.emotion.toUpperCase()} · WITHIN · MEMORY`,
-      symbolism: `A symbolic centerpiece emblem with organic curves, memory, reflection, presence, and editorial silhouette — layered quiet luxury symbolism serving as the campaign anchor`,
-      emotionalNarrative: `${design.emotion} anchors the ${design.title} launch story through editorial restraint, symbolic depth, and calm luxury emotional storytelling across the full capsule narrative.`,
-      visualConcept: `${design.emotion.toLowerCase()} campaign centerpiece — editorial symbolic composition with dominant focal hierarchy, ${premiumEmotion.toLowerCase()} emotional layering, and billboard-readable silhouette`,
-    }),
+    strengthenHeroCandidate(
+      {
+        ...design,
+        emotion: pickThemeEmotion(theme, collection),
+        emotionalKeyword: theme.emotionalKeyword,
+        message: theme.emotionalKeyword.toUpperCase(),
+        symbolism: theme.symbolism,
+        emotionalNarrative: `${theme.emotionalKeyword} anchors the ${collection.name} launch story through ${theme.visualMotifs[0]} and calm luxury emotional storytelling.`,
+        visualConcept: `${pickThemeEmotion(theme, collection).toLowerCase()} campaign centerpiece — ${theme.visualMotifs.join(", ")}`,
+      },
+      theme,
+    ),
   );
 
-  let analyzed = applyBrandDnaAnalysis(working);
-  if (analyzed.dnaScore < REGEN_DNA_TARGET) {
-    analyzed = { ...analyzed, dnaScore: REGEN_DNA_TARGET };
-  }
-
+  const analyzed = applyBrandDnaAnalysis(working);
   const commercialScore = calculateCommercialScore(analyzed);
   const campaignPotential = assessCampaignPotential(analyzed, commercialScore);
-  return {
+  const enriched = {
     ...analyzed,
     commercialScore,
     campaignPotential,
-    heroScore: calculateHeroScore({
-      ...analyzed,
-      commercialScore,
-      campaignPotential,
-    }),
+  };
+
+  return {
+    ...enriched,
+    heroScore: calculateHeroScore(enriched, peers),
   };
 }
 
@@ -279,32 +235,28 @@ export function regenerateHeroDesign(input: HeroRegenerationInput): {
   heroAnalysis: HeroAnalysis;
 } {
   const adjustments = input.adjustments ?? [];
-  const newHeroId = slugHeroId(`${input.collection.name}-${input.previousHero.designId}`);
+  const theme = resolveThemeProfile(input.collection);
+  const newHeroId = slugHeroId(`${input.collection.name}-${theme.id}`);
   const draft = buildRegeneratedHeroConcept(input, newHeroId);
-  let design = ensureRegenerationTargets(draft);
-  let heroAnalysis = buildHeroAnalysis(design);
+  const peers = input.designs.filter(
+    (design) => design.designId !== input.previousHero.designId,
+  );
+  let design = ensureRegenerationTargets(draft, input.collection, peers);
+  let heroAnalysis = buildHeroAnalysis(design, [...peers, design]);
 
   if (!meetsRegenerationTargets(design, heroAnalysis)) {
-    const calibrated = calibrateRegeneratedHero(design, heroAnalysis);
-    design = calibrated.design;
-    heroAnalysis = calibrated.analysis;
+    design = ensureRegenerationTargets(design, input.collection, peers);
+    heroAnalysis = buildHeroAnalysis(design, [...peers, design]);
   }
 
   const improvements = [
-    "Rebuilt as campaign-scale editorial centerpiece (30–32 cm print zone)",
-    "Elevated symbolic focal hierarchy with recognizable silhouette",
-    `Strengthened ${design.emotion.toLowerCase()} emotional storytelling for launch narrative`,
+    `Rebuilt as theme-specific campaign hero for "${input.collection.campaignTheme}"`,
+    `Applied ${theme.emotionalKeyword} emotional keyword and "${buildThemeHeroTitle(input.collection, theme)}" title`,
+    `Visual motifs: ${theme.visualMotifs.slice(0, 2).join("; ")}`,
     "Optimized for homepage banner, Instagram ads, and premium mockup readability",
     "Removed weak minimal / micro-graphic patterns from hero candidacy",
-    `DNA aligned to Milaene brand rules — target ${REGEN_DNA_TARGET}%+`,
+    `Dynamic scores — hero ${heroAnalysis.heroScore}%, DNA ${design.dnaScore}%, commercial ${heroAnalysis.commercialScore}%`,
   ];
-
-  if (design.dnaScore >= REGEN_DNA_TARGET) {
-    improvements.push(`DNA score raised to ${design.dnaScore}%`);
-  }
-  if ((design.heroScore ?? 0) >= REGEN_HERO_SCORE_TARGET) {
-    improvements.push(`Hero score target met at ${design.heroScore}%`);
-  }
 
   adjustments.push(
     `hero regeneration: created "${design.title}" replacing "${input.previousHero.title}"`,
@@ -359,47 +311,48 @@ export function applyHeroRegeneration(
   const hero = working.find((d) => d.designId === regeneratedHero.designId)!;
   const heroAnalysis = regeneratedAnalysis;
   const launchApproval = buildLaunchApproval(hero, heroAnalysis)!;
-  const approved =
-    heroAnalysis.heroScore >= REGEN_HERO_SCORE_TARGET &&
-    hero.dnaScore >= REGEN_DNA_TARGET &&
-    heroAnalysis.campaignPotential === "high" &&
-    !isWeakHeroVisual(hero);
+
+  const ceoResult = applyCeoConsistency(
+    collection,
+    hero,
+    heroAnalysis,
+    working,
+    collection.collectionScore,
+  );
+
+  const approved = ceoResult.ceoApproved;
+  const syncedHero = ceoResult.hero;
+  const syncedAnalysis = ceoResult.heroAnalysis;
 
   const supportingDesignIds = working
-    .filter((d) => d.designId !== hero.designId)
+    .filter((d) => d.designId !== syncedHero.designId)
     .map((d) => d.designId);
 
-  const collectionScore = approved
-    ? Math.max(collection.collectionScore, 75)
-    : Math.min(collection.collectionScore, 69);
-
-  const ceoRecommendation = approved
-    ? "Proceed to Design Studio — CEO approves regenerated hero as launch piece."
-    : "Do not launch yet — refine Hero Piece.";
+  const syncedDesigns = working.map((d) =>
+    d.designId === syncedHero.designId ? syncedHero : d,
+  );
 
   const enrichedCollection: ResearchCollection = {
-    ...collection,
-    collectionScore,
-    heroDesignId: hero.designId,
+    ...ceoResult.collection,
+    heroDesignId: syncedHero.designId,
     supportingDesignIds,
-    heroStatus: approved ? "approved" : "rejected",
     heroRegenerationRequired: false,
     heroRegeneration,
-    heroAnalysis,
     heroProduct: {
-      product: hero.product,
+      ...ceoResult.collection.heroProduct,
+      product: syncedHero.product,
       estimatedRetailPrice: collection.heroProduct.estimatedRetailPrice,
-      productionComplexity: hero.productionDifficulty,
-      commercialConfidence: heroAnalysis.commercialScore,
+      productionComplexity: syncedHero.productionDifficulty,
     },
+    heroAnalysis: syncedAnalysis,
     ceoAnalysis: {
-      strongestProduct: hero.product,
+      strongestProduct: syncedHero.product,
       weakestProduct:
         collection.ceoAnalysis?.weakestProduct ??
-        [...working].sort((a, b) => a.dnaScore - b.dnaScore)[0]?.product ??
-        hero.product,
+        [...syncedDesigns].sort((a, b) => a.dnaScore - b.dnaScore)[0]?.product ??
+        syncedHero.product,
       recommendedLaunchOrder: [
-        hero.title,
+        syncedHero.title,
         ...(collection.ceoAnalysis?.recommendedLaunchOrder ?? []).filter(
           (title) => title !== previousHero.title,
         ),
@@ -407,26 +360,20 @@ export function applyHeroRegeneration(
       productionRisk:
         collection.ceoAnalysis?.productionRisk ??
         "Production risk assessed after hero regeneration pass",
-      commercialConfidence: Math.round(
-        (heroAnalysis.commercialScore + hero.dnaScore + heroAnalysis.heroScore) / 3,
-      ),
-      adPotential: heroAnalysis.adPotential,
-      launchApproval: {
-        ...launchApproval,
-        approved,
-      },
+      commercialConfidence: ceoResult.collection.ceoAnalysis!.commercialConfidence,
+      adPotential: syncedAnalysis.adPotential,
+      launchApproval,
     },
-    ceoRecommendation,
   };
 
   adjustments.push(
-    `hero regeneration: finalized "${hero.title}" (hero ${heroAnalysis.heroScore}%, DNA ${hero.dnaScore}%, approved ${approved})`,
+    `hero regeneration: finalized "${syncedHero.title}" (hero ${syncedAnalysis.heroScore}%, DNA ${syncedHero.dnaScore}%, approved ${approved})`,
   );
 
   return {
-    designs: working,
+    designs: syncedDesigns,
     collection: enrichedCollection,
-    regeneratedHero: hero,
+    regeneratedHero: syncedHero,
     heroRegeneration,
   };
 }

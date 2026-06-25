@@ -1,13 +1,18 @@
-import { applyBrandDnaAnalysis } from "./brand-dna";
 import {
   enrichDesignRelationships,
-  ROLE_DNA_MINIMUMS,
 } from "./collection-intelligence";
+import { computeDynamicCollectionScore } from "./collection-scoring";
 import {
-  normalizeDesignPrintArea,
   visualConceptFingerprint,
 } from "./design-concept";
-import { REGEN_DNA_TARGET } from "./hero-regeneration";
+import { assertCeoConsistency } from "./ceo-consistency";
+import {
+  applyFinalQualityGate,
+  designFailsQualityGate,
+  enforceHardQualityGate,
+} from "./quality-gate";
+import { buildThemeRoleFallbackConcept } from "./theme-fallback";
+import { roundPercent } from "./score-coercion";
 import {
   COLLECTION_ARC,
   COLLECTION_ROLES,
@@ -44,84 +49,6 @@ const NON_HERO_ROLES: CollectionRole[] = [
   "Supporting Piece",
   "Limited Piece",
 ];
-
-interface RoleFallbackProfile {
-  approach: CreativeApproach;
-  titleLabel: string;
-  emotion: string;
-  product: string;
-  printArea: string;
-  productionDifficulty: DesignConcept["productionDifficulty"];
-  visualConcept: string;
-  designDescription: string;
-  printSize: string;
-}
-
-const ROLE_FALLBACK_PROFILES: Record<CollectionRole, RoleFallbackProfile> = {
-  "Hero Piece": {
-    approach: "Japanese Editorial",
-    titleLabel: "Campaign Hero",
-    emotion: "Presence",
-    product: "Faith Oversized Hoodie",
-    printArea: "Front",
-    productionDifficulty: "Medium",
-    visualConcept: "Campaign-scale editorial centerpiece with dominant focal hierarchy",
-    designDescription: "Launch hero with campaign-scale symbolic presence",
-    printSize: "30 cm editorial graphic",
-  },
-  "Core Essential": {
-    approach: "Luxury Minimalism",
-    titleLabel: "Core Essential Tee",
-    emotion: "Calm",
-    product: "Faith Tee",
-    printArea: "Front",
-    productionDifficulty: "Low",
-    visualConcept:
-      "Wearable commercial essential — minimal chest mark with quiet luxury restraint and repeatable everyday appeal",
-    designDescription:
-      "Commercial foundation piece — simple, distinct, and always-on for capsule continuity",
-    printSize: "8 cm minimal chest mark",
-  },
-  "Statement Piece": {
-    approach: "Symbolic Illustration",
-    titleLabel: "Statement Graphic",
-    emotion: "Depth",
-    product: "Faith Oversized Hoodie",
-    printArea: "Back",
-    productionDifficulty: "Medium",
-    visualConcept:
-      "Stronger symbolic graphic with layered illustration — artistic peak without replacing the hero anchor",
-    designDescription:
-      "Statement expression with bolder symbolism and editorial back placement",
-    printSize: "26 cm back graphic",
-  },
-  "Supporting Piece": {
-    approach: "Minimal Back Print",
-    titleLabel: "Supporting Quiet",
-    emotion: "Reflection",
-    product: "Faith Hoodie",
-    printArea: "Back",
-    productionDifficulty: "Low",
-    visualConcept:
-      "Subtle secondary piece — restrained back print that reinforces the hero without competing for attention",
-    designDescription:
-      "Quiet supporting design with micro back placement and narrative reinforcement",
-    printSize: "6 cm back icon",
-  },
-  "Limited Piece": {
-    approach: "Abstract Graphic",
-    titleLabel: "Limited Capsule",
-    emotion: "Silence",
-    product: "Faith Oversized Hoodie",
-    printArea: "Front",
-    productionDifficulty: "High",
-    visualConcept:
-      "Exclusive limited expression — abstract panel with premium placement, material contrast, and drop-day exclusivity",
-    designDescription:
-      "Limited capsule closer with elevated production detail and experimental composition",
-    printSize: "32 cm abstract front panel",
-  },
-};
 
 const ROLE_PREDICATES: Record<
   CollectionRole,
@@ -166,20 +93,21 @@ export function mergeHeroAnalysisIntoDesign(
   }
 
   const dnaFromAnalysis = extractDnaFromWhyHero(heroAnalysis.whyHero);
-  const regenFloor = collection.heroRegeneration ? REGEN_DNA_TARGET : 0;
-  const dnaScore = Math.max(
-    design.dnaScore,
-    dnaFromAnalysis ?? 0,
-    regenFloor,
-  );
+  const dnaScore = roundPercent(Math.max(design.dnaScore, dnaFromAnalysis ?? 0));
 
   return {
     ...design,
     collectionRole: "Hero Piece",
     supportsDesignId: undefined,
     dnaScore,
-    heroScore: heroAnalysis.heroScore,
-    commercialScore: heroAnalysis.commercialScore,
+    heroScore:
+      heroAnalysis.heroScore !== undefined
+        ? roundPercent(heroAnalysis.heroScore)
+        : undefined,
+    commercialScore:
+      heroAnalysis.commercialScore !== undefined
+        ? roundPercent(heroAnalysis.commercialScore)
+        : undefined,
     campaignPotential: heroAnalysis.campaignPotential,
   };
 }
@@ -259,19 +187,6 @@ function removeStaleHeroEntries(
   });
 }
 
-function uniqueTitle(
-  baseTitle: string,
-  usedTitles: Set<string>,
-): string {
-  let candidate = baseTitle;
-  let suffix = 2;
-  while (usedTitles.has(candidate.trim().toLowerCase())) {
-    candidate = `${baseTitle} · Variant ${suffix}`;
-    suffix += 1;
-  }
-  return candidate;
-}
-
 function buildRoleFallbackConcept(
   role: CollectionRole,
   collection: ResearchCollection,
@@ -280,122 +195,20 @@ function buildRoleFallbackConcept(
   usedTitles: Set<string>,
   usedApproaches: Set<CreativeApproach>,
 ): DesignConcept {
-  const profile = ROLE_FALLBACK_PROFILES[role];
-  const slug = role.toLowerCase().replace(/\s+/g, "-");
-  const title = uniqueTitle(`${collection.name} — ${profile.titleLabel}`, usedTitles);
-
-  let approach = profile.approach;
-  if (usedApproaches.has(approach)) {
-    const alternate = (
-      [
-        "Luxury Minimalism",
-        "Minimal Back Print",
-        "Symbolic Illustration",
-        "Abstract Graphic",
-        "Typography Design",
-      ] as CreativeApproach[]
-    ).find((entry) => !usedApproaches.has(entry));
-    if (alternate) approach = alternate;
-  }
-
   const color =
     collection.colorDirection[index % collection.colorDirection.length] ??
     anchor.color ??
     "Sand";
 
-  const draft: DesignConcept = {
-    ...anchor,
-    designId: `consistency-${slug}-${index}`,
-    title,
-    creativeApproach: approach,
-    collectionRole: role,
-    product: profile.product,
+  return buildThemeRoleFallbackConcept({
+    role,
+    collection,
+    designId: `consistency-${role.toLowerCase().replace(/\s+/g, "-")}-${index}`,
     color,
-    printArea: profile.printArea,
-    styleDirection: `Quiet luxury ${profile.approach.toLowerCase()} — ${profile.emotion.toLowerCase()} ${role.toLowerCase()} for ${collection.name}`,
-    emotion: profile.emotion,
-    targetAudience: collection.targetAudience,
-    visualConcept: `${profile.visualConcept} — ${collection.mood.toLowerCase()} capsule ${role.toLowerCase()}`,
-    designDescription: profile.designDescription,
-    symbolism: `${collection.philosophy.slice(0, 80)} — ${role.toLowerCase()} symbolism`,
-    typography:
-      role === "Core Essential"
-        ? "Micro sans-serif chest mark, wide tracking"
-        : role === "Statement Piece"
-          ? "Editorial serif accent with symbolic illustration hierarchy"
-          : "No type — pure graphic restraint",
-    message: role === "Hero Piece" ? profile.emotion.toUpperCase() : "",
-    rationale: `Role-specific fallback generated during final consistency pass for ${role}.`,
-    printTechnique:
-      profile.productionDifficulty === "High"
-        ? "Multi-layer screen print with specialty ink"
-        : "Screen print, 1–2 color spot palette",
-    printSize: profile.printSize,
-    placementDimensions:
-      profile.printArea === "Back"
-        ? "Center back placement with editorial margins"
-        : "Center chest placement with calm luxury spacing",
-    garmentInspiration: anchor.garmentInspiration,
-    brandInspiration: anchor.brandInspiration,
-    productionDifficulty: profile.productionDifficulty,
-    visualReferences: anchor.visualReferences,
-    exactComposition: `${profile.emotion.toLowerCase()} ${role.toLowerCase()} composition — distinct from hero with ${approach.toLowerCase()} hierarchy`,
-    graphicElements: [
-      `${profile.emotion.toLowerCase()} motif`,
-      `${role.toLowerCase()} negative space frame`,
-      `${approach.toLowerCase()} focal layer`,
-    ],
-    elementCount: "3 layered elements",
-    layoutDescription: `${role} layout with editorial spacing and role-specific hierarchy`,
-    visualHierarchy: `${profile.emotion} motif → supporting frame → garment base`,
-    colorBreakdown: [
-      { color, usage: "garment base" },
-      { color: "Soft Black Ink", usage: "primary graphic" },
-    ],
-    materialEffects: anchor.materialEffects,
-    negativeSpaceUsage:
-      role === "Supporting Piece"
-        ? "Generous back negative space with subtle micro placement"
-        : anchor.negativeSpaceUsage,
-    designInstructions: [
-      `Build the ${role.toLowerCase()} using ${approach.toLowerCase()} hierarchy and Milaene restraint.`,
-      `Keep the concept visually distinct from the hero and other capsule roles.`,
-      `Apply ${color} base with muted tonal ink and production-safe spacing.`,
-    ],
-    mockupDescription: `${title} on ${profile.product} — ${profile.printArea.toLowerCase()} placement mockup`,
-    geometry: anchor.geometry,
-    dimensions: profile.printSize,
-    coordinates: anchor.coordinates,
-    rotation: anchor.rotation,
-    spacing: anchor.spacing,
-    strokeWidth: anchor.strokeWidth,
-    opacity: anchor.opacity,
-    layerOrder: anchor.layerOrder,
-    contrastLevel: anchor.contrastLevel,
-    textureIntensity: anchor.textureIntensity,
-    visualWeight: anchor.visualWeight,
-    balance: anchor.balance,
-    alignment: anchor.alignment,
-    focalPoint: `${profile.emotion.toLowerCase()} focal for ${role.toLowerCase()}`,
-    edgeTreatment: anchor.edgeTreatment,
-    dnaMatches: anchor.dnaMatches,
-    dnaConflicts: anchor.dnaConflicts,
-    whyFitsMilaene: anchor.whyFitsMilaene,
-    repeatabilityScore: role === "Limited Piece" ? "Medium" : "High",
-    imagePromptCore: `${collection.name} ${role.toLowerCase()}, ${approach.toLowerCase()}, ${color}, Milaene quiet luxury`,
-    supportsDesignId: undefined,
-    relationshipReason: undefined,
-    heroScore: undefined,
-    commercialScore: undefined,
-    campaignPotential: undefined,
-  };
-
-  let analyzed = applyBrandDnaAnalysis(normalizeDesignPrintArea(draft));
-  const minimum = ROLE_DNA_MINIMUMS[role];
-  if (analyzed.dnaScore < minimum) {
-    analyzed = { ...analyzed, dnaScore: minimum };
-  }
-  return analyzed;
+    usedTitles,
+    emotionIndex: index,
+    usedApproaches,
+  });
 }
 
 function deduplicateDesignPool(
@@ -476,23 +289,37 @@ function assignExactRoles(
 
   for (const role of NON_HERO_ROLES) {
     const predicate = ROLE_PREDICATES[role];
+    const passesGate = (design: DesignConcept) => !designFailsQualityGate(design);
     const candidate =
       pool.find(
         (design) =>
-          !usedIds.has(design.designId) && design.collectionRole === role,
+          !usedIds.has(design.designId) &&
+          design.collectionRole === role &&
+          passesGate(design),
       ) ??
       pool.find(
         (design) =>
-          !usedIds.has(design.designId) && predicate(design),
+          !usedIds.has(design.designId) &&
+          predicate(design) &&
+          passesGate(design),
+      ) ??
+      pool.find(
+        (design) => !usedIds.has(design.designId) && passesGate(design),
       ) ??
       pool.find((design) => !usedIds.has(design.designId));
 
-    if (candidate) {
+    if (candidate && !designFailsQualityGate(candidate)) {
       usedIds.add(candidate.designId);
       usedTitles.add(candidate.title.trim().toLowerCase());
       usedApproaches.add(candidate.creativeApproach);
       byRole.set(role, { ...candidate, collectionRole: role });
       continue;
+    }
+
+    if (candidate && designFailsQualityGate(candidate)) {
+      adjustments.push(
+        `final consistency: skipped weak candidate "${candidate.title}" for "${role}" — generating theme fallback`,
+      );
     }
 
     const fallback = buildRoleFallbackConcept(
@@ -590,11 +417,13 @@ export function rebuildCollectionFromFinalizedDesigns(
   ).filter((title): title is string => Boolean(title));
 
   const heroAnalysis = syncHeroAnalysisWithDesign(collection.heroAnalysis, hero);
+  const breakdown = computeDynamicCollectionScore(designs, collection);
 
   return {
     ...collection,
     heroDesignId: hero.designId,
     supportingDesignIds,
+    collectionScore: breakdown.collectionScore,
     collectionArc,
     relationshipGraph,
     dnaRanking,
@@ -688,12 +517,25 @@ export function assertFinalCollectionConsistency(
         role: design.collectionRole,
         heroScore: design.heroScore,
         dnaScore: design.dnaScore,
+        commercialScore: design.commercialScore,
         printArea: design.printArea,
       })),
     );
     throw new Error(
       `Final collection consistency failed: ${errors.join("; ")}`,
     );
+  }
+
+  for (const design of designs) {
+    if (design.dnaScore < 60) {
+      throw new Error(
+        `Final quality gate: "${design.title}" has DNA ${design.dnaScore}% — minimum is 60%`,
+      );
+    }
+  }
+
+  if (hero) {
+    assertCeoConsistency(collection, hero, collection.heroAnalysis);
   }
 }
 
@@ -757,21 +599,28 @@ export function finalConsistencyPass(
   }
 
   const pool = working.filter((design) => design.designId !== hero.designId);
-  let finalized = assignExactRoles(pool, hero, collection, adjustments);
+  const { designs: strengthenedPool, replacedDesignCount: poolReplaced } =
+    enforceHardQualityGate(pool, collection, adjustments);
+  let finalized = assignExactRoles(strengthenedPool, hero, collection, adjustments);
   finalized = ensureRelationshipGraph(finalized, hero.designId);
+
+  const { designs: qualityDesigns, collection: qualityCollection, scores } =
+    applyFinalQualityGate(finalized, collection, adjustments, poolReplaced);
+
+  finalized = qualityDesigns;
 
   const supportingDesignIds = finalized
     .filter((design) => design.designId !== hero.designId)
     .map((design) => design.designId);
 
   const updatedCollection: ResearchCollection = {
-    ...collection,
+    ...qualityCollection,
     heroDesignId: hero.designId,
     supportingDesignIds,
   };
 
   adjustments.push(
-    `final consistency: finalized ${finalized.length} designs with exact role coverage (hero "${hero.title}", DNA ${hero.dnaScore}%)`,
+    `final consistency: finalized ${finalized.length} designs with exact role coverage (hero "${hero.title}", DNA ${hero.dnaScore}%, collection score ${scores.collectionScore}%)`,
   );
 
   return {

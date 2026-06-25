@@ -1,6 +1,19 @@
 import { applyBrandDnaAnalysis } from "./brand-dna";
+import {
+  applyCeoConsistency,
+  buildConsistentAdPotential,
+  buildLaunchApprovalCopy,
+  collectHeroApprovalMetrics,
+  isHeroCeoApproved,
+  limitCommercialScore,
+} from "./ceo-consistency";
 import { normalizeDesignPrintArea } from "./design-concept";
 import { MILAENE_EMOTIONAL_VOCABULARY } from "./emotional-vocabulary";
+import { roundPercent } from "./score-coercion";
+import {
+  pickThemeEmotion,
+  type ThemeProfile,
+} from "./theme-vocabulary";
 import {
   COLLECTION_ROLES,
   type CampaignPotential,
@@ -35,6 +48,155 @@ const WEAK_HERO_PATTERNS: RegExp[] = [
 
 const STRONG_SYMBOLISM =
   /\b(symbol|emblem|arc|curve|silhouette|memory|reflection|presence|echo|organic|heraldic|centerpiece)\b/i;
+
+const MICRO_PRINT_PATTERN =
+  /\b(\d{1,2}\s*cm|micro|tiny|small chest|left chest dot|icon only|minimal mark)\b/i;
+const NICHE_SYMBOLISM =
+  /\b(obscure|esoteric|cryptic|incomprehensible|confusing|abstract metaphor)\b/i;
+const WEARABLE_PRODUCT_PATTERN = /hoodie|tee|sweat|oversized|crew/i;
+const BESTSELLER_PRODUCT_PATTERN = /faith|oversized hoodie|bestseller/i;
+
+function parsePrintWidthCm(design: DesignConcept): number | undefined {
+  const match = design.printSize.match(/(\d{1,2})\s*cm/i);
+  if (!match) return undefined;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function scoreCampaignReadability(design: DesignConcept): number {
+  let score = 35;
+  if (design.contrastLevel === "High") score += 22;
+  else if (design.contrastLevel === "Medium") score += 14;
+  if (design.visualWeight === "Heavy" || design.visualWeight === "Balanced") {
+    score += 12;
+  }
+  const width = parsePrintWidthCm(design);
+  if (width !== undefined) {
+    if (width >= 24) score += 18;
+    else if (width >= 16) score += 10;
+    else if (width < 12) score -= 12;
+  }
+  if (/center|spine|vertical|editorial|campaign/i.test(design.placementDimensions)) {
+    score += 8;
+  }
+  if (design.focalPoint.length > 12) score += 6;
+  return Math.max(0, Math.min(100, score));
+}
+
+function scoreProductFit(design: DesignConcept): number {
+  let score = 40;
+  if (WEARABLE_PRODUCT_PATTERN.test(design.product)) score += 25;
+  if (BESTSELLER_PRODUCT_PATTERN.test(design.product)) score += 15;
+  if (design.productionDifficulty === "Low") score += 12;
+  else if (design.productionDifficulty === "Medium") score += 6;
+  if (/front|back|chest|spine/i.test(design.printArea)) score += 8;
+  return Math.max(0, Math.min(100, score));
+}
+
+function scoreEmotionalRelevance(design: DesignConcept): number {
+  const corpus = `${design.emotion} ${design.message} ${design.symbolism} ${design.emotionalNarrative ?? ""}`;
+  const preferredHits = MILAENE_EMOTIONAL_VOCABULARY.preferred.filter((word) =>
+    corpus.toLowerCase().includes(word.toLowerCase()),
+  ).length;
+  const discouragedHits = MILAENE_EMOTIONAL_VOCABULARY.discouraged.filter((word) =>
+    corpus.toLowerCase().includes(word.toLowerCase()),
+  ).length;
+  let score = 35 + preferredHits * 14;
+  score -= discouragedHits * 18;
+  if ((design.emotionalNarrative?.length ?? 0) > 40) score += 10;
+  if (design.emotionalKeyword && design.emotion.includes(design.emotionalKeyword)) {
+    score += 8;
+  }
+  return Math.max(0, Math.min(100, score));
+}
+
+function scoreUniquenessVsPeers(
+  design: DesignConcept,
+  peers: DesignConcept[] = [],
+): number {
+  if (peers.length === 0) return scoreUniqueness(design);
+  const sameApproach = peers.filter(
+    (peer) =>
+      peer.designId !== design.designId &&
+      peer.creativeApproach === design.creativeApproach,
+  ).length;
+  const sameEmotion = peers.filter(
+    (peer) =>
+      peer.designId !== design.designId &&
+      peer.emotion.toLowerCase() === design.emotion.toLowerCase(),
+  ).length;
+  let score = scoreUniqueness(design);
+  score -= sameApproach * 14;
+  score -= sameEmotion * 8;
+  return Math.max(20, Math.min(100, score));
+}
+
+function computeCommercialPenalties(design: DesignConcept): number {
+  const corpus = [
+    design.visualConcept,
+    design.designDescription,
+    design.printSize,
+    design.typography,
+    design.exactComposition,
+    design.symbolism,
+  ].join(" ");
+
+  let penalty = 0;
+  const width = parsePrintWidthCm(design);
+
+  if (MICRO_PRINT_PATTERN.test(corpus) || (width !== undefined && width < 10)) {
+    penalty += 22;
+  }
+  if (
+    /\b(micro wordmark|tiny wordmark|tone-on-tone wordmark|spaced caps wordmark)\b/i.test(
+      corpus,
+    ) ||
+    (design.creativeApproach === "Luxury Minimalism" &&
+      design.message.split(/\s+/).length <= 1 &&
+      width !== undefined &&
+      width < 14)
+  ) {
+    penalty += 18;
+  }
+  if (isWeakHeroVisual(design) || design.visualWeight === "Light") {
+    penalty += 14;
+  }
+  if (design.contrastLevel === "Low" && design.visualWeight !== "Heavy") {
+    penalty += 10;
+  }
+  if (NICHE_SYMBOLISM.test(design.symbolism)) {
+    penalty += 12;
+  }
+  if (scoreCampaignReadability(design) < 45) {
+    penalty += 15;
+  }
+  if (
+    design.creativeApproach === "Minimal Back Print" &&
+    width !== undefined &&
+    width < 16
+  ) {
+    penalty += 20;
+  }
+
+  return Math.min(55, penalty);
+}
+
+function computeCommercialRewards(design: DesignConcept): number {
+  let reward = 0;
+  const width = parsePrintWidthCm(design);
+
+  if (WEARABLE_PRODUCT_PATTERN.test(design.product)) reward += 12;
+  if (BESTSELLER_PRODUCT_PATTERN.test(design.product)) reward += 10;
+  if (!isWeakHeroVisual(design) && (width === undefined || width >= 20)) {
+    reward += 14;
+  }
+  if (scoreEmotionalRelevance(design) >= 60) reward += 10;
+  if (design.productionDifficulty === "Low") reward += 8;
+  if (scoreCampaignReadability(design) >= 65) reward += 12;
+  if (design.repeatabilityScore === "High") reward += 6;
+
+  return Math.min(40, reward);
+}
 
 function scoreProductionSimplicity(design: DesignConcept): number {
   return design.productionDifficulty === "Low"
@@ -109,7 +271,7 @@ function scoreHeroSuitability(design: DesignConcept, commercialScore: number): n
 }
 
 export function calculateCommercialScore(design: DesignConcept): number {
-  const raw =
+  const base =
     scoreProductionSimplicity(design) +
     scorePodSuitability(design) +
     scoreRepeatability(design) +
@@ -117,7 +279,10 @@ export function calculateCommercialScore(design: DesignConcept): number {
     scoreBestsellerPotential(design) +
     scoreVisualCommercialComponent(design);
 
-  return Math.max(0, Math.min(100, raw));
+  const raw =
+    base + computeCommercialRewards(design) - computeCommercialPenalties(design);
+
+  return Math.max(0, Math.min(100, Math.round(raw)));
 }
 
 export function scoreEmotionalStrength(design: DesignConcept): number {
@@ -171,26 +336,31 @@ export function scoreVisualMemorability(design: DesignConcept): number {
   return Math.min(100, score);
 }
 
-export function calculateHeroScore(design: DesignConcept): number {
+export function calculateHeroScore(
+  design: DesignConcept,
+  peerDesigns: DesignConcept[] = [],
+): number {
   const commercialScore = design.commercialScore ?? calculateCommercialScore(design);
   const campaign =
     design.campaignPotential ?? assessCampaignPotential(design, commercialScore);
-  const campaignScore =
-    campaign === "high" ? 90 : campaign === "medium" ? 65 : 35;
+
+  const memorability = scoreVisualMemorability(design);
+  const readability = scoreCampaignReadability(design);
+  const emotional = scoreEmotionalRelevance(design);
+  const productFit = scoreProductFit(design);
+  const uniqueness = scoreUniquenessVsPeers(design, peerDesigns);
+  const campaignFactor =
+    campaign === "high" ? 88 : campaign === "medium" ? 62 : 38;
 
   const score = Math.round(
-    scoreEmotionalStrength(design) * 0.2 +
-      scoreSymbolism(design) * 0.15 +
-      scoreUniqueness(design) * 0.15 +
-      (design.repeatabilityScore === "High"
-        ? 70
-        : design.repeatabilityScore === "Medium"
-          ? 55
-          : 40) *
-        0.1 +
-      campaignScore * 0.15 +
-      scoreVisualMemorability(design) * 0.15 +
-      design.dnaScore * 0.1,
+    design.dnaScore * 0.18 +
+      memorability * 0.16 +
+      readability * 0.14 +
+      emotional * 0.14 +
+      productFit * 0.1 +
+      commercialScore * 0.1 +
+      uniqueness * 0.08 +
+      campaignFactor * 0.1,
   );
 
   return Math.max(0, Math.min(100, score));
@@ -271,11 +441,29 @@ export function hasStrongVisualIdentity(design: DesignConcept): boolean {
   return checks.filter(Boolean).length >= 1;
 }
 
-export function strengthenHeroCandidate(design: DesignConcept): DesignConcept {
+export function strengthenHeroCandidate(
+  design: DesignConcept,
+  theme?: ThemeProfile,
+): DesignConcept {
   const emotion =
-    MILAENE_EMOTIONAL_VOCABULARY.preferred.find((word) =>
-      design.emotion.toLowerCase().includes(word.toLowerCase()),
-    ) ?? "Presence";
+    theme
+      ? pickThemeEmotion(theme, {
+          name: design.title,
+          campaignTheme: design.message,
+          story: design.symbolism,
+          mood: design.emotion,
+          philosophy: design.styleDirection,
+        } as ResearchCollection)
+      : MILAENE_EMOTIONAL_VOCABULARY.preferred.find((word) =>
+          design.emotion.toLowerCase().includes(word.toLowerCase()),
+        ) ?? design.emotion;
+
+  const motif =
+    theme?.visualMotifs[0] ??
+    "organic curve emblem with editorial negative space framing";
+  const symbolismText =
+    theme?.symbolism ??
+    `A restrained ${emotion.toLowerCase()} symbol serving as the emotional anchor — layered meaning through organic curves, editorial spacing, and quiet luxury symbolism`;
 
   const useBackPlacement =
     /back|spine|yoke/i.test(
@@ -286,9 +474,10 @@ export function strengthenHeroCandidate(design: DesignConcept): DesignConcept {
     ...design,
     collectionRole: "Hero Piece",
     emotion,
+    emotionalKeyword: theme?.emotionalKeyword ?? emotion,
     message: emotion.toUpperCase(),
-    visualConcept: `${emotion.toLowerCase()} centerpiece — editorial symbolic composition with strong focal hierarchy and generous negative space framing a memorable Milaene emblem`,
-    symbolism: `A restrained ${emotion.toLowerCase()} symbol serving as the emotional anchor — layered meaning through organic curves, editorial spacing, and quiet luxury symbolism`,
+    visualConcept: `${emotion.toLowerCase()} centerpiece — ${motif} with strong focal hierarchy and generous negative space`,
+    symbolism: symbolismText,
     exactComposition: useBackPlacement
       ? "Vertical editorial centerpiece anchored on full spine back — dominant focal symbol with wide negative space margins and calm luxury hierarchy"
       : "Vertical editorial centerpiece anchored on upper chest — dominant focal symbol with wide negative space margins and calm luxury hierarchy",
@@ -340,12 +529,7 @@ export function qualifiesAsHeroCandidate(design: DesignConcept): boolean {
 }
 
 export function isHeroApproved(hero: DesignConcept, analysis: HeroAnalysis): boolean {
-  return (
-    hero.dnaScore >= HERO_DNA_TARGET &&
-    analysis.heroScore >= HERO_SCORE_TARGET &&
-    analysis.campaignPotential === "high" &&
-    !isWeakHeroVisual(hero)
-  );
+  return isHeroCeoApproved(hero, analysis);
 }
 
 export interface HeroFailureAssessment {
@@ -504,7 +688,10 @@ export function validateExactCollectionRoles(
   }));
 }
 
-function applyCommercialFields(design: DesignConcept): DesignConcept {
+function applyCommercialFields(
+  design: DesignConcept,
+  peers: DesignConcept[] = [],
+): DesignConcept {
   const commercialScore = calculateCommercialScore(design);
   const campaignPotential = assessCampaignPotential(design, commercialScore);
 
@@ -513,7 +700,12 @@ function applyCommercialFields(design: DesignConcept): DesignConcept {
     commercialScore,
     campaignPotential,
     ...(design.collectionRole === "Hero Piece"
-      ? { heroScore: calculateHeroScore({ ...design, commercialScore, campaignPotential }) }
+      ? {
+          heroScore: calculateHeroScore(
+            { ...design, commercialScore, campaignPotential },
+            peers,
+          ),
+        }
       : {}),
   };
 }
@@ -540,13 +732,13 @@ function rankHeroCandidates(designs: DesignConcept[]): DesignConcept[] {
       campaignPotential: assessCampaignPotential(b, commercialB),
     };
     const scoreA =
-      calculateHeroScore(enrichedA) * 0.4 +
+      calculateHeroScore(enrichedA, candidates) * 0.4 +
       a.dnaScore * 0.25 +
       scoreEmotionalStrength(a) * 0.15 +
       scoreVisualMemorability(a) * 0.15 +
       scoreSymbolism(a) * 0.05;
     const scoreB =
-      calculateHeroScore(enrichedB) * 0.4 +
+      calculateHeroScore(enrichedB, candidates) * 0.4 +
       b.dnaScore * 0.25 +
       scoreEmotionalStrength(b) * 0.15 +
       scoreVisualMemorability(b) * 0.15 +
@@ -564,31 +756,39 @@ function buildWhyHero(design: DesignConcept, heroScore: number): string {
   ].join(" — ");
 }
 
-export function buildHeroAnalysis(design: DesignConcept): HeroAnalysis {
+export function buildHeroAnalysis(
+  design: DesignConcept,
+  peerDesigns: DesignConcept[] = [],
+): HeroAnalysis {
   const commercialScore = design.commercialScore ?? calculateCommercialScore(design);
   const campaignPotential =
     design.campaignPotential ?? assessCampaignPotential(design, commercialScore);
-  const heroScore = calculateHeroScore({
-    ...design,
-    commercialScore,
-    campaignPotential,
-  });
+  const heroScore = calculateHeroScore(
+    {
+      ...design,
+      commercialScore,
+      campaignPotential,
+    },
+    peerDesigns,
+  );
 
-  return {
-    heroScore,
-    commercialScore,
+  const emotionalPct = roundPercent(scoreEmotionalStrength(design));
+  const draftAnalysis: HeroAnalysis = {
+    heroScore: roundPercent(heroScore),
+    commercialScore: roundPercent(commercialScore),
     campaignPotential,
     whyHero: buildWhyHero(design, heroScore),
     visualStrength: hasStrongVisualIdentity(design)
       ? `Strong ${design.creativeApproach.toLowerCase()} composition with memorable focal hierarchy and campaign-scale presence`
       : "Visual presence strengthened for homepage and editorial campaign readability",
-    emotionalStrength: `${design.emotion} — ${scoreEmotionalStrength(design)}% emotional resonance through Milaene symbolic language`,
-    adPotential:
-      campaignPotential === "high"
-        ? "High — suitable for homepage banner, Instagram ads, and launch hero product"
-        : campaignPotential === "medium"
-          ? "Medium — viable for lookbook and social, may need visual amplification for paid ads"
-          : "Low — refine visual impact before using as campaign anchor",
+    emotionalStrength: `${design.emotion} — ${emotionalPct}% emotional resonance through Milaene symbolic language`,
+    adPotential: "",
+  };
+  const ceoApproved = isHeroCeoApproved(design, draftAnalysis);
+
+  return {
+    ...draftAnalysis,
+    adPotential: buildConsistentAdPotential(ceoApproved, campaignPotential),
   };
 }
 
@@ -596,19 +796,14 @@ export function buildLaunchApproval(
   hero: DesignConcept,
   analysis: HeroAnalysis,
 ): NonNullable<ResearchCollection["ceoAnalysis"]>["launchApproval"] {
-  const approved = isHeroApproved(hero, analysis);
-
-  return {
-    approved,
-    emotionalImpact: `${hero.emotion} symbolism delivers ${analysis.emotionalStrength.toLowerCase()} — ${approved ? "sufficient" : "insufficient"} for a Milaene launch narrative`,
-    commercialStrength: `${analysis.commercialScore}% commercial score with ${hero.repeatabilityScore.toLowerCase()} repeatability — ${approved ? "CEO-grade launch confidence" : "needs commercial strengthening"}`,
-    adPerformanceExpectations:
-      analysis.campaignPotential === "high"
-        ? "Expect strong homepage conversion and Instagram engagement — hero reads at thumbnail and billboard scale"
-        : analysis.campaignPotential === "medium"
-          ? "Moderate paid social performance — organic lookbook strong, paid ads may need tighter crop"
-          : "Weak ad performance expected until visual impact is elevated",
-  };
+  const metrics = collectHeroApprovalMetrics(hero, analysis);
+  const ceoApproved = isHeroCeoApproved(hero, analysis);
+  const { commercialScore } = limitCommercialScore(
+    metrics.commercialScore,
+    metrics,
+    ceoApproved,
+  );
+  return buildLaunchApprovalCopy(hero, analysis, ceoApproved, commercialScore);
 }
 
 export interface HeroEngineResult {
@@ -629,79 +824,77 @@ export function applyHeroEngine(
     const base = design.designId === heroId ? heroCandidate : design;
     const normalized = normalizeDesignPrintArea(base);
     if (design.designId === heroId) {
-      return applyCommercialFields({ ...normalized, collectionRole: "Hero Piece" });
+      return applyCommercialFields(
+        { ...normalized, collectionRole: "Hero Piece" },
+        working,
+      );
     }
-    return applyCommercialFields(normalized);
+    return applyCommercialFields(normalized, working);
   });
 
   working = validateExactCollectionRoles(working, adjustments, heroId);
 
   const hero = working.find((d) => d.designId === heroId)!;
-  const heroAnalysis = buildHeroAnalysis(hero);
+  const heroAnalysis = buildHeroAnalysis(hero, working);
   const failure = assessHeroFailure(hero, heroAnalysis);
   const launchApproval = buildLaunchApproval(hero, heroAnalysis)!;
-  const approved = failure.heroStatus === "approved" && launchApproval.approved;
+
+  const ceoResult = applyCeoConsistency(
+    collection,
+    hero,
+    heroAnalysis,
+    working,
+    collection.collectionScore,
+  );
+
+  const approved = ceoResult.ceoApproved;
+  const syncedHero = ceoResult.hero;
+  const syncedAnalysis = ceoResult.heroAnalysis;
+  const syncedCollection = ceoResult.collection;
 
   const supportingDesignIds = working
-    .filter((d) => d.designId !== hero.designId)
+    .filter((d) => d.designId !== syncedHero.designId)
     .map((d) => d.designId);
 
-  const ceoAnalysis = {
-    ...collection.ceoAnalysis,
-    strongestProduct: hero.product,
-    commercialConfidence: Math.round(
-      (heroAnalysis.commercialScore + hero.dnaScore + heroAnalysis.heroScore) / 3,
-    ),
-    adPotential: heroAnalysis.adPotential,
-    launchApproval,
-  };
-
-  const collectionScore = approved
-    ? collection.collectionScore
-    : Math.min(collection.collectionScore, 69);
-
-  const ceoRecommendation = approved
-    ? "Proceed to Design Studio — CEO approves hero as launch piece."
-    : "Do not launch yet — refine Hero Piece.";
+  const syncedDesigns = working.map((d) =>
+    d.designId === syncedHero.designId ? syncedHero : d,
+  );
 
   const enrichedCollection: ResearchCollection = {
-    ...collection,
-    collectionScore,
-    heroDesignId: hero.designId,
+    ...syncedCollection,
+    heroDesignId: syncedHero.designId,
     supportingDesignIds,
-    heroStatus: failure.heroStatus,
+    heroStatus: approved ? "approved" : failure.heroStatus,
     heroRegenerationRequired: failure.heroRegenerationRequired,
     heroProduct: {
-      product: hero.product,
+      ...syncedCollection.heroProduct,
+      product: syncedHero.product,
       estimatedRetailPrice: collection.heroProduct.estimatedRetailPrice,
-      productionComplexity: hero.productionDifficulty,
-      commercialConfidence: heroAnalysis.commercialScore,
+      productionComplexity: syncedHero.productionDifficulty,
     },
-    heroAnalysis,
+    heroAnalysis: syncedAnalysis,
     ceoAnalysis: {
-      strongestProduct:
-        ceoAnalysis?.strongestProduct ?? hero.product,
+      strongestProduct: syncedHero.product,
       weakestProduct:
-        ceoAnalysis?.weakestProduct ??
-        [...working].sort((a, b) => a.dnaScore - b.dnaScore)[0]?.product ??
-        hero.product,
+        collection.ceoAnalysis?.weakestProduct ??
+        [...syncedDesigns].sort((a, b) => a.dnaScore - b.dnaScore)[0]?.product ??
+        syncedHero.product,
       recommendedLaunchOrder:
-        ceoAnalysis?.recommendedLaunchOrder ?? [hero.title],
+        collection.ceoAnalysis?.recommendedLaunchOrder ?? [syncedHero.title],
       productionRisk:
-        ceoAnalysis?.productionRisk ??
+        collection.ceoAnalysis?.productionRisk ??
         "Production risk assessed after hero engine pass",
-      commercialConfidence: ceoAnalysis.commercialConfidence ?? heroAnalysis.commercialScore,
-      adPotential: heroAnalysis.adPotential,
+      commercialConfidence: syncedCollection.ceoAnalysis!.commercialConfidence,
+      adPotential: syncedAnalysis.adPotential,
       launchApproval,
     },
-    ceoRecommendation,
   };
 
   adjustments.push(
-    `hero engine: selected "${hero.title}" as hero (score ${heroAnalysis.heroScore}%, DNA ${hero.dnaScore}%, commercial ${heroAnalysis.commercialScore}%, approved ${approved})`,
+    `hero engine: selected "${syncedHero.title}" as hero (score ${syncedAnalysis.heroScore}%, DNA ${syncedHero.dnaScore}%, commercial ${syncedAnalysis.commercialScore}%, approved ${approved})`,
   );
 
-  return { designs: working, collection: enrichedCollection };
+  return { designs: syncedDesigns, collection: enrichedCollection };
 }
 
 export function formatHeroEngineMarkdown(

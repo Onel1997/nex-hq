@@ -445,10 +445,7 @@ export function buildCollection(
       working.find((d) => d.collectionRole === "Hero Piece")?.designId ??
         hero.designId,
     );
-    collectionScore = Math.max(
-      COLLECTION_MIN_SCORE,
-      computeCollectionScore(working),
-    );
+    collectionScore = computeCollectionScore(working);
   }
 
   const mood = readCollectionField(context, "mood") || pickCollectionMood(working);

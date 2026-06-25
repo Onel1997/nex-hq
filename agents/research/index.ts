@@ -136,3 +136,49 @@ export {
   formatColorBreakdown,
   visualConceptFingerprint,
 } from "./design-concept";
+export {
+  computeDynamicCollectionScore,
+} from "./collection-scoring";
+export type { CollectionScoreBreakdown } from "./collection-scoring";
+export {
+  applyFinalQualityGate,
+  replaceWeakDesigns,
+  enforceHardQualityGate,
+  designFailsQualityGate,
+  isWeakNonHeroDesign,
+  isGenericVisualConcept,
+  isGenericTitle,
+  hasStaleArtDirection,
+  logFinalQualityScores,
+  roundDesignScores,
+} from "./quality-gate";
+export type { FinalQualityScores, FinalQualityGateResult } from "./quality-gate";
+export {
+  buildThemeRoleFallbackConcept,
+} from "./theme-fallback";
+export type { ThemeFallbackInput } from "./theme-fallback";
+export {
+  resolveThemeProfile,
+  pickThemeEmotion,
+  buildThemeHeroTitle,
+  getThemeRoleTitle,
+} from "./theme-vocabulary";
+export type { ThemeProfile, ThemeRoleTitles } from "./theme-vocabulary";
+export { roundPercent, ABSOLUTE_DNA_FLOOR } from "./score-coercion";
+export {
+  applyCeoConsistency,
+  assertCeoConsistency,
+  isCeoApproved,
+  isHeroCeoApproved,
+  collectHeroApprovalMetrics,
+  limitCommercialScore,
+  capCollectionScore,
+  buildCeoRecommendation,
+  buildConsistentAdPotential,
+  logCeoConsistency,
+  CEO_HERO_SCORE_MIN,
+  CEO_DNA_SCORE_MIN,
+  CEO_COMMERCIAL_SCORE_MIN,
+  CEO_EMOTIONAL_STRENGTH_MIN,
+} from "./ceo-consistency";
+export type { HeroApprovalMetrics, CeoConsistencyResult } from "./ceo-consistency";

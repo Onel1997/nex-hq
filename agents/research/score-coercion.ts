@@ -1,3 +1,12 @@
+/** Round a 0–100 score for display and persisted output. */
+export function roundPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+/** Absolute minimum DNA score for any finalized design. */
+export const ABSOLUTE_DNA_FLOOR = 60;
+
 export const COMMERCIAL_CONFIDENCE_LEVELS = ["High", "Medium", "Low"] as const;
 
 export type CommercialConfidenceLevel =

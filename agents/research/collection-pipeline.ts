@@ -4,6 +4,8 @@ import {
   applyCollectionIntelligence,
   enrichDesignRelationships,
 } from "./collection-intelligence";
+import { applyCeoConsistency } from "./ceo-consistency";
+import { computeDynamicCollectionScore } from "./collection-scoring";
 import { normalizeDesignPrintArea } from "./design-concept";
 import { applyHeroEngine } from "./hero-engine";
 import { applyHeroRegeneration } from "./hero-regeneration";
@@ -109,32 +111,63 @@ export function applyCollectionPipeline(
   finalDesigns = finalDesigns.map((design) => normalizeDesignPrintArea(design));
   finalDesigns = finalizeCollectionDesigns(finalDesigns, heroResult.collection);
 
+  const hero = finalDesigns.find(
+    (d) => d.designId === heroResult.collection.heroDesignId,
+  );
+  const heroAnalysis = heroResult.collection.heroAnalysis;
+
+  const scoreBreakdown = computeDynamicCollectionScore(
+    finalDesigns,
+    heroResult.collection,
+  );
+
+  const ceoSynced =
+    hero && heroAnalysis
+      ? applyCeoConsistency(
+          {
+            ...heroResult.collection,
+            collectionArc: intelligenceResult.collection.collectionArc,
+            emotionalNarrative: intelligenceResult.collection.emotionalNarrative,
+          },
+          hero,
+          heroAnalysis,
+          finalDesigns,
+          scoreBreakdown.collectionScore,
+        )
+      : null;
+
   const intelligenceCeo = intelligenceResult.collection.ceoAnalysis;
-  const heroCeo = heroResult.collection.ceoAnalysis;
+  const heroCeo = ceoSynced?.collection.ceoAnalysis ?? heroResult.collection.ceoAnalysis;
 
-  const collection: ResearchCollection = {
-    ...heroResult.collection,
-    collectionArc: intelligenceResult.collection.collectionArc,
-    emotionalNarrative: intelligenceResult.collection.emotionalNarrative,
-    ceoAnalysis:
-      intelligenceCeo && heroCeo
-        ? {
-            strongestProduct: heroCeo.strongestProduct,
-            weakestProduct: intelligenceCeo.weakestProduct,
-            recommendedLaunchOrder: intelligenceCeo.recommendedLaunchOrder,
-            productionRisk: intelligenceCeo.productionRisk,
-            commercialConfidence: heroCeo.commercialConfidence,
-            adPotential: heroCeo.adPotential,
-            launchApproval: heroCeo.launchApproval,
-          }
-        : heroCeo ?? intelligenceCeo,
-    ceoRecommendation: heroCeo?.launchApproval?.approved
-      ? "Proceed to Design Studio — CEO approves hero as launch piece."
-      : "Do not launch yet — refine Hero Piece.",
-    collectionScore: heroCeo?.launchApproval?.approved
-      ? heroResult.collection.collectionScore
-      : Math.min(heroResult.collection.collectionScore, 69),
-  };
+  const collection: ResearchCollection = ceoSynced
+    ? {
+        ...ceoSynced.collection,
+        ceoAnalysis:
+          intelligenceCeo && heroCeo
+            ? {
+                strongestProduct: heroCeo.strongestProduct,
+                weakestProduct: intelligenceCeo.weakestProduct,
+                recommendedLaunchOrder: intelligenceCeo.recommendedLaunchOrder,
+                productionRisk: intelligenceCeo.productionRisk,
+                commercialConfidence: heroCeo.commercialConfidence,
+                adPotential: heroCeo.adPotential,
+                launchApproval: heroCeo.launchApproval,
+              }
+            : heroCeo,
+      }
+    : {
+        ...heroResult.collection,
+        collectionArc: intelligenceResult.collection.collectionArc,
+        emotionalNarrative: intelligenceResult.collection.emotionalNarrative,
+        collectionScore: Math.min(scoreBreakdown.collectionScore, 69),
+        ceoRecommendation: "Do not launch yet — refine or regenerate Hero Piece.",
+      };
 
-  return { designs: finalDesigns, collection };
+  const syncedDesigns = ceoSynced
+    ? finalDesigns.map((d) =>
+        d.designId === ceoSynced.hero.designId ? ceoSynced.hero : d,
+      )
+    : finalDesigns;
+
+  return { designs: syncedDesigns, collection };
 }
