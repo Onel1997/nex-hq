@@ -223,15 +223,7 @@ function assignDesignRelationships(
     if (design.designId === heroDesignId) {
       return { ...design, supportsDesignId: undefined };
     }
-    const supports =
-      design.collectionRole === "Supporting Piece" ||
-      design.collectionRole === "Statement Piece" ||
-      design.collectionRole === "Limited Piece"
-        ? heroDesignId
-        : design.collectionRole === "Core Essential"
-          ? undefined
-          : heroDesignId;
-    return { ...design, supportsDesignId: supports };
+    return { ...design, supportsDesignId: heroDesignId };
   });
 }
 

@@ -45,9 +45,9 @@ const THEME_PROFILES: Array<{ match: RegExp; profile: Omit<ThemeProfile, "emotio
       emotionalKeyword: "closeness without connection",
       heroTitle: "ONLY BETWEEN US",
       visualMotifs: [
-        "interlocking curves drawn close without touching",
-        "paired silhouettes in negative space",
-        "subtle proximity geometry",
+        "interrupted dual arc drawn close without touching",
+        "offset parallel arcs in negative space",
+        "missing center geometry",
       ],
       symbolism:
         "Unspoken feelings held in quiet proximity — love without expression, moments never shared, resolving toward acceptance",
@@ -69,7 +69,7 @@ const THEME_PROFILES: Array<{ match: RegExp; profile: Omit<ThemeProfile, "emotio
       heroTitle: "WHAT WE LOST",
       visualMotifs: [
         "fragmented path lines converging toward a void",
-        "isolated figure silhouette in negative space",
+        "isolated abstract contour in negative space",
         "inner map contour with broken coordinates",
       ],
       symbolism:
@@ -138,7 +138,7 @@ const THEME_PROFILES: Array<{ match: RegExp; profile: Omit<ThemeProfile, "emotio
       heroTitle: "HELD IN SHADOW",
       visualMotifs: [
         "layered tonal shadow planes",
-        "silhouette emerging from gradient negative space",
+        "abstract form emerging from gradient negative space",
         "architectural shadow geometry on garment",
       ],
       symbolism:

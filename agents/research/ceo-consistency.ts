@@ -121,6 +121,7 @@ export function limitCommercialScore(
   rawCommercial: number,
   metrics: HeroApprovalMetrics,
   ceoApproved: boolean,
+  hero?: DesignConcept,
 ): { commercialScore: number; capsApplied: string[] } {
   const capsApplied: string[] = [];
   let score = roundPercent(rawCommercial);
@@ -141,7 +142,37 @@ export function limitCommercialScore(
     capsApplied.push("emotionalPenalty:-10");
   }
 
+  if (hero) {
+    const balanced = balanceHeroCommercialFloor(hero, metrics, score);
+    if (balanced > score) {
+      capsApplied.push(`heroCommercialFloor:${balanced}`);
+      score = balanced;
+    }
+  }
+
   return { commercialScore: roundPercent(score), capsApplied };
+}
+
+/** Strong heroes keep commercial credibility unless production or repeatability is weak. */
+export function balanceHeroCommercialFloor(
+  hero: DesignConcept,
+  metrics: HeroApprovalMetrics,
+  commercialScore: number,
+): number {
+  const strongHero =
+    metrics.dnaScore >= 85 &&
+    metrics.heroScore >= 80 &&
+    metrics.emotionalStrength >= 80 &&
+    metrics.campaignPotential === "high";
+
+  if (!strongHero) return commercialScore;
+
+  const allowBelow80 =
+    hero.productionDifficulty === "High" || hero.repeatabilityScore === "Low";
+
+  if (allowBelow80) return commercialScore;
+
+  return Math.max(commercialScore, 80);
 }
 
 /** Hard caps applied once at final collection score authority. */
@@ -328,6 +359,7 @@ export function assertCeoConsistency(
     metrics.commercialScore,
     metrics,
     ceoApproved,
+    hero,
   );
   const adTier = adPotentialTier(
     heroAnalysis?.adPotential ?? collection.ceoAnalysis?.adPotential ?? "",
@@ -386,7 +418,7 @@ export function applyCeoConsistency(
   const ceoApproved = isCeoApproved(metrics);
 
   const { commercialScore: limitedCommercialScore, capsApplied: commercialCaps } =
-    limitCommercialScore(metrics.commercialScore, metrics, ceoApproved);
+    limitCommercialScore(metrics.commercialScore, metrics, ceoApproved, hero);
 
   const rawScore = roundPercent(
     rawCollectionScore ??

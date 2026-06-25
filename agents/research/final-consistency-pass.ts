@@ -7,6 +7,19 @@ import {
   applyFinalCollectionScore,
 } from "./ceo-consistency";
 import {
+  applyEmotionalRepairPass,
+  assertRoleConsistency,
+  normalizeCollectionRoles,
+} from "./role-consistency";
+import { applyBrandDnaAnalysis } from "./brand-dna";
+import {
+  applyCollectionEmotionalVisualLanguage,
+} from "./emotional-visual";
+import {
+  assertDnaScoreDiversity,
+  ensureCollectionDnaDiversity,
+} from "./milaene-translation";
+import {
   visualConceptFingerprint,
 } from "./design-concept";
 import { assertCeoConsistency } from "./ceo-consistency";
@@ -464,10 +477,19 @@ export function assertFinalCollectionConsistency(
     );
   }
 
-  for (const role of COLLECTION_ROLES) {
-    const count = designs.filter((design) => design.collectionRole === role).length;
-    if (count !== 1) {
-      errors.push(`expected exactly 1 "${role}", received ${count}`);
+  assertRoleConsistency(designs);
+
+  for (const design of designs) {
+    if (design.designId === collection.heroDesignId) {
+      if (design.supportsDesignId !== undefined) {
+        errors.push(`hero "${design.title}" must not have supportsDesignId`);
+      }
+      continue;
+    }
+    if (design.supportsDesignId !== collection.heroDesignId) {
+      errors.push(
+        `"${design.title}" (${design.collectionRole}) must support hero ${collection.heroDesignId}, received ${design.supportsDesignId ?? "none"}`,
+      );
     }
   }
 
@@ -540,6 +562,8 @@ export function assertFinalCollectionConsistency(
     assertCeoConsistency(collection, hero, collection.heroAnalysis);
   }
 
+  assertDnaScoreDiversity(designs);
+
   if (!collection.scoreLocked) {
     throw new Error("Final collection score authority was not applied");
   }
@@ -554,7 +578,21 @@ export function applyFinalConsistencyToDesignOutput(
     output.collection,
     adjustments,
   );
-  let designs = applyRoleMetadata(consistency.designs);
+  let designs = applyEmotionalRepairPass(
+    consistency.designs,
+    consistency.collection,
+    adjustments,
+  );
+  designs = normalizeCollectionRoles(designs, adjustments);
+  assertRoleConsistency(designs);
+  designs = applyCollectionEmotionalVisualLanguage(designs, consistency.collection);
+  designs = designs.map((design) => applyBrandDnaAnalysis(design));
+  designs = ensureCollectionDnaDiversity(designs, adjustments);
+  designs = applyRoleMetadata(designs);
+  const heroDesignId =
+    designs.find((design) => design.collectionRole === "Hero Piece")?.designId ??
+    consistency.collection.heroDesignId;
+  designs = ensureRelationshipGraph(designs, heroDesignId);
   let collection = rebuildCollectionFromFinalizedDesigns(
     consistency.collection,
     designs,

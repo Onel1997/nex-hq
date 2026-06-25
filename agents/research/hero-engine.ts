@@ -826,6 +826,7 @@ export function buildLaunchApproval(
     metrics.commercialScore,
     metrics,
     ceoApproved,
+    hero,
   );
   return buildLaunchApprovalCopy(hero, analysis, ceoApproved, commercialScore);
 }

@@ -101,6 +101,39 @@ export {
 } from "./final-consistency-pass";
 export type { FinalConsistencyResult } from "./final-consistency-pass";
 export {
+  normalizeCollectionRoles,
+  applyEmotionalRepairPass,
+  assertRoleConsistency,
+  ROLE_ASSIGNMENT_PRIORITY,
+} from "./role-consistency";
+export {
+  translateEmotionToMilaeneVisuals,
+  buildMilaeneTranslation,
+  applyMilaeneDnaCaps,
+  scoreSymbolicAbstraction,
+  sanitizeMilaeneArtDirection,
+  detectMilaeneEmotionCategories,
+  hasLiteralEmotionalImagery,
+  logMilaeneTranslation,
+  milaeneToVisualSymbols,
+  createMotifTokenCounts,
+  extractTrackedMotifTokens,
+  ensureCollectionDnaDiversity,
+  assertDnaScoreDiversity,
+  rescoreDnaForRole,
+  ROLE_DNA_RANGES,
+  ROLE_DNA_TARGETS,
+  TRACKED_MOTIF_TOKENS,
+  MILAENE_FORBIDDEN_VISUALS,
+} from "./milaene-translation";
+export type {
+  MilaeneVisualLanguage,
+  MilaeneTranslationResult,
+  MilaeneEmotionCategory,
+  MilaeneTranslationOptions,
+  TrackedMotifToken,
+} from "./milaene-translation";
+export {
   applyBrandDnaAnalysis,
   analyzeBrandDna,
   DNA_MIN_SCORE,
@@ -156,6 +189,7 @@ export type { FinalQualityScores, FinalQualityGateResult } from "./quality-gate"
 export {
   buildEmotionalVisualLanguage,
   applyEmotionalVisualLanguage,
+  applyCollectionEmotionalVisualLanguage,
   assertEmotionalVisualMatch,
   repairEmotionalVisualMismatch,
   ensureEmotionalVisualMatch,
@@ -209,6 +243,7 @@ export {
   isHeroCeoApproved,
   collectHeroApprovalMetrics,
   limitCommercialScore,
+  balanceHeroCommercialFloor,
   applyCollectionCaps,
   capCollectionScore,
   buildCeoRecommendation,

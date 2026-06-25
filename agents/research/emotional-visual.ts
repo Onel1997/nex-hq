@@ -1,4 +1,16 @@
 import { analyzeThemeEmotion, analyzeCollectionEmotion, type ThemeEmotionalAnalysis } from "./emotional-intelligence";
+import {
+  milaeneToVisualSymbols,
+  sanitizeMilaeneArtDirection,
+  translateEmotionToMilaeneVisuals,
+  buildMilaeneTranslation,
+  applyMilaeneDnaCaps,
+  createMotifTokenCounts,
+  type MilaeneVisualLanguage,
+  type MilaeneTranslationResult,
+  type TrackedMotifToken,
+} from "./milaene-translation";
+import { ROLE_ASSIGNMENT_PRIORITY } from "./role-consistency";
 import { roundPercent } from "./score-coercion";
 import type { DesignConcept, ResearchCollection } from "./types";
 
@@ -26,14 +38,14 @@ const VISUAL_FAMILY_LIBRARY: Record<
 > = {
   CONNECTION: {
     visualSymbols: [
-      "interlocking forms",
-      "overlapping shadows",
-      "touching curves",
+      "parallel curves",
+      "mirrored abstract forms",
+      "shared geometry",
     ],
     compositionRules: [
-      "pair forms in deliberate proximity",
+      "pair abstract forms in deliberate proximity",
       "allow partial overlap at edges only",
-      "maintain readable silhouette at campaign scale",
+      "maintain readable abstract form at campaign scale",
     ],
     spacingRules: [
       "controlled proximity between elements",
@@ -54,32 +66,33 @@ const VISUAL_FAMILY_LIBRARY: Record<
   },
   DISTANCE: {
     visualSymbols: [
-      "separated elements",
-      "empty center space",
-      "broken geometry",
-      "two separated silhouettes",
+      "interrupted dual arc",
+      "missing center geometry",
+      "offset geometry",
+      "dual abstract forms",
     ],
     compositionRules: [
+      "offset geometry creating perceived distance",
       "avoid central overlap",
-      "leave 40% empty area",
-      "keep forms apart on a shared axis",
+      "keep abstract forms apart on a shared axis",
       "never stack elements into a tight cluster",
     ],
     spacingRules: [
-      "large margins",
-      "wide separation between forms",
-      "minimum 24 mm between primary silhouettes",
+      "negative axis spacing",
+      "offset vertical alignment",
+      "empty middle axis",
+      "minimum 24 mm between primary abstract forms",
     ],
     typographyRules: [
       "sparse uppercase only if type is required",
       "no kanji or script-led composition",
     ],
     motionLanguage: [
-      "forms drifting apart",
+      "offset geometry creating perceived distance",
       "unfinished paths that stop before meeting",
     ],
     negativeSpaceStrategy: [
-      "empty center space as the emotional subject",
+      "negative axis spacing as the emotional subject",
       "negative space must read louder than ink",
     ],
   },
@@ -353,71 +366,129 @@ function applyVisualLanguageToDesign(
   design: DesignConcept,
   language: EmotionalVisualLanguage,
   analysis: ThemeEmotionalAnalysis,
+  milaene: MilaeneTranslationResult,
 ): DesignConcept {
-  const primaryMotif = primaryMotifFromLanguage(language);
-  const secondaryMotif = secondaryMotifFromLanguage(language);
-  const category = dominantEmotionCategory(language);
-  const approach = preferredCreativeApproach(language);
+  const milaeneLanguage = milaene.translatedVisualLanguage;
+  const visualSymbols = milaeneToVisualSymbols(milaeneLanguage);
+
+  const primaryMotif = visualSymbols[0] ?? "organic curve emblem";
+  const secondaryMotif = visualSymbols[1] ?? "editorial negative space frame";
+  const category = dominantEmotionCategory({
+    ...language,
+    visualSymbols,
+  });
+  const approach = preferredCreativeApproach({
+    ...language,
+    visualSymbols,
+  });
 
   const enriched: DesignConcept = {
     ...design,
     creativeApproach: approach,
     visualLanguage: {
       emotionalKeyword: language.emotionalKeyword,
-      visualSymbols: language.visualSymbols,
-      compositionRules: language.compositionRules,
-      spacingRules: language.spacingRules,
-      typographyRules: language.typographyRules,
+      visualSymbols,
+      compositionRules: milaeneLanguage.composition,
+      spacingRules: milaeneLanguage.spacing,
+      typographyRules: milaeneLanguage.typography,
       motionLanguage: language.motionLanguage,
-      negativeSpaceStrategy: language.negativeSpaceStrategy,
+      negativeSpaceStrategy: milaeneLanguage.spacing.filter((rule) =>
+        /negative|empty|axis|margin/i.test(rule),
+      ),
     },
+    milaeneTranslation: milaene.milaeneTranslation,
+    visualRestraint: milaene.visualRestraint,
+    symbolicAbstraction: milaene.symbolicAbstraction,
+    editorialRestraint: milaene.editorialRestraint,
+    symbolicAbstractionScore: milaene.symbolicAbstractionScore,
     visualConcept: stripStaleVisualCopy(
-      buildVisualConceptFromLanguage(design, language),
+      sanitizeMilaeneArtDirection(
+        buildVisualConceptFromLanguage(
+          design,
+          { ...language, visualSymbols },
+        ),
+      ),
     ),
     designDescription: stripStaleVisualCopy(
-      `Narrative ${design.collectionRole.toLowerCase()} for ${design.title}: ${analysis.emotionalPain} expressed through ${primaryMotif}, held in ${analysis.emotionalTension}, resolving toward ${analysis.emotionalResolution}.`,
+      sanitizeMilaeneArtDirection(
+        `Narrative ${design.collectionRole.toLowerCase()} for ${design.title}: ${analysis.emotionalPain} expressed through ${primaryMotif}, held in ${analysis.emotionalTension}, resolving toward ${analysis.emotionalResolution}.`,
+      ),
     ),
-    graphicElements: buildGraphicElementsFromLanguage(language),
+    graphicElements: buildGraphicElementsFromLanguage({
+      ...language,
+      visualSymbols,
+    }),
     exactComposition: stripStaleVisualCopy(
-      buildExactCompositionFromLanguage(design, language),
+      sanitizeMilaeneArtDirection(
+        buildExactCompositionFromLanguage(design, { ...language, visualSymbols }),
+      ),
     ),
     layoutDescription: stripStaleVisualCopy(
-      buildLayoutDescriptionFromLanguage(design, language),
+      sanitizeMilaeneArtDirection(
+        buildLayoutDescriptionFromLanguage(design, { ...language, visualSymbols }),
+      ),
     ),
-    visualHierarchy: `1) ${primaryMotif}  2) ${secondaryMotif}  3) ${language.negativeSpaceStrategy[0] ?? "negative space field"}`,
-    colorBreakdown: buildColorBreakdownFromLanguage(design, language),
-    materialEffects: buildMaterialEffectsFromLanguage(language),
-    negativeSpaceUsage: buildNegativeSpaceFromLanguage(language),
-    designInstructions: buildDesignInstructionsFromLanguage(design, language).map(
-      stripStaleVisualCopy,
+    visualHierarchy: `1) ${primaryMotif}  2) ${secondaryMotif}  3) ${milaeneLanguage.spacing[0] ?? "negative axis spacing"}`,
+    colorBreakdown: buildColorBreakdownFromLanguage(design, { ...language, visualSymbols }),
+    materialEffects: sanitizeMilaeneArtDirection(
+      milaeneLanguage.materialLanguage.join(" — ") ||
+        buildMaterialEffectsFromLanguage({ ...language, visualSymbols }),
+    ),
+    negativeSpaceUsage: sanitizeMilaeneArtDirection(
+      milaeneLanguage.spacing.join(" — "),
+    ),
+    designInstructions: buildDesignInstructionsFromLanguage(
+      design,
+      { ...language, visualSymbols },
+    ).map((instruction) =>
+      stripStaleVisualCopy(sanitizeMilaeneArtDirection(instruction)),
     ),
     mockupDescription: stripStaleVisualCopy(
-      `${design.title} on ${design.product} in ${design.color} — ${primaryMotif} with ${language.negativeSpaceStrategy[0] ?? "generous negative space"}, editorial studio light, emotional visual translation`,
+      sanitizeMilaeneArtDirection(
+        `${design.title} on ${design.product} in ${design.color} — ${primaryMotif} with ${milaeneLanguage.spacing[0] ?? "negative axis spacing"}, editorial studio light, Milaene abstract translation`,
+      ),
     ),
     geometry: stripStaleVisualCopy(
-      `${primaryMotif} on vertical editorial axis with ${secondaryMotif}`,
+      sanitizeMilaeneArtDirection(milaeneLanguage.geometry.slice(0, 3).join(" + ")),
     ),
     dimensions: design.dimensions?.includes("cm")
       ? design.dimensions
       : design.printSize || "28 cm editorial graphic zone",
     coordinates: design.coordinates || design.placementDimensions,
     imagePromptCore: stripStaleVisualCopy(
-      buildImagePromptCoreFromLanguage(design, language),
+      sanitizeMilaeneArtDirection(
+        [
+          design.title,
+          visualSymbols.slice(0, 3).join(", "),
+          language.emotionalKeyword,
+          design.color,
+          design.product,
+          "calm luxury",
+          "Milaene DNA",
+          "abstract emotional translation",
+        ].join(", "),
+      ),
     ),
-    spacing: language.spacingRules[1] ?? language.spacingRules[0] ?? design.spacing,
-    typography: language.typographyRules.join("; "),
+    spacing: milaeneLanguage.spacing[1] ?? milaeneLanguage.spacing[0] ?? design.spacing,
+    typography: milaeneLanguage.typography.join("; "),
     symbolism: stripStaleVisualCopy(
-      `${language.emotionalKeyword} — ${primaryMotif} with ${secondaryMotif}; ${analysis.emotionalPain} made visible through ${analysis.emotionalConflict}`,
+      sanitizeMilaeneArtDirection(
+        `${language.emotionalKeyword} — ${primaryMotif} with ${secondaryMotif}; ${analysis.emotionalPain} made visible through ${analysis.emotionalConflict}`,
+      ),
     ),
-    placementDimensions: stripStaleVisualCopy(design.placementDimensions),
+    placementDimensions: stripStaleVisualCopy(
+      sanitizeMilaeneArtDirection(design.placementDimensions),
+    ),
     printArea: design.printArea,
     balance: category === "LOSS" ? "Asymmetrical" : design.balance,
-    elementCount: `${buildGraphicElementsFromLanguage(language).length} emotional visual layers`,
+    elementCount: `${buildGraphicElementsFromLanguage({ ...language, visualSymbols }).length} abstract visual layers`,
     garmentInspiration: "Premium oversized fleece construction — styling influence only",
     brandInspiration: "Milaene calm luxury restraint — styling influence only",
-    visualReferences: "Emotional visual translation, muted tonal styling influence only",
+    visualReferences: "Milaene abstract emotional translation, muted tonal styling influence only",
     styleDirection: stripStaleVisualCopy(
-      `${language.emotionalKeyword} visual narrative — calm luxury editorial restraint`,
+      sanitizeMilaeneArtDirection(
+        `${language.emotionalKeyword} abstract visual narrative — calm luxury editorial restraint`,
+      ),
     ),
   };
 
@@ -519,11 +590,13 @@ export function resolveEmotionalVisualFamilies(
   return inferVisualFamilies(corpus);
 }
 
-/** Build visual language from emotional architecture — not editorial style references. */
+/** Build visual language from emotional architecture — routes through Milaene translation. */
 export function buildEmotionalVisualLanguage(input: {
   analysis?: ThemeEmotionalAnalysis;
   theme?: string;
   emotionalKeyword?: string;
+  role?: DesignConcept["collectionRole"];
+  motifTokenCounts?: Map<TrackedMotifToken, number>;
 }): EmotionalVisualLanguage {
   const analysis =
     input.analysis ??
@@ -534,8 +607,38 @@ export function buildEmotionalVisualLanguage(input: {
     analysis.emotionalTension ??
     analysis.emotionalPain;
 
-  const families = resolveEmotionalVisualFamilies(analysis, keyword);
-  return mergeFamilies(families, keyword);
+  const milaene = translateEmotionToMilaeneVisuals(
+    keyword,
+    analysis.emotionalPain,
+    analysis.emotionalConflict,
+    analysis.emotionalMemory,
+    {
+      log: false,
+      role: input.role ?? "Supporting Piece",
+      motifTokenCounts: input.motifTokenCounts,
+    },
+  );
+
+  return milaeneToEmotionalVisualLanguage(milaene.translatedVisualLanguage, keyword);
+}
+
+function milaeneToEmotionalVisualLanguage(
+  milaene: MilaeneVisualLanguage,
+  keyword: string,
+): EmotionalVisualLanguage {
+  return {
+    emotionalKeyword: keyword,
+    visualSymbols: milaeneToVisualSymbols(milaene),
+    compositionRules: milaene.composition,
+    spacingRules: milaene.spacing,
+    typographyRules: milaene.typography,
+    motionLanguage: milaene.composition
+      .filter((rule) => /offset|unfinished|repeat|open/i.test(rule))
+      .slice(0, 2),
+    negativeSpaceStrategy: milaene.spacing.filter((rule) =>
+      /negative|empty|axis|margin|separation/i.test(rule),
+    ),
+  };
 }
 
 function primaryMotifFromLanguage(language: EmotionalVisualLanguage): string {
@@ -649,7 +752,7 @@ function buildDesignInstructionsFromLanguage(
   language: EmotionalVisualLanguage,
 ): string[] {
   return [
-    `Translate ${language.emotionalKeyword} through ${language.visualSymbols.slice(0, 2).join(" and ")} — not editorial style clichés`,
+    `Translate ${language.emotionalKeyword} through ${language.visualSymbols.slice(0, 2).join(" and ")} — Milaene abstract translation, never direct narrative depiction`,
     language.compositionRules[0] ??
       "Maintain emotional composition discipline across the print zone",
     language.spacingRules[0] ??
@@ -678,14 +781,50 @@ function buildImagePromptCoreFromLanguage(
 export function applyEmotionalVisualLanguage(
   design: DesignConcept,
   collection: ResearchCollection,
+  motifTokenCounts?: Map<TrackedMotifToken, number>,
 ): DesignConcept {
   const analysis = analyzeCollectionEmotion(collection);
-  const language = buildEmotionalVisualLanguage({
-    analysis,
-    emotionalKeyword: design.emotionalKeyword ?? analysis.emotionalTension,
-  });
+  const keyword = design.emotionalKeyword ?? analysis.emotionalTension;
+  const milaene = translateEmotionToMilaeneVisuals(
+    keyword,
+    design.emotionalNarrative ?? analysis.emotionalPain,
+    analysis.emotionalConflict,
+    analysis.emotionalMemory,
+    {
+      log: true,
+      role: design.collectionRole,
+      motifTokenCounts,
+    },
+  );
+  const language = milaeneToEmotionalVisualLanguage(
+    milaene.translatedVisualLanguage,
+    keyword,
+  );
 
-  return applyVisualLanguageToDesign(design, language, analysis);
+  return applyVisualLanguageToDesign(design, language, analysis, milaene);
+}
+
+/** Apply role-specific Milaene translations across the capsule with motif diversity. */
+export function applyCollectionEmotionalVisualLanguage(
+  designs: DesignConcept[],
+  collection: ResearchCollection,
+): DesignConcept[] {
+  const motifTokenCounts = createMotifTokenCounts();
+  const ordered = [...designs].sort(
+    (a, b) =>
+      ROLE_ASSIGNMENT_PRIORITY.indexOf(a.collectionRole) -
+      ROLE_ASSIGNMENT_PRIORITY.indexOf(b.collectionRole),
+  );
+  const updated = new Map<string, DesignConcept>();
+
+  for (const design of ordered) {
+    updated.set(
+      design.designId,
+      applyEmotionalVisualLanguage(design, collection, motifTokenCounts),
+    );
+  }
+
+  return designs.map((design) => updated.get(design.designId) ?? design);
 }
 
 export function assertEmotionalVisualMatch(
@@ -714,25 +853,40 @@ export function repairEmotionalVisualMismatch(
   );
 
   const language = buildRepairLanguage(category, themeEmotion, keyword);
+  const milaene = translateEmotionToMilaeneVisuals(
+    keyword,
+    themeEmotion.emotionalPain,
+    themeEmotion.emotionalConflict,
+    themeEmotion.emotionalMemory,
+    { log: false, role: design.collectionRole },
+  );
+
+  language.visualSymbols = milaeneToVisualSymbols(milaene.translatedVisualLanguage);
+  language.compositionRules = milaene.translatedVisualLanguage.composition;
+  language.spacingRules = milaene.translatedVisualLanguage.spacing;
+  language.typographyRules = milaene.translatedVisualLanguage.typography;
+  language.negativeSpaceStrategy = milaene.translatedVisualLanguage.spacing.filter(
+    (rule) => /negative|empty|axis|margin/i.test(rule),
+  );
 
   if (category === "DISTANCE") {
     language.visualSymbols = uniqueStrings([
-      "two separated silhouettes",
-      "empty center space",
-      "almost-touching curves",
-      "broken line",
+      "interrupted dual arc",
+      "missing center geometry",
+      "offset geometry",
+      "dual abstract forms",
       ...language.visualSymbols,
     ]).slice(0, 6);
     language.compositionRules = uniqueStrings([
+      "offset geometry creating perceived distance",
       "avoid central overlap",
-      "leave 40% empty area",
-      "keep forms apart on a shared axis",
+      "keep abstract forms apart on a shared axis",
       ...language.compositionRules,
     ]).slice(0, 5);
     language.negativeSpaceStrategy = uniqueStrings([
-      "empty center space as the emotional subject",
+      "negative axis spacing as the emotional subject",
       "negative space must read louder than ink",
-      "reserve at least 40% open field",
+      "empty middle axis",
       ...language.negativeSpaceStrategy,
     ]).slice(0, 3);
   }
@@ -770,7 +924,12 @@ export function repairEmotionalVisualMismatch(
     ]).slice(0, 6);
   }
 
-  const repaired = applyVisualLanguageToDesign(design, language, themeEmotion);
+  const repaired = applyVisualLanguageToDesign(
+    design,
+    language,
+    themeEmotion,
+    milaene,
+  );
   return repaired;
 }
 
@@ -823,17 +982,32 @@ export function ensureEmotionalVisualMatch(
 }
 
 export function scoreEmotionalDnaAlignment(design: DesignConcept): number {
-  const language = design.visualLanguage;
-  if (!language) return roundPercent(design.dnaScore);
   const corpus = [
-    design.whyFitsMilaene.join(" "),
-    design.dnaMatches.join(" "),
-    design.styleDirection,
+    design.visualConcept,
+    design.symbolism,
+    design.exactComposition,
+    design.geometry,
+    design.milaeneTranslation ?? "",
+    design.graphicElements.join(" "),
   ].join(" ");
-  let score = design.dnaScore;
-  if (/negative space|muted|editorial|organic|restraint/i.test(corpus)) score += 4;
-  if (DOMINANT_STYLE_PATTERNS.test(corpus)) score -= 8;
-  if ((language.visualSymbols?.length ?? 0) >= 2) score += 3;
+
+  const milaene = buildMilaeneTranslation(
+    design.emotionalKeyword ?? design.emotion,
+    design.emotionalNarrative,
+    design.message,
+    design.symbolism,
+    design.collectionRole,
+  );
+
+  let score = applyMilaeneDnaCaps(design.dnaScore, milaene, corpus, design.collectionRole);
+  const language = design.visualLanguage;
+  if (language) {
+    if (/negative space|negative axis|muted|editorial|organic|restraint/i.test(corpus)) {
+      score += 4;
+    }
+    if (DOMINANT_STYLE_PATTERNS.test(corpus)) score -= 8;
+    if ((language.visualSymbols?.length ?? 0) >= 2) score += 3;
+  }
   return roundPercent(Math.max(0, Math.min(100, score)));
 }
 

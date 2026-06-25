@@ -5,6 +5,13 @@ import type {
   RepeatabilityScore,
 } from "./types";
 import { COLLECTION_ROLES, REPEATABILITY_SCORES } from "./types";
+import {
+  applyMilaeneDnaCaps,
+  buildMilaeneTranslation,
+  hasLiteralEmotionalImagery,
+  ROLE_DNA_RANGES,
+} from "./milaene-translation";
+import { roundPercent } from "./score-coercion";
 
 export const DNA_MIN_SCORE = 65;
 
@@ -316,7 +323,27 @@ export function analyzeBrandDna(concept: DesignConcept): BrandDnaAnalysis {
     philosophy.score -
     forbidden.penalty;
 
-  const dnaScore = Math.max(0, Math.min(100, raw));
+  const milaeneTranslation = buildMilaeneTranslation(
+    concept.emotionalKeyword ?? concept.emotion,
+    concept.emotionalNarrative,
+    concept.message,
+    concept.symbolism,
+    concept.collectionRole,
+  );
+
+  let dnaScore = applyMilaeneDnaCaps(
+    Math.max(0, Math.min(100, raw)),
+    milaeneTranslation,
+    corpus,
+    concept.collectionRole,
+  );
+
+  if (hasLiteralEmotionalImagery(corpus)) {
+    dnaScore = Math.min(dnaScore, 70);
+  }
+
+  const range = ROLE_DNA_RANGES[concept.collectionRole];
+  dnaScore = roundPercent(Math.min(range.max, Math.max(range.min, dnaScore)));
 
   const dnaMatches: string[] = [];
   if (color.match) dnaMatches.push(`muted palette (${color.match})`);
@@ -346,6 +373,12 @@ export function analyzeBrandDna(concept: DesignConcept): BrandDnaAnalysis {
   }
   if (concept.creativeApproach === "Abstract Graphic" && concept.graphicElements.length > 4) {
     dnaConflicts.push("geometric complexity slightly high");
+  }
+  if (hasLiteralEmotionalImagery(corpus)) {
+    dnaConflicts.push("literal emotional imagery caps DNA at 70%");
+  }
+  if (milaeneTranslation.symbolicAbstractionScore >= 70) {
+    dnaMatches.push("abstract Milaene emotional translation");
   }
 
   const whyFitsMilaene = [
@@ -398,6 +431,11 @@ function assignCollectionRole(concept: DesignConcept, dnaScore: number): Collect
 }
 
 function assignRepeatability(concept: DesignConcept, dnaScore: number): RepeatabilityScore {
+  if (concept.collectionRole === "Hero Piece") {
+    return concept.productionDifficulty === "High" ? "Medium" : "High";
+  }
+  if (concept.collectionRole === "Limited Piece") return "Low";
+
   const highRepeat: CreativeApproach[] = [
     "Luxury Minimalism",
     "Minimal Back Print",
@@ -438,5 +476,26 @@ function buildImagePromptCore(concept: DesignConcept): string {
 
 export function applyBrandDnaAnalysis(concept: DesignConcept): DesignConcept {
   const analysis = analyzeBrandDna(concept);
-  return { ...concept, ...analysis };
+  const milaene = buildMilaeneTranslation(
+    concept.emotionalKeyword ?? concept.emotion,
+    concept.emotionalNarrative,
+    concept.message,
+    concept.symbolism,
+    concept.collectionRole,
+  );
+
+  return {
+    ...concept,
+    ...analysis,
+    collectionRole: concept.collectionRole,
+    heroScore: concept.heroScore,
+    commercialScore: concept.commercialScore,
+    campaignPotential: concept.campaignPotential,
+    milaeneTranslation: concept.milaeneTranslation ?? milaene.milaeneTranslation,
+    visualRestraint: concept.visualRestraint ?? milaene.visualRestraint,
+    symbolicAbstraction: concept.symbolicAbstraction ?? milaene.symbolicAbstraction,
+    editorialRestraint: concept.editorialRestraint ?? milaene.editorialRestraint,
+    symbolicAbstractionScore:
+      concept.symbolicAbstractionScore ?? milaene.symbolicAbstractionScore,
+  };
 }
