@@ -1,8 +1,10 @@
-import { applyCeoConsistency, buildCeoRecommendation } from "./ceo-consistency";
+import {
+  collectHeroApprovalMetrics,
+  isCeoApproved,
+} from "./ceo-consistency";
 import { computeDynamicCollectionScore } from "./collection-scoring";
 import {
   assessCampaignPotential,
-  buildHeroAnalysis,
   calculateCommercialScore,
   calculateHeroScore,
 } from "./hero-engine";
@@ -10,7 +12,6 @@ import { ABSOLUTE_DNA_FLOOR, roundPercent } from "./score-coercion";
 import { buildThemeRoleFallbackConcept } from "./theme-fallback";
 import type {
   DesignConcept,
-  HeroAnalysis,
   ResearchCollection,
 } from "./types";
 
@@ -220,33 +221,7 @@ export interface FinalQualityGateResult {
   scores: FinalQualityScores;
 }
 
-function syncCollectionCeoState(
-  collection: ResearchCollection,
-  hero: DesignConcept,
-  peers: DesignConcept[],
-  designs: DesignConcept[],
-  collectionScore: number,
-): { collection: ResearchCollection; designs: DesignConcept[]; ceoApproved: boolean } {
-  const heroAnalysis = buildHeroAnalysis(hero, peers);
-  const result = applyCeoConsistency(
-    collection,
-    hero,
-    heroAnalysis,
-    designs,
-    collectionScore,
-  );
-  return {
-    collection: result.collection,
-    designs: result.collection.heroDesignId
-      ? designs.map((d) =>
-          d.designId === result.hero.designId ? result.hero : d,
-        )
-      : designs,
-    ceoApproved: result.ceoApproved,
-  };
-}
-
-/** Final quality gate before returning design research output. */
+/** Final quality gate before CEO consistency — does not mutate collection score authority. */
 export function applyFinalQualityGate(
   designs: DesignConcept[],
   collection: ResearchCollection,
@@ -290,46 +265,28 @@ export function applyFinalQualityGate(
 
   const breakdown = computeDynamicCollectionScore(roundedDesigns, collection);
   const weakest = [...roundedDesigns].sort((a, b) => a.dnaScore - b.dnaScore)[0];
-
   const heroDesign =
     roundedDesigns.find((d) => d.designId === hero?.designId) ?? hero;
 
-  const ceoSync = heroDesign
-    ? syncCollectionCeoState(
-        collection,
-        heroDesign,
-        peers,
-        roundedDesigns,
-        breakdown.collectionScore,
-      )
-    : {
-        collection: {
-          ...collection,
-          collectionScore: Math.min(roundPercent(breakdown.collectionScore), 69),
-          ceoRecommendation: buildCeoRecommendation(false),
-        },
-        designs: roundedDesigns,
-        ceoApproved: false,
-      };
+  const ceoApproved =
+    heroDesign && collection.heroAnalysis
+      ? isCeoApproved(collectHeroApprovalMetrics(heroDesign, collection.heroAnalysis))
+      : false;
 
   const scores: FinalQualityScores = {
-    collectionScore: ceoSync.collection.collectionScore,
+    collectionScore: roundPercent(breakdown.collectionScore),
     averageDna: roundPercent(breakdown.averageDna),
-    heroScore: roundPercent(
-      ceoSync.designs.find((d) => d.collectionRole === "Hero Piece")?.heroScore ??
-        collection.heroAnalysis?.heroScore ??
-        0,
-    ),
+    heroScore: roundPercent(heroDesign?.heroScore ?? collection.heroAnalysis?.heroScore ?? 0),
     weakestDesign: weakest
       ? `${weakest.title} (${weakest.dnaScore}%)`
       : "none",
     replacedDesignCount,
-    ceoApproved: ceoSync.ceoApproved,
+    ceoApproved,
   };
 
   logFinalQualityScores(scores);
 
-  for (const design of ceoSync.designs) {
+  for (const design of roundedDesigns) {
     if (design.dnaScore < ABSOLUTE_DNA_FLOOR) {
       console.error(
         `FINAL QUALITY GATE: "${design.title}" still below DNA floor (${design.dnaScore}%)`,
@@ -338,8 +295,8 @@ export function applyFinalQualityGate(
   }
 
   return {
-    designs: ceoSync.designs,
-    collection: ceoSync.collection,
+    designs: roundedDesigns,
+    collection,
     scores,
   };
 }

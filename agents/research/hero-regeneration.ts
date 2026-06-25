@@ -1,5 +1,12 @@
 import { applyBrandDnaAnalysis, MILAENE_BRAND_DNA } from "./brand-dna";
 import { applyCeoConsistency } from "./ceo-consistency";
+import {
+  applyNarrativeHeroFields,
+  buildHeroEmotionalNarrative,
+  buildNarrativeSymbolism,
+  buildNarrativeVisualConcept,
+} from "./emotional-intelligence";
+import { applyEmotionalVisualLanguage } from "./emotional-visual";
 import { normalizeDesignPrintArea } from "./design-concept";
 import {
   assessCampaignPotential,
@@ -80,9 +87,15 @@ function buildRegeneratedHeroConcept(
     .sort((a, b) => b.dnaScore - a.dnaScore);
   const anchor = supporters[0] ?? previousHero;
   const emotion = pickThemeEmotion(theme, collection);
-  const heroTitle = buildThemeHeroTitle(collection, theme);
   const primaryMotif = theme.visualMotifs[0] ?? "organic curve emblem";
   const secondaryMotif = theme.visualMotifs[1] ?? "editorial negative space frame";
+  const narrativeBase = applyNarrativeHeroFields({
+    design: anchor,
+    collection,
+    primaryMotif,
+    secondaryMotif,
+  });
+  const heroTitle = narrativeBase.title;
   const color = anchor.color || collection.colorDirection[0] || "Washed Black";
   const product = anchor.product || collection.heroProduct.product || "Oversized Hoodie";
   const dnaSignals = collectDnaSignals(supporters);
@@ -95,7 +108,7 @@ function buildRegeneratedHeroConcept(
     ...anchor,
     designId: newHeroId,
     title: heroTitle,
-    creativeApproach: "Japanese Editorial",
+    creativeApproach: "Symbolic Illustration",
     collectionRole: "Hero Piece",
     product,
     color,
@@ -103,11 +116,16 @@ function buildRegeneratedHeroConcept(
     styleDirection: `Quiet luxury campaign hero — ${collection.mood.toLowerCase()} ${theme.id.replace(/-/g, " ")} centerpiece for ${collection.campaignTheme}`,
     emotion,
     targetAudience: collection.targetAudience,
-    visualConcept: `${emotion.toLowerCase()} campaign centerpiece — ${primaryMotif} with ${secondaryMotif}, dominant focal hierarchy, and billboard-readable silhouette for ${collection.campaignTheme}`,
-    designDescription: `Regenerated launch hero for ${collection.name}. Theme-led ${emotion.toLowerCase()} symbolism (${theme.symbolism.slice(0, 90).toLowerCase()}) with premium editorial restraint.`,
-    symbolism: `${theme.symbolism} — reinforced through ${dnaSignals.slice(0, 2).join(" and ")}`,
+    visualConcept: buildNarrativeVisualConcept(
+      theme.emotion,
+      heroTitle,
+      primaryMotif,
+      secondaryMotif,
+    ),
+    designDescription: `Regenerated launch hero for ${collection.name}. Narrative-led ${theme.emotion.emotionalPain} expressed through ${primaryMotif} with premium editorial restraint.`,
+    symbolism: buildNarrativeSymbolism(theme.emotion, primaryMotif, heroTitle),
     typography: "Editorial serif, wide tracking, uppercase, single restrained text block",
-    message: theme.emotionalKeyword.toUpperCase(),
+    message: heroTitle,
     rationale: `Auto-regenerated hero for ${collection.campaignTheme} — ${collection.philosophy.slice(0, 80).toLowerCase()}`,
     printTechnique: "Screen print, 2-color spot palette, plastisol",
     printSize: "30 cm wide editorial graphic",
@@ -117,10 +135,10 @@ function buildRegeneratedHeroConcept(
     garmentInspiration: "Acne Studios oversized hoodie, Lemaire editorial restraint",
     brandInspiration: "Milaene calm luxury — meaning over hype",
     productionDifficulty: "Low",
-    visualReferences: `Theme: ${theme.id}, Calvin Klein 90s editorial, Jil Sander campaign spacing`,
+    visualReferences: `Emotional visual translation for ${theme.id}, muted tonal styling influence only`,
     exactComposition: `Vertical editorial centerpiece featuring ${primaryMotif} — wide negative space margins, calm luxury hierarchy, campaign-scale silhouette readable at 3 meters`,
     graphicElements: [
-      `${emotion.toLowerCase()} ${theme.id.replace(/-/g, " ")} emblem`,
+      `${theme.emotion.emotionalTension} emblem`,
       secondaryMotif,
       theme.visualMotifs[2] ?? "symbolic focal anchor",
       "muted tonal ink layer",
@@ -130,7 +148,7 @@ function buildRegeneratedHeroConcept(
     layoutDescription:
       "Single dominant campaign symbol centered on generous negative space with editorial vertical rhythm and premium spacing discipline",
     visualHierarchy:
-      `Primary ${theme.emotionalKeyword.toLowerCase()} emblem → negative space frame → tonal ink layer → symbolic accent → garment silhouette`,
+      `Primary "${heroTitle}" narrative emblem → negative space frame → tonal ink layer → symbolic accent → garment silhouette`,
     colorBreakdown: [
       { color, usage: "garment base" },
       { color: "Soft Black Ink", usage: "primary graphic" },
@@ -140,8 +158,8 @@ function buildRegeneratedHeroConcept(
     negativeSpaceUsage:
       "Generous negative space with muted tonal restraint and editorial breathing room around the campaign centerpiece",
     designInstructions: [
-      `Build a campaign-scale symbolic centerpiece for "${collection.campaignTheme}" — never a micro graphic or tiny chest mark`,
-      `Express ${theme.emotionalKeyword.toLowerCase()} through ${primaryMotif} with calm luxury hierarchy`,
+      `Build a campaign-scale narrative centerpiece for "${collection.campaignTheme}" — never a micro graphic or tiny chest mark`,
+      `Express ${theme.emotion.emotionalPain} through ${primaryMotif} with calm luxury hierarchy`,
       "Maintain billboard readability at thumbnail and homepage banner scale",
     ],
     mockupDescription:
@@ -159,7 +177,7 @@ function buildRegeneratedHeroConcept(
     visualWeight: "Balanced",
     balance: "Symmetrical",
     alignment: "Center",
-    focalPoint: `Dominant ${theme.emotionalKeyword.toLowerCase()} emblem centered as campaign anchor`,
+    focalPoint: `Dominant "${heroTitle}" narrative emblem centered as campaign anchor`,
     edgeTreatment: "Clean vector edges with soft tonal falloff",
     dnaScore: 0,
     dnaMatches: [],
@@ -170,13 +188,17 @@ function buildRegeneratedHeroConcept(
       "Avoids hype aesthetics and supports long-term Milaene collection building",
     ],
     repeatabilityScore: "High",
-    imagePromptCore: `${theme.emotionalKeyword} editorial campaign hero, ${primaryMotif}, washed black oversized hoodie, calm luxury, negative space, Milaene DNA, ${collection.campaignTheme}`,
-    emotionalNarrative: `${collection.emotionalNarrative ?? collection.story} — regenerated hero anchors the ${collection.campaignTheme} launch narrative through ${theme.emotionalKeyword.toLowerCase()}.`,
+    imagePromptCore: `${heroTitle} editorial campaign hero, ${primaryMotif}, washed black oversized hoodie, calm luxury, negative space, Milaene DNA, ${collection.campaignTheme}`,
+    emotionalNarrative: buildHeroEmotionalNarrative(
+      theme.emotion,
+      heroTitle,
+      collection.name,
+    ),
     emotionalKeyword: theme.emotionalKeyword,
     supportsDesignId: undefined,
   };
 
-  return concept;
+  return applyEmotionalVisualLanguage(concept, collection);
 }
 
 function meetsRegenerationTargets(
@@ -205,12 +227,27 @@ function ensureRegenerationTargets(
         ...design,
         emotion: pickThemeEmotion(theme, collection),
         emotionalKeyword: theme.emotionalKeyword,
-        message: theme.emotionalKeyword.toUpperCase(),
-        symbolism: theme.symbolism,
-        emotionalNarrative: `${theme.emotionalKeyword} anchors the ${collection.name} launch story through ${theme.visualMotifs[0]} and calm luxury emotional storytelling.`,
-        visualConcept: `${pickThemeEmotion(theme, collection).toLowerCase()} campaign centerpiece — ${theme.visualMotifs.join(", ")}`,
+        symbolism: buildNarrativeSymbolism(
+          theme.emotion,
+          theme.visualMotifs[0] ?? "organic curve emblem",
+          buildThemeHeroTitle(collection, theme),
+        ),
+        emotionalNarrative: buildHeroEmotionalNarrative(
+          theme.emotion,
+          buildThemeHeroTitle(collection, theme),
+          collection.name,
+        ),
+        visualConcept: buildNarrativeVisualConcept(
+          theme.emotion,
+          buildThemeHeroTitle(collection, theme),
+          theme.visualMotifs[0] ?? "organic curve emblem",
+          theme.visualMotifs[1] ?? "editorial negative space frame",
+        ),
+        message: buildThemeHeroTitle(collection, theme),
+        title: buildThemeHeroTitle(collection, theme),
       },
       theme,
+      collection,
     ),
   );
 
@@ -242,6 +279,7 @@ export function regenerateHeroDesign(input: HeroRegenerationInput): {
     (design) => design.designId !== input.previousHero.designId,
   );
   let design = ensureRegenerationTargets(draft, input.collection, peers);
+  design = applyEmotionalVisualLanguage(design, input.collection);
   let heroAnalysis = buildHeroAnalysis(design, [...peers, design]);
 
   if (!meetsRegenerationTargets(design, heroAnalysis)) {

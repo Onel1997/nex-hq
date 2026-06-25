@@ -3,6 +3,10 @@ import {
 } from "./collection-intelligence";
 import { computeDynamicCollectionScore } from "./collection-scoring";
 import {
+  applyCeoConsistency,
+  applyFinalCollectionScore,
+} from "./ceo-consistency";
+import {
   visualConceptFingerprint,
 } from "./design-concept";
 import { assertCeoConsistency } from "./ceo-consistency";
@@ -29,10 +33,10 @@ import {
 
 const ROLE_TO_ARC: Record<CollectionRole, StoryPosition> = {
   "Hero Piece": "Reflection",
-  "Core Essential": "Introduction",
-  "Statement Piece": "Tension",
-  "Supporting Piece": "Resolution",
-  "Limited Piece": "Closure",
+  "Core Essential": "Pain",
+  "Statement Piece": "Conflict",
+  "Supporting Piece": "Acceptance",
+  "Limited Piece": "Memory",
 };
 
 const LAUNCH_ORDER_ROLES: CollectionRole[] = [
@@ -417,13 +421,11 @@ export function rebuildCollectionFromFinalizedDesigns(
   ).filter((title): title is string => Boolean(title));
 
   const heroAnalysis = syncHeroAnalysisWithDesign(collection.heroAnalysis, hero);
-  const breakdown = computeDynamicCollectionScore(designs, collection);
 
   return {
     ...collection,
     heroDesignId: hero.designId,
     supportingDesignIds,
-    collectionScore: breakdown.collectionScore,
     collectionArc,
     relationshipGraph,
     dnaRanking,
@@ -537,6 +539,10 @@ export function assertFinalCollectionConsistency(
   if (hero) {
     assertCeoConsistency(collection, hero, collection.heroAnalysis);
   }
+
+  if (!collection.scoreLocked) {
+    throw new Error("Final collection score authority was not applied");
+  }
 }
 
 export function applyFinalConsistencyToDesignOutput(
@@ -548,11 +554,39 @@ export function applyFinalConsistencyToDesignOutput(
     output.collection,
     adjustments,
   );
-  const designs = applyRoleMetadata(consistency.designs);
-  const collection = rebuildCollectionFromFinalizedDesigns(
+  let designs = applyRoleMetadata(consistency.designs);
+  let collection = rebuildCollectionFromFinalizedDesigns(
     consistency.collection,
     designs,
   );
+
+  const hero = designs.find((design) => design.designId === collection.heroDesignId);
+  const heroAnalysis = collection.heroAnalysis;
+
+  if (hero && heroAnalysis) {
+    const rawBreakdown = computeDynamicCollectionScore(designs, collection);
+    const ceoResult = applyCeoConsistency(
+      collection,
+      hero,
+      heroAnalysis,
+      designs,
+      rawBreakdown.collectionScore,
+    );
+    designs = designs.map((design) =>
+      design.designId === ceoResult.hero.designId ? ceoResult.hero : design,
+    );
+    const finalResult = applyFinalCollectionScore(
+      ceoResult.collection,
+      ceoResult.hero,
+      ceoResult.heroAnalysis,
+      ceoResult.rawCollectionScore,
+      adjustments,
+    );
+    designs = designs.map((design) =>
+      design.designId === finalResult.hero.designId ? finalResult.hero : design,
+    );
+    collection = finalResult.collection;
+  }
 
   return {
     ...output,

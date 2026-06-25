@@ -1,5 +1,10 @@
 import { applyBrandDnaAnalysis } from "./brand-dna";
+import {
+  buildThemeEmotionalNarrative,
+} from "./emotional-intelligence";
+import { applyEmotionalVisualLanguage } from "./emotional-visual";
 import { MILAENE_EMOTIONAL_VOCABULARY } from "./emotional-vocabulary";
+import { resolveThemeProfile } from "./theme-vocabulary";
 import {
   CREATIVE_APPROACHES,
   COLLECTION_ARC,
@@ -26,18 +31,18 @@ export const ROLE_DNA_MINIMUMS: Record<CollectionRole, number> = {
 
 const ROLE_TO_ARC: Record<CollectionRole, StoryPosition> = {
   "Hero Piece": "Reflection",
-  "Core Essential": "Introduction",
-  "Statement Piece": "Tension",
-  "Supporting Piece": "Resolution",
-  "Limited Piece": "Closure",
+  "Core Essential": "Pain",
+  "Statement Piece": "Conflict",
+  "Supporting Piece": "Acceptance",
+  "Limited Piece": "Memory",
 };
 
 const EMOTIONAL_POSITION_BY_ROLE: Record<CollectionRole, string> = {
-  "Hero Piece": "emotional anchor of the capsule",
-  "Core Essential": "accessible entry point to the narrative",
-  "Statement Piece": "artistic peak of the collection",
-  "Supporting Piece": "quiet reinforcement of the hero message",
-  "Limited Piece": "experimental conclusion to the arc",
+  "Hero Piece": "emotional anchor where wound meets reflection",
+  "Core Essential": "entry into the emotional wound",
+  "Statement Piece": "peak of narrative conflict",
+  "Supporting Piece": "movement toward acceptance",
+  "Limited Piece": "memory that closes the arc",
 };
 
 const RELATIONSHIP_REASONS: Record<
@@ -403,35 +408,34 @@ export function enforceCollectionRoles(
 
 function buildEmotionalNarrative(
   designs: DesignConcept[],
-  collectionName: string,
+  collection: ResearchCollection,
 ): string {
-  const keywords = designs
-    .map((d) => d.emotionalKeyword ?? d.emotion)
-    .filter(Boolean)
-    .slice(0, 5);
-  return `${collectionName} moves through ${keywords.join(" → ").toLowerCase()} — a Milaene capsule built on emotional restraint, editorial spacing, and quiet luxury symbolism.`;
+  const theme = resolveThemeProfile(collection);
+  return buildThemeEmotionalNarrative(theme.emotion, collection.name);
 }
 
 function applyEmotionalFields(
   design: DesignConcept,
   index: number,
+  collection: ResearchCollection,
 ): DesignConcept {
   const role = design.collectionRole;
-  const keyword =
-    MILAENE_EMOTIONAL_VOCABULARY.preferred.find((word) =>
-      design.emotion.toLowerCase().includes(word.toLowerCase()),
-    ) ?? pickPreferredEmotion(index);
+  const theme = resolveThemeProfile(collection);
+  const keyword = theme.emotionalKeyword;
 
-  const narrative = `${keyword} expressed through ${design.creativeApproach.toLowerCase()} — ${design.visualConcept.slice(0, 80).toLowerCase()}.`;
+  const narrative = `${theme.emotion.emotionalPain} expressed through ${design.creativeApproach.toLowerCase()} — ${design.visualConcept.slice(0, 80).toLowerCase()}, held in ${theme.emotion.emotionalTension}.`;
 
-  return {
-    ...design,
-    emotion: design.emotion.includes(keyword) ? design.emotion : keyword,
-    emotionalKeyword: keyword,
-    emotionalNarrative: narrative,
-    emotionalPositionInCollection: EMOTIONAL_POSITION_BY_ROLE[role],
-    storyPosition: ROLE_TO_ARC[role],
-  };
+  return applyEmotionalVisualLanguage(
+    {
+      ...design,
+      emotion: design.emotion.includes(keyword) ? design.emotion : pickPreferredEmotion(index),
+      emotionalKeyword: keyword,
+      emotionalNarrative: narrative,
+      emotionalPositionInCollection: EMOTIONAL_POSITION_BY_ROLE[role],
+      storyPosition: ROLE_TO_ARC[role],
+    },
+    collection,
+  );
 }
 
 export function enrichDesignRelationships(
@@ -559,10 +563,10 @@ export function applyCollectionIntelligence(
 
   working = enrichDesignRelationships(working, heroDesignId);
   working = working.map((design, index) =>
-    applyEmotionalFields(sanitizeEmotionalLanguage(design, index), index),
+    applyEmotionalFields(sanitizeEmotionalLanguage(design, index), index, collection),
   );
 
-  const emotionalNarrative = buildEmotionalNarrative(working, collection.name);
+  const emotionalNarrative = buildEmotionalNarrative(working, collection);
   const ceoAnalysis = buildCeoAnalysis(working, {
     ...collection,
     heroDesignId,

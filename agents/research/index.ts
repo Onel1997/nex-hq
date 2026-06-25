@@ -154,6 +154,39 @@ export {
 } from "./quality-gate";
 export type { FinalQualityScores, FinalQualityGateResult } from "./quality-gate";
 export {
+  buildEmotionalVisualLanguage,
+  applyEmotionalVisualLanguage,
+  assertEmotionalVisualMatch,
+  repairEmotionalVisualMismatch,
+  ensureEmotionalVisualMatch,
+  isEmotionalVisualStrictMode,
+  logFinalEmotionalVisual,
+  scoreEmotionalDnaAlignment,
+  resolveEmotionalVisualFamilies,
+} from "./emotional-visual";
+export type {
+  EmotionalVisualLanguage,
+  EmotionalVisualFamily,
+  EmotionalVisualMatchResult,
+} from "./emotional-visual";
+export {
+  analyzeThemeEmotion,
+  analyzeCollectionEmotion,
+  applyNarrativeHeroFields,
+  buildHeroEmotionalNarrative,
+  buildNarrativeSymbolism,
+  buildNarrativeVisualConcept,
+  buildThemeEmotionalNarrative,
+  computeEmotionalStrength,
+  isGenericEmotionalMessage,
+  pickNarrativeHeroTitle,
+  EMOTIONAL_STRENGTH_CEO_MIN,
+} from "./emotional-intelligence";
+export type {
+  ThemeEmotionalAnalysis,
+  EmotionalStrengthBreakdown,
+} from "./emotional-intelligence";
+export {
   buildThemeRoleFallbackConcept,
 } from "./theme-fallback";
 export type { ThemeFallbackInput } from "./theme-fallback";
@@ -162,23 +195,33 @@ export {
   pickThemeEmotion,
   buildThemeHeroTitle,
   getThemeRoleTitle,
+  getThemeEmotionalAnalysis,
 } from "./theme-vocabulary";
 export type { ThemeProfile, ThemeRoleTitles } from "./theme-vocabulary";
 export { roundPercent, ABSOLUTE_DNA_FLOOR } from "./score-coercion";
 export {
   applyCeoConsistency,
+  applyFinalCollectionScore,
   assertCeoConsistency,
+  assertCollectionScoreCaps,
+  assertCollectionScoreUnlocked,
   isCeoApproved,
   isHeroCeoApproved,
   collectHeroApprovalMetrics,
   limitCommercialScore,
+  applyCollectionCaps,
   capCollectionScore,
   buildCeoRecommendation,
   buildConsistentAdPotential,
   logCeoConsistency,
+  logFinalCollectionAuthority,
   CEO_HERO_SCORE_MIN,
   CEO_DNA_SCORE_MIN,
   CEO_COMMERCIAL_SCORE_MIN,
   CEO_EMOTIONAL_STRENGTH_MIN,
 } from "./ceo-consistency";
-export type { HeroApprovalMetrics, CeoConsistencyResult } from "./ceo-consistency";
+export type {
+  HeroApprovalMetrics,
+  CeoConsistencyResult,
+  FinalCollectionScoreResult,
+} from "./ceo-consistency";

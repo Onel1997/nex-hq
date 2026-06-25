@@ -7,11 +7,20 @@ import {
   isHeroCeoApproved,
   limitCommercialScore,
 } from "./ceo-consistency";
+import {
+  applyNarrativeHeroFields,
+  computeEmotionalStrength,
+  EMOTIONAL_STRENGTH_CEO_MIN,
+} from "./emotional-intelligence";
+import {
+  applyEmotionalVisualLanguage,
+} from "./emotional-visual";
 import { normalizeDesignPrintArea } from "./design-concept";
 import { MILAENE_EMOTIONAL_VOCABULARY } from "./emotional-vocabulary";
 import { roundPercent } from "./score-coercion";
 import {
   pickThemeEmotion,
+  resolveThemeProfile,
   type ThemeProfile,
 } from "./theme-vocabulary";
 import {
@@ -25,7 +34,7 @@ import {
 
 export const HERO_DNA_TARGET = 80;
 export const HERO_SCORE_TARGET = 80;
-export const HERO_EMOTIONAL_TARGET = 70;
+export const HERO_EMOTIONAL_TARGET = EMOTIONAL_STRENGTH_CEO_MIN;
 export const HERO_VISUAL_TARGET = 75;
 export const HERO_FAILURE_THRESHOLD = 2;
 
@@ -286,13 +295,7 @@ export function calculateCommercialScore(design: DesignConcept): number {
 }
 
 export function scoreEmotionalStrength(design: DesignConcept): number {
-  const preferred = MILAENE_EMOTIONAL_VOCABULARY.preferred.filter((word) =>
-    `${design.emotion} ${design.message} ${design.symbolism}`
-      .toLowerCase()
-      .includes(word.toLowerCase()),
-  ).length;
-  const narrativeBonus = (design.emotionalNarrative?.length ?? 0) > 30 ? 10 : 0;
-  return Math.min(100, preferred * 18 + narrativeBonus + design.dnaScore * 0.3);
+  return computeEmotionalStrength(design).emotionalStrength;
 }
 
 function scoreSymbolism(design: DesignConcept): number {
@@ -444,43 +447,37 @@ export function hasStrongVisualIdentity(design: DesignConcept): boolean {
 export function strengthenHeroCandidate(
   design: DesignConcept,
   theme?: ThemeProfile,
+  collection?: ResearchCollection,
 ): DesignConcept {
-  const emotion =
-    theme
-      ? pickThemeEmotion(theme, {
-          name: design.title,
-          campaignTheme: design.message,
-          story: design.symbolism,
-          mood: design.emotion,
-          philosophy: design.styleDirection,
-        } as ResearchCollection)
-      : MILAENE_EMOTIONAL_VOCABULARY.preferred.find((word) =>
-          design.emotion.toLowerCase().includes(word.toLowerCase()),
-        ) ?? design.emotion;
+  const resolvedTheme = theme ?? (collection ? resolveThemeProfile(collection) : undefined);
+  const emotion = resolvedTheme
+    ? pickThemeEmotion(resolvedTheme, collection ?? {
+        name: design.title,
+        campaignTheme: design.message,
+        story: design.symbolism,
+        mood: design.emotion,
+        philosophy: design.styleDirection,
+      } as ResearchCollection)
+    : MILAENE_EMOTIONAL_VOCABULARY.preferred.find((word) =>
+        design.emotion.toLowerCase().includes(word.toLowerCase()),
+      ) ?? design.emotion;
 
   const motif =
-    theme?.visualMotifs[0] ??
+    resolvedTheme?.visualMotifs[0] ??
     "organic curve emblem with editorial negative space framing";
-  const symbolismText =
-    theme?.symbolism ??
-    `A restrained ${emotion.toLowerCase()} symbol serving as the emotional anchor — layered meaning through organic curves, editorial spacing, and quiet luxury symbolism`;
+  const secondaryMotif =
+    resolvedTheme?.visualMotifs[1] ?? "editorial negative space frame";
 
   const useBackPlacement =
     /back|spine|yoke/i.test(
       `${design.printArea} ${design.placementDimensions} ${design.exactComposition}`,
     );
 
-  const strengthened: DesignConcept = {
+  let strengthened: DesignConcept = {
     ...design,
     collectionRole: "Hero Piece",
     emotion,
-    emotionalKeyword: theme?.emotionalKeyword ?? emotion,
-    message: emotion.toUpperCase(),
-    visualConcept: `${emotion.toLowerCase()} centerpiece — ${motif} with strong focal hierarchy and generous negative space`,
-    symbolism: symbolismText,
-    exactComposition: useBackPlacement
-      ? "Vertical editorial centerpiece anchored on full spine back — dominant focal symbol with wide negative space margins and calm luxury hierarchy"
-      : "Vertical editorial centerpiece anchored on upper chest — dominant focal symbol with wide negative space margins and calm luxury hierarchy",
+    emotionalKeyword: resolvedTheme?.emotionalKeyword ?? emotion,
     printSize:
       design.printSize?.includes("cm")
         ? design.printSize.replace(/\d+/, (n) =>
@@ -506,6 +503,25 @@ export function strengthenHeroCandidate(
       "Hero campaign mockup — oversized hoodie in washed black with dominant chest or back graphic readable at 3 meters, editorial studio lighting",
     styleDirection: `Quiet luxury hero statement — ${design.styleDirection}`,
   };
+
+  if (resolvedTheme && collection) {
+    strengthened = applyNarrativeHeroFields({
+      design: strengthened,
+      collection,
+      primaryMotif: motif,
+      secondaryMotif,
+    });
+    strengthened = applyEmotionalVisualLanguage(strengthened, collection);
+  } else {
+    strengthened = {
+      ...strengthened,
+      message: resolvedTheme?.heroTitle ?? emotion.toUpperCase(),
+      visualConcept: `${emotion.toLowerCase()} centerpiece — ${motif} with strong focal hierarchy and generous negative space`,
+      symbolism:
+        resolvedTheme?.symbolism ??
+        `A restrained ${emotion.toLowerCase()} symbol serving as the emotional anchor — layered meaning through organic curves, editorial spacing, and quiet luxury symbolism`,
+    };
+  }
 
   return normalizeDesignPrintArea(applyBrandDnaAnalysis(strengthened));
 }
@@ -592,10 +608,17 @@ export function assessHeroFailure(
   };
 }
 
-function prepareHeroCandidate(design: DesignConcept): DesignConcept {
+function prepareHeroCandidate(
+  design: DesignConcept,
+  collection?: ResearchCollection,
+): DesignConcept {
   let candidate = normalizeDesignPrintArea(design);
   if (candidate.dnaScore < HERO_DNA_TARGET || isWeakHeroVisual(candidate)) {
-    candidate = strengthenHeroCandidate(candidate);
+    candidate = strengthenHeroCandidate(
+      candidate,
+      collection ? resolveThemeProfile(collection) : undefined,
+      collection,
+    );
   }
   return candidate;
 }
@@ -603,6 +626,7 @@ function prepareHeroCandidate(design: DesignConcept): DesignConcept {
 function resolveHeroSelection(
   designs: DesignConcept[],
   adjustments: string[],
+  collection?: ResearchCollection,
 ): DesignConcept {
   const ranked = rankHeroCandidates(designs);
   const qualified = ranked.filter(qualifiesAsHeroCandidate);
@@ -619,7 +643,7 @@ function resolveHeroSelection(
   adjustments.push(
     `hero engine: selected best available candidate "${best.title}" for evaluation`,
   );
-  return prepareHeroCandidate(best);
+  return prepareHeroCandidate(best, collection);
 }
 
 /** Ensure exactly one design holds each required collection role. */
@@ -817,7 +841,7 @@ export function applyHeroEngine(
   adjustments: string[] = [],
 ): HeroEngineResult {
   let working = validateExactCollectionRoles(designs, adjustments);
-  const heroCandidate = resolveHeroSelection(working, adjustments);
+  const heroCandidate = resolveHeroSelection(working, adjustments, collection);
   const heroId = heroCandidate.designId;
 
   working = working.map((design) => {

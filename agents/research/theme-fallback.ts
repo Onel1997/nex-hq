@@ -1,5 +1,7 @@
 import { applyBrandDnaAnalysis } from "./brand-dna";
 import { ROLE_DNA_MINIMUMS } from "./collection-intelligence";
+import { buildHeroEmotionalNarrative } from "./emotional-intelligence";
+import { applyEmotionalVisualLanguage } from "./emotional-visual";
 import { normalizeDesignPrintArea } from "./design-concept";
 import {
   assessCampaignPotential,
@@ -32,7 +34,7 @@ interface RoleSpec {
 
 const ROLE_SPECS: Record<CollectionRole, RoleSpec> = {
   "Hero Piece": {
-    approach: "Japanese Editorial",
+    approach: "Symbolic Illustration",
     product: "Faith Oversized Hoodie",
     printArea: "Front",
     printSize: "30 cm editorial graphic",
@@ -285,7 +287,7 @@ export function buildThemeRoleFallbackConcept(
         : role === "Statement Piece"
           ? "Editorial serif accent beneath symbolic illustration"
           : "No type — pure graphic restraint",
-    message: role === "Core Essential" ? theme.emotionalKeyword.toUpperCase() : "",
+    message: role === "Hero Piece" ? title : role === "Core Essential" ? theme.emotionalKeyword : "",
     rationale: `Theme-aware ${role.toLowerCase()} fallback for ${theme.id} — ${collection.campaignTheme}.`,
     printTechnique:
       spec.productionDifficulty === "High"
@@ -318,7 +320,10 @@ export function buildThemeRoleFallbackConcept(
     dnaConflicts: [],
     whyFitsMilaene: [],
     repeatabilityScore: role === "Limited Piece" ? "Medium" : "High",
-    emotionalNarrative: `${emotion} expressed through ${motif} — ${collection.campaignTheme} ${role.toLowerCase()}.`,
+    emotionalNarrative:
+      role === "Hero Piece"
+        ? buildHeroEmotionalNarrative(theme.emotion, title, collection.name)
+        : `${theme.emotion.emotionalPain} expressed through ${motif} — ${collection.campaignTheme} ${role.toLowerCase()}.`,
     supportsDesignId: role === "Hero Piece" ? undefined : heroDesignId,
     relationshipReason: undefined,
     heroScore: undefined,
@@ -326,5 +331,5 @@ export function buildThemeRoleFallbackConcept(
     campaignPotential: undefined,
   };
 
-  return ensureMinimumDna(draft, role);
+  return ensureMinimumDna(applyEmotionalVisualLanguage(draft, collection), role);
 }

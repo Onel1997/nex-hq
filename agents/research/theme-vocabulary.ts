@@ -1,4 +1,12 @@
+import {
+  analyzeCollectionEmotion,
+  analyzeThemeEmotion,
+  pickNarrativeHeroTitle,
+  type ThemeEmotionalAnalysis,
+} from "./emotional-intelligence";
 import type { CollectionRole, ResearchCollection } from "./types";
+
+export type { ThemeEmotionalAnalysis };
 
 export interface ThemeRoleTitles {
   "Hero Piece": string;
@@ -16,29 +24,40 @@ export interface ThemeProfile {
   symbolism: string;
   emotions: string[];
   roleTitles: ThemeRoleTitles;
+  emotion: ThemeEmotionalAnalysis;
 }
 
-const THEME_PROFILES: Array<{ match: RegExp; profile: ThemeProfile }> = [
+function withEmotion(
+  entry: Omit<ThemeProfile, "emotion">,
+  themeCorpus: string,
+): ThemeProfile {
+  return {
+    ...entry,
+    emotion: analyzeThemeEmotion(themeCorpus),
+  };
+}
+
+const THEME_PROFILES: Array<{ match: RegExp; profile: Omit<ThemeProfile, "emotion"> }> = [
   {
     match: /silent\s*love|unspoken\s*bond|quiet\s*love|closeness/i,
     profile: {
       id: "silent-love",
-      emotionalKeyword: "Connection",
-      heroTitle: "Unspoken Bond",
+      emotionalKeyword: "closeness without connection",
+      heroTitle: "ONLY BETWEEN US",
       visualMotifs: [
         "interlocking curves drawn close without touching",
         "paired silhouettes in negative space",
         "subtle proximity geometry",
       ],
       symbolism:
-        "Two forms held in quiet proximity — emotional connection expressed through closeness, restraint, and unspoken bond",
+        "Unspoken feelings held in quiet proximity — love without expression, moments never shared, resolving toward acceptance",
       emotions: ["Connection", "Closeness", "Stillness", "Reflection"],
       roleTitles: {
-        "Hero Piece": "Unspoken Bond",
-        "Core Essential": "Quiet Bond Essential",
-        "Statement Piece": "Unspoken Curve",
-        "Supporting Piece": "Soft Distance Mark",
-        "Limited Piece": "Only Between Us",
+        "Hero Piece": "ONLY BETWEEN US",
+        "Core Essential": "NEVER SAID",
+        "Statement Piece": "STILL HERE",
+        "Supporting Piece": "UNSAID DISTANCE",
+        "Limited Piece": "WHAT WE NEVER TOLD",
       },
     },
   },
@@ -46,22 +65,22 @@ const THEME_PROFILES: Array<{ match: RegExp; profile: ThemeProfile }> = [
     match: /lost\s*souls?|searching|isolation|fragmented|inner\s*map/i,
     profile: {
       id: "lost-souls",
-      emotionalKeyword: "Distance",
-      heroTitle: "Fragmented Path",
+      emotionalKeyword: "searching without arrival",
+      heroTitle: "WHAT WE LOST",
       visualMotifs: [
         "fragmented path lines converging toward a void",
         "isolated figure silhouette in negative space",
         "inner map contour with broken coordinates",
       ],
       symbolism:
-        "A searching soul mapped through fragmented paths — isolation, longing, and the inner geography of being lost",
+        "Loneliness mapped through fragmented paths — identity conflict, past selves remembered, self-discovery at the end of searching",
       emotions: ["Distance", "Depth", "Echo", "Weight"],
       roleTitles: {
-        "Hero Piece": "Fragmented Path",
-        "Core Essential": "Inner Map Essential",
-        "Statement Piece": "Lost Path Emblem",
-        "Supporting Piece": "Solitude Back Mark",
-        "Limited Piece": "No Direction Capsule",
+        "Hero Piece": "WHAT WE LOST",
+        "Core Essential": "WHEN YOU LEFT",
+        "Statement Piece": "PAST SELVES",
+        "Supporting Piece": "EMPTY ROOM",
+        "Limited Piece": "NO DIRECTION",
       },
     },
   },
@@ -69,22 +88,22 @@ const THEME_PROFILES: Array<{ match: RegExp; profile: ThemeProfile }> = [
     match: /time\s*never\s*waits|hourglass|fading\s*time|clock|temporal/i,
     profile: {
       id: "time-never-waits",
-      emotionalKeyword: "Weight",
-      heroTitle: "Fading Hour",
+      emotionalKeyword: "urgency against stillness",
+      heroTitle: "LAST CONVERSATION",
       visualMotifs: [
         "abstract hourglass with dissolving sand geometry",
         "fading calendar grid with eroded date markers",
         "circular clock abstraction with broken tick marks",
       ],
       symbolism:
-        "Time markers dissolving into negative space — the weight of passing moments through hourglass geometry and fading temporal symbols",
+        "Passing time dissolving into negative space — impermanence, lost moments, presence longed for, acceptance of what cannot be held",
       emotions: ["Weight", "Echo", "Memory", "Stillness"],
       roleTitles: {
-        "Hero Piece": "Fading Hour",
-        "Core Essential": "Moment Essential",
-        "Statement Piece": "Fading Hour Emblem",
-        "Supporting Piece": "Time Marker Back Print",
-        "Limited Piece": "Last Minute Capsule",
+        "Hero Piece": "LAST CONVERSATION",
+        "Core Essential": "BEFORE THE LIGHT",
+        "Statement Piece": "FADING HOUR",
+        "Supporting Piece": "LOST MOMENTS",
+        "Limited Piece": "NEVER AGAIN",
       },
     },
   },
@@ -92,22 +111,22 @@ const THEME_PROFILES: Array<{ match: RegExp; profile: ThemeProfile }> = [
     match: /quiet\s*ascent|ascent|rise\s*quietly/i,
     profile: {
       id: "quiet-ascent",
-      emotionalKeyword: "Becoming",
-      heroTitle: "Quiet Ascent",
+      emotionalKeyword: "rising without noise",
+      heroTitle: "RISE WITHOUT NOISE",
       visualMotifs: [
         "ascending arc geometry with editorial spacing",
         "stepped tonal layers rising vertically",
         "organic curve reaching upward through negative space",
       ],
       symbolism:
-        "Quiet upward movement through restrained arc geometry — growth without noise, ascent through editorial minimalism",
+        "Quiet upward movement through restrained arc geometry — growth without noise, becoming through editorial minimalism",
       emotions: ["Becoming", "Light", "Calm", "Poise"],
       roleTitles: {
-        "Hero Piece": "Quiet Ascent",
-        "Core Essential": "Rising Calm Essential",
-        "Statement Piece": "Ascent Curve",
-        "Supporting Piece": "Upward Mark",
-        "Limited Piece": "Peak Capsule",
+        "Hero Piece": "RISE WITHOUT NOISE",
+        "Core Essential": "STILL CLIMBING",
+        "Statement Piece": "BEFORE THE PEAK",
+        "Supporting Piece": "HELD IN MOTION",
+        "Limited Piece": "QUIET ASCENT",
       },
     },
   },
@@ -115,49 +134,49 @@ const THEME_PROFILES: Array<{ match: RegExp; profile: ThemeProfile }> = [
     match: /between\s*shadows|shadow|depth/i,
     profile: {
       id: "between-shadows",
-      emotionalKeyword: "Depth",
-      heroTitle: "Held In Shadow",
+      emotionalKeyword: "light against concealment",
+      heroTitle: "HELD IN SHADOW",
       visualMotifs: [
         "layered tonal shadow planes",
         "silhouette emerging from gradient negative space",
         "architectural shadow geometry on garment",
       ],
       symbolism:
-        "Depth expressed through layered shadow planes — meaning found in what is partially hidden, not fully revealed",
+        "What remains hidden expressed through layered shadow planes — visibility versus protection, faces in half-light, living with ambiguity",
       emotions: ["Depth", "Silence", "Weight", "Reflection"],
       roleTitles: {
-        "Hero Piece": "Held In Shadow",
-        "Core Essential": "Shadow Line Essential",
-        "Statement Piece": "Depth Plane Emblem",
-        "Supporting Piece": "Half-Light Mark",
-        "Limited Piece": "Between Shadows Capsule",
+        "Hero Piece": "HELD IN SHADOW",
+        "Core Essential": "HALF REVEALED",
+        "Statement Piece": "BETWEEN LIGHT",
+        "Supporting Piece": "WHAT STAYS HIDDEN",
+        "Limited Piece": "EDGE OF DARK",
       },
     },
   },
 ];
 
-const DEFAULT_PROFILE: ThemeProfile = {
+const DEFAULT_PROFILE_BASE: Omit<ThemeProfile, "emotion"> = {
   id: "milaene-capsule",
-  emotionalKeyword: "Presence",
-  heroTitle: "Editorial Anchor",
+  emotionalKeyword: "presence without certainty",
+  heroTitle: "STILL HERE",
   visualMotifs: [
     "organic curve emblem with editorial negative space",
     "symbolic focal anchor with muted tonal restraint",
     "centered composition with calm luxury hierarchy",
   ],
   symbolism:
-    "A restrained symbolic centerpiece — organic curves, editorial spacing, and quiet luxury meaning drawn from the capsule narrative",
+    "Emotional restraint translated into organic curves — longing, memory, and quiet resolution drawn from the capsule narrative",
   emotions: ["Presence", "Calm", "Reflection", "Depth"],
   roleTitles: {
-    "Hero Piece": "Editorial Anchor",
-    "Core Essential": "Quiet Core Essential",
-    "Statement Piece": "Symbolic Peak",
-    "Supporting Piece": "Soft Echo Mark",
-    "Limited Piece": "Capsule Closer",
+    "Hero Piece": "STILL HERE",
+    "Core Essential": "WHAT REMAINS",
+    "Statement Piece": "BEFORE WE KNEW",
+    "Supporting Piece": "HELD IN SILENCE",
+    "Limited Piece": "LAST GLANCE",
   },
 };
 
-const DEFAULT_ROLE_LABELS: ThemeRoleTitles = DEFAULT_PROFILE.roleTitles;
+const DEFAULT_ROLE_LABELS: ThemeRoleTitles = DEFAULT_PROFILE_BASE.roleTitles;
 
 function collectionCorpus(collection: ResearchCollection): string {
   return [
@@ -178,24 +197,33 @@ export function resolveThemeProfile(collection: ResearchCollection): ThemeProfil
 
   for (const entry of THEME_PROFILES) {
     if (entry.match.test(corpus)) {
-      return entry.profile;
+      return withEmotion(entry.profile, corpus);
     }
   }
 
   const moodKeyword = collection.mood.split(/\s+/)[0];
   if (moodKeyword && moodKeyword.length > 3) {
-    return {
-      ...DEFAULT_PROFILE,
-      id: `mood-${moodKeyword}`,
-      emotionalKeyword:
-        DEFAULT_PROFILE.emotions.find((e) =>
-          collection.mood.toLowerCase().includes(e.toLowerCase()),
-        ) ?? DEFAULT_PROFILE.emotionalKeyword,
-      heroTitle: `${collection.name.split(/\s+/).slice(0, 2).join(" ")} Anchor`.trim(),
-    };
+    return withEmotion(
+      {
+        ...DEFAULT_PROFILE_BASE,
+        id: `mood-${moodKeyword}`,
+        emotionalKeyword:
+          DEFAULT_PROFILE_BASE.emotions.find((e) =>
+            collection.mood.toLowerCase().includes(e.toLowerCase()),
+          ) ?? DEFAULT_PROFILE_BASE.emotionalKeyword,
+        heroTitle: pickNarrativeHeroTitle(corpus),
+      },
+      corpus,
+    );
   }
 
-  return DEFAULT_PROFILE;
+  return withEmotion(DEFAULT_PROFILE_BASE, corpus);
+}
+
+export function getThemeEmotionalAnalysis(
+  collection: ResearchCollection,
+): ThemeEmotionalAnalysis {
+  return analyzeCollectionEmotion(collection);
 }
 
 export function pickThemeEmotion(
@@ -215,11 +243,12 @@ export function buildThemeHeroTitle(
   collection: ResearchCollection,
   profile: ThemeProfile,
 ): string {
-  const base = profile.heroTitle;
-  if (collection.name.toLowerCase().includes(base.toLowerCase())) {
-    return `${collection.name} — Hero`;
+  const corpus = collectionCorpus(collection);
+  const narrativeTitle = pickNarrativeHeroTitle(corpus);
+  if (profile.roleTitles["Hero Piece"]) {
+    return profile.roleTitles["Hero Piece"];
   }
-  return `${collection.name} — ${base}`;
+  return narrativeTitle;
 }
 
 export function getThemeRoleTitle(
@@ -231,5 +260,5 @@ export function getThemeRoleTitle(
   if (role === "Hero Piece") {
     return buildThemeHeroTitle(collection, profile);
   }
-  return `${collection.name} — ${themed}`;
+  return themed;
 }

@@ -198,6 +198,20 @@ export type ContrastLevel = (typeof CONTRAST_LEVELS)[number];
 export type VisualWeight = (typeof VISUAL_WEIGHTS)[number];
 export type BalanceType = (typeof BALANCE_TYPES)[number];
 
+export const emotionalVisualLanguageSchema = z.object({
+  emotionalKeyword: z.string().min(2).optional(),
+  visualSymbols: z.array(z.string().min(3)).min(1),
+  compositionRules: z.array(z.string().min(3)).min(1),
+  spacingRules: z.array(z.string().min(3)).min(1),
+  typographyRules: z.array(z.string().min(3)).optional(),
+  motionLanguage: z.array(z.string().min(3)).optional(),
+  negativeSpaceStrategy: z.array(z.string().min(3)).optional(),
+});
+
+export type EmotionalVisualLanguageOutput = z.infer<
+  typeof emotionalVisualLanguageSchema
+>;
+
 export const colorBreakdownEntrySchema = z.object({
   color: z.string().min(2),
   usage: z.string().min(2),
@@ -239,11 +253,11 @@ export const COLLECTION_TYPES = [
 export const REPEATABILITY_SCORES = ["Low", "Medium", "High"] as const;
 
 export const COLLECTION_ARC = [
-  "Introduction",
+  "Pain",
+  "Conflict",
   "Reflection",
-  "Tension",
-  "Resolution",
-  "Closure",
+  "Acceptance",
+  "Memory",
 ] as const;
 
 export type CollectionRole = (typeof COLLECTION_ROLES)[number];
@@ -430,6 +444,8 @@ export const researchCollectionSchema = z.object({
   heroRegeneration: heroRegenerationSchema.optional(),
   relationshipGraph: z.array(relationshipGraphNodeSchema).optional(),
   dnaRanking: z.array(collectionDnaRankingEntrySchema).optional(),
+  /** Set by final collection score authority — blocks further collectionScore writes. */
+  scoreLocked: z.boolean().optional(),
 });
 
 export type ResearchCollection = z.infer<typeof researchCollectionSchema>;
@@ -495,6 +511,7 @@ export const designConceptSchema = z.object({
   emotionalPositionInCollection: z.string().min(5).optional(),
   storyPosition: z.enum(COLLECTION_ARC).optional(),
   relationshipReason: conceptText(10).optional(),
+  visualLanguage: emotionalVisualLanguageSchema.optional(),
   commercialScore: flexOptionalPercentScore,
   campaignPotential: flexOptionalCampaignPotential,
   heroScore: flexOptionalPercentScore,

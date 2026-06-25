@@ -1,7 +1,11 @@
 import { computeDynamicCollectionScore } from "./collection-scoring";
 import {
+  ensureEmotionalVisualMatch,
+  logFinalEmotionalVisual,
+  scoreEmotionalDnaAlignment,
+} from "./emotional-visual";
+import {
   calculateCommercialScore,
-  calculateHeroScore,
   scoreEmotionalStrength,
 } from "./hero-engine";
 import {
@@ -39,11 +43,30 @@ export interface CeoConsistencyResult {
   ceoApproved: boolean;
   metrics: HeroApprovalMetrics;
   limitedCommercialScore: number;
-  cappedCollectionScore: number;
+  rawCollectionScore: number;
   scoreCapsApplied: string[];
   heroAnalysis: HeroAnalysis;
   collection: ResearchCollection;
   hero: DesignConcept;
+}
+
+export interface FinalCollectionScoreResult {
+  collection: ResearchCollection;
+  hero: DesignConcept;
+  rawCollectionScore: number;
+  finalCollectionScore: number;
+  capsApplied: string[];
+  ceoApproved: boolean;
+  heroDnaScore: number;
+  emotionalStrength: number;
+}
+
+export function assertCollectionScoreUnlocked(
+  collection: ResearchCollection,
+): void {
+  if (collection.scoreLocked) {
+    throw new Error("COLLECTION_SCORE_LOCK_VIOLATION");
+  }
 }
 
 export function parseEmotionalStrengthPercent(
@@ -121,36 +144,72 @@ export function limitCommercialScore(
   return { commercialScore: roundPercent(score), capsApplied };
 }
 
+/** Hard caps applied once at final collection score authority. */
+export function applyCollectionCaps(
+  rawCollectionScore: number,
+  ceoApproved: boolean,
+  heroDnaScore: number,
+  emotionalStrength: number,
+): { collectionScore: number; capsApplied: string[] } {
+  const capsApplied: string[] = [];
+  const limits = [roundPercent(rawCollectionScore)];
+
+  if (!ceoApproved) {
+    limits.push(CEO_REJECTED_COLLECTION_CAP);
+    capsApplied.push(`rejected:${CEO_REJECTED_COLLECTION_CAP}`);
+  }
+
+  if (heroDnaScore < CEO_DNA_SCORE_MIN) {
+    limits.push(CEO_DNA_COLLECTION_CAP);
+    capsApplied.push(`dnaCollectionCap:${CEO_DNA_COLLECTION_CAP}`);
+  }
+
+  if (emotionalStrength < CEO_EMOTIONAL_STRENGTH_MIN) {
+    limits.push(CEO_EMOTIONAL_COLLECTION_CAP);
+    capsApplied.push(`emotionalCollectionCap:${CEO_EMOTIONAL_COLLECTION_CAP}`);
+  }
+
+  const collectionScore = Math.min(...limits);
+  return { collectionScore: roundPercent(collectionScore), capsApplied };
+}
+
+/** @deprecated Use applyCollectionCaps */
 export function capCollectionScore(
   rawScore: number,
   ceoApproved: boolean,
   metrics: HeroApprovalMetrics,
 ): { collectionScore: number; capsApplied: string[] } {
-  const capsApplied: string[] = [];
-  const limits = [roundPercent(rawScore)];
+  return applyCollectionCaps(
+    rawScore,
+    ceoApproved,
+    metrics.dnaScore,
+    metrics.emotionalStrength,
+  );
+}
 
-  if (!ceoApproved) {
-    limits.push(CEO_REJECTED_COLLECTION_CAP);
-    capsApplied.push(`rejectedCollectionCap:${CEO_REJECTED_COLLECTION_CAP}`);
+export function assertCollectionScoreCaps(input: {
+  collectionScore: number;
+  ceoApproved: boolean;
+  heroDnaScore: number;
+  emotionalStrength: number;
+}): void {
+  if (!input.ceoApproved && input.collectionScore > CEO_REJECTED_COLLECTION_CAP) {
+    throw new Error("CEO_COLLECTION_SCORE_VIOLATION");
   }
 
-  if (metrics.dnaScore < CEO_DNA_SCORE_MIN) {
-    limits.push(CEO_DNA_COLLECTION_CAP);
-    capsApplied.push(`dnaCollectionCap:${CEO_DNA_COLLECTION_CAP}`);
+  if (
+    input.heroDnaScore < CEO_DNA_SCORE_MIN &&
+    input.collectionScore > CEO_DNA_COLLECTION_CAP
+  ) {
+    throw new Error("DNA_SCORE_CAP_VIOLATION");
   }
 
-  if (metrics.emotionalStrength < CEO_EMOTIONAL_STRENGTH_MIN) {
-    limits.push(CEO_EMOTIONAL_COLLECTION_CAP);
-    capsApplied.push(`emotionalCollectionCap:${CEO_EMOTIONAL_COLLECTION_CAP}`);
+  if (
+    input.emotionalStrength < CEO_EMOTIONAL_STRENGTH_MIN &&
+    input.collectionScore > CEO_EMOTIONAL_COLLECTION_CAP
+  ) {
+    throw new Error("EMOTIONAL_CAP_VIOLATION");
   }
-
-  if (!ceoApproved) {
-    limits.push(80);
-    capsApplied.push("unapprovedCollectionMax:80");
-  }
-
-  const collectionScore = Math.min(...limits);
-  return { collectionScore: roundPercent(collectionScore), capsApplied };
 }
 
 export function buildConsistentAdPotential(
@@ -221,7 +280,7 @@ export function sanitizeRejectedCopy(text: string, ceoApproved: boolean): string
 export function logCeoConsistency(input: {
   metrics: HeroApprovalMetrics;
   limitedCommercialScore: number;
-  cappedCollectionScore: number;
+  rawCollectionScore: number;
   ceoApproved: boolean;
   scoreCapsApplied: string[];
 }): void {
@@ -230,11 +289,32 @@ export function logCeoConsistency(input: {
   console.log(`dnaScore: ${input.metrics.dnaScore}`);
   console.log(`emotionalStrength: ${input.metrics.emotionalStrength}`);
   console.log(`commercialScore: ${input.limitedCommercialScore}`);
-  console.log(`collectionScore: ${input.cappedCollectionScore}`);
+  console.log(`rawCollectionScore: ${input.rawCollectionScore}`);
   console.log(`ceoApproved: ${input.ceoApproved}`);
   console.log(
-    `scoreCapsApplied: ${input.scoreCapsApplied.length > 0 ? input.scoreCapsApplied.join(", ") : "none"}`,
+    `scoreCapsApplied: ${input.scoreCapsApplied.length > 0 ? input.scoreCapsApplied.join(", ") : "none (collection caps apply at final authority)"}`,
   );
+}
+
+export function logFinalCollectionAuthority(input: {
+  rawCollectionScore: number;
+  finalCollectionScore: number;
+  heroDnaScore: number;
+  emotionalStrength: number;
+  ceoApproved: boolean;
+  capsApplied: string[];
+  scoreLocked: boolean;
+}): void {
+  console.log("FINAL COLLECTION AUTHORITY");
+  console.log(`rawCollectionScore: ${input.rawCollectionScore}`);
+  console.log(`finalCollectionScore: ${input.finalCollectionScore}`);
+  console.log(`heroDNA: ${input.heroDnaScore}`);
+  console.log(`emotionalStrength: ${input.emotionalStrength}`);
+  console.log(`ceoApproved: ${input.ceoApproved}`);
+  console.log(
+    `capsApplied: ${input.capsApplied.length > 0 ? input.capsApplied.join(", ") : "none"}`,
+  );
+  console.log(`scoreLocked: ${input.scoreLocked}`);
 }
 
 export function assertCeoConsistency(
@@ -249,23 +329,20 @@ export function assertCeoConsistency(
     metrics,
     ceoApproved,
   );
-  const { collectionScore } = capCollectionScore(
-    collection.collectionScore,
-    ceoApproved,
-    metrics,
-  );
   const adTier = adPotentialTier(
     heroAnalysis?.adPotential ?? collection.ceoAnalysis?.adPotential ?? "",
   );
 
+  assertCollectionScoreCaps({
+    collectionScore: collection.collectionScore,
+    ceoApproved,
+    heroDnaScore: metrics.dnaScore,
+    emotionalStrength: metrics.emotionalStrength,
+  });
+
   const errors: string[] = [];
 
   if (!ceoApproved) {
-    if (collectionScore > CEO_REJECTED_COLLECTION_CAP) {
-      errors.push(
-        `collectionScore ${collectionScore} exceeds rejected cap ${CEO_REJECTED_COLLECTION_CAP}`,
-      );
-    }
     if (commercialScore > CEO_REJECTED_COMMERCIAL_CAP) {
       errors.push(
         `commercialScore ${commercialScore} exceeds rejected cap ${CEO_REJECTED_COMMERCIAL_CAP}`,
@@ -292,6 +369,10 @@ export function assertCeoConsistency(
   }
 }
 
+/**
+ * Sync CEO-owned fields (commercialConfidence, adPotential, recommendation, hero state).
+ * Does not apply final collection score caps — use applyFinalCollectionScore after this.
+ */
 export function applyCeoConsistency(
   collection: ResearchCollection,
   hero: DesignConcept,
@@ -299,20 +380,18 @@ export function applyCeoConsistency(
   designs: DesignConcept[],
   rawCollectionScore?: number,
 ): CeoConsistencyResult {
+  assertCollectionScoreUnlocked(collection);
+
   const metrics = collectHeroApprovalMetrics(hero, heroAnalysis);
   const ceoApproved = isCeoApproved(metrics);
 
   const { commercialScore: limitedCommercialScore, capsApplied: commercialCaps } =
     limitCommercialScore(metrics.commercialScore, metrics, ceoApproved);
 
-  const rawScore =
+  const rawScore = roundPercent(
     rawCollectionScore ??
-    computeDynamicCollectionScore(designs, collection).collectionScore;
-
-  const { collectionScore: cappedCollectionScore, capsApplied: collectionCaps } =
-    capCollectionScore(rawScore, ceoApproved, metrics);
-
-  const scoreCapsApplied = [...commercialCaps, ...collectionCaps];
+      computeDynamicCollectionScore(designs, collection).collectionScore,
+  );
 
   const adPotential = buildConsistentAdPotential(
     ceoApproved,
@@ -357,7 +436,7 @@ export function applyCeoConsistency(
 
   const syncedCollection: ResearchCollection = {
     ...collection,
-    collectionScore: cappedCollectionScore,
+    collectionScore: rawScore,
     ceoRecommendation: buildCeoRecommendation(ceoApproved),
     heroStatus: ceoApproved ? "approved" : "rejected",
     heroAnalysis: syncedHeroAnalysis,
@@ -386,20 +465,90 @@ export function applyCeoConsistency(
   logCeoConsistency({
     metrics,
     limitedCommercialScore,
-    cappedCollectionScore,
+    rawCollectionScore: rawScore,
     ceoApproved,
-    scoreCapsApplied,
+    scoreCapsApplied: commercialCaps,
   });
 
   return {
     ceoApproved,
     metrics,
     limitedCommercialScore,
-    cappedCollectionScore,
-    scoreCapsApplied,
+    rawCollectionScore: rawScore,
+    scoreCapsApplied: commercialCaps,
     heroAnalysis: syncedHeroAnalysis,
     collection: syncedCollection,
     hero: syncedHero,
+  };
+}
+
+/**
+ * Terminal collection score authority — applies hard caps, locks the score, and asserts.
+ * Nothing may mutate collectionScore after this step.
+ */
+export function applyFinalCollectionScore(
+  collection: ResearchCollection,
+  hero: DesignConcept,
+  heroAnalysis: HeroAnalysis,
+  rawCollectionScore?: number,
+  adjustments: string[] = [],
+): FinalCollectionScoreResult {
+  assertCollectionScoreUnlocked(collection);
+
+  const repairedHero = ensureEmotionalVisualMatch(hero, collection, adjustments);
+
+  const metrics = collectHeroApprovalMetrics(repairedHero, heroAnalysis);
+  const ceoApproved = isCeoApproved(metrics);
+  const raw = roundPercent(rawCollectionScore ?? collection.collectionScore);
+
+  const { collectionScore: finalCollectionScore, capsApplied } = applyCollectionCaps(
+    raw,
+    ceoApproved,
+    metrics.dnaScore,
+    metrics.emotionalStrength,
+  );
+
+  assertCollectionScoreCaps({
+    collectionScore: finalCollectionScore,
+    ceoApproved,
+    heroDnaScore: metrics.dnaScore,
+    emotionalStrength: metrics.emotionalStrength,
+  });
+
+  const lockedCollection: ResearchCollection = {
+    ...collection,
+    collectionScore: finalCollectionScore,
+    scoreLocked: true,
+  };
+
+  logFinalCollectionAuthority({
+    rawCollectionScore: raw,
+    finalCollectionScore,
+    heroDnaScore: metrics.dnaScore,
+    emotionalStrength: metrics.emotionalStrength,
+    ceoApproved,
+    capsApplied,
+    scoreLocked: true,
+  });
+
+  logFinalEmotionalVisual({
+    emotion: repairedHero.emotion,
+    visualLanguage: repairedHero.visualLanguage,
+    symbolism: repairedHero.symbolism,
+    composition: repairedHero.exactComposition,
+    negativeSpace: repairedHero.negativeSpaceUsage,
+    dnaAlignment: scoreEmotionalDnaAlignment(repairedHero),
+  });
+
+  return {
+    collection: lockedCollection,
+    hero: repairedHero,
+    rawCollectionScore: raw,
+    finalCollectionScore,
+    capsApplied,
+    ceoApproved,
+    heroDnaScore: metrics.dnaScore,
+    emotionalStrength: metrics.emotionalStrength,
   };
 }
 
