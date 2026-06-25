@@ -29,6 +29,7 @@ export type {
   ParsedResearchOutput,
   ResearchType,
 } from "./types";
+export { normalizeCommercialConfidence, formatCommercialConfidence } from "./types";
 export {
   applyCollectionEngine,
   buildCollection,
@@ -91,6 +92,14 @@ export {
   LARGE_RESEARCH_RESPONSE_THRESHOLD,
 } from "./response-guard";
 export { finalizeCollectionDesigns } from "./collection-pipeline";
+export {
+  finalConsistencyPass,
+  applyFinalConsistencyToDesignOutput,
+  assertFinalCollectionConsistency,
+  rebuildCollectionFromFinalizedDesigns,
+  mergeHeroAnalysisIntoDesign,
+} from "./final-consistency-pass";
+export type { FinalConsistencyResult } from "./final-consistency-pass";
 export {
   applyBrandDnaAnalysis,
   analyzeBrandDna,

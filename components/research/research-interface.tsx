@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { ArrowRight, CheckCircle2, Loader2, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { DesignConcept, ResearchCollection } from "@/agents/research/types";
-import { COLLECTION_ARC } from "@/agents/research/types";
+import { COLLECTION_ARC, normalizeCommercialConfidence } from "@/agents/research/types";
 import {
   coerceConceptField,
   formatColorBreakdown,
@@ -23,15 +23,12 @@ import {
 } from "@/agents/research/design-concept";
 import { Progress } from "@/components/ui/progress";
 
-function resolveCollectionRole(
+function displayCollectionRole(
   design: DesignConcept,
   heroDesignId?: string,
 ): string {
   if (heroDesignId && design.designId === heroDesignId) {
     return "Hero Piece";
-  }
-  if (design.collectionRole === "Hero Piece" && design.designId !== heroDesignId) {
-    return "Supporting Piece";
   }
   return design.collectionRole;
 }
@@ -112,10 +109,31 @@ function buildDesignConceptContext(result: DesignReportResult) {
   };
 }
 
+function coerceFinalizedDesignConcepts(
+  designs: unknown[] | undefined,
+): DesignConcept[] {
+  if (!Array.isArray(designs)) return [];
+
+  return designs.filter(
+    (entry): entry is DesignConcept =>
+      Boolean(entry) &&
+      typeof entry === "object" &&
+      !Array.isArray(entry) &&
+      typeof (entry as DesignConcept).designId === "string" &&
+      typeof (entry as DesignConcept).title === "string" &&
+      typeof (entry as DesignConcept).collectionRole === "string",
+  );
+}
+
 function parseDesignConcepts(
   designs: unknown[] | undefined,
   result: DesignReportResult,
 ): DesignConcept[] {
+  const finalized = coerceFinalizedDesignConcepts(designs);
+  if (finalized.length > 0) {
+    return finalized;
+  }
+
   return (
     normalizeDesignConcepts(designs, buildDesignConceptContext(result)) ?? []
   );
@@ -257,7 +275,7 @@ function DesignConceptCard({
     targetAudience: string;
   };
 }) {
-  const displayRole = resolveCollectionRole(concept, heroDesignId);
+  const displayRole = displayCollectionRole(concept, heroDesignId);
   const isHero = displayRole === "Hero Piece";
   const roleBadgeClass =
     displayRole === "Hero Piece"
@@ -1086,7 +1104,7 @@ function CollectionIntelligencePanel({
           {designs
             .filter((d) => d.designId !== collection.heroDesignId)
             .map((design) => {
-              const role = resolveCollectionRole(design, collection.heroDesignId);
+              const role = displayCollectionRole(design, collection.heroDesignId);
               return (
               <div
                 key={design.designId}
@@ -1114,7 +1132,7 @@ function CollectionIntelligencePanel({
         </p>
         <div className="space-y-2">
           {ranked.map((design, index) => {
-            const role = resolveCollectionRole(design, collection.heroDesignId);
+            const role = displayCollectionRole(design, collection.heroDesignId);
             return (
             <div key={design.designId} className="space-y-1">
               <div className="flex items-center justify-between gap-2 text-sm">
@@ -1178,7 +1196,9 @@ function CollectionIntelligencePanel({
               <dt className="text-xs text-muted-foreground">
                 {t("research.interface.collection.commercialConfidence")}
               </dt>
-              <dd className="text-sm font-medium">{analysis.commercialConfidence}%</dd>
+              <dd className="text-sm font-medium">
+                {normalizeCommercialConfidence(analysis.commercialConfidence)}
+              </dd>
             </div>
             <div className="space-y-1 sm:col-span-2">
               <dt className="text-xs text-muted-foreground">
@@ -1301,7 +1321,7 @@ function CollectionOverviewPanel({
           </p>
           <p className="text-sm text-muted-foreground">
             {t("research.interface.collection.confidence")}:{" "}
-            {collection.heroProduct.commercialConfidence}%
+            {normalizeCommercialConfidence(collection.heroProduct.commercialConfidence)}
           </p>
         </div>
         <div className="space-y-1">

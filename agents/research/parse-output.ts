@@ -12,6 +12,11 @@ import {
 } from "./detail-mode";
 import { MILAENE_BRAND_DNA } from "./brand-dna";
 import { applyCollectionPipeline } from "./collection-pipeline";
+import {
+  applyFinalConsistencyToDesignOutput,
+  assertFinalCollectionConsistency,
+} from "./final-consistency-pass";
+import { coercePercentScore, coerceRetailPrice, coerceCampaignPotential, coerceRepeatabilityScore } from "./score-coercion";
 import { assertCompleteJsonResponse } from "./response-guard";
 import {
   designResearchOutputSchema,
@@ -911,6 +916,128 @@ export function isCollectionOnlyResearchPayload(
   return !(Array.isArray(parsed.designs) && parsed.designs.length > 0);
 }
 
+function normalizeDesignSchemaFields(
+  normalized: Record<string, unknown>,
+  adjustments: string[],
+): void {
+  const collection = normalized.collection;
+  if (collection && typeof collection === "object" && !Array.isArray(collection)) {
+    const col = { ...(collection as Record<string, unknown>) };
+
+    if (col.collectionScore !== undefined) {
+      const coerced = coercePercentScore(col.collectionScore);
+      if (coerced !== undefined && coerced !== col.collectionScore) {
+        col.collectionScore = coerced;
+        adjustments.push(`coerced collection.collectionScore → ${coerced}`);
+      }
+    }
+
+    if (col.heroProduct && typeof col.heroProduct === "object") {
+      const heroProduct = { ...(col.heroProduct as Record<string, unknown>) };
+      if (heroProduct.commercialConfidence !== undefined) {
+        const coerced = coercePercentScore(heroProduct.commercialConfidence);
+        if (coerced !== undefined && coerced !== heroProduct.commercialConfidence) {
+          heroProduct.commercialConfidence = coerced;
+          adjustments.push(
+            `coerced collection.heroProduct.commercialConfidence → ${coerced}`,
+          );
+        }
+      }
+      if (heroProduct.estimatedRetailPrice !== undefined) {
+        const price = coerceRetailPrice(heroProduct.estimatedRetailPrice);
+        if (price && price !== heroProduct.estimatedRetailPrice) {
+          heroProduct.estimatedRetailPrice = price;
+          adjustments.push(
+            `coerced collection.heroProduct.estimatedRetailPrice → ${price}`,
+          );
+        }
+      }
+      col.heroProduct = heroProduct;
+    }
+
+    for (const block of ["ceoAnalysis", "heroAnalysis"] as const) {
+      if (!col[block] || typeof col[block] !== "object") continue;
+      const analysis = { ...(col[block] as Record<string, unknown>) };
+      const fields =
+        block === "ceoAnalysis"
+          ? (["commercialConfidence"] as const)
+          : (["heroScore", "commercialScore"] as const);
+      for (const field of fields) {
+        if (analysis[field] === undefined) continue;
+        const coerced = coercePercentScore(analysis[field]);
+        if (coerced !== undefined && coerced !== analysis[field]) {
+          analysis[field] = coerced;
+          adjustments.push(`coerced collection.${block}.${field} → ${coerced}`);
+        }
+      }
+      if (analysis.campaignPotential !== undefined) {
+        const potential = coerceCampaignPotential(analysis.campaignPotential);
+        if (potential && potential !== analysis.campaignPotential) {
+          analysis.campaignPotential = potential;
+          adjustments.push(
+            `coerced collection.${block}.campaignPotential → ${potential}`,
+          );
+        }
+      }
+      col[block] = analysis;
+    }
+
+    normalized.collection = col;
+  }
+
+  if (Array.isArray(normalized.designs)) {
+    normalized.designs = normalized.designs.map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return entry;
+      }
+      const design = { ...(entry as Record<string, unknown>) };
+      for (const field of ["commercialScore", "heroScore", "dnaScore"] as const) {
+        if (design[field] === undefined) continue;
+        const coerced = coercePercentScore(design[field]);
+        if (coerced !== undefined && coerced !== design[field]) {
+          design[field] = coerced;
+          adjustments.push(`coerced designs[${index}].${field} → ${coerced}`);
+        }
+      }
+      if (design.campaignPotential !== undefined) {
+        const potential = coerceCampaignPotential(design.campaignPotential);
+        if (potential && potential !== design.campaignPotential) {
+          design.campaignPotential = potential;
+          adjustments.push(
+            `coerced designs[${index}].campaignPotential → ${potential}`,
+          );
+        }
+      }
+      if (design.repeatabilityScore !== undefined) {
+        const repeatability = coerceRepeatabilityScore(design.repeatabilityScore);
+        if (repeatability && repeatability !== design.repeatabilityScore) {
+          design.repeatabilityScore = repeatability;
+          adjustments.push(
+            `coerced designs[${index}].repeatabilityScore → ${repeatability}`,
+          );
+        }
+      }
+      return design;
+    });
+  }
+
+  if (normalized.commercialScore !== undefined) {
+    const coerced = coercePercentScore(normalized.commercialScore);
+    if (coerced !== undefined && coerced !== normalized.commercialScore) {
+      normalized.commercialScore = coerced;
+      adjustments.push(`coerced top-level commercialScore → ${coerced}`);
+    }
+  }
+
+  if (normalized.campaignPotential !== undefined) {
+    const potential = coerceCampaignPotential(normalized.campaignPotential);
+    if (potential && potential !== normalized.campaignPotential) {
+      normalized.campaignPotential = potential;
+      adjustments.push(`coerced top-level campaignPotential → ${potential}`);
+    }
+  }
+}
+
 function normalizeDesignResearchPayload(
   parsed: Record<string, unknown>,
   detailMode: ResearchDetailMode = DEFAULT_RESEARCH_DETAIL_MODE,
@@ -1025,7 +1152,49 @@ function normalizeDesignResearchPayload(
     );
   }
 
+  normalizeDesignSchemaFields(normalized, adjustments);
+
   return { normalized, adjustments };
+}
+
+function logFinalValidationIssue(
+  issues: z.ZodIssue[],
+  parsed: Record<string, unknown>,
+): void {
+  console.error("FINAL VALIDATION ISSUE");
+  console.error(JSON.stringify(issues, null, 2));
+
+  const first = issues[0];
+  if (first) {
+    console.error("PATH:", first.path);
+    console.error(
+      "EXPECTED:",
+      "expected" in first ? first.expected : undefined,
+    );
+    console.error(
+      "RECEIVED:",
+      "received" in first ? first.received : zodIssueToDetail(first, parsed).received,
+    );
+    console.error("MESSAGE:", first.message);
+  }
+
+  const designs = Array.isArray(parsed.designs) ? parsed.designs : [];
+  console.log(
+    "FINAL DESIGN SUMMARY",
+    designs.map((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return entry;
+      }
+      const design = entry as Record<string, unknown>;
+      return {
+        title: design.title,
+        role: design.collectionRole,
+        heroScore: design.heroScore,
+        dnaScore: design.dnaScore,
+        printArea: design.printArea,
+      };
+    }),
+  );
 }
 
 function validateDesignResearchPayload(
@@ -1038,11 +1207,10 @@ function validateDesignResearchPayload(
     return result.data;
   }
 
-  console.log(JSON.stringify(result.error.issues, null, 2));
-
+  logFinalValidationIssue(result.error.issues, parsed);
   logValidationIssues(result.error.issues, parsed, "Design schema validation issues");
 
-  const validationIssues = result.error.issues.map((issue) =>
+  const validationIssues = result.error.issues.slice(0, 5).map((issue) =>
     zodIssueToDetail(issue, parsed),
   );
 
@@ -1091,7 +1259,8 @@ function logValidationIssues(
   parsed: Record<string, unknown>,
   label: string,
 ): void {
-  const details = issues.map((issue) => ({
+  const topIssues = issues.slice(0, 5);
+  const details = topIssues.map((issue) => ({
     path: issue.path.join(".") || "(root)",
     code: issue.code,
     message: issue.message,
@@ -1101,9 +1270,15 @@ function logValidationIssues(
   console.error(`[Research Run] ${label}`, {
     issueCount: issues.length,
     issues: details,
-    zodIssues: issues,
+    zodIssues: topIssues,
     parsedPreview: JSON.stringify(parsed, null, 2).slice(0, 4000),
   });
+
+  if (issues.length > 5) {
+    console.error(
+      `[Research Run] ${label} — ${issues.length - 5} additional issue(s) omitted from log`,
+    );
+  }
 }
 
 function isOptionalNestedRoot(path: string): boolean {
@@ -1341,12 +1516,23 @@ export function parseResearchOutput(
       detailMode,
     });
 
+    const validated = validateDesignResearchPayload(normalized, {
+      rawResponse: raw,
+      strippedJson,
+    });
+    const finalized = applyFinalConsistencyToDesignOutput(validated, adjustments);
+    assertFinalCollectionConsistency(finalized);
+
+    if (adjustments.length > 0) {
+      console.info("[Research Run] Final consistency adjustments", {
+        adjustments: adjustments.slice(-10),
+        adjustmentCount: adjustments.length,
+      });
+    }
+
     return {
       kind: "design",
-      output: validateDesignResearchPayload(normalized, {
-        rawResponse: raw,
-        strippedJson,
-      }),
+      output: finalized,
     };
   }
 

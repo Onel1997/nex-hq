@@ -39,10 +39,20 @@ export function compactDesignConceptDetail(
 ): DesignConcept {
   if (detailMode === "full") return design;
 
-  const compactInstructions = [
-    design.designInstructions[0] ??
-      "Follow exactComposition, printSize, and colorBreakdown for production.",
+  const instructionFallbacks = [
+    "Follow exactComposition, printSize, and colorBreakdown for production.",
+    "Apply Milaene colorBreakdown with restrained ink opacity and clean vector edges.",
+    "Verify printArea placement against placementDimensions before sampling.",
   ];
+
+  const compactInstructions = instructionFallbacks.map(
+    (fallback, index) => {
+      const step = design.designInstructions[index] ?? fallback;
+      return step.length >= 10
+        ? step
+        : `${step} Maintain Milaene production standards.`;
+    },
+  );
 
   return {
     ...design,

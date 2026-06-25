@@ -3,6 +3,19 @@ import {
   type ResearchReportType,
 } from "@/brain/domains/reports";
 import { z } from "zod";
+import { coercePercentScore, coerceRetailPrice, coerceCampaignPotential, coerceRepeatabilityScore } from "./score-coercion";
+
+export {
+  COMMERCIAL_CONFIDENCE_LEVELS,
+  commercialConfidenceLevel,
+  coercePercentScore,
+  coerceRetailPrice,
+  coerceCampaignPotential,
+  coerceRepeatabilityScore,
+  normalizeCommercialConfidence,
+  formatCommercialConfidence,
+} from "./score-coercion";
+export type { CommercialConfidenceLevel } from "./score-coercion";
 
 export const RESEARCH_TYPES = RESEARCH_REPORT_TYPES;
 export type ResearchType = ResearchReportType;
@@ -241,11 +254,75 @@ export type StoryPosition = (typeof COLLECTION_ARC)[number];
 export const CAMPAIGN_POTENTIAL_LEVELS = ["low", "medium", "high"] as const;
 export type CampaignPotential = (typeof CAMPAIGN_POTENTIAL_LEVELS)[number];
 
+const flexPercentScore = z
+  .union([z.number(), z.string()])
+  .transform((value, ctx) => {
+    const coerced = coercePercentScore(value);
+    if (coerced === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Expected percent score (0–100) or High/Medium/Low",
+      });
+      return z.NEVER;
+    }
+    return coerced;
+  })
+  .pipe(z.number().min(0).max(100));
+
+const flexOptionalPercentScore = flexPercentScore.optional();
+
+const flexRetailPrice = z
+  .union([z.string(), z.number()])
+  .transform((value, ctx) => {
+    const coerced = coerceRetailPrice(value);
+    if (coerced === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Expected retail price string (e.g. 89€) or number",
+      });
+      return z.NEVER;
+    }
+    return coerced;
+  })
+  .pipe(z.string().min(2));
+
+const flexCampaignPotential = z
+  .union([z.string(), z.number()])
+  .transform((value, ctx) => {
+    const coerced = coerceCampaignPotential(value);
+    if (coerced === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Expected campaign potential (low|medium|high)",
+      });
+      return z.NEVER;
+    }
+    return coerced;
+  })
+  .pipe(z.enum(CAMPAIGN_POTENTIAL_LEVELS));
+
+const flexOptionalCampaignPotential = flexCampaignPotential.optional();
+
+const flexRepeatabilityScore = z
+  .union([z.string(), z.number()])
+  .transform((value, ctx) => {
+    const coerced = coerceRepeatabilityScore(value);
+    if (coerced === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Expected repeatability score (High|Medium|Low)",
+      });
+      return z.NEVER;
+    }
+    return coerced;
+  })
+  .pipe(z.enum(REPEATABILITY_SCORES));
+
 export const heroProductSchema = z.object({
   product: z.string().min(1),
-  estimatedRetailPrice: z.string().min(2),
+  estimatedRetailPrice: flexRetailPrice,
   productionComplexity: z.enum(PRODUCTION_DIFFICULTY_LEVELS),
-  commercialConfidence: z.number().min(0).max(100),
+  commercialConfidence: flexPercentScore,
 });
 
 export type HeroProduct = z.infer<typeof heroProductSchema>;
@@ -264,7 +341,7 @@ export const ceoAnalysisSchema = z.object({
   weakestProduct: z.string().min(1),
   recommendedLaunchOrder: z.array(z.string().min(1)).min(1),
   productionRisk: z.string().min(10),
-  commercialConfidence: z.number().min(0).max(100),
+  commercialConfidence: flexPercentScore,
   adPotential: z.string().min(10),
   launchApproval: launchApprovalSchema.optional(),
 });
@@ -272,9 +349,9 @@ export const ceoAnalysisSchema = z.object({
 export type CeoAnalysis = z.infer<typeof ceoAnalysisSchema>;
 
 export const heroAnalysisSchema = z.object({
-  heroScore: z.number().min(0).max(100),
-  commercialScore: z.number().min(0).max(100),
-  campaignPotential: z.enum(CAMPAIGN_POTENTIAL_LEVELS),
+  heroScore: flexPercentScore,
+  commercialScore: flexPercentScore,
+  campaignPotential: flexCampaignPotential,
   whyHero: z.string().min(10),
   visualStrength: z.string().min(10),
   emotionalStrength: z.string().min(10),
@@ -298,6 +375,36 @@ export const heroRegenerationSchema = z.object({
 
 export type HeroRegeneration = z.infer<typeof heroRegenerationSchema>;
 
+export const relationshipGraphNodeSchema = z.object({
+  designId: z.string().optional(),
+  id: z.string().optional(),
+  title: z.string().optional(),
+  name: z.string().optional(),
+  role: z.string().optional(),
+  collectionRole: z.string().optional(),
+  supportsDesignId: z.string().optional(),
+  supports: z.string().optional(),
+  relationshipReason: z.string().optional(),
+  emotion: z.string().optional(),
+  product: z.string().optional(),
+  color: z.string().optional(),
+  visualConcept: z.string().optional(),
+});
+
+export type RelationshipGraphNode = z.infer<typeof relationshipGraphNodeSchema>;
+
+export const collectionDnaRankingEntrySchema = z.object({
+  designId: z.string().min(1),
+  title: z.string().min(1),
+  role: z.enum(COLLECTION_ROLES),
+  dnaScore: flexPercentScore,
+  heroScore: flexOptionalPercentScore,
+});
+
+export type CollectionDnaRankingEntry = z.infer<
+  typeof collectionDnaRankingEntrySchema
+>;
+
 export const researchCollectionSchema = z.object({
   name: z.string().min(3),
   type: z.enum(COLLECTION_TYPES),
@@ -309,7 +416,7 @@ export const researchCollectionSchema = z.object({
   colorDirection: z.array(z.string().min(2)).min(2).max(6),
   targetAudience: z.string().min(10),
   dropStrategy: z.string().min(20),
-  collectionScore: z.number().min(0).max(100),
+  collectionScore: flexPercentScore,
   ceoRecommendation: z.string().min(5),
   collectionImagePrompt: conceptText(20),
   campaignTheme: z.string().min(3),
@@ -321,6 +428,8 @@ export const researchCollectionSchema = z.object({
   heroStatus: z.enum(HERO_STATUSES).optional(),
   heroRegenerationRequired: z.boolean().optional(),
   heroRegeneration: heroRegenerationSchema.optional(),
+  relationshipGraph: z.array(relationshipGraphNodeSchema).optional(),
+  dnaRanking: z.array(collectionDnaRankingEntrySchema).optional(),
 });
 
 export type ResearchCollection = z.infer<typeof researchCollectionSchema>;
@@ -373,12 +482,12 @@ export const designConceptSchema = z.object({
   alignment: conceptText(3),
   focalPoint: conceptText(5),
   edgeTreatment: conceptText(5),
-  dnaScore: z.number().min(0).max(100),
+  dnaScore: flexPercentScore,
   dnaMatches: z.array(z.string().min(3)).min(1).max(8),
   dnaConflicts: z.array(z.string().min(3)).max(6),
   whyFitsMilaene: z.array(z.string().min(10)).min(2).max(8),
   collectionRole: z.enum(COLLECTION_ROLES),
-  repeatabilityScore: z.enum(REPEATABILITY_SCORES),
+  repeatabilityScore: flexRepeatabilityScore,
   imagePromptCore: conceptText(20),
   supportsDesignId: z.string().optional(),
   emotionalNarrative: conceptText(10).optional(),
@@ -386,9 +495,9 @@ export const designConceptSchema = z.object({
   emotionalPositionInCollection: z.string().min(5).optional(),
   storyPosition: z.enum(COLLECTION_ARC).optional(),
   relationshipReason: conceptText(10).optional(),
-  commercialScore: z.number().min(0).max(100).optional(),
-  campaignPotential: z.enum(CAMPAIGN_POTENTIAL_LEVELS).optional(),
-  heroScore: z.number().min(0).max(100).optional(),
+  commercialScore: flexOptionalPercentScore,
+  campaignPotential: flexOptionalCampaignPotential,
+  heroScore: flexOptionalPercentScore,
 });
 
 export type DesignConcept = z.infer<typeof designConceptSchema>;
@@ -412,31 +521,13 @@ export const designResearchOutputSchema = z.object({
 export type DesignResearchOutput = z.infer<typeof designResearchOutputSchema>;
 
 /** LLM may return collection metadata without designs[] — parser synthesizes concepts. */
-export const relationshipGraphNodeSchema = z.object({
-  designId: z.string().optional(),
-  id: z.string().optional(),
-  title: z.string().optional(),
-  name: z.string().optional(),
-  role: z.string().optional(),
-  collectionRole: z.string().optional(),
-  supportsDesignId: z.string().optional(),
-  supports: z.string().optional(),
-  relationshipReason: z.string().optional(),
-  emotion: z.string().optional(),
-  product: z.string().optional(),
-  color: z.string().optional(),
-  visualConcept: z.string().optional(),
-});
-
-export type RelationshipGraphNode = z.infer<typeof relationshipGraphNodeSchema>;
-
 export const collectionOnlyResearchInputSchema = z.object({
   title: z.string().min(1),
   collection: z.record(z.string(), z.unknown()),
   relationshipGraph: z.array(relationshipGraphNodeSchema).optional(),
   heroAnalysis: heroAnalysisSchema.optional(),
-  commercialScore: z.number().min(0).max(100).optional(),
-  campaignPotential: z.enum(CAMPAIGN_POTENTIAL_LEVELS).optional(),
+  commercialScore: flexOptionalPercentScore,
+  campaignPotential: flexOptionalCampaignPotential,
   products: z.array(z.string()).optional(),
   colors: z.array(z.string()).optional(),
   materials: z.array(z.string()).optional(),
