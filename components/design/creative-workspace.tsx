@@ -33,11 +33,14 @@ import { saveImageStudioHandoff } from "@/lib/image/image-handoff-store";
 import { cn } from "@/lib/utils";
 import {
   Archive,
+  Check,
   CheckCircle2,
   ChevronRight,
+  Circle,
   Columns2,
   Copy,
   Download,
+  Eye,
   GitCompare,
   Heart,
   ImageIcon,
@@ -45,6 +48,7 @@ import {
   Maximize2,
   MessageSquare,
   Minus,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -64,6 +68,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 
@@ -79,14 +84,14 @@ const TIMELINE: Array<{ id: CollectionTimelineStage; label: string }> = [
   { id: "launch", label: "Launch" },
 ];
 
-const DIRECTOR_SUGGESTIONS = [
-  "Make typography more premium",
-  "Increase negative space",
-  "More minimal",
-  "Luxury feeling",
-  "Reduce visual weight",
-  "More wearable",
-  "Improve print efficiency",
+const DIRECTOR_SUGGESTIONS: Array<{ label: string; prompt: string }> = [
+  { label: "Improve luxury feeling", prompt: "Make typography more premium and increase the luxury feeling" },
+  { label: "Reduce typography", prompt: "Reduce visual weight and simplify typography" },
+  { label: "Increase emotional impact", prompt: "Increase emotional impact and editorial presence" },
+  { label: "More editorial", prompt: "Make the composition more editorial and refined" },
+  { label: "Create Version 2", prompt: "Create a refined Version 2 with elevated restraint" },
+  { label: "Generate alternate composition", prompt: "Generate an alternate composition with fresh layout" },
+  { label: "Improve print efficiency", prompt: "Improve print efficiency and production clarity" },
 ];
 
 interface CreativeWorkspaceProps {
@@ -278,28 +283,23 @@ export function CreativeWorkspace({
 
       <div className="cw-main">
         <header className="cw-mission-bar">
-          <div>
+          <div className="cw-mission-bar-primary">
             <p className="cw-eyebrow">Active Design Mission</p>
             <h1>{brief.title}</h1>
             <p className="cw-mission-meta">
               {mission.collectionName} · {brief.role} · {brief.product} · {brief.color}
             </p>
-          </div>
-          <div className="cw-mission-scores">
-            {brief.dnaScore !== undefined ? (
-              <ScorePill label="DNA" value={`${brief.dnaScore}%`} />
-            ) : null}
-            {brief.commercialScore !== undefined ? (
-              <ScorePill label="Commercial" value={`${brief.commercialScore}%`} />
-            ) : null}
-            {brief.campaignPotential ? (
-              <ScorePill label="Campaign" value={brief.campaignPotential} />
-            ) : null}
-            <ScorePill label="Print" value={`${brief.printReadinessScore}%`} />
-            <span className="cw-version-badge">{iteration.label}</span>
+            <div className="cw-mission-inline-meta">
+              {brief.dnaScore !== undefined ? (
+                <ScorePill label="DNA" value={`${brief.dnaScore}%`} />
+              ) : null}
+              <ScorePill label="Print Ready" value={`${brief.printReadinessScore}%`} />
+              <span className="cw-version-badge">{iteration.label}</span>
+            </div>
           </div>
         </header>
 
+        <div className="cw-toolbar-sticky">
         <ProductionToolbar
           loading={actionLoading}
           onGenerateSvg={() =>
@@ -366,6 +366,7 @@ export function CreativeWorkspace({
             notify("Draft saved");
           }}
         />
+        </div>
 
         <div className="cw-workspace-core">
           <DesignCanvas
@@ -381,8 +382,8 @@ export function CreativeWorkspace({
         {toast ? <p className="cw-toast">{toast}</p> : null}
         {error ? <p className="cw-error">{error}</p> : null}
 
-        <div className="cw-panels-grid">
-          <IterationsPanel
+        <div className="cw-supporting-stack">
+          <IterationsStrip
             iterations={workspace.iterations}
             activeId={workspace.activeIterationId}
             onPreview={(id) => onPatchMission((s) => restoreIteration(s, id))}
@@ -611,6 +612,14 @@ function DesignCanvas({
         </div>
       </div>
       <div className="cw-canvas-stage">
+        <div className="cw-canvas-atmosphere" aria-hidden>
+          <div className="cw-canvas-spotlight" />
+          <div className="cw-canvas-particles">
+            {Array.from({ length: 14 }, (_, i) => (
+              <span key={i} className="cw-particle" style={{ "--i": i } as CSSProperties} />
+            ))}
+          </div>
+        </div>
         <div
           className="cw-canvas-viewport"
           style={{
@@ -654,12 +663,15 @@ function ProductionToolbar({
   onExportPng: () => void;
   onSaveDraft: () => void;
 }) {
-  const tools = [
+  const generateTools = [
     { label: "Generate SVG", icon: Shapes, action: onGenerateSvg },
     { label: "Generate Mockup", icon: ImageIcon, action: onGenerateMockup },
     { label: "Generate AI Render", icon: Wand2, action: onGenerateRender },
     { label: "Upscale", icon: ZoomIn, action: () => {} },
     { label: "Remove Background", icon: Maximize2, action: () => {} },
+  ];
+
+  const exportTools = [
     { label: "Export SVG", icon: Download, action: onExportSvg },
     { label: "Export PNG", icon: Download, action: onExportPng },
     { label: "Export PDF", icon: Download, action: onExportPng },
@@ -668,29 +680,40 @@ function ProductionToolbar({
     { label: "Save Draft", icon: Save, action: onSaveDraft },
   ];
 
+  const renderBtn = (
+    tool: { label: string; icon: typeof Shapes; action: () => void },
+    variant: "primary" | "secondary" | "success" = "secondary",
+  ) => (
+    <button
+      key={tool.label}
+      type="button"
+      className={cn("cw-toolbar-btn", `cw-btn-${variant}`)}
+      disabled={loading === tool.label}
+      onClick={tool.action}
+    >
+      {loading === tool.label ? (
+        <Loader2 className="size-3.5 animate-spin" />
+      ) : (
+        <tool.icon className="size-3.5" />
+      )}
+      <span>{tool.label}</span>
+    </button>
+  );
+
   return (
     <div className="cw-toolbar">
-      {tools.map((tool) => (
-        <button
-          key={tool.label}
-          type="button"
-          className="cw-toolbar-btn"
-          disabled={loading === tool.label}
-          onClick={tool.action}
-        >
-          {loading === tool.label ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <tool.icon className="size-4" />
-          )}
-          <span>{tool.label}</span>
-        </button>
-      ))}
+      <div className="cw-toolbar-row">
+        {generateTools.map((t) => renderBtn(t, "primary"))}
+      </div>
+      <div className="cw-toolbar-row">
+        {exportTools.slice(0, 5).map((t) => renderBtn(t, "secondary"))}
+        {renderBtn(exportTools[5], "success")}
+      </div>
     </div>
   );
 }
 
-function IterationsPanel({
+function IterationsStrip({
   iterations,
   activeId,
   onPreview,
@@ -708,32 +731,56 @@ function IterationsPanel({
   onFavorite: (id: string) => void;
 }) {
   return (
-    <section className="cw-panel cw-iterations">
-      <h3>Design Iterations</h3>
-      <ul>
+    <section className="cw-iterations-strip" aria-label="Design iterations">
+      <h3>Versions</h3>
+      <div className="cw-iterations-row">
         {iterations.map((it) => (
-          <li key={it.id} className={cn(it.id === activeId && "active")}>
-            <button type="button" className="cw-iter-label" onClick={() => onPreview(it.id)}>
-              {it.favorite ? <Star className="size-3 fill-current" /> : null}
-              {it.label}
+          <div
+            key={it.id}
+            className={cn("cw-iter-chip", it.id === activeId && "active")}
+          >
+            <button
+              type="button"
+              className="cw-iter-chip-btn"
+              onClick={() => onPreview(it.id)}
+              title={it.label}
+            >
+              V{it.version}
+              {it.favorite ? <Star className="size-3 fill-current text-[#d4c4b0]" /> : null}
             </button>
-            <div className="cw-iter-actions">
-              <button type="button" title="Restore" onClick={() => onRestore(it.id)}>
-                <RotateCcw className="size-3" />
+            <div className="cw-iter-menu">
+              <button type="button" className="cw-iter-menu-trigger" aria-label="Version actions">
+                <MoreHorizontal className="size-3.5" />
               </button>
-              <button type="button" title="Duplicate" onClick={() => onDuplicate(it.id)}>
-                <Copy className="size-3" />
-              </button>
-              <button type="button" title="Compare" onClick={() => onCompare(it.id)}>
-                <GitCompare className="size-3" />
-              </button>
-              <button type="button" title="Favorite" onClick={() => onFavorite(it.id)}>
-                <Heart className="size-3" />
-              </button>
+              <div className="cw-iter-menu-popover" role="menu">
+                <button type="button" role="menuitem" onClick={() => onPreview(it.id)}>
+                  <Eye className="size-3" /> Preview
+                </button>
+                <button type="button" role="menuitem" onClick={() => onRestore(it.id)}>
+                  <RotateCcw className="size-3" /> Restore
+                </button>
+                <button type="button" role="menuitem" onClick={() => onDuplicate(it.id)}>
+                  <Copy className="size-3" /> Duplicate
+                </button>
+                <button type="button" role="menuitem" onClick={() => onCompare(it.id)}>
+                  <GitCompare className="size-3" /> Compare
+                </button>
+                <button type="button" role="menuitem" onClick={() => onFavorite(it.id)}>
+                  <Heart className="size-3" /> Favorite
+                </button>
+              </div>
             </div>
-          </li>
+          </div>
         ))}
-      </ul>
+        <button
+          type="button"
+          className="cw-iter-add"
+          title="Duplicate current version"
+          onClick={() => onDuplicate(activeId)}
+        >
+          <Plus className="size-3.5" />
+        </button>
+      </div>
     </section>
   );
 }
@@ -757,16 +804,16 @@ function DesignHealthPanel({ health }: { health: PerDesignWorkspace["health"] })
 }
 
 function RadialScore({ label, value }: { label: string; value: number }) {
-  const r = 16;
+  const r = 12;
   const c = 2 * Math.PI * r;
   const offset = c - (value / 100) * c;
   return (
     <div className="cw-radial" title={`${label}: ${value}`}>
-      <svg viewBox="0 0 40 40" className="cw-radial-svg" aria-hidden>
-        <circle cx="20" cy="20" r={r} className="cw-radial-track" />
+      <svg viewBox="0 0 32 32" className="cw-radial-svg cw-radial-animated" aria-hidden>
+        <circle cx="16" cy="16" r={r} className="cw-radial-track" />
         <circle
-          cx="20"
-          cy="20"
+          cx="16"
+          cy="16"
           r={r}
           className="cw-radial-fill"
           strokeDasharray={c}
@@ -779,19 +826,43 @@ function RadialScore({ label, value }: { label: string; value: number }) {
   );
 }
 
+const PRODUCTION_CHIP_LABELS: Record<string, string> = {
+  svg: "SVG",
+  mockup: "Mockup",
+  aiRender: "AI Render",
+  print: "Print",
+  embroidery: "Embroidery",
+  dtg: "DTG",
+  screenPrint: "Screen Print",
+  shopify: "Shopify",
+  marketing: "Marketing",
+  launch: "Launch",
+};
+
+function productionStatusIcon(status: string) {
+  if (status === "complete") return <Check className="size-3" />;
+  if (status === "working") return <Loader2 className="size-3 animate-spin" />;
+  return <Circle className="size-2.5" />;
+}
+
 function ProductionStatusPanel({ items }: { items: PerDesignWorkspace["production"] }) {
   return (
-    <section className="cw-panel cw-production">
-      <h3>Production Status</h3>
-      <ul>
+    <section className="cw-production-strip" aria-label="Production status">
+      <h3>Production</h3>
+      <div className="cw-prod-chips">
         {items.map((item) => (
-          <li key={item.id} className={cn("cw-prod-item", `cw-prod-${item.status}`)}>
-            <span className="cw-prod-dot" />
-            <span>{item.label}</span>
-            <span className="cw-prod-status">{item.status}</span>
-          </li>
+          <span
+            key={item.id}
+            className={cn("cw-prod-chip", `cw-prod-${item.status}`)}
+            title={`${item.label}: ${item.status}`}
+          >
+            <span className="cw-prod-chip-icon" aria-hidden>
+              {productionStatusIcon(item.status)}
+            </span>
+            {PRODUCTION_CHIP_LABELS[item.id] ?? item.label}
+          </span>
         ))}
-      </ul>
+      </div>
     </section>
   );
 }
@@ -866,21 +937,35 @@ function CreativeDirectorPanel({
       >
         <ChevronRight className="size-4" />
       </button>
-      <header>
-        <Sparkles className="size-4" />
-        <h2>Creative Director AI</h2>
+      <header className="cw-director-header">
+        <div className="cw-director-header-icon">
+          <Sparkles className="size-4" />
+        </div>
+        <div>
+          <p className="cw-director-eyebrow">AI Creative Assistant</p>
+          <h2>Creative Director AI</h2>
+        </div>
       </header>
       <div className="cw-director-suggestions">
-        {DIRECTOR_SUGGESTIONS.map((s) => (
-          <button key={s} type="button" onClick={() => onSuggestion(s)}>
-            {s}
-          </button>
-        ))}
+        <p className="cw-director-suggestions-label">Suggested directions</p>
+        <div className="cw-director-suggestion-cards">
+          {DIRECTOR_SUGGESTIONS.map((s) => (
+            <button
+              key={s.label}
+              type="button"
+              className="cw-director-card"
+              onClick={() => onSuggestion(s.prompt)}
+            >
+              <span className="cw-director-card-label">{s.label}</span>
+              <ChevronRight className="size-3.5 cw-director-card-arrow" />
+            </button>
+          ))}
+        </div>
       </div>
       <div className="cw-director-thread">
         {messages.length === 0 ? (
           <p className="cw-director-empty">
-            Direct the design — typography, restraint, emotion, production.
+            Speak naturally — typography, restraint, emotion, production. Your senior Creative Director is listening.
           </p>
         ) : (
           messages.map((m) => (
@@ -905,9 +990,9 @@ function CreativeDirectorPanel({
         <input
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
-          placeholder='Try "Make it more emotional"'
+          placeholder="Describe the direction you want…"
         />
-        <button type="submit" disabled={loading || !input.trim()}>
+        <button type="submit" className="cw-btn-primary" disabled={loading || !input.trim()}>
           <MessageSquare className="size-4" />
         </button>
       </form>
@@ -932,16 +1017,24 @@ function QuickApprovalPanel({
 }) {
   return (
     <div className="cw-approval">
-      <button type="button" className="cw-approval-approve" onClick={onApprove}>
+      <button type="button" className="cw-approval-btn cw-btn-success" onClick={onApprove}>
         <CheckCircle2 className="size-4" /> Approve
       </button>
-      <button type="button" onClick={onRevision}>Needs Revision</button>
-      <button type="button" onClick={onArchive}>
+      <button type="button" className="cw-approval-btn cw-btn-secondary" onClick={onRevision}>
+        Needs Revision
+      </button>
+      <button type="button" className="cw-approval-btn cw-btn-danger" onClick={onArchive}>
         <Archive className="size-3.5" /> Archive
       </button>
-      <button type="button" onClick={onBackResearch}>Send Back to Research</button>
-      <button type="button" onClick={onImageStudio}>Send to Image Studio</button>
-      <button type="button" onClick={onCeo}>Send to CEO</button>
+      <button type="button" className="cw-approval-btn cw-btn-secondary" onClick={onBackResearch}>
+        Send Back to Research
+      </button>
+      <button type="button" className="cw-approval-btn cw-btn-secondary" onClick={onImageStudio}>
+        Send to Image Studio
+      </button>
+      <button type="button" className="cw-approval-btn cw-btn-secondary" onClick={onCeo}>
+        Send to CEO
+      </button>
     </div>
   );
 }
@@ -1020,7 +1113,7 @@ function CompareColumn({
 
 function ScorePill({ label, value }: { label: string; value: string }) {
   return (
-    <span className="cw-score-pill">
+    <span className="cw-score-pill cw-score-pill-inline">
       <span>{label}</span>
       <strong className="capitalize">{value}</strong>
     </span>
@@ -1029,26 +1122,54 @@ function ScorePill({ label, value }: { label: string; value: string }) {
 
 function GarmentPlaceholder() {
   return (
-    <svg viewBox="0 0 320 380" className="cw-garment-svg" aria-hidden>
-      <path
-        d="M80 90 L160 55 L240 90 L260 120 L240 340 L80 340 L60 120 Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        fill="none"
-        opacity="0.35"
-      />
-      <rect
-        x="130"
-        y="155"
-        width="60"
-        height="70"
-        rx="4"
-        stroke="currentColor"
-        strokeDasharray="4 4"
-        fill="none"
-        opacity="0.35"
-      />
-    </svg>
+    <div className="cw-garment-wrap">
+      <svg viewBox="0 0 320 400" className="cw-garment-svg" aria-hidden>
+        <defs>
+          <linearGradient id="cw-garment-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#63E3E3" stopOpacity="0.45" />
+            <stop offset="50%" stopColor="#D9B46B" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#63E3E3" stopOpacity="0.25" />
+          </linearGradient>
+          <radialGradient id="cw-garment-glow" cx="50%" cy="40%" r="50%">
+            <stop offset="0%" stopColor="#63E3E3" stopOpacity="0.12" />
+            <stop offset="100%" stopColor="#63E3E3" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <ellipse cx="160" cy="200" rx="90" ry="120" fill="url(#cw-garment-glow)" />
+        <path
+          d="M72 95 Q160 48 248 95 L268 128 L248 355 L72 355 L52 128 Z"
+          stroke="url(#cw-garment-stroke)"
+          strokeWidth="1.4"
+          fill="none"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M128 95 Q160 72 192 95"
+          stroke="url(#cw-garment-stroke)"
+          strokeWidth="1"
+          fill="none"
+          opacity="0.6"
+        />
+        <rect
+          x="128"
+          y="168"
+          width="64"
+          height="78"
+          rx="6"
+          stroke="url(#cw-garment-stroke)"
+          strokeDasharray="5 5"
+          strokeWidth="1"
+          fill="none"
+          opacity="0.5"
+        />
+        <path
+          d="M160 246 L160 310"
+          stroke="url(#cw-garment-stroke)"
+          strokeWidth="0.8"
+          opacity="0.35"
+        />
+      </svg>
+    </div>
   );
 }
 

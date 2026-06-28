@@ -1,6 +1,5 @@
 "use client";
 
-import { WorkspaceNav } from "@/components/workspace/workspace-nav";
 import {
   WorkspaceContextPanel,
   WorkspaceTimeline,
@@ -54,8 +53,6 @@ export function WorkspaceShell({
       className={cn("workspace-shell", className)}
       style={{ "--workspace-accent": accent } as React.CSSProperties}
     >
-      <WorkspaceNav activeId={agentId} />
-
       <div className="workspace-main">
         {!hideHeader ? (
           <header className="workspace-header">

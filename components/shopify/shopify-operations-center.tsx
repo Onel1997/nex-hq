@@ -8,7 +8,6 @@
 
 import { ShopifyOperationsCommerce } from "@/components/shopify/shopify-operations-commerce";
 import { useShopifyOperations } from "@/components/shopify/use-shopify-operations";
-import { WorkspaceNav } from "@/components/workspace/workspace-nav";
 import { cn } from "@/lib/utils";
 import { Loader2, RefreshCw } from "lucide-react";
 
@@ -17,7 +16,6 @@ export function ShopifyOperationsCenter() {
 
   return (
     <div className="shopify-operations-shell">
-      <WorkspaceNav activeId="shopify" />
       <div className="shopify-operations">
         <div className="shopify-operations-header">
           <div className="shopify-operations-live">

@@ -89,9 +89,9 @@ body:has(.design-studio-shell) {
   flex-direction: column;
   width: 100%;
   min-height: min-content;
-  background: #030506;
-  color: #eaf2ff;
-  --design-accent: #22d3ee;
+  background: #0b0e13;
+  color: #f4f1eb;
+  --design-accent: #63e3e3;
 }
 
 /* ── Top bar — sticky within scrollable center ── */
@@ -105,9 +105,22 @@ body:has(.design-studio-shell) {
   gap: 1rem;
   flex-shrink: 0;
   padding: 0.65rem 1.25rem;
-  border-bottom: 1px solid rgb(21 32 48 / 0.6);
-  background: rgb(6 10 16 / 0.94);
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+  background: rgb(11 14 19 / 0.94);
   backdrop-filter: blur(12px);
+}
+
+.design-studio-topbar-lab {
+  background: rgb(11 14 19 / 0.94);
+  border-bottom-color: rgb(255 255 255 / 0.06);
+}
+
+.design-studio-crumb-design {
+  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: #d9b46b;
+  text-transform: none;
 }
 
 .design-studio-breadcrumbs {
