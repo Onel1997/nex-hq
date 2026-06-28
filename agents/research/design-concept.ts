@@ -736,9 +736,9 @@ function resolveConceptColor(
   );
 }
 
-const BACK_PLACEMENT_PATTERN =
+export const BACK_PLACEMENT_PATTERN =
   /\b(upper back|full back|center back|back print|back graphic|spine|yoke|between shoulder)\b/i;
-const FRONT_PLACEMENT_PATTERN =
+export const FRONT_PLACEMENT_PATTERN =
   /\b(center chest|upper chest|left chest|chest|front print|front graphic)\b/i;
 
 /** Align printArea with placement copy in composition fields. */

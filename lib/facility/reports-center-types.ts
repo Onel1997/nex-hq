@@ -33,8 +33,44 @@ export interface ReportsCenterPreview {
   connectedDepartments: string[];
 }
 
+export interface ReportsCenterDesignCollection {
+  name: string;
+  story?: string;
+  mood?: string;
+  philosophy?: string;
+  heroDesignId: string;
+  campaignTheme?: string;
+  collectionScore?: number;
+}
+
+export interface ReportsCenterDesignConceptSummary {
+  designId: string;
+  title: string;
+  collectionRole: string;
+  product: string;
+  color: string;
+  printArea: string;
+  placement: string;
+  dimensions: string;
+  productionMethod: string;
+  dnaScore: number;
+  commercialScore?: number;
+  campaignPotential?: string;
+  isHero: boolean;
+}
+
+export interface ReportsCenterDesignResearch {
+  reportId: string;
+  hasDesignResearch: boolean;
+  designCount: number;
+  collection?: ReportsCenterDesignCollection;
+  designs: ReportsCenterDesignConceptSummary[];
+}
+
 export interface ReportsCenterReport {
   id: string;
+  /** Brain content.reportId — used for Design Studio handoff. */
+  reportId: string;
   title: string;
   department: string;
   agent: string;
@@ -47,6 +83,7 @@ export interface ReportsCenterReport {
   agentTab: ReportsCenterAgentTab;
   isCeoBriefing?: boolean;
   preview: ReportsCenterPreview;
+  designResearch?: ReportsCenterDesignResearch;
 }
 
 export interface ReportsCenterAgentTabFilter {

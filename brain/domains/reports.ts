@@ -609,6 +609,12 @@ export interface BrainResearchSections {
   recommendations: string[];
   competitorReport?: BrainCompetitorReportSections;
   trendReport?: BrainTrendReportSections;
+  /** Structured Research HQ design concepts for Design Studio handoff. */
+  designResearch?: {
+    title?: string;
+    collection?: Record<string, unknown>;
+    designs?: Record<string, unknown>[];
+  };
   /** Research HQ → Design Studio handoff payload. */
   designBrief?: {
     collectionIdea: string;

@@ -210,6 +210,7 @@ function reportToCenterReport(
 
   return {
     id: report.id,
+    reportId: report.id,
     title: report.title,
     department: departmentForReport(report),
     agent: agentName(report.agentId),
@@ -222,6 +223,7 @@ function reportToCenterReport(
     agentTab,
     isCeoBriefing: overrides?.isCeoBriefing ?? type === "ceo_briefing",
     preview: buildPreview(report, type, tasks),
+    designResearch: report.designResearch,
   };
 }
 
@@ -232,6 +234,7 @@ function taskToMissionSummary(task: TaskListItem): ReportsCenterReport | null {
 
   return {
     id: `mission-${task.id}`,
+    reportId: `mission-${task.id}`,
     title: `Mission Summary — ${task.title}`,
     department:
       agentId !== "ceo" ? AGENT_STUDIO_NAMES[agentId] : AGENT_STUDIO_NAMES.ceo,
@@ -275,6 +278,7 @@ async function buildCommerceReports(): Promise<ReportsCenterReport[]> {
     const reports: ReportsCenterReport[] = [
       {
         id: "commerce-report-revenue",
+        reportId: "commerce-report-revenue",
         title: "Commerce Revenue Analysis",
         department: "Commerce Lab",
         agent: "Commerce Intelligence",
@@ -307,6 +311,7 @@ async function buildCommerceReports(): Promise<ReportsCenterReport[]> {
     if (topProduct) {
       reports.push({
         id: "commerce-report-product",
+        reportId: "commerce-report-product",
         title: `Product Performance — ${topProduct.title}`,
         department: "Commerce Lab",
         agent: "Commerce Intelligence",
@@ -452,6 +457,7 @@ function buildCeoBriefings(
 
     return {
       id: template.id,
+      reportId: template.id,
       title: template.title,
       department: AGENT_STUDIO_NAMES.ceo,
       agent: agentName("ceo"),

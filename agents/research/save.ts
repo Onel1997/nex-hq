@@ -114,6 +114,11 @@ function buildDesignResearchSections(
       "Design-Umsetzung muss auf verfügbare Katalogvarianten und MarketPrint-Produktion abgestimmt bleiben.",
     ],
     recommendations: designSummaries,
+    designResearch: {
+      title: output.title,
+      collection: output.collection as unknown as Record<string, unknown>,
+      designs: output.designs as unknown as Record<string, unknown>[],
+    },
   };
 
   if (output.designBrief) {
@@ -214,6 +219,16 @@ async function saveDesignResearchToBrain(
         type: "markdown",
         label: "Design-Ideen",
         content: fullAnalysis,
+      },
+      {
+        id: `${reportId}-design-payload`,
+        type: "json",
+        label: "Design-Konzepte (structured)",
+        content: JSON.stringify({
+          title: output.title,
+          collection: output.collection,
+          designs: output.designs,
+        }),
       },
     ],
   };

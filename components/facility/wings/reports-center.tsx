@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FacilityDepartmentShell } from "@/components/facility/facility-department-shell";
 import type {
   ReportsCenterAgentTab,
+  ReportsCenterDesignConceptSummary,
+  ReportsCenterDesignResearch,
   ReportsCenterPayload,
   ReportsCenterReport,
   ReportsCenterSource,
@@ -19,6 +21,7 @@ import {
   Loader2,
   Palette,
   RefreshCw,
+  Send,
   ShoppingBag,
   Target,
   TrendingUp,
@@ -310,8 +313,11 @@ function ReportCard({
         </span>
       </footer>
 
-      {report.tags.length > 0 ? (
+      {report.tags.length > 0 || report.designResearch?.designCount ? (
         <div className="rc-card-tags">
+          {report.designResearch?.designCount ? (
+            <span>{report.designResearch.designCount} designs</span>
+          ) : null}
           {report.tags.map((tag) => (
             <span key={tag}>{tag}</span>
           ))}
@@ -329,6 +335,11 @@ function ReportPreview({
   onBack: () => void;
 }) {
   const Icon = AGENT_TAB_ICONS[report.agentTab];
+  const designResearch = report.designResearch;
+  const hasStructuredDesign =
+    designResearch?.hasDesignResearch && designResearch.designs.length > 0;
+  const displayTitle =
+    designResearch?.collection?.name?.trim() || report.title;
 
   return (
     <article className="rc-preview">
@@ -350,7 +361,7 @@ function ReportPreview({
             {STATUS_LABELS[report.status]}
           </span>
         </div>
-        <h2>{report.title}</h2>
+        <h2>{displayTitle}</h2>
         <div className="rc-preview-info">
           <span>{report.agent}</span>
           <span>{Math.round(report.confidence * 100)}% confidence</span>
@@ -364,53 +375,324 @@ function ReportPreview({
         </div>
       </header>
 
+      {process.env.NODE_ENV === "development" ? (
+        <DesignResearchDebugPanel
+          reportId={report.reportId}
+          designResearch={designResearch}
+        />
+      ) : null}
+
       <div className="rc-preview-body">
-        <PreviewSection title="Executive Summary">
-          <p>{report.preview.executiveSummary}</p>
-        </PreviewSection>
+        {hasStructuredDesign && designResearch ? (
+          <DesignResearchPreview
+            reportId={report.reportId}
+            designResearch={designResearch}
+            displayTitle={displayTitle}
+          />
+        ) : (
+          <>
+            <PreviewSection title="Executive Summary">
+              <p>{report.preview.executiveSummary}</p>
+            </PreviewSection>
 
-        <PreviewSection title="Key Findings">
-          <ul>
-            {report.preview.keyFindings.map((finding) => (
-              <li key={finding}>{finding}</li>
-            ))}
-          </ul>
-        </PreviewSection>
-
-        <PreviewSection title="Recommendations">
-          <ul>
-            {report.preview.recommendations.map((rec) => (
-              <li key={rec}>{rec}</li>
-            ))}
-          </ul>
-        </PreviewSection>
-
-        <div className="rc-preview-columns">
-          <PreviewSection title="Linked Missions">
-            {report.preview.linkedMissions.length > 0 ? (
-              <ul className="rc-linked-list">
-                {report.preview.linkedMissions.map((mission) => (
-                  <li key={mission.id}>
-                    <Target className="size-3.5" />
-                    {mission.title}
-                  </li>
+            <PreviewSection title="Key Findings">
+              <ul>
+                {report.preview.keyFindings.map((finding) => (
+                  <li key={finding}>{finding}</li>
                 ))}
               </ul>
-            ) : (
-              <p className="rc-preview-muted">No linked missions</p>
-            )}
-          </PreviewSection>
+            </PreviewSection>
 
-          <PreviewSection title="Connected Departments">
-            <div className="rc-dept-chips">
-              {report.preview.connectedDepartments.map((dept) => (
-                <span key={dept}>{dept}</span>
-              ))}
+            <PreviewSection title="Recommendations">
+              <ul>
+                {report.preview.recommendations.map((rec) => (
+                  <li key={rec}>{rec}</li>
+                ))}
+              </ul>
+            </PreviewSection>
+
+            <div className="rc-preview-columns">
+              <PreviewSection title="Linked Missions">
+                {report.preview.linkedMissions.length > 0 ? (
+                  <ul className="rc-linked-list">
+                    {report.preview.linkedMissions.map((mission) => (
+                      <li key={mission.id}>
+                        <Target className="size-3.5" />
+                        {mission.title}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="rc-preview-muted">No linked missions</p>
+                )}
+              </PreviewSection>
+
+              <PreviewSection title="Connected Departments">
+                <div className="rc-dept-chips">
+                  {report.preview.connectedDepartments.map((dept) => (
+                    <span key={dept}>{dept}</span>
+                  ))}
+                </div>
+              </PreviewSection>
             </div>
-          </PreviewSection>
-        </div>
+          </>
+        )}
       </div>
     </article>
+  );
+}
+
+function DesignResearchDebugPanel({
+  reportId,
+  designResearch,
+}: {
+  reportId: string;
+  designResearch?: ReportsCenterDesignResearch;
+}) {
+  return (
+    <div className="rc-design-debug" aria-label="Design research debug">
+      <span>Report ID: {reportId}</span>
+      <span>
+        Has designResearch: {designResearch?.hasDesignResearch ? "true" : "false"}
+      </span>
+      <span>Design count: {designResearch?.designCount ?? 0}</span>
+    </div>
+  );
+}
+
+function DesignResearchPreview({
+  reportId,
+  designResearch,
+  displayTitle,
+}: {
+  reportId: string;
+  designResearch: ReportsCenterDesignResearch;
+  displayTitle: string;
+}) {
+  const collection = designResearch.collection;
+  const collectionLabel = collection?.name?.trim() || displayTitle;
+
+  return (
+    <section className="rc-design-research" aria-label="Design collection">
+      <header className="rc-design-research-header">
+        <div>
+          <h3>Design Collection</h3>
+          <p className="rc-design-collection-name">{collectionLabel}</p>
+        </div>
+        <DesignStudioHandoffButton
+          reportId={reportId}
+          mode="all"
+          label="Send full collection to Design Studio"
+          variant="collection"
+        />
+      </header>
+
+      {collection ? (
+        <div className="rc-design-collection-overview">
+          {collection.campaignTheme ? (
+            <p>
+              <strong>Campaign theme:</strong> {collection.campaignTheme}
+            </p>
+          ) : null}
+          {collection.heroDesignId ? (
+            <p>
+              <strong>Hero design ID:</strong>{" "}
+              <code>{collection.heroDesignId}</code>
+            </p>
+          ) : null}
+          {collection.mood ? (
+            <p>
+              <strong>Mood:</strong> {collection.mood}
+            </p>
+          ) : null}
+          {collection.philosophy ? (
+            <p>
+              <strong>Philosophy:</strong> {collection.philosophy}
+            </p>
+          ) : null}
+          {collection.story ? (
+            <p>
+              <strong>Story:</strong> {collection.story}
+            </p>
+          ) : null}
+          {collection.collectionScore != null ? (
+            <p>
+              <strong>Collection score:</strong> {collection.collectionScore}%
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="rc-design-grid">
+        {designResearch.designs.map((design) => (
+          <DesignConceptCard
+            key={design.designId}
+            reportId={reportId}
+            design={design}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DesignConceptCard({
+  reportId,
+  design,
+}: {
+  reportId: string;
+  design: ReportsCenterDesignConceptSummary;
+}) {
+  return (
+    <article
+      className={cn("rc-design-card", design.isHero && "rc-design-card-hero")}
+    >
+      <header className="rc-design-card-header">
+        <div>
+          <h4>{design.title}</h4>
+          <p className="rc-design-card-meta">
+            <code>{design.designId}</code>
+            <span>{design.collectionRole}</span>
+            {design.isHero ? <span className="rc-design-hero-badge">Hero</span> : null}
+          </p>
+        </div>
+        <DesignStudioHandoffButton
+          reportId={reportId}
+          designId={design.designId}
+          label="Send to Design Studio"
+          variant="design"
+        />
+      </header>
+
+      <dl className="rc-design-spec-grid">
+        <div>
+          <dt>Product</dt>
+          <dd>{design.product}</dd>
+        </div>
+        <div>
+          <dt>Color</dt>
+          <dd>{design.color}</dd>
+        </div>
+        <div>
+          <dt>Print area</dt>
+          <dd>{design.printArea}</dd>
+        </div>
+        <div>
+          <dt>Placement</dt>
+          <dd>{design.placement}</dd>
+        </div>
+        <div>
+          <dt>Dimensions</dt>
+          <dd>{design.dimensions}</dd>
+        </div>
+        <div>
+          <dt>Production</dt>
+          <dd>{design.productionMethod}</dd>
+        </div>
+        <div>
+          <dt>DNA score</dt>
+          <dd>{design.dnaScore}%</dd>
+        </div>
+        {design.commercialScore != null ? (
+          <div>
+            <dt>Commercial score</dt>
+            <dd>{design.commercialScore}%</dd>
+          </div>
+        ) : null}
+        {design.campaignPotential ? (
+          <div>
+            <dt>Campaign potential</dt>
+            <dd className="rc-design-capitalize">{design.campaignPotential}</dd>
+          </div>
+        ) : null}
+      </dl>
+    </article>
+  );
+}
+
+function DesignStudioHandoffButton({
+  reportId,
+  designId,
+  mode,
+  label,
+  variant,
+}: {
+  reportId: string;
+  designId?: string;
+  mode?: "all";
+  label: string;
+  variant: "design" | "collection";
+}) {
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleClick = async () => {
+    setLoading(true);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const body =
+        mode === "all"
+          ? { reportId, mode: "all" as const }
+          : { reportId, designId: designId ?? "" };
+
+      const res = await fetch("/api/design/from-research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        brief?: { title?: string };
+        briefs?: Array<{ title?: string }>;
+      };
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error ?? "Design Studio handoff failed");
+      }
+
+      if (mode === "all") {
+        const count = data.briefs?.length ?? 0;
+        setMessage(`Sent ${count} design brief${count === 1 ? "" : "s"} to Design Studio`);
+      } else {
+        setMessage(
+          data.brief?.title
+            ? `Sent "${data.brief.title}" to Design Studio`
+            : "Sent to Design Studio",
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Design Studio handoff failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="rc-handoff-wrap">
+      <button
+        type="button"
+        className={cn(
+          "rc-handoff-btn",
+          variant === "collection" && "rc-handoff-btn-collection",
+        )}
+        onClick={() => void handleClick()}
+        disabled={loading}
+      >
+        {loading ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <Send className="size-3.5" />
+        )}
+        {label}
+      </button>
+      {message ? <p className="rc-handoff-success">{message}</p> : null}
+      {error ? <p className="rc-handoff-error">{error}</p> : null}
+    </div>
   );
 }
 

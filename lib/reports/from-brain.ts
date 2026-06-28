@@ -19,6 +19,7 @@ import type {
 import type { BrainRecord } from "@/brain/types";
 import type { ReportCategory, ReportListItem } from "@/lib/mock/reports";
 import { toImageProjectView } from "@/lib/reports/image-project";
+import { extractDesignResearchView } from "@/lib/reports/design-research-view";
 import {
   agentTabForAgentId,
   inferBrainReportSource,
@@ -404,6 +405,7 @@ export function brainReportRecordToListItem(
       : undefined,
     source: inferBrainReportSource(record, content),
     agentTab: agentTabForAgentId(content.agentId),
+    designResearch: extractDesignResearchView(content),
   };
 }
 

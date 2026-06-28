@@ -23,6 +23,7 @@ import type {
   ShopifyReportType,
 } from "@/brain/domains/reports";
 import type { ImageProjectView } from "@/lib/reports/image-project";
+import type { ReportsCenterDesignResearch } from "@/lib/facility/reports-center-types";
 import type { ReportAgentTab, ReportSource } from "@/lib/reports/report-source";
 import type { AgentId } from "@/lib/constants/agents";
 
@@ -188,6 +189,8 @@ export interface ReportListItem {
       agentId: AgentId;
     }>;
   };
+  /** Structured Research HQ design concepts for Reports Center / Design Studio handoff. */
+  designResearch?: ReportsCenterDesignResearch;
 }
 
 export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {
