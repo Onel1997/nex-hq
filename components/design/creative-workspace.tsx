@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import {
   Archive,
   CheckCircle2,
+  ChevronRight,
   Columns2,
   Copy,
   Download,
@@ -60,6 +61,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -92,7 +94,7 @@ interface CreativeWorkspaceProps {
   onSelectBrief?: (designId: string) => void;
   onSaveDraft?: () => void;
   onPatchMission: (updater: (state: DesignMissionState) => DesignMissionState) => void;
-  commerceSection?: ReactNode;
+  renderCommerceSection?: () => ReactNode;
 }
 
 export function CreativeWorkspace({
@@ -100,7 +102,7 @@ export function CreativeWorkspace({
   onSelectBrief,
   onSaveDraft,
   onPatchMission,
-  commerceSection,
+  renderCommerceSection,
 }: CreativeWorkspaceProps) {
   const router = useRouter();
   const workspace = getActiveWorkspace(mission);
@@ -118,6 +120,15 @@ export function CreativeWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [directorOpen, setDirectorOpen] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1400px)");
+    const sync = () => setDirectorOpen(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
@@ -257,7 +268,7 @@ export function CreativeWorkspace({
     : null;
 
   return (
-    <div className="cw-root">
+    <div className={cn("cw-root", directorOpen && "cw-root--director-open")}>
       <CollectionNavigator
         collectionName={mission.collectionName}
         designs={mission.allBriefs ?? [brief]}
@@ -390,6 +401,8 @@ export function CreativeWorkspace({
       </div>
 
       <CreativeDirectorPanel
+        open={directorOpen}
+        onToggleOpen={() => setDirectorOpen((value) => !value)}
         messages={workspace.chat}
         input={chatInput}
         loading={chatLoading}
@@ -402,14 +415,14 @@ export function CreativeWorkspace({
         <CollectionTimeline current={mission.timelineStage} />
       </div>
 
-      {commerceSection ? (
+      {renderCommerceSection ? (
         <div className="cw-commerce-span">
           <DesignLabCollapse
             title="Commerce Intelligence"
             meta="Supporting context"
             defaultOpen={false}
           >
-            {commerceSection}
+            {renderCommerceSection()}
           </DesignLabCollapse>
         </div>
       ) : null}
@@ -807,6 +820,8 @@ function CollectionTimeline({ current }: { current: CollectionTimelineStage }) {
 }
 
 function CreativeDirectorPanel({
+  open,
+  onToggleOpen,
   messages,
   input,
   loading,
@@ -814,6 +829,8 @@ function CreativeDirectorPanel({
   onSend,
   onSuggestion,
 }: {
+  open: boolean;
+  onToggleOpen: () => void;
   messages: PerDesignWorkspace["chat"];
   input: string;
   loading: boolean;
@@ -821,8 +838,34 @@ function CreativeDirectorPanel({
   onSend: () => void;
   onSuggestion: (s: string) => void;
 }) {
+  if (!open) {
+    return (
+      <aside className="cw-director" aria-label="Creative Director AI">
+        <button
+          type="button"
+          className="cw-director-tab"
+          onClick={onToggleOpen}
+          aria-expanded={false}
+          aria-label="Expand Creative Director"
+        >
+          <Sparkles className="size-4 shrink-0" />
+          <span className="cw-director-tab-label">Director</span>
+        </button>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="cw-director" aria-label="Creative Director AI">
+    <aside className="cw-director cw-director--open" aria-label="Creative Director AI">
+      <button
+        type="button"
+        className="cw-director-collapse"
+        onClick={onToggleOpen}
+        aria-expanded
+        aria-label="Collapse Creative Director"
+      >
+        <ChevronRight className="size-4" />
+      </button>
       <header>
         <Sparkles className="size-4" />
         <h2>Creative Director AI</h2>

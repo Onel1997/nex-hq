@@ -12,7 +12,7 @@ interface DesignMissionPanelProps {
   onSelectBrief?: (designId: string) => void;
   onSaveDraft?: () => void;
   onPatchMission: (updater: (state: DesignMissionState) => DesignMissionState) => void;
-  commerceSection?: ReactNode;
+  renderCommerceSection?: () => ReactNode;
 }
 
 export function DesignMissionEmptyState() {

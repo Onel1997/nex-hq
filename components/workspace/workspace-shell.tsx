@@ -27,6 +27,7 @@ interface WorkspaceShellProps {
   className?: string;
   hideHeader?: boolean;
   contextPanel?: React.ReactNode;
+  collapsibleContext?: boolean;
   timeline?: React.ReactNode;
 }
 
@@ -40,6 +41,7 @@ export function WorkspaceShell({
   className,
   hideHeader = false,
   contextPanel,
+  collapsibleContext = false,
   timeline,
 }: WorkspaceShellProps) {
   const { data, loading } = useWorkspaceContext(agentId);
@@ -111,7 +113,11 @@ export function WorkspaceShell({
         <div className="workspace-body">
           <main className="workspace-center">{children}</main>
           {contextPanel ?? (
-            <WorkspaceContextPanel data={data} loading={loading} />
+            <WorkspaceContextPanel
+              data={data}
+              loading={loading}
+              collapsible={collapsibleContext}
+            />
           )}
         </div>
 

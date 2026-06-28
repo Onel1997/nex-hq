@@ -2,44 +2,61 @@
 
 .design-studio-body-workspace {
   padding: 0;
-  min-height: 0;
-  flex: 1;
-  overflow: hidden;
+  min-height: auto;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
 }
 
 .design-studio-lab.design-studio {
-  min-height: 0;
-  height: 100%;
+  min-height: min-content;
+  height: auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow: visible;
 }
 
 .design-studio-shell .workspace-center:has(.cw-root) {
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  overflow-x: hidden;
+  overflow: visible;
+  display: block;
+  min-height: auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
-/* ── Root: 280 | center | 360 + full-width footer rows ── */
+/* ── Root: 220 | center | director rail ── */
 
 .cw-root {
-  --cw-nav-w: 280px;
-  --cw-director-w: 360px;
+  --cw-nav-w: 220px;
+  --cw-director-w: 44px;
   --cw-topbar-h: 52px;
 
   display: grid;
-  grid-template-columns: var(--cw-nav-w) minmax(900px, 1fr) var(--cw-director-w);
-  grid-template-rows: minmax(0, 1fr) auto auto;
-  flex: 1;
-  min-height: 0;
-  height: calc(100vh - var(--cw-topbar-h));
-  max-height: calc(100vh - var(--cw-topbar-h));
+  grid-template-columns: var(--cw-nav-w) minmax(720px, 1fr) minmax(0, var(--cw-director-w));
+  grid-template-rows: auto auto auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  max-height: none;
+  padding-bottom: 4.5rem;
   background: #010203;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+
+.cw-root--director-open {
+  --cw-director-w: 320px;
 }
 
 /* ── Column 1: Collection navigator (fixed 280px) ── */
@@ -47,8 +64,13 @@
 .cw-collection-nav {
   grid-column: 1;
   grid-row: 1;
-  width: var(--cw-nav-w);
-  min-width: var(--cw-nav-w);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  align-self: start;
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - var(--cw-topbar-h));
   padding: 1rem 0.85rem;
   background: rgb(4 5 7 / 0.98);
   border-right: 1px solid rgb(255 255 255 / 0.05);
@@ -131,28 +153,105 @@
   grid-column: 2;
   grid-row: 1;
   display: grid;
-  grid-template-rows: auto auto minmax(420px, 1fr) auto;
+  grid-template-rows: auto auto minmax(520px, auto) auto;
   gap: 0.65rem;
   min-width: 0;
+  max-width: 100%;
   min-height: 0;
   padding: 0.85rem 1rem 0.75rem;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
   border-right: 1px solid rgb(255 255 255 / 0.04);
 }
 
-/* ── Column 3: Creative Director (fixed 360px) ── */
+@media (min-width: 1101px) {
+  .cw-main {
+    min-width: 720px;
+  }
+}
+
+/* ── Column 3: Creative Director rail ── */
 
 .cw-director {
   grid-column: 3;
   grid-row: 1;
-  width: var(--cw-director-w);
-  min-width: var(--cw-director-w);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
+  align-self: start;
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - var(--cw-topbar-h));
   min-height: 0;
   overflow: hidden;
   background: rgb(4 5 7 / 0.98);
   border-left: 1px solid rgb(255 255 255 / 0.05);
+}
+
+.cw-director-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 8rem;
+  padding: 1rem 0.35rem;
+  border: none;
+  background: transparent;
+  color: rgb(148 163 184 / 0.9);
+  cursor: pointer;
+}
+
+.cw-director-tab:hover {
+  color: #6eb5c0;
+  background: rgb(255 255 255 / 0.03);
+}
+
+.cw-director-tab-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.cw-director--open header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding: 0.85rem 2.25rem 0.6rem 0.85rem;
+  color: #6eb5c0;
+}
+
+.cw-director-collapse {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.55rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.35rem;
+  background: rgb(4 5 7 / 0.95);
+  color: rgb(148 163 184 / 0.9);
+  cursor: pointer;
+}
+
+.cw-director-collapse:hover {
+  color: #6eb5c0;
+  border-color: rgb(110 181 192 / 0.25);
+}
+
+.cw-director--open {
+  position: relative;
 }
 
 /* ── Full-width footer rows ── */
@@ -170,18 +269,19 @@
   grid-row: 3;
   padding: 0 1rem 0.75rem;
   background: rgb(3 4 6 / 0.95);
-  max-height: 40vh;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 /* ── Mission bar (compact) ── */
 
 .cw-mission-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .cw-eyebrow {
@@ -199,24 +299,20 @@
   font-weight: 500;
   letter-spacing: -0.02em;
   color: #fafafa;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 36rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .cw-mission-meta {
   margin: 0.2rem 0 0;
   font-size: 0.72rem;
   color: rgb(148 163 184 / 0.85);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .cw-mission-scores {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.35rem;
   flex-shrink: 0;
 }
@@ -255,14 +351,14 @@
 
 .cw-toolbar {
   display: flex;
-  flex-wrap: nowrap;
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
   padding: 0.35rem 0;
-  overflow-x: auto;
-  overflow-y: hidden;
   flex-shrink: 0;
-  scrollbar-width: thin;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .cw-toolbar-btn {
@@ -276,7 +372,7 @@
   background: rgb(8 10 14 / 0.9);
   color: #cbd5e1;
   font-size: 0.68rem;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   cursor: pointer;
   transition: border-color 0.15s;
 }
@@ -295,6 +391,8 @@
 .cw-workspace-core {
   min-height: 0;
   min-width: 0;
+  max-width: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -302,7 +400,10 @@
 
 .cw-canvas-section {
   flex: 1;
-  min-height: 420px;
+  min-height: 520px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
   border-radius: 0.75rem;
@@ -368,7 +469,10 @@
 
 .cw-canvas-stage {
   flex: 1;
-  min-height: 360px;
+  min-height: 520px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
   background-color: #050608;
   background-image:
     linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px),
@@ -459,8 +563,6 @@
     "health health";
   gap: 0.55rem;
   flex-shrink: 0;
-  max-height: 220px;
-  overflow: hidden;
 }
 
 .cw-iterations {
@@ -848,22 +950,26 @@
 /* ── Quick approval (floating) ── */
 
 .cw-approval {
-  position: fixed;
+  position: sticky;
   bottom: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
   z-index: 40;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.3rem;
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin: 0.75rem auto 0;
   padding: 0.45rem 0.6rem;
   border-radius: 999px;
   border: 1px solid rgb(255 255 255 / 0.08);
   background: rgb(8 10 14 / 0.94);
   backdrop-filter: blur(16px);
   box-shadow: 0 12px 40px rgb(0 0 0 / 0.5);
-  max-width: calc(100% - var(--cw-nav-w) - var(--cw-director-w) - 2rem);
-  overflow-x: auto;
+  overflow-x: hidden;
+  grid-column: 1 / -1;
+  justify-self: center;
+  align-self: end;
 }
 
 .cw-approval button {
@@ -1036,41 +1142,16 @@
   color: #6eb5c0;
 }
 
-/* ── Responsive ── */
-
-@media (max-width: 1400px) {
-  .cw-root {
-    grid-template-columns: var(--cw-nav-w) minmax(0, 1fr) var(--cw-director-w);
-  }
-
-  .cw-health-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1280px) {
-  .cw-root {
-    --cw-nav-w: 240px;
-    --cw-director-w: 320px;
-    grid-template-columns: var(--cw-nav-w) minmax(0, 1fr) var(--cw-director-w);
-  }
-
-  .cw-health-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-
-  .cw-panels-grid {
-    max-height: 240px;
-  }
-}
+/* ── Responsive — stack only below 1100px ── */
 
 @media (max-width: 1100px) {
   .cw-root {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    grid-template-rows: auto auto auto auto auto;
     height: auto;
     max-height: none;
-    overflow: visible;
+    overflow-x: hidden;
+    overflow-y: visible;
   }
 
   .cw-collection-nav {
@@ -1090,8 +1171,10 @@
   .cw-main {
     grid-column: 1;
     grid-row: 2;
-    grid-template-rows: auto auto minmax(360px, 55vh) auto;
-    overflow: visible;
+    min-width: 0;
+    grid-template-rows: auto auto minmax(520px, auto) auto;
+    overflow-x: hidden;
+    overflow-y: visible;
     border-right: none;
   }
 
@@ -1127,13 +1210,7 @@
   }
 
   .cw-approval {
-    left: 50%;
-    transform: translateX(-50%);
     max-width: calc(100% - 1.5rem);
-  }
-
-  .design-studio-shell .workspace-center:has(.cw-root) {
-    overflow-y: auto;
   }
 }
 

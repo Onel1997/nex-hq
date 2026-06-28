@@ -46,8 +46,30 @@ export function DesignStudioCenter() {
   const { data, loading, error, refresh } = useDesignStudio();
   const { mission, hydrated, selectBrief, markSaved, patchMission } = useDesignMission();
 
-  const commerceSection =
-    data && !loading ? (
+  const renderCommerceSection = () => {
+    if (loading) {
+      return (
+        <div className="design-studio-supporting-loading">
+          <Loader2 className="size-6 animate-spin text-[#22d3ee]" />
+          <p>Loading commerce intelligence…</p>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="design-studio-supporting-error">
+          <p>{error}</p>
+          <button type="button" onClick={() => void refresh()}>
+            Retry
+          </button>
+        </div>
+      );
+    }
+
+    if (!data) return null;
+
+    return (
       <>
         <div className="design-studio-row-1">
           <ProductEcosystemColumn studio={data.studio} />
@@ -58,25 +80,15 @@ export function DesignStudioCenter() {
         <DesignIntelligenceSection studio={data.studio} />
         <ProductIntelligenceGrid studio={data.studio} />
       </>
-    ) : loading ? (
-      <div className="design-studio-supporting-loading">
-        <Loader2 className="size-6 animate-spin text-[#22d3ee]" />
-        <p>Loading commerce intelligence…</p>
-      </div>
-    ) : error ? (
-      <div className="design-studio-supporting-error">
-        <p>{error}</p>
-        <button type="button" onClick={() => void refresh()}>
-          Retry
-        </button>
-      </div>
-    ) : null;
+    );
+  };
 
   return (
     <WorkspaceShell
       agentId="designer"
       className="design-studio-shell"
       hideHeader
+      collapsibleContext
       contextPanel={
         data && !mission ? <DesignStudioSidebar studio={data.studio} /> : undefined
       }
@@ -123,7 +135,7 @@ export function DesignStudioCenter() {
               onSelectBrief={selectBrief}
               onSaveDraft={markSaved}
               onPatchMission={patchMission}
-              commerceSection={commerceSection}
+              renderCommerceSection={renderCommerceSection}
             />
           ) : hydrated ? (
             <DesignMissionEmptyState />
