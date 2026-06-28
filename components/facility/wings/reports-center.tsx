@@ -1,5 +1,10 @@
 "use client";
 
+import type { DesignStudioBrief } from "@/agents/design/studio-brief";
+import {
+  buildDesignMissionFromHandoff,
+  saveDesignMission,
+} from "@/lib/design/design-mission-store";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FacilityDepartmentShell } from "@/components/facility/facility-department-shell";
 import type {
@@ -647,8 +652,12 @@ function DesignStudioHandoffButton({
       const data = (await res.json()) as {
         ok?: boolean;
         error?: string;
-        brief?: { title?: string };
-        briefs?: Array<{ title?: string }>;
+        reportId?: string;
+        brainRecordId?: string;
+        reportTitle?: string;
+        collectionName?: string;
+        brief?: DesignStudioBrief;
+        briefs?: DesignStudioBrief[];
       };
 
       if (!res.ok || !data.ok) {
@@ -656,9 +665,33 @@ function DesignStudioHandoffButton({
       }
 
       if (mode === "all") {
-        const count = data.briefs?.length ?? 0;
+        const briefs = data.briefs ?? [];
+        const count = briefs.length;
+        if (count > 0 && data.reportId && data.reportTitle) {
+          saveDesignMission(
+            buildDesignMissionFromHandoff({
+              reportId: data.reportId,
+              brainRecordId: data.brainRecordId,
+              reportTitle: data.reportTitle,
+              collectionName: data.collectionName,
+              brief: briefs[0],
+              allBriefs: briefs,
+            }),
+          );
+        }
         setMessage(`Sent ${count} design brief${count === 1 ? "" : "s"} to Design Studio`);
       } else {
+        if (data.brief && data.reportId && data.reportTitle) {
+          saveDesignMission(
+            buildDesignMissionFromHandoff({
+              reportId: data.reportId,
+              brainRecordId: data.brainRecordId,
+              reportTitle: data.reportTitle,
+              collectionName: data.collectionName,
+              brief: data.brief,
+            }),
+          );
+        }
         setMessage(
           data.brief?.title
             ? `Sent "${data.brief.title}" to Design Studio`

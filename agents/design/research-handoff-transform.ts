@@ -319,6 +319,13 @@ export function convertResearchConceptToStudioBrief(
       ? `Uppercase editorial — "${aligned.message.trim()}"`
       : "No type — graphic only");
 
+  const visualConcept = cleanFallbackText(aligned.visualConcept) || geometry;
+  const designDescription =
+    cleanFallbackText(aligned.designDescription) ||
+    cleanFallbackText(aligned.layoutDescription) ||
+    cleanFallbackText(aligned.exactComposition) ||
+    visualConcept;
+
   return {
     designId: aligned.designId,
     title: aligned.title.trim(),
@@ -328,6 +335,8 @@ export function convertResearchConceptToStudioBrief(
     printArea: aligned.printArea.trim(),
     placement,
     dimensions: resolveDimensions(aligned),
+    visualConcept,
+    designDescription,
     geometry,
     visualElements: visualElements.length > 0 ? visualElements : [geometry],
     typography,
@@ -344,5 +353,8 @@ export function convertResearchConceptToStudioBrief(
     mockupPrompt: buildMockupPrompt(aligned, placement),
     imagePrompt: buildImagePrompt(aligned),
     printReadinessScore: scorePrintReadiness(aligned, placement, conflict),
+    dnaScore: aligned.dnaScore,
+    commercialScore: aligned.commercialScore,
+    campaignPotential: aligned.campaignPotential,
   };
 }
