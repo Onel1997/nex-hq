@@ -29,6 +29,7 @@ import {
   updatePromptOverride,
   updateWorkspace,
 } from "@/lib/design/design-mission-store";
+import { svgMarkupToDataUrl } from "@/lib/design/svg-data-url";
 import { saveImageStudioHandoff } from "@/lib/image/image-handoff-store";
 import { cn } from "@/lib/utils";
 import {
@@ -65,7 +66,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
-  useEffect,
   useMemo,
   useState,
   type CSSProperties,
@@ -127,18 +127,68 @@ export function CreativeWorkspace({
   const [chatLoading, setChatLoading] = useState(false);
   const [directorOpen, setDirectorOpen] = useState(false);
 
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1400px)");
-    const sync = () => setDirectorOpen(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-
   const notify = useCallback((msg: string) => {
     setToast(msg);
     setError(null);
   }, []);
+
+  const resetProductionStatus = useCallback(
+    (itemId: "svg" | "mockup" | "aiRender") => {
+      onPatchMission((s) =>
+        updateWorkspace(s, s.brief.designId, (w) => ({
+          ...w,
+          production: w.production.map((p) =>
+            p.id === itemId ? { ...p, status: "pending" as const } : p,
+          ),
+        })),
+      );
+    },
+    [onPatchMission],
+  );
+
+  const runSvgGeneration = useCallback(async () => {
+    const label = "Generate SVG";
+    setActionLoading(label);
+    setToast(null);
+    setError(null);
+    onPatchMission((s) =>
+      updateWorkspace(s, s.brief.designId, (w) => ({
+        ...w,
+        production: w.production.map((p) =>
+          p.id === "svg" ? { ...p, status: "working" as const } : p,
+        ),
+      })),
+    );
+
+    try {
+      const res = await fetch("/api/design/generate-svg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string; svg?: string };
+      if (!res.ok || !data.ok || !data.svg) {
+        throw new Error(data.error ?? "SVG generation failed");
+      }
+
+      const svgUrl = svgMarkupToDataUrl(data.svg);
+
+      onPatchMission((state) => {
+        let next = setPipelineStage(state, "design");
+        next = setTimelineStage(next, "design");
+        next = updateMissionAssets(next, { svgUrl });
+        next = appendVersionEntry(next, "SVG generated", "svg");
+        return next;
+      });
+      setCanvasTab("svg");
+      notify("Generate SVG complete");
+    } catch (err) {
+      resetProductionStatus("svg");
+      setError(err instanceof Error ? err.message : "Generate SVG failed");
+    } finally {
+      setActionLoading(null);
+    }
+  }, [brief, notify, onPatchMission, resetProductionStatus]);
 
   const runGeneration = useCallback(
     async (
@@ -189,12 +239,15 @@ export function CreativeWorkspace({
         });
         notify(`${label} complete`);
       } catch (err) {
+        const productionId =
+          assetKey === "svgUrl" ? "svg" : assetKey === "mockupUrl" ? "mockup" : "aiRender";
+        resetProductionStatus(productionId);
         setError(err instanceof Error ? err.message : `${label} failed`);
       } finally {
         setActionLoading(null);
       }
     },
-    [notify, onPatchMission],
+    [notify, onPatchMission, resetProductionStatus],
   );
 
   const sendDirectorMessage = useCallback(
@@ -273,7 +326,7 @@ export function CreativeWorkspace({
     : null;
 
   return (
-    <div className={cn("cw-root", directorOpen && "cw-root--director-open")}>
+    <div className="cw-root">
       <CollectionNavigator
         collectionName={mission.collectionName}
         designs={mission.allBriefs ?? [brief]}
@@ -302,17 +355,7 @@ export function CreativeWorkspace({
         <div className="cw-toolbar-sticky">
         <ProductionToolbar
           loading={actionLoading}
-          onGenerateSvg={() =>
-            void runGeneration(
-              prompts.svgPrompt,
-              "Generate SVG",
-              "svgUrl",
-              "SVG generated",
-              "svg",
-              "design",
-              "design",
-            )
-          }
+          onGenerateSvg={() => void runSvgGeneration()}
           onGenerateMockup={() =>
             void runGeneration(
               prompts.mockupPrompt,
@@ -379,6 +422,17 @@ export function CreativeWorkspace({
           />
         </div>
 
+        <CreativeDirectorPanel
+          open={directorOpen}
+          onToggleOpen={() => setDirectorOpen((value) => !value)}
+          messages={workspace.chat}
+          input={chatInput}
+          loading={chatLoading}
+          onInputChange={setChatInput}
+          onSend={() => void sendDirectorMessage(chatInput)}
+          onSuggestion={sendDirectorMessage}
+        />
+
         {toast ? <p className="cw-toast">{toast}</p> : null}
         {error ? <p className="cw-error">{error}</p> : null}
 
@@ -400,17 +454,6 @@ export function CreativeWorkspace({
           <DesignHealthPanel health={workspace.health} />
         </div>
       </div>
-
-      <CreativeDirectorPanel
-        open={directorOpen}
-        onToggleOpen={() => setDirectorOpen((value) => !value)}
-        messages={workspace.chat}
-        input={chatInput}
-        loading={chatLoading}
-        onInputChange={setChatInput}
-        onSend={() => void sendDirectorMessage(chatInput)}
-        onSuggestion={sendDirectorMessage}
-      />
 
       <div className="cw-timeline-span">
         <CollectionTimeline current={mission.timelineStage} />
@@ -909,94 +952,80 @@ function CreativeDirectorPanel({
   onSend: () => void;
   onSuggestion: (s: string) => void;
 }) {
-  if (!open) {
-    return (
-      <aside className="cw-director" aria-label="Creative Director AI">
-        <button
-          type="button"
-          className="cw-director-tab"
-          onClick={onToggleOpen}
-          aria-expanded={false}
-          aria-label="Expand Creative Director"
-        >
-          <Sparkles className="size-4 shrink-0" />
-          <span className="cw-director-tab-label">Director</span>
-        </button>
-      </aside>
-    );
-  }
-
   return (
-    <aside className="cw-director cw-director--open" aria-label="Creative Director AI">
+    <section className="cw-director-section" aria-label="Creative Director AI">
       <button
         type="button"
-        className="cw-director-collapse"
+        className="cw-director-section-toggle"
         onClick={onToggleOpen}
-        aria-expanded
-        aria-label="Collapse Creative Director"
+        aria-expanded={open}
+        aria-label={open ? "Collapse Creative Director AI" : "Expand Creative Director AI"}
       >
-        <ChevronRight className="size-4" />
-      </button>
-      <header className="cw-director-header">
-        <div className="cw-director-header-icon">
-          <Sparkles className="size-4" />
-        </div>
-        <div>
-          <p className="cw-director-eyebrow">AI Creative Assistant</p>
-          <h2>Creative Director AI</h2>
-        </div>
-      </header>
-      <div className="cw-director-suggestions">
-        <p className="cw-director-suggestions-label">Suggested directions</p>
-        <div className="cw-director-suggestion-cards">
-          {DIRECTOR_SUGGESTIONS.map((s) => (
-            <button
-              key={s.label}
-              type="button"
-              className="cw-director-card"
-              onClick={() => onSuggestion(s.prompt)}
-            >
-              <span className="cw-director-card-label">{s.label}</span>
-              <ChevronRight className="size-3.5 cw-director-card-arrow" />
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="cw-director-thread">
-        {messages.length === 0 ? (
-          <p className="cw-director-empty">
-            Speak naturally — typography, restraint, emotion, production. Your senior Creative Director is listening.
-          </p>
-        ) : (
-          messages.map((m) => (
-            <div key={m.id} className={cn("cw-director-msg", m.role)}>
-              {m.content}
-            </div>
-          ))
-        )}
-        {loading ? (
-          <div className="cw-director-msg assistant">
-            <Loader2 className="size-4 animate-spin" />
+        <div className="cw-director-section-heading">
+          <span className="cw-director-section-icon-wrap">
+            <Sparkles className="size-4" />
+          </span>
+          <div>
+            <h2>Creative Director AI</h2>
+            <p className="cw-director-section-subtitle">
+              Suggestions, revisions and version ideas
+            </p>
           </div>
-        ) : null}
-      </div>
-      <form
-        className="cw-director-input"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSend();
-        }}
-      >
-        <input
-          value={input}
-          onChange={(e) => onInputChange(e.target.value)}
-          placeholder="Describe the direction you want…"
+        </div>
+        <ChevronRight
+          className={cn("size-4 cw-director-section-chevron", open && "is-open")}
         />
-        <button type="submit" className="cw-btn-primary" disabled={loading || !input.trim()}>
-          <MessageSquare className="size-4" />
-        </button>
-      </form>
-    </aside>
+      </button>
+
+      {open ? (
+        <div className="cw-director-section-body">
+          <div className="cw-director-suggestion-grid">
+            {DIRECTOR_SUGGESTIONS.map((s) => (
+              <button
+                key={s.label}
+                type="button"
+                className="cw-director-chip"
+                onClick={() => onSuggestion(s.prompt)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {messages.length > 0 || loading ? (
+            <div className="cw-director-thread">
+              {messages.map((m) => (
+                <div key={m.id} className={cn("cw-director-msg", m.role)}>
+                  {m.content}
+                </div>
+              ))}
+              {loading ? (
+                <div className="cw-director-msg assistant">
+                  <Loader2 className="size-4 animate-spin" />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <form
+            className="cw-director-input"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSend();
+            }}
+          >
+            <input
+              value={input}
+              onChange={(e) => onInputChange(e.target.value)}
+              placeholder="Describe the direction you want…"
+            />
+            <button type="submit" className="cw-btn-primary" disabled={loading || !input.trim()}>
+              <MessageSquare className="size-4" />
+            </button>
+          </form>
+        </div>
+      ) : null}
+    </section>
   );
 }
 

@@ -24,21 +24,25 @@ body:has(.design-studio-shell) {
 }
 
 /* ── Shell scroll architecture ──
-   Left agent nav stays fixed; page scrolls vertically.
-   Live Context overlays on the right — does not shrink center. */
+   Center content reserves a right gutter; Live Context tab sits in the rail zone. */
 
 .design-studio-shell {
+  --design-content-gutter: 32px;
+  --design-live-context-rail: 44px;
+
   width: 100%;
-  max-width: 100vw;
+  max-width: 100%;
   min-height: 100vh;
   height: auto;
   overflow-x: hidden;
   overflow-y: visible;
+  box-sizing: border-box;
 }
 
 .design-studio-shell.workspace-shell {
   height: auto;
   min-height: 100%;
+  box-sizing: border-box;
 }
 
 .design-studio-shell .workspace-main {
@@ -46,9 +50,11 @@ body:has(.design-studio-shell) {
   min-height: 0;
   min-width: 0;
   max-width: 100%;
+  width: 100%;
   height: auto;
   overflow-x: hidden;
   overflow-y: visible;
+  box-sizing: border-box;
 }
 
 .design-studio-shell .workspace-body {
@@ -57,8 +63,10 @@ body:has(.design-studio-shell) {
   min-height: auto;
   min-width: 0;
   max-width: 100%;
+  width: 100%;
   overflow-x: hidden;
   overflow-y: visible;
+  box-sizing: border-box;
 }
 
 .design-studio-shell .workspace-center {
@@ -68,8 +76,14 @@ body:has(.design-studio-shell) {
   max-width: 100%;
   width: 100%;
   padding: 0;
+  padding-right: var(--design-content-gutter);
   overflow-x: hidden;
   overflow-y: visible;
+  box-sizing: border-box;
+}
+
+.design-studio-shell .workspace-body:has(.design-live-context) .workspace-center {
+  padding-right: calc(var(--design-content-gutter) + var(--design-live-context-rail));
 }
 
 .design-studio-shell .design-studio {
@@ -78,6 +92,7 @@ body:has(.design-studio-shell) {
   min-width: 0;
   overflow-x: hidden;
   overflow-y: visible;
+  box-sizing: border-box;
 }
 
 .design-studio-shell .workspace-timeline {
@@ -104,6 +119,10 @@ body:has(.design-studio-shell) {
   justify-content: space-between;
   gap: 1rem;
   flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0.65rem 1.25rem;
   border-bottom: 1px solid rgb(255 255 255 / 0.06);
   background: rgb(11 14 19 / 0.94);
@@ -1038,24 +1057,26 @@ body:has(.design-studio-shell) {
   overflow: hidden;
 }
 
-/* ── Live Context — collapsible overlay rail ── */
+/* ── Live Context — rail tab outside content gutter ── */
 .design-studio-shell .workspace-context.design-live-context {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
   z-index: 30;
-  width: 44px;
-  min-width: 44px;
-  max-width: 44px;
+  width: var(--design-live-context-rail);
+  min-width: var(--design-live-context-rail);
+  max-width: var(--design-live-context-rail);
   height: auto;
-  box-shadow: -10px 0 28px rgb(0 0 0 / 0.35);
+  box-shadow: none;
+  pointer-events: auto;
 }
 
 .design-studio-shell .workspace-context.design-live-context.design-live-context--open {
   width: 320px;
   min-width: 320px;
-  max-width: min(320px, 92vw);
+  max-width: min(320px, calc(100% - var(--design-content-gutter)));
+  box-shadow: -10px 0 28px rgb(0 0 0 / 0.35);
 }
 
 .design-studio-shell .design-live-context {
@@ -1132,6 +1153,16 @@ body:has(.design-studio-shell) {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+@media (max-width: 1100px) {
+  .design-studio-shell .workspace-context.design-live-context:not(.design-live-context--open) {
+    display: none;
+  }
+
+  .design-studio-shell .workspace-body:has(.design-live-context) .workspace-center {
+    padding-right: var(--design-content-gutter);
+  }
 }
 
 .design-studio-sidebar-header {

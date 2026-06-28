@@ -13,6 +13,7 @@ import {
   updateMissionAssets,
   updatePromptOverride,
 } from "@/lib/design/design-mission-store";
+import { svgMarkupToDataUrl } from "@/lib/design/svg-data-url";
 import { saveImageStudioHandoff } from "@/lib/image/image-handoff-store";
 import { cn } from "@/lib/utils";
 import {
@@ -75,6 +76,40 @@ export function DesignLabWorkspace({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const runSvgGeneration = useCallback(async () => {
+    const label = "Generate SVG";
+    setActionLoading(label);
+    setActionMessage(null);
+    setActionError(null);
+
+    try {
+      const res = await fetch("/api/design/generate-svg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string; svg?: string };
+      if (!res.ok || !data.ok || !data.svg) {
+        throw new Error(data.error ?? "SVG generation failed");
+      }
+
+      const svgUrl = svgMarkupToDataUrl(data.svg);
+
+      onPatchMission((state) => {
+        let next = setPipelineStage(state, "design");
+        next = updateMissionAssets(next, { svgUrl });
+        next = appendVersionEntry(next, "SVG generated", "svg");
+        return next;
+      });
+
+      setActionMessage(`${label} complete`);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : `${label} failed`);
+    } finally {
+      setActionLoading(null);
+    }
+  }, [brief, onPatchMission]);
 
   const runGeneration = useCallback(
     async (
@@ -202,15 +237,7 @@ export function DesignLabWorkspace({
         onEdit={handlePromptOverride}
         onRegenerate={(key) => {
           const map = {
-            svgPrompt: () =>
-              void runGeneration(
-                prompts.svgPrompt,
-                "SVG",
-                "svgUrl",
-                "SVG updated",
-                "svg",
-                "design",
-              ),
+            svgPrompt: () => void runSvgGeneration(),
             mockupPrompt: () =>
               void runGeneration(
                 prompts.mockupPrompt,
@@ -242,16 +269,7 @@ export function DesignLabWorkspace({
         message={actionMessage}
         error={actionError}
         reportId={mission.reportId}
-        onGenerateSvg={() =>
-          void runGeneration(
-            prompts.svgPrompt,
-            "Generate SVG",
-            "svgUrl",
-            "SVG generated",
-            "svg",
-            "design",
-          )
-        }
+        onGenerateSvg={() => void runSvgGeneration()}
         onGenerateMockup={() =>
           void runGeneration(
             prompts.mockupPrompt,
