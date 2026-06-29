@@ -12,6 +12,7 @@ import {
 import { logCompositionScore } from "@/lib/design/design-library/composition-intelligence";
 import { evaluateKnowledgeGate, getKnowledgeBaseStats } from "@/lib/design/design-knowledge";
 import { validatePremiumTemplateOutput } from "@/lib/design/design-library/templates/premium/quality-gate";
+import { isPremiumTypographyRole } from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
 import {
   ARCHITECTURAL_FRAME_RECIPE,
   FAITH_COLLECTION_RECIPE,
@@ -186,12 +187,12 @@ export function renderPremiumTemplateEngine(
     `[DESIGN KNOWLEDGE] Brain loaded: ${stats.totalRecipes} recipes (${stats.layouts} layouts, ${stats.typography} typography, ${stats.symbols} symbols, ${stats.ornaments} ornaments)`,
   );
 
-  const isHero = spec.brief.role.toLowerCase().includes("hero");
+  const isPremium = isPremiumTypographyRole(spec.brief.role);
   const placement = detectApparelPlacement(spec);
   const preferred = selectPremiumTemplate(spec);
 
   const placementOverride =
-    isHero && !spec.brief.printArea.toLowerCase().includes("micro")
+    isPremium && !spec.brief.printArea.toLowerCase().includes("micro")
       ? placement === "center-chest"
         ? "oversized-front"
         : placement
@@ -201,15 +202,15 @@ export function renderPremiumTemplateEngine(
   const candidates = [preferred, ...FALLBACK_CHAIN.filter((t) => t !== preferred)];
 
   for (const templateId of candidates) {
-    const result = tryRenderCandidate(baseCtx, templateId, isHero);
+    const result = tryRenderCandidate(baseCtx, templateId, isPremium);
     if (result) return result;
   }
 
-  if (isHero) {
+  if (isPremium) {
     for (let variant = 1; variant <= 6; variant++) {
       const variantCtx = { ...baseCtx, seed: baseCtx.seed + variant * 37 };
       for (const templateId of candidates) {
-        const result = tryRenderCandidate(variantCtx, templateId, isHero);
+        const result = tryRenderCandidate(variantCtx, templateId, isPremium);
         if (result) return result;
       }
     }

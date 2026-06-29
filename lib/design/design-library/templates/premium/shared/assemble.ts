@@ -8,7 +8,7 @@ import type { SymbolRecipe } from "@/lib/design/design-library/templates/premium
 import { PREMIUM_ENGINE_COMMENT } from "@/lib/design/design-library/templates/premium/types";
 import { buildPremiumTypographyPlacements } from "@/lib/design/design-library/templates/premium/shared/typography-build";
 import { renderTypographySvg } from "@/lib/design/design-library/templates/premium/shared/typography-render";
-import { isHeroTypographyArtwork } from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
+import { isPremiumTypographyRole } from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
 import { buildSymbolLayers } from "@/lib/design/design-library/templates/premium/shared/symbols-build";
 import { buildOrnamentLayers } from "@/lib/design/design-library/templates/premium/shared/ornaments-build";
 import { analyzePremiumSvg } from "@/lib/design/design-library/templates/premium/quality-gate";
@@ -81,7 +81,7 @@ export function renderPremiumTemplateFromRecipe(
   let adjustedCtx = { ...ctx, heroScale: scale };
 
   let rawTypography = buildPremiumTypographyPlacements(adjustedCtx, layout);
-  if (recipe.decision && !isHeroTypographyArtwork(adjustedCtx)) {
+  if (recipe.decision && !isPremiumTypographyRole(adjustedCtx.spec.brief.role)) {
     rawTypography = applyKnowledgeTypography(rawTypography, recipe.decision);
   }
 
@@ -90,6 +90,7 @@ export function renderPremiumTemplateFromRecipe(
   adjustedCtx = applyDirectiveToContext(adjustedCtx, directed.directive);
 
   const typographyPlacements = directed.typography;
+  adjustedCtx.spec.typography = typographyPlacements;
   const typeRender = renderTypographySvg(
     typographyPlacements,
     ctx.colors.ink,

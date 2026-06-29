@@ -23,7 +23,7 @@ import {
   type CompositionScoreInput,
   type CreativeDirectorScore,
 } from "@/lib/design/design-library/composition-intelligence/score";
-import { isHeroTypographyArtwork } from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
+import { isPremiumTypographyRole } from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
 import { range } from "@/lib/design/vector-engine/hash";
 import { snap } from "@/lib/design/vector-engine/tokens";
 
@@ -68,7 +68,7 @@ export function directComposition(
   const fashion = resolveFashionProfile(spec.style.id, spec.brief.visualConcept);
   const apparel = resolveApparelContext(ctx);
 
-  const preserveArtwork = isHeroTypographyArtwork(ctx);
+  const preserveArtwork = isPremiumTypographyRole(spec.brief.role);
   let enhancedType = preserveArtwork
     ? typography
     : applyTypographyOverlap(typography, focalSystem, overlap, seed);
@@ -103,8 +103,8 @@ export function directComposition(
     seed,
   };
 
-  const isHero = spec.brief.role.toLowerCase().includes("hero");
-  const gate = evaluateCompositionGate(scoreInput, isHero);
+  const isPremium = isPremiumTypographyRole(spec.brief.role);
+  const gate = evaluateCompositionGate(scoreInput, isPremium);
   const score = gate.score;
 
   const asymShiftX = range(seed, 1400, -safeZone.width * 0.06, safeZone.width * 0.06);

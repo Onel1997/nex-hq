@@ -2,7 +2,7 @@ import type { ComposedLayers } from "@/lib/design/vector-engine/types";
 import { escapeXml, group, rect } from "@/lib/design/vector-engine/xml";
 import { renderHeroRichLayers } from "@/lib/design/design-library/composition/render-hero";
 import { renderEditorialRules, renderOrnament } from "@/lib/design/design-library/ornaments/render";
-import { isHeroRole } from "@/lib/design/design-library/quality/score";
+import { isPremiumTypographyRole } from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
 import { renderSymbol, renderSymbolAccent } from "@/lib/design/design-library/symbols/render";
 import type { LibraryArtworkSpec, TypographyPlacement } from "@/lib/design/design-library/types";
 
@@ -59,7 +59,7 @@ export function renderArtwork(spec: LibraryArtworkSpec): { layers: ComposedLayer
   const secondarySymbols = spec.symbols.filter((s) => s.zone === "secondary");
   const accentSymbols = spec.symbols.filter((s) => s.zone === "accent");
 
-  const heroRich = isHeroRole(spec.brief.role)
+  const heroRich = isPremiumTypographyRole(spec.brief.role)
     ? renderHeroRichLayers(spec, strokeWidth)
     : null;
 

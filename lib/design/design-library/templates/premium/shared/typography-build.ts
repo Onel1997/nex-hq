@@ -5,7 +5,7 @@ import type {
 } from "@/lib/design/design-library/templates/premium/types";
 import {
   buildHeroTypographyArtwork,
-  isHeroTypographyArtwork,
+  isPremiumTypographyRole,
 } from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
 import { assetPoint } from "@/lib/design/design-library/templates/premium/shared/context";
 import { extractHeadline, formatCoordinates, toRomanNumeral } from "@/lib/design/vector-engine/typography";
@@ -16,7 +16,7 @@ export function buildPremiumTypographyPlacements(
   ctx: PremiumRenderContext,
   layout: PremiumTemplateLayoutConfig,
 ): TypographyPlacement[] {
-  if (isHeroTypographyArtwork(ctx)) {
+  if (isPremiumTypographyRole(ctx.spec.brief.role)) {
     return buildHeroTypographyArtwork(ctx, layout);
   }
 

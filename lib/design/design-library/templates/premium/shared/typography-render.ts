@@ -74,14 +74,11 @@ export function renderTypographySvg(
     }
 
     if (el.role === "vertical-text") {
-      const chars = el.text.toUpperCase().split("");
-      const dy = el.size * el.lineHeight;
-      const tspans = chars
-        .map((ch, i) => `<tspan x="${el.x}" dy="${i === 0 ? 0 : dy}">${escapeXml(ch)}</tspan>`)
-        .join("");
-      const transform = el.rotation !== 0 ? ` transform="rotate(${el.rotation} ${el.x} ${el.y})"` : "";
+      const transform =
+        el.rotation !== 0 ? ` transform="rotate(${el.rotation} ${el.x} ${el.y})"` : "";
+      const anchor = el.align === "middle" ? "middle" : el.align === "end" ? "end" : "start";
       groups.push(
-        `<g id="${el.id}"><text fill="${ink}" font-family="${fontFamily}" font-size="${el.size}" font-weight="${el.weight}" letter-spacing="${ls}" opacity="${el.opacity}"${transform}>${tspans}</text></g>`,
+        `<g id="${el.id}"><text x="${el.x}" y="${el.y}" fill="${ink}" font-family="${fontFamily}" font-size="${el.size}" font-weight="${el.weight}" letter-spacing="${ls}" text-anchor="${anchor}" opacity="${el.opacity}" dominant-baseline="alphabetic"${transform}>${escapeXml(el.text.toUpperCase())}</text></g>`,
       );
       continue;
     }
