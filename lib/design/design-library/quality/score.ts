@@ -3,19 +3,36 @@ import type {
   LibraryArtworkSpec,
   QualityScoreBreakdown,
   QualityValidationResult,
+  HeroVisualAuditResult,
+  SymbolId,
 } from "@/lib/design/design-library/types";
 
 const WEIGHTS = {
-  visualBalance: 0.12,
-  typographyHierarchy: 0.14,
-  luxuryFeeling: 0.11,
-  apparelReadiness: 0.15,
+  visualBalance: 0.1,
+  typographyHierarchy: 0.12,
+  luxuryFeeling: 0.09,
+  apparelReadiness: 0.14,
+  compositionRichness: 0.05,
   originality: 0.08,
   emotionalTranslation: 0.09,
   negativeSpaceUse: 0.08,
   printReadiness: 0.1,
   brandConsistency: 0.07,
-  commercialPotential: 0.06,
+  commercialPotential: 0.08,
+} as const;
+
+const HERO_WEIGHTS = {
+  apparelReadiness: 0.28,
+  compositionRichness: 0.32,
+  visualBalance: 0.06,
+  typographyHierarchy: 0.1,
+  luxuryFeeling: 0.05,
+  originality: 0.04,
+  emotionalTranslation: 0.04,
+  negativeSpaceUse: 0.03,
+  printReadiness: 0.04,
+  brandConsistency: 0.02,
+  commercialPotential: 0.02,
 } as const;
 
 export const QUIET_LUXURY_MICRO_TEMPLATE_IDS = new Set(["micro-graphic", "minimal-emblem"]);
@@ -30,6 +47,39 @@ const RICH_TEMPLATES = new Set([
   "monochrome-symbol",
   "luxury-wordmark",
 ]);
+
+const CIRCLE_ARC_SYMBOLS = new Set<SymbolId>([
+  "broken-circle",
+  "interrupted-arc",
+  "half-circle",
+  "split-circle",
+  "orbit",
+  "halo",
+]);
+
+const HERO_TEMPLATE_SCORE_CAPS: Partial<Record<string, number>> = {
+  "luxury-wordmark": 78,
+  "minimal-emblem": 76,
+  "micro-graphic": 72,
+};
+
+const SECONDARY_GEOMETRY_ORNAMENTS = new Set([
+  "editorial-dividers",
+  "vertical-rules",
+  "flank-strikes",
+  "luxury-borders",
+  "coordinates",
+  "rule-lines",
+  "micro-lines",
+]);
+
+const LOGO_MARK_LAYOUTS = new Set(["center-chest", "micro-chest", "symbol-above-type"]);
+
+const HERO_LOGO_TEMPLATES = new Set(["luxury-wordmark", "minimal-emblem", "micro-graphic"]);
+
+export function isHeroRole(role: string): boolean {
+  return role.toLowerCase().includes("hero");
+}
 
 export function getRoleMinimumScore(role: string): number {
   const r = role.toLowerCase();
@@ -54,6 +104,13 @@ function countDecorTypography(spec: LibraryArtworkSpec): number {
   return spec.typography.filter((t) => t.layer === "decorative").length;
 }
 
+function countCompositionLayers(spec: LibraryArtworkSpec): number {
+  const symbolZones = new Set(spec.symbols.map((s) => s.zone)).size;
+  const ornamentKinds = new Set(spec.ornaments.map((o) => o.ornamentId)).size;
+  const typeLayers = new Set(spec.typography.map((t) => t.layer)).size;
+  return symbolZones + ornamentKinds + typeLayers;
+}
+
 function hasHeadlineHierarchy(spec: LibraryArtworkSpec): boolean {
   const roles = new Set(spec.typography.map((t) => t.role));
   return roles.has("headline") || roles.has("stacked-headline");
@@ -69,6 +126,93 @@ function hasSubHierarchy(spec: LibraryArtworkSpec): boolean {
   );
 }
 
+function hasStrongFocalHierarchy(spec: LibraryArtworkSpec): boolean {
+  if (!hasHeadlineHierarchy(spec)) return false;
+  const headline = spec.typography.find(
+    (t) => t.role === "headline" || t.role === "stacked-headline",
+  );
+  const sub = spec.typography.find((t) => t.role === "subheadline");
+  if (!headline) return false;
+  if (sub) return headline.size >= sub.size * 1.6;
+  return hasSubHierarchy(spec) && countDecorTypography(spec) >= 2;
+}
+
+function hasSecondaryCompositionLayer(spec: LibraryArtworkSpec): boolean {
+  const secondarySymbols = spec.symbols.filter((s) => s.zone === "secondary" || s.zone === "accent");
+  if (secondarySymbols.length >= 1) return true;
+  if (spec.layoutZones.anchors.secondary) return true;
+  if (spec.ornaments.some((o) => SECONDARY_GEOMETRY_ORNAMENTS.has(o.ornamentId))) return true;
+  return false;
+}
+
+function hasApparelScaleComposition(spec: LibraryArtworkSpec): boolean {
+  const oversizedLayout =
+    spec.layout.id.includes("oversized") ||
+    spec.layout.id === "gallery-layout" ||
+    spec.layout.id === "editorial-layout" ||
+    spec.layout.id === "wrap-composition";
+  const heroRatio = spec.layoutZones.heroZone.height / spec.layoutZones.safeZone.height;
+  const density = elementDensity(spec);
+  return (
+    oversizedLayout ||
+    spec.style.preferredPrintScale === "oversized" ||
+    (heroRatio >= 0.44 && density >= 5)
+  );
+}
+
+function hasStructuralSymbol(spec: LibraryArtworkSpec): boolean {
+  return spec.symbols.some((s) => !CIRCLE_ARC_SYMBOLS.has(s.symbolId));
+}
+
+function hasMeaningfulSecondaryGeometry(spec: LibraryArtworkSpec): boolean {
+  if (hasStructuralSymbol(spec)) return true;
+  if (
+    spec.ornaments.some((o) =>
+      ["luxury-borders", "editorial-dividers", "vertical-rules", "flank-strikes", "registration-marks"].includes(
+        o.ornamentId,
+      ),
+    )
+  ) {
+    return true;
+  }
+  return hasApparelScaleComposition(spec);
+}
+
+function isCircleArcTypoOnly(spec: LibraryArtworkSpec): boolean {
+  if (spec.symbols.length === 0) return false;
+  const allCircleArc = spec.symbols.every((s) => CIRCLE_ARC_SYMBOLS.has(s.symbolId));
+  const thinType = countTypographyLayers(spec) < 2;
+  return allCircleArc && thinType && !hasMeaningfulSecondaryGeometry(spec);
+}
+
+function looksLikeLogoMark(spec: LibraryArtworkSpec): boolean {
+  const compactLayout =
+    LOGO_MARK_LAYOUTS.has(spec.layout.id) ||
+    (spec.layout.scaling.heroScale < 0.42 && spec.layout.balance === "symmetric");
+  const circleArcDominant = spec.symbols.length > 0 && !hasStructuralSymbol(spec);
+
+  if (HERO_LOGO_TEMPLATES.has(spec.template.id) && compactLayout && circleArcDominant) {
+    return true;
+  }
+
+  const heroOnly =
+    spec.symbols.filter((s) => s.zone === "hero").length <= 1 &&
+    spec.symbols.filter((s) => s.zone !== "hero").length === 0;
+  return compactLayout && heroOnly && (circleArcDominant || spec.ornaments.length < 3);
+}
+
+function isHeroEnriched(spec: LibraryArtworkSpec): boolean {
+  return (
+    spec.symbols.length >= 2 &&
+    hasStructuralSymbol(spec) &&
+    spec.ornaments.length >= 3 &&
+    countTypographyLayers(spec) >= 2 &&
+    hasSecondaryCompositionLayer(spec) &&
+    hasStrongFocalHierarchy(spec) &&
+    hasApparelScaleComposition(spec)
+  );
+}
+
 function elementDensity(spec: LibraryArtworkSpec): number {
   return spec.symbols.length + spec.ornaments.length + spec.typography.length;
 }
@@ -80,6 +224,68 @@ function isBlueprintLike(spec: LibraryArtworkSpec): boolean {
     spec.ornaments.filter((o) => o.ornamentId === "coordinates" || o.ornamentId === "registration-marks").length >= 2;
   const typeThin = countTypographyLayers(spec) <= 1 && countDecorTypography(spec) <= 1;
   return gridHeavy && typeThin && spec.style.id === "technical-streetwear";
+}
+
+export function auditHeroVisualComplexity(spec: LibraryArtworkSpec): HeroVisualAuditResult {
+  const symbolCount = spec.symbols.length;
+  const ornamentCount = spec.ornaments.length;
+  const typographyBlocks = countTypographyLayers(spec);
+  const layerCount = countCompositionLayers(spec);
+
+  console.log(
+    `[DESIGN LIBRARY] Hero richness check: symbols=${symbolCount} ornaments=${ornamentCount} typography=${typographyBlocks} layers=${layerCount}`,
+  );
+
+  if (symbolCount < 2) {
+    return { passed: false, reason: "symbolCount < 2", symbolCount, ornamentCount, typographyBlocks, layerCount };
+  }
+  if (ornamentCount < 3) {
+    return { passed: false, reason: "ornamentCount < 3", symbolCount, ornamentCount, typographyBlocks, layerCount };
+  }
+  if (typographyBlocks < 2) {
+    return { passed: false, reason: "typographyBlocks < 2", symbolCount, ornamentCount, typographyBlocks, layerCount };
+  }
+  if (!hasSecondaryCompositionLayer(spec)) {
+    return { passed: false, reason: "no secondary composition layer", symbolCount, ornamentCount, typographyBlocks, layerCount };
+  }
+  if (!hasStrongFocalHierarchy(spec)) {
+    return { passed: false, reason: "no strong focal hierarchy", symbolCount, ornamentCount, typographyBlocks, layerCount };
+  }
+  if (!hasApparelScaleComposition(spec)) {
+    return { passed: false, reason: "no apparel-scale composition", symbolCount, ornamentCount, typographyBlocks, layerCount };
+  }
+  if (isCircleArcTypoOnly(spec)) {
+    return {
+      passed: false,
+      reason: "primary visual is only circle/arc + typography",
+      symbolCount,
+      ornamentCount,
+      typographyBlocks,
+      layerCount,
+    };
+  }
+  if (looksLikeLogoMark(spec)) {
+    return {
+      passed: false,
+      reason: "design looks like logo mark instead of apparel artwork",
+      symbolCount,
+      ornamentCount,
+      typographyBlocks,
+      layerCount,
+    };
+  }
+  if (HERO_LOGO_TEMPLATES.has(spec.template.id) && !hasStructuralSymbol(spec)) {
+    return {
+      passed: false,
+      reason: "logo template without structural symbol system",
+      symbolCount,
+      ornamentCount,
+      typographyBlocks,
+      layerCount,
+    };
+  }
+
+  return { passed: true, symbolCount, ornamentCount, typographyBlocks, layerCount };
 }
 
 function scoreVisualBalance(spec: LibraryArtworkSpec): number {
@@ -132,9 +338,29 @@ function scoreApparelReadiness(spec: LibraryArtworkSpec): number {
   if (spec.ornaments.length >= 4) score += 14;
   if (countTypographyLayers(spec) >= 1 && hasSubHierarchy(spec)) score += 12;
   if (spec.layout.id.includes("oversized") || spec.layout.id === "center-chest") score += 8;
+  if (hasApparelScaleComposition(spec)) score += 16;
   if (spec.symbols.length <= 1 && countTypographyLayers(spec) <= 1) score -= 30;
   if (elementDensity(spec) >= 7) score += 10;
   if (isBlueprintLike(spec)) score -= 22;
+  if (looksLikeLogoMark(spec)) score -= 28;
+  if (isCircleArcTypoOnly(spec)) score -= 32;
+  return clamp(score);
+}
+
+function scoreCompositionRichness(spec: LibraryArtworkSpec): number {
+  let score = 38;
+  if (spec.symbols.length >= 2) score += 14;
+  if (spec.symbols.length >= 3) score += 6;
+  if (spec.ornaments.length >= 3) score += 14;
+  if (spec.ornaments.length >= 5) score += 6;
+  if (countTypographyLayers(spec) >= 2) score += 12;
+  if (hasSecondaryCompositionLayer(spec)) score += 12;
+  if (hasStrongFocalHierarchy(spec)) score += 10;
+  if (hasApparelScaleComposition(spec)) score += 14;
+  if (countDecorTypography(spec) >= 2) score += 6;
+  if (isCircleArcTypoOnly(spec)) score -= 35;
+  if (looksLikeLogoMark(spec)) score -= 30;
+  if (elementDensity(spec) >= 8) score += 8;
   return clamp(score);
 }
 
@@ -195,12 +421,20 @@ function scoreCommercialPotential(spec: LibraryArtworkSpec): number {
   return clamp(score);
 }
 
+function applyHeroTemplateCaps(spec: LibraryArtworkSpec, overall: number): number {
+  const cap = HERO_TEMPLATE_SCORE_CAPS[spec.template.id];
+  if (!cap) return overall;
+  if (spec.template.id === "luxury-wordmark" && isHeroEnriched(spec)) return overall;
+  return Math.min(overall, cap);
+}
+
 export function scoreArtworkSpec(spec: LibraryArtworkSpec): QualityScoreBreakdown {
   const breakdown = {
     visualBalance: scoreVisualBalance(spec),
     typographyHierarchy: scoreTypographyHierarchy(spec),
     luxuryFeeling: scoreLuxuryFeeling(spec),
     apparelReadiness: scoreApparelReadiness(spec),
+    compositionRichness: scoreCompositionRichness(spec),
     originality: scoreOriginality(spec),
     emotionalTranslation: scoreEmotionalTranslation(spec),
     negativeSpaceUse: scoreNegativeSpaceUse(spec),
@@ -210,12 +444,18 @@ export function scoreArtworkSpec(spec: LibraryArtworkSpec): QualityScoreBreakdow
     overall: 0,
   };
 
+  const weights = isHeroRole(spec.brief.role) ? HERO_WEIGHTS : WEIGHTS;
+
   breakdown.overall = clamp(
-    Object.entries(WEIGHTS).reduce(
-      (sum, [key, weight]) => sum + breakdown[key as keyof typeof WEIGHTS] * weight,
+    Object.entries(weights).reduce(
+      (sum, [key, weight]) => sum + breakdown[key as keyof typeof weights] * weight,
       0,
     ),
   );
+
+  if (isHeroRole(spec.brief.role)) {
+    breakdown.overall = applyHeroTemplateCaps(spec, breakdown.overall);
+  }
 
   return breakdown;
 }
@@ -243,6 +483,18 @@ export function validateArtworkCandidate(
 
   if (isBlueprintLike(spec)) {
     return { valid: false, reason: "blueprint/wireframe composition" };
+  }
+
+  if (isHeroRole(brief.role)) {
+    const audit = auditHeroVisualComplexity(spec);
+    if (!audit.passed && audit.reason) {
+      console.log(`[DESIGN LIBRARY] Visual audit failed: ${audit.reason}`);
+      return { valid: false, reason: `hero visual audit: ${audit.reason}` };
+    }
+
+    if (score.compositionRichness < 58) {
+      return { valid: false, reason: "insufficient composition richness for hero" };
+    }
   }
 
   const minimum = getRoleMinimumScore(brief.role);

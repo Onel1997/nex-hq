@@ -1,6 +1,8 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import { composeFromBrief, enrichArtworkSpec } from "@/lib/design/design-library/composition/engine";
 import {
+  auditHeroVisualComplexity,
+  isHeroRole,
   scoreArtworkSpec,
   validateArtworkCandidate,
 } from "@/lib/design/design-library/quality/score";
@@ -16,12 +18,22 @@ import type {
 
 const MIN_CANDIDATES = 8;
 
+const HERO_LOGO_TEMPLATES = new Set(["luxury-wordmark", "minimal-emblem", "micro-graphic"]);
+
 const FALLBACK_OVERRIDES: CompositionOverrides[] = [
   { templateId: "editorial-poster", forceRich: true },
   { templateId: "faith-collection", forceRich: true },
   { templateId: "oversized-graphic", forceRich: true },
   { templateId: "monochrome-symbol", styleId: "architectural", layoutId: "gallery-layout", forceRich: true },
   { templateId: "luxury-wordmark", styleId: "minimal-luxury", layoutId: "symbol-above-type", forceRich: true },
+];
+
+/** Hero Piece fallback chain when visual audit fails. */
+const HERO_FALLBACK_OVERRIDES: CompositionOverrides[] = [
+  { templateId: "editorial-poster", layoutId: "oversized-front", forceRich: true },
+  { templateId: "oversized-graphic", layoutId: "oversized-front", forceRich: true },
+  { templateId: "faith-collection", layoutId: "symbol-above-type", forceRich: true },
+  { templateId: "monochrome-symbol", styleId: "architectural", layoutId: "gallery-layout", forceRich: true },
 ];
 
 function uniqueKey(spec: LibraryArtworkSpec): string {
@@ -94,50 +106,82 @@ export function generateArtworkCandidates(brief: DesignStudioBrief): LibraryArtw
   return candidates;
 }
 
-export function selectBestArtwork(brief: DesignStudioBrief): LibraryArtworkSpec {
-  const candidates = generateArtworkCandidates(brief);
-  const scored = candidates.map((spec) => {
-    const score = scoreArtworkSpec(spec);
-    const validation = validateArtworkCandidate(spec, score, brief);
-    console.log(
-      `[DESIGN LIBRARY] Candidate scored: ${spec.template.name} ${score.overall}`,
+function scoreCandidate(spec: LibraryArtworkSpec, brief: DesignStudioBrief) {
+  const score = scoreArtworkSpec(spec);
+  const validation = validateArtworkCandidate(spec, score, brief);
+  console.log(`[DESIGN LIBRARY] Candidate scored: ${spec.template.name} ${score.overall}`);
+  if (!validation.valid && validation.reason) {
+    console.log(`[DESIGN LIBRARY] Rejected candidate: ${validation.reason}`);
+  }
+  return { spec, score, validation };
+}
+
+function sortCandidates(
+  a: ReturnType<typeof scoreCandidate>,
+  b: ReturnType<typeof scoreCandidate>,
+  hero: boolean,
+) {
+  if (hero) {
+    const richnessDelta = b.score.compositionRichness - a.score.compositionRichness;
+    if (richnessDelta !== 0) return richnessDelta;
+    const apparelDelta = b.score.apparelReadiness - a.score.apparelReadiness;
+    if (apparelDelta !== 0) return apparelDelta;
+  }
+  if (b.score.overall !== a.score.overall) return b.score.overall - a.score.overall;
+  return b.score.apparelReadiness - a.score.apparelReadiness;
+}
+
+function buildFallbackCandidates(
+  brief: DesignStudioBrief,
+  overrides: CompositionOverrides[],
+  startIndex: number,
+) {
+  return overrides.map((overridesEntry, index) => {
+    const spec = enrichArtworkSpec(
+      composeFromBrief(brief, { ...overridesEntry, variantIndex: startIndex + index }),
     );
-    if (!validation.valid && validation.reason) {
-      console.log(`[DESIGN LIBRARY] Rejected candidate: ${validation.reason}`);
-    }
-    return { spec, score, validation };
+    return scoreCandidate(spec, brief);
   });
+}
+
+export function selectBestArtwork(brief: DesignStudioBrief): LibraryArtworkSpec {
+  const hero = isHeroRole(brief.role);
+  const candidates = generateArtworkCandidates(brief);
+  const scored = candidates.map((spec) => scoreCandidate(spec, brief));
 
   const valid = scored.filter((c) => c.validation.valid);
-  const pool = valid.length > 0 ? valid : scored;
+  const heroSafe = hero
+    ? valid.filter((c) => !HERO_LOGO_TEMPLATES.has(c.spec.template.id))
+    : valid;
+  const pool = heroSafe.length > 0 ? heroSafe : valid.length > 0 ? valid : scored;
 
-  pool.sort((a, b) => {
-    if (b.score.overall !== a.score.overall) return b.score.overall - a.score.overall;
-    return b.score.apparelReadiness - a.score.apparelReadiness;
-  });
+  pool.sort((a, b) => sortCandidates(a, b, hero));
 
   let selected = pool[0];
 
-  if (!selected || !selected.validation.valid) {
-    console.log("[DESIGN LIBRARY] All candidates failed quality gate — forcing rich fallback");
-    const fallbackScored = FALLBACK_OVERRIDES.map((overrides, index) => {
-      const spec = enrichArtworkSpec(composeFromBrief(brief, { ...overrides, variantIndex: 200 + index }));
-      const score = scoreArtworkSpec(spec);
-      const validation = validateArtworkCandidate(spec, score, brief);
-      console.log(`[DESIGN LIBRARY] Candidate scored: ${spec.template.name} ${score.overall}`);
-      if (!validation.valid && validation.reason) {
-        console.log(`[DESIGN LIBRARY] Rejected candidate: ${validation.reason}`);
-      }
-      return { spec, score, validation };
-    });
+  const needsHeroFallback =
+    hero &&
+    selected &&
+    (!selected.validation.valid || !auditHeroVisualComplexity(selected.spec).passed);
 
-    fallbackScored.sort((a, b) => b.score.overall - a.score.overall);
-    selected = fallbackScored[0] ?? selected;
+  if (!selected || !selected.validation.valid || needsHeroFallback) {
+    const fallbackOverrides = hero ? HERO_FALLBACK_OVERRIDES : FALLBACK_OVERRIDES;
+    console.log(
+      hero
+        ? "[DESIGN LIBRARY] Hero visual audit failed — forcing hero fallback chain"
+        : "[DESIGN LIBRARY] All candidates failed quality gate — forcing rich fallback",
+    );
+
+    const fallbackScored = buildFallbackCandidates(brief, fallbackOverrides, 200);
+    fallbackScored.sort((a, b) => sortCandidates(a, b, hero));
+
+    const passingFallback = fallbackScored.find((c) => c.validation.valid);
+    selected = passingFallback ?? fallbackScored[0] ?? selected;
   }
 
   if (!selected) {
     const fallbackSpec = enrichArtworkSpec(
-      composeFromBrief(brief, { templateId: "editorial-poster", forceRich: true }),
+      composeFromBrief(brief, { templateId: "editorial-poster", layoutId: "oversized-front", forceRich: true }),
     );
     selected = {
       spec: fallbackSpec,
@@ -146,9 +190,33 @@ export function selectBestArtwork(brief: DesignStudioBrief): LibraryArtworkSpec 
     };
   }
 
+  let finalSpec = selected.spec;
+  if (hero) {
+    finalSpec = enrichArtworkSpec(finalSpec);
+    const audit = auditHeroVisualComplexity(finalSpec);
+    if (!audit.passed || HERO_LOGO_TEMPLATES.has(finalSpec.template.id)) {
+      const richFallback = buildFallbackCandidates(brief, HERO_FALLBACK_OVERRIDES, 400).find(
+        (c) => c.validation.valid && !HERO_LOGO_TEMPLATES.has(c.spec.template.id),
+      );
+      if (richFallback) {
+        finalSpec = richFallback.spec;
+      } else {
+        finalSpec = enrichArtworkSpec(
+          composeFromBrief(brief, {
+            templateId: "editorial-poster",
+            layoutId: "oversized-front",
+            forceRich: true,
+            variantIndex: 999,
+          }),
+        );
+      }
+    }
+  }
+
+  const finalScore = scoreArtworkSpec(finalSpec);
   console.log(
-    `[DESIGN LIBRARY] Selected candidate: ${selected.spec.template.name} ${selected.score.overall}`,
+    `[DESIGN LIBRARY] Selected candidate: ${finalSpec.template.name} ${finalScore.overall}`,
   );
 
-  return selected.spec;
+  return finalSpec;
 }

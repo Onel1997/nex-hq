@@ -1,6 +1,8 @@
 import type { ComposedLayers } from "@/lib/design/vector-engine/types";
 import { escapeXml, group, rect } from "@/lib/design/vector-engine/xml";
+import { renderHeroRichLayers } from "@/lib/design/design-library/composition/render-hero";
 import { renderEditorialRules, renderOrnament } from "@/lib/design/design-library/ornaments/render";
+import { isHeroRole } from "@/lib/design/design-library/quality/score";
 import { renderSymbol, renderSymbolAccent } from "@/lib/design/design-library/symbols/render";
 import type { LibraryArtworkSpec, TypographyPlacement } from "@/lib/design/design-library/types";
 
@@ -57,38 +59,53 @@ export function renderArtwork(spec: LibraryArtworkSpec): { layers: ComposedLayer
   const secondarySymbols = spec.symbols.filter((s) => s.zone === "secondary");
   const accentSymbols = spec.symbols.filter((s) => s.zone === "accent");
 
-  const baseGeometry = group(
-    "layer-base-geometry",
-    heroSymbols.map((placement) => renderSymbol({ ...symbolCtx, placement })).join(""),
-  );
+  const heroRich = isHeroRole(spec.brief.role)
+    ? renderHeroRichLayers(spec, strokeWidth)
+    : null;
 
-  const secondaryShapes = group(
-    "layer-secondary-shapes",
-    [
-      ...secondarySymbols.map((placement) => renderSymbol({ ...symbolCtx, placement })),
-      ...accentSymbols.map((placement) => renderSymbol({ ...symbolCtx, placement })),
-      ...heroSymbols.flatMap((placement, i) =>
-        Array.from({ length: 3 }, (_, j) =>
-          renderSymbolAccent({ ...symbolCtx, placement }, i * 3 + j),
-        ),
-      ),
-    ].join(""),
-  );
+  const baseGeometry = heroRich
+    ? heroRich.baseGeometry
+    : group(
+        "layer-base-geometry",
+        heroSymbols.map((placement) => renderSymbol({ ...symbolCtx, placement })).join(""),
+      );
+
+  const secondaryShapes = heroRich
+    ? heroRich.secondaryShapes
+    : group(
+        "layer-secondary-shapes",
+        [
+          ...secondarySymbols.map((placement) => renderSymbol({ ...symbolCtx, placement })),
+          ...accentSymbols.map((placement) => renderSymbol({ ...symbolCtx, placement })),
+          ...heroSymbols.flatMap((placement, i) =>
+            Array.from({ length: 3 }, (_, j) =>
+              renderSymbolAccent({ ...symbolCtx, placement }, i * 3 + j),
+            ),
+          ),
+        ].join(""),
+      );
 
   const typeBlocks = spec.typography.filter((t) => t.layer === "typography");
   const decorType = spec.typography.filter((t) => t.layer === "decorative");
   const fontFamily = spec.typographySystem.fontFamily;
 
-  const typography = group(
-    "layer-typography",
-    typeBlocks.map((t) => group(t.id, renderTypographyPlacement(t, colors.ink, fontFamily))).join(""),
-  );
+  const typography = heroRich
+    ? heroRich.typography
+    : group(
+        "layer-typography",
+        typeBlocks.map((t) => group(t.id, renderTypographyPlacement(t, colors.ink, fontFamily))).join(""),
+      );
 
   const decorativeDetails = group(
     "layer-decorative-details",
     [
-      spec.ornaments.map((placement) => renderOrnament({ ...symbolCtx, placement })).join(""),
-      decorType.map((t) => group(t.id, renderTypographyPlacement(t, colors.ink, fontFamily))).join(""),
+      heroRich?.decorativeDetails ?? "",
+      ...(heroRich
+        ? []
+        : [
+            spec.ornaments.map((placement) => renderOrnament({ ...symbolCtx, placement })).join(""),
+            decorType.map((t) => group(t.id, renderTypographyPlacement(t, colors.ink, fontFamily))).join(""),
+          ]),
       renderEditorialRules(
         layoutZones.safeZone,
         layoutZones.anchors.focal.y,
@@ -111,13 +128,13 @@ export function renderArtwork(spec: LibraryArtworkSpec): { layers: ComposedLayer
 
   return {
     layers: {
-      background: group("layer-background", ""),
+      background: heroRich?.background ?? group("layer-background", ""),
       baseGeometry,
       secondaryShapes,
       typography,
       decorativeDetails,
       productionGuides,
     },
-    defs: "",
+    defs: heroRich?.defs ?? "",
   };
 }

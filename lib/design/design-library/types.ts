@@ -383,6 +383,7 @@ export interface QualityScoreBreakdown {
   typographyHierarchy: number;
   luxuryFeeling: number;
   apparelReadiness: number;
+  compositionRichness: number;
   originality: number;
   emotionalTranslation: number;
   negativeSpaceUse: number;
@@ -390,6 +391,15 @@ export interface QualityScoreBreakdown {
   brandConsistency: number;
   commercialPotential: number;
   overall: number;
+}
+
+export interface HeroVisualAuditResult {
+  passed: boolean;
+  reason?: string;
+  symbolCount: number;
+  ornamentCount: number;
+  typographyBlocks: number;
+  layerCount: number;
 }
 
 export interface QualityValidationResult {
