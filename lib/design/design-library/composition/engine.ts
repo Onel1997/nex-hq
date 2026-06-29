@@ -13,6 +13,12 @@ import {
   selectTypographySystem,
 } from "@/lib/design/design-library/typography";
 import type { CompositionOverrides, LibraryArtworkSpec, OrnamentId, SymbolId } from "@/lib/design/design-library/types";
+import {
+  applyEmotionalTypography,
+  buildEmotionalWeights,
+  decideEmotionalDirection,
+  effectiveNegativeSpace,
+} from "@/lib/design/design-knowledge/emotional-language";
 import { range } from "@/lib/design/vector-engine/hash";
 import { snap } from "@/lib/design/vector-engine/tokens";
 
@@ -27,32 +33,38 @@ export function composeFromBrief(
   const baseSeed = selectTemplateSeed(brief);
   const seed = baseSeed + (overrides.variantIndex ?? 0) * 97;
 
-  const style = overrides.styleId ? getStyle(overrides.styleId) : selectStyle(brief);
+  const emotionalDirection = decideEmotionalDirection(brief, seed);
+  const emotionWeights = buildEmotionalWeights(emotionalDirection);
+
+  const style = overrides.styleId ? getStyle(overrides.styleId) : selectStyle(brief, emotionWeights);
   if (!overrides.styleId && !overrides.templateId) {
     console.log(`[DESIGN LIBRARY] Style selected: ${style.name}`);
   }
 
   const layout = overrides.layoutId
     ? getLayout(overrides.layoutId)
-    : selectLayout(brief, style);
+    : selectLayout(brief, style, emotionWeights);
   if (!overrides.layoutId && !overrides.templateId) {
     console.log(`[DESIGN LIBRARY] Layout selected: ${layout.name}`);
   }
 
   const template = overrides.templateId
     ? getTemplate(overrides.templateId)
-    : selectTemplate(brief, style, layout, seed);
+    : selectTemplate(brief, style, layout, seed, emotionWeights);
   if (!overrides.templateId) {
     console.log(`[DESIGN LIBRARY] Template selected: ${template.name}`);
   }
 
   const artboard = parseArtboard(brief.dimensions);
-  const layoutZones = layout.resolveZones(artboard, style.negativeSpace);
+  const layoutZones = layout.resolveZones(
+    artboard,
+    effectiveNegativeSpace(style, emotionWeights),
+  );
 
   const typographySystem =
     getTypographySystem(template.typographySystemId) ?? selectTypographySystem(style);
 
-  const typography = buildTypographyPlacements(
+  let typography = buildTypographyPlacements(
     brief,
     style,
     layout,
@@ -61,9 +73,10 @@ export function composeFromBrief(
     typographySystem,
     seed,
   );
+  typography = applyEmotionalTypography(typography, brief, emotionalDirection, seed);
 
-  let symbols = selectSymbols(brief, style, layout, layoutZones, template, seed);
-  let ornaments = selectOrnaments(style, layout, layoutZones, template, seed);
+  let symbols = selectSymbols(brief, style, layout, layoutZones, template, seed, emotionWeights);
+  let ornaments = selectOrnaments(style, layout, layoutZones, template, seed, emotionWeights);
 
   if (overrides.forceRich) {
     symbols = enrichSymbols(symbols, template, layoutZones, seed);
@@ -89,6 +102,7 @@ export function composeFromBrief(
     grid,
     colors,
     artboard,
+    emotionalDirection,
   };
 
   return overrides.forceRich ? enrichArtworkSpec(spec) : spec;

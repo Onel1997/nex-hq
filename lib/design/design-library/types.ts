@@ -1,4 +1,5 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
+import type { EmotionalDirectorDecision } from "@/lib/design/design-knowledge/emotional-language/types";
 import type { ColorScheme } from "@/lib/design/vector-engine/types";
 
 /* ── Geometry primitives ─────────────────────────────────────── */
@@ -369,6 +370,8 @@ export interface LibraryArtworkSpec {
   grid: GridDefinition;
   colors: ColorScheme;
   artboard: Rect;
+  /** Emotional narrative layer — primary/secondary story direction. */
+  emotionalDirection?: EmotionalDirectorDecision;
 }
 
 export interface LibraryEngineOptions {

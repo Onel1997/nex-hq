@@ -2,6 +2,7 @@ import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { LibraryArtworkSpec } from "@/lib/design/design-library/types";
 import type { CommercialScoreBreakdown } from "@/lib/design/commercial-design-director/commercial-score";
 import type { BuyerPsychologyProfile } from "@/lib/design/commercial-design-director/buyer-psychology";
+import { evaluateEmotionCompositionMatch } from "@/lib/design/design-knowledge/emotional-language";
 
 export interface EmotionalAssessment {
   score: number;
@@ -9,6 +10,8 @@ export interface EmotionalAssessment {
   tension: number;
   intimacy: number;
   confidence: number;
+  compositionMatch: number;
+  emotionAligned: boolean;
   notes: string[];
 }
 
@@ -44,9 +47,10 @@ export function evaluateEmotionalImpact(
 ): EmotionalAssessment {
   const notes: string[] = [];
   const corpus = `${brief.title} ${brief.visualConcept} ${brief.designDescription}`;
-  const mood = detectMood(corpus);
+  const mood = spec.emotionalDirection?.primary ?? detectMood(corpus);
+  const compositionMatch = evaluateEmotionCompositionMatch(spec);
 
-  let score = commercialScore.emotionalImpact * 0.55 + psychology.emotion * 0.45;
+  let score = commercialScore.emotionalImpact * 0.5 + psychology.emotion * 0.35 + compositionMatch.score * 0.15;
 
   const titleWords = brief.title.split(/\s+/).filter(Boolean);
   const intimacy =
@@ -75,12 +79,29 @@ export function evaluateEmotionalImpact(
     score -= 6;
   }
 
+  if (compositionMatch.aligned) {
+    score += 6;
+    notes.push(`composition expresses ${mood} emotional narrative`);
+  } else if (compositionMatch.mismatches.length > 0) {
+    notes.push(`emotion mismatch: ${compositionMatch.mismatches[0]}`);
+    score -= 4;
+  }
+
+  if (spec.emotionalDirection && spec.emotionalDirection.confidence >= 70) {
+    score += 4;
+    notes.push(
+      `${spec.emotionalDirection.primary} + ${spec.emotionalDirection.secondary} story direction locked`,
+    );
+  }
+
   return {
     score: clamp(score),
     mood,
     tension,
     intimacy,
     confidence,
+    compositionMatch: compositionMatch.score,
+    emotionAligned: compositionMatch.aligned,
     notes,
   };
 }

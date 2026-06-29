@@ -5,6 +5,8 @@ import type {
   TemplateDefinition,
   TemplateId,
 } from "@/lib/design/design-library/types";
+import type { EmotionalCompositionWeights } from "@/lib/design/design-knowledge/emotional-language";
+import { applyEmotionTemplateScore } from "@/lib/design/design-knowledge/emotional-language";
 import { ALL_TEMPLATE_IDS, getTemplate, TEMPLATE_REGISTRY } from "@/lib/design/design-library/templates/registry";
 import { hashString } from "@/lib/design/vector-engine/hash";
 
@@ -42,11 +44,15 @@ export function selectTemplate(
   style: DesignStyleDefinition,
   layout: LayoutDefinition,
   seed: number,
+  emotionWeights?: EmotionalCompositionWeights,
 ): TemplateDefinition {
-  const scored = ALL_TEMPLATE_IDS.map((id) => ({
-    template: TEMPLATE_REGISTRY[id],
-    score: scoreTemplate(TEMPLATE_REGISTRY[id], brief, style, layout),
-  })).sort((a, b) => b.score - a.score);
+  const scored = ALL_TEMPLATE_IDS.map((id) => {
+    let score = scoreTemplate(TEMPLATE_REGISTRY[id], brief, style, layout);
+    if (emotionWeights) {
+      score = applyEmotionTemplateScore(score, id, emotionWeights);
+    }
+    return { template: TEMPLATE_REGISTRY[id], score };
+  }).sort((a, b) => b.score - a.score);
 
   const top = scored[0]?.score ?? 0;
   const tied = scored.filter((e) => e.score === top);

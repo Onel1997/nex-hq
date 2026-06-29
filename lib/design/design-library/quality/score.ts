@@ -383,6 +383,22 @@ function scoreEmotionalTranslation(spec: LibraryArtworkSpec): number {
   if (text.includes("editorial") && spec.template.id === "editorial-poster") score += 12;
   if (text.includes("oversized") && spec.layout.id.includes("oversized")) score += 10;
   if (spec.template.hierarchy === spec.style.hierarchy) score += 8;
+
+  const emotion = spec.emotionalDirection;
+  if (emotion) {
+    score += Math.round(emotion.confidence * 0.12);
+    if (spec.typography.some((t) => t.variant === "ghost")) score += 10;
+    if (spec.typography.length >= 3) score += 6;
+    const symbolHits = emotion.translation.symbols.filter((id) =>
+      spec.symbols.some((s) => s.symbolId === id),
+    ).length;
+    score += symbolHits * 5;
+    const ornamentHits = emotion.translation.ornaments.filter((id) =>
+      spec.ornaments.some((o) => o.ornamentId === id),
+    ).length;
+    score += ornamentHits * 3;
+  }
+
   return clamp(score);
 }
 

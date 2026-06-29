@@ -40,6 +40,7 @@ export * from "@/lib/design/design-knowledge/ornament-language";
 export * from "@/lib/design/design-knowledge/fashion-language";
 export * from "@/lib/design/design-knowledge/composition-language";
 export * from "@/lib/design/design-knowledge/collection-language";
+export * from "@/lib/design/design-knowledge/emotional-language";
 export * from "@/lib/design/design-knowledge/art-direction";
 export * from "@/lib/design/design-knowledge/visual-systems";
 export * from "@/lib/design/design-knowledge/knowledge-score";

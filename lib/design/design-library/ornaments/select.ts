@@ -6,6 +6,8 @@ import type {
   OrnamentPlacement,
   TemplateDefinition,
 } from "@/lib/design/design-library/types";
+import type { EmotionalCompositionWeights } from "@/lib/design/design-knowledge/emotional-language";
+import { rankEmotionOrnaments } from "@/lib/design/design-knowledge/emotional-language";
 import { range } from "@/lib/design/vector-engine/hash";
 import { snap } from "@/lib/design/vector-engine/tokens";
 
@@ -26,8 +28,12 @@ export function selectOrnaments(
   zones: LayoutZones,
   template: TemplateDefinition,
   seed: number,
+  emotionWeights?: EmotionalCompositionWeights,
 ): OrnamentPlacement[] {
-  const ornamentIds = [...new Set([...template.ornaments, ...style.preferredOrnaments])].slice(0, 6);
+  const merged = [...new Set([...template.ornaments, ...style.preferredOrnaments])];
+  const ranked = emotionWeights ? rankEmotionOrnaments(merged, emotionWeights) : merged;
+  const cap = emotionWeights?.ornamentCountCap ?? 6;
+  const ornamentIds = ranked.slice(0, cap);
   const heroScale = zones.heroZone.width * layout.scaling.ornamentScale;
   const positions = ORNAMENT_POSITIONS(zones, heroScale);
 

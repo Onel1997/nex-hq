@@ -1,5 +1,7 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { DesignStyleDefinition, LayoutDefinition, LayoutId } from "@/lib/design/design-library/types";
+import type { EmotionalCompositionWeights } from "@/lib/design/design-knowledge/emotional-language";
+import { applyEmotionLayoutScore } from "@/lib/design/design-knowledge/emotional-language";
 import { getLayout, LAYOUT_REGISTRY } from "@/lib/design/design-library/layouts/registry";
 import { hashString, pick } from "@/lib/design/vector-engine/hash";
 
@@ -29,9 +31,30 @@ function detectLayoutId(brief: DesignStudioBrief, style: DesignStyleDefinition):
   return "center-chest";
 }
 
-export function selectLayout(brief: DesignStudioBrief, style: DesignStyleDefinition): LayoutDefinition {
+export function selectLayout(
+  brief: DesignStudioBrief,
+  style: DesignStyleDefinition,
+  emotionWeights?: EmotionalCompositionWeights,
+): LayoutDefinition {
   const seed = hashString([brief.designId, brief.placement, brief.printArea].join("|"));
   const detected = detectLayoutId(brief, style);
+
+  if (emotionWeights) {
+    const candidates = style.preferredLayouts.includes(detected)
+      ? [detected, ...style.preferredLayouts.filter((id) => id !== detected)]
+      : [detected, ...style.preferredLayouts];
+
+    const uniqueCandidates = [...new Set(candidates)].filter((id) => LAYOUT_REGISTRY[id]);
+    if (uniqueCandidates.length > 0) {
+      const scored = uniqueCandidates.map((id) => ({
+        id,
+        score: applyEmotionLayoutScore(0, id, emotionWeights) + (id === detected ? 2 : 0),
+      }));
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0]!;
+      if (best.score > 0) return getLayout(best.id);
+    }
+  }
 
   if (style.preferredLayouts.includes(detected)) {
     return getLayout(detected);

@@ -1,6 +1,8 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import { hashString, pick } from "@/lib/design/vector-engine/hash";
 import type { DesignStyleDefinition, DesignStyleId } from "@/lib/design/design-library/types";
+import type { EmotionalCompositionWeights } from "@/lib/design/design-knowledge/emotional-language";
+import { applyEmotionStyleScore } from "@/lib/design/design-knowledge/emotional-language";
 import { ALL_STYLE_IDS, getStyle } from "@/lib/design/design-library/styles/registry";
 
 function briefText(brief: DesignStudioBrief): string {
@@ -32,14 +34,21 @@ const STYLE_KEYWORDS: Record<DesignStyleId, string[]> = {
   "monochrome-luxury": ["monochrome", "single color", "tone on tone", "black on black"],
 };
 
-export function detectStyleFromBrief(brief: DesignStudioBrief, seed: number): DesignStyleId {
+export function detectStyleFromBrief(
+  brief: DesignStudioBrief,
+  seed: number,
+  emotionWeights?: EmotionalCompositionWeights,
+): DesignStyleId {
   const text = briefText(brief);
   let best: DesignStyleId = "minimal-luxury";
   let bestScore = -1;
 
   for (const id of ALL_STYLE_IDS) {
     const keywords = STYLE_KEYWORDS[id];
-    const score = keywords.reduce((sum, kw) => sum + (text.includes(kw) ? 1 : 0), 0);
+    let score = keywords.reduce((sum, kw) => sum + (text.includes(kw) ? 1 : 0), 0);
+    if (emotionWeights) {
+      score = applyEmotionStyleScore(score, id, emotionWeights);
+    }
     if (score > bestScore) {
       bestScore = score;
       best = id;
@@ -60,8 +69,11 @@ export function detectStyleFromBrief(brief: DesignStudioBrief, seed: number): De
   return best;
 }
 
-export function selectStyle(brief: DesignStudioBrief): DesignStyleDefinition {
+export function selectStyle(
+  brief: DesignStudioBrief,
+  emotionWeights?: EmotionalCompositionWeights,
+): DesignStyleDefinition {
   const seed = hashString([brief.designId, brief.geometry, brief.placement].join("|"));
-  const styleId = detectStyleFromBrief(brief, seed);
+  const styleId = detectStyleFromBrief(brief, seed, emotionWeights);
   return getStyle(styleId);
 }

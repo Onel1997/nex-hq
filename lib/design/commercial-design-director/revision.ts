@@ -3,6 +3,11 @@ import type { CompositionOverrides } from "@/lib/design/design-library/types";
 import type { DesignCritique } from "@/lib/design/commercial-design-director/critique";
 import type { CommercialScoreBreakdown } from "@/lib/design/commercial-design-director/commercial-score";
 import type { CommercialScoreDimension } from "@/lib/design/commercial-design-director/commercial-score";
+import type { LibraryArtworkSpec } from "@/lib/design/design-library/types";
+import {
+  emotionRevisionOverrides,
+  evaluateEmotionCompositionMatch,
+} from "@/lib/design/design-knowledge/emotional-language";
 
 export const MAX_COMMERCIAL_REVISION_ITERATIONS = 5;
 
@@ -41,6 +46,7 @@ export function buildRevisionTasks(
   critique: DesignCritique,
   score: CommercialScoreBreakdown,
   iteration: number,
+  spec?: LibraryArtworkSpec,
 ): RevisionTask[] {
   const tasks: RevisionTask[] = [];
   let index = 0;
@@ -129,6 +135,25 @@ export function buildRevisionTasks(
     );
   }
 
+  if (spec?.emotionalDirection) {
+    const match = evaluateEmotionCompositionMatch(spec);
+    if (!match.aligned) {
+      const overrides = emotionRevisionOverrides(spec.emotionalDirection);
+      push(
+        "composition",
+        "high",
+        "emotionalImpact",
+        `emotion ${spec.emotionalDirection.primary} not expressed in composition`,
+        `Re-compose for ${spec.emotionalDirection.primary}/${spec.emotionalDirection.secondary} — ${match.mismatches[0] ?? "align template, symbols, and typography to story"}`,
+        {
+          ...overrides,
+          forceRich: true,
+          variantIndex: iteration + 40,
+        },
+      );
+    }
+  }
+
   if (score.collectionConsistency < 75) {
     push(
       "brand-dna",
@@ -201,6 +226,9 @@ export function applyRevisionTasks(
   }
   if (tasks.some((t) => t.dimension === "premiumFeeling")) {
     visualConceptAdditions.push("calm luxury negative space with premium restraint");
+  }
+  if (tasks.some((t) => t.dimension === "emotionalImpact")) {
+    visualConceptAdditions.push("wearable emotional storytelling through symbol and typography language");
   }
 
   const visualConcept =

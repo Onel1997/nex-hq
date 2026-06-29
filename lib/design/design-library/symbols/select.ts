@@ -7,6 +7,8 @@ import type {
   SymbolPlacement,
   TemplateDefinition,
 } from "@/lib/design/design-library/types";
+import type { EmotionalCompositionWeights } from "@/lib/design/design-knowledge/emotional-language";
+import { rankEmotionSymbols } from "@/lib/design/design-knowledge/emotional-language";
 import { getSymbol } from "@/lib/design/design-library/symbols/registry";
 import { range } from "@/lib/design/vector-engine/hash";
 import { snap } from "@/lib/design/vector-engine/tokens";
@@ -34,12 +36,24 @@ export function selectSymbols(
   zones: LayoutZones,
   template: TemplateDefinition,
   seed: number,
+  emotionWeights?: EmotionalCompositionWeights,
 ): SymbolPlacement[] {
   const placements: SymbolPlacement[] = [];
   const heroScale = zones.heroZone.width * layout.scaling.heroScale * style.geometryScale;
   const symbolAnchor = zones.anchors.symbol;
 
-  const primaryId = template.primarySymbol;
+  const candidatePrimaries = [
+    template.primarySymbol,
+    ...template.secondarySymbols,
+    ...(emotionWeights
+      ? (Object.keys(emotionWeights.symbols) as SymbolId[]).filter((id) =>
+          emotionWeights.symbols[id],
+        )
+      : []),
+  ];
+  const primaryId = emotionWeights
+    ? rankEmotionSymbols([...new Set(candidatePrimaries)], emotionWeights)[0] ?? template.primarySymbol
+    : template.primarySymbol;
   placements.push({
     id: "symbol-primary",
     symbolId: primaryId,
@@ -52,9 +66,12 @@ export function selectSymbols(
   });
 
   const briefMatches = matchSymbolFromBrief(brief);
-  const secondaryIds = [
+  const mergedSecondary = [
     ...new Set([...template.secondarySymbols, ...briefMatches.filter((id) => id !== primaryId)]),
-  ].slice(0, 3);
+  ];
+  const secondaryIds = (
+    emotionWeights ? rankEmotionSymbols(mergedSecondary, emotionWeights) : mergedSecondary
+  ).slice(0, 3);
 
   secondaryIds.forEach((symbolId, index) => {
     const def = getSymbol(symbolId);

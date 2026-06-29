@@ -123,7 +123,7 @@ export function runCommercialDesignReview(input: CommercialDirectorInput): Comme
 
   const revisionTasks = critique.approved
     ? []
-    : buildRevisionTasks(critique, score, iteration - 1);
+    : buildRevisionTasks(critique, score, iteration - 1, input.spec);
 
   const review: CommercialDesignReview = {
     score,
