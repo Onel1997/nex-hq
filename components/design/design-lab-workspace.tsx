@@ -12,6 +12,7 @@ import {
   setPipelineStage,
   updateMissionAssets,
   updatePromptOverride,
+  updateWorkspace,
 } from "@/lib/design/design-mission-store";
 import { svgMarkupToDataUrl } from "@/lib/design/svg-data-url";
 import { saveImageStudioHandoff } from "@/lib/image/image-handoff-store";
@@ -76,12 +77,35 @@ export function DesignLabWorkspace({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [previewFocus, setPreviewFocus] = useState<"svg" | "mockup" | "render" | null>(null);
+
+  const resetProductionStatus = useCallback(
+    (itemId: "svg" | "mockup" | "aiRender") => {
+      onPatchMission((s) =>
+        updateWorkspace(s, s.brief.designId, (w) => ({
+          ...w,
+          production: w.production.map((p) =>
+            p.id === itemId ? { ...p, status: "pending" as const } : p,
+          ),
+        })),
+      );
+    },
+    [onPatchMission],
+  );
 
   const runSvgGeneration = useCallback(async () => {
     const label = "Generate SVG";
     setActionLoading(label);
     setActionMessage(null);
     setActionError(null);
+    onPatchMission((s) =>
+      updateWorkspace(s, s.brief.designId, (w) => ({
+        ...w,
+        production: w.production.map((p) =>
+          p.id === "svg" ? { ...p, status: "working" as const } : p,
+        ),
+      })),
+    );
 
     try {
       const res = await fetch("/api/design/generate-svg", {
@@ -103,13 +127,15 @@ export function DesignLabWorkspace({
         return next;
       });
 
+      setPreviewFocus("svg");
       setActionMessage(`${label} complete`);
     } catch (err) {
+      resetProductionStatus("svg");
       setActionError(err instanceof Error ? err.message : `${label} failed`);
     } finally {
       setActionLoading(null);
     }
-  }, [brief, onPatchMission]);
+  }, [brief, onPatchMission, resetProductionStatus]);
 
   const runGeneration = useCallback(
     async (
@@ -120,9 +146,21 @@ export function DesignLabWorkspace({
       versionType: "svg" | "mockup" | "render",
       nextStage: PipelineStage,
     ) => {
+      const productionId =
+        assetKey === "mockupUrl" ? "mockup" : assetKey === "renderUrl" ? "aiRender" : "svg";
+
       setActionLoading(label);
       setActionMessage(null);
       setActionError(null);
+      onPatchMission((s) =>
+        updateWorkspace(s, s.brief.designId, (w) => ({
+          ...w,
+          production: w.production.map((p) =>
+            p.id === productionId ? { ...p, status: "working" as const } : p,
+          ),
+        })),
+      );
+
       try {
         const res = await fetch("/api/image/run", {
           method: "POST",
@@ -149,14 +187,18 @@ export function DesignLabWorkspace({
           return next;
         });
 
+        if (assetKey === "mockupUrl") setPreviewFocus("mockup");
+        if (assetKey === "renderUrl") setPreviewFocus("render");
+
         setActionMessage(`${label} complete`);
       } catch (err) {
+        resetProductionStatus(productionId);
         setActionError(err instanceof Error ? err.message : `${label} failed`);
       } finally {
         setActionLoading(null);
       }
     },
-    [onPatchMission],
+    [onPatchMission, resetProductionStatus],
   );
 
   const handleSendToImageStudio = useCallback(() => {
@@ -224,7 +266,7 @@ export function DesignLabWorkspace({
         </div>
       ) : null}
 
-      <DesignLabPreview mission={mission} brief={brief} />
+      <DesignLabPreview mission={mission} brief={brief} previewFocus={previewFocus} />
 
       <DesignLabBriefCards brief={brief} />
 
@@ -391,19 +433,35 @@ function HeroScore({
 function DesignLabPreview({
   mission,
   brief,
+  previewFocus,
 }: {
   mission: DesignMissionState;
   brief: DesignStudioBrief;
+  previewFocus?: "svg" | "mockup" | "render" | null;
 }) {
+  const focusedUrl =
+    previewFocus === "svg"
+      ? mission.assets.svgUrl
+      : previewFocus === "mockup"
+        ? mission.assets.mockupUrl
+        : previewFocus === "render"
+          ? mission.assets.renderUrl
+          : null;
+
   const previewUrl =
-    mission.assets.mockupUrl ?? mission.assets.svgUrl ?? mission.assets.renderUrl;
-  const previewKind = mission.assets.mockupUrl
-    ? "mockup"
-    : mission.assets.svgUrl
-      ? "svg"
-      : mission.assets.renderUrl
-        ? "render"
-        : null;
+    focusedUrl ??
+    mission.assets.mockupUrl ??
+    mission.assets.svgUrl ??
+    mission.assets.renderUrl;
+  const previewKind = focusedUrl
+    ? previewFocus
+    : mission.assets.mockupUrl
+      ? "mockup"
+      : mission.assets.svgUrl
+        ? "svg"
+        : mission.assets.renderUrl
+          ? "render"
+          : null;
 
   return (
     <section className="design-lab-preview" aria-label="Design Preview">
