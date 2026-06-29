@@ -111,6 +111,82 @@ export interface ShapePlacement {
   fillMode: "filled" | "outline" | "both";
 }
 
+export type CompositionCandidateId =
+  | "minimal-luxury-wordmark"
+  | "interrupted-arc-emblem"
+  | "editorial-back-print"
+  | "asymmetric-chest-mark"
+  | "oversized-typography-print"
+  | "quiet-luxury-micro-mark"
+  | "architectural-frame-layout"
+  | "broken-circle-symbol"
+  | "technical-streetwear-layout"
+  | "gallery-type-system";
+
+export type CompositionSymmetry = "symmetric" | "asymmetric" | "radial";
+export type PrintScaleMode = "micro" | "standard" | "oversized";
+export type HierarchyMode = "type-first" | "geometry-first" | "balanced";
+
+export interface TypographySystemSpec {
+  hierarchy: HierarchyMode;
+  headlineScale: number;
+  headlineYOffset: number;
+  trackingBoost: number;
+  includeSubHeadline: boolean;
+  includeCoordinates: boolean;
+  includeRomanNumeral: boolean;
+  includeCapsuleCode: boolean;
+  alignment: "center" | "left" | "asymmetric";
+  scaleMode: PrintScaleMode;
+}
+
+export interface GeometrySystemSpec {
+  primaryKind: PrimitiveKind;
+  secondaryKinds: PrimitiveKind[];
+  scale: number;
+  yOffset: number;
+  includeDualArcs: boolean;
+  includeMissingCenter: boolean;
+  includeOuterFrame: boolean;
+  includeBrokenCircle: boolean;
+}
+
+export interface DetailSystemSpec {
+  microDetailCount: number;
+  includeFlankLines: boolean;
+  includeMicroLines: boolean;
+  includeCoordinateMarks: boolean;
+  includeVerticalRules: boolean;
+  includeCapsuleCode: boolean;
+  includeSideRoman: boolean;
+  includeEditorialRules: boolean;
+}
+
+export interface CompositionCandidateScoreBreakdown {
+  briefAlignment: number;
+  styleFit: number;
+  layoutFit: number;
+  hierarchyFit: number;
+  negativeSpaceFit: number;
+  total: number;
+}
+
+export interface CompositionCandidate {
+  id: CompositionCandidateId;
+  name: string;
+  styleFamily: string;
+  layoutFamily: CompositionId;
+  typographySystem: TypographySystemSpec;
+  geometrySystem: GeometrySystemSpec;
+  detailSystem: DetailSystemSpec;
+  emotionalTone: string;
+  negativeSpaceRatio: number;
+  visualWeight: number;
+  symmetry: CompositionSymmetry;
+  printScale: PrintScaleMode;
+  scoreBreakdown?: CompositionCandidateScoreBreakdown;
+}
+
 export interface DesignSpec {
   composition: CompositionId;
   artboard: Rect;
@@ -123,6 +199,7 @@ export interface DesignSpec {
   colors: ColorScheme;
   effects: PrintEffect[];
   seed: number;
+  compositionCandidate: CompositionCandidate;
 }
 
 export interface VectorEngineOptions {

@@ -26,6 +26,9 @@ export function serializeVectorSvg(input: SerializeInput): string {
 
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<!-- SVG_ENGINE_PHASE_2_2_COMPOSITION_CANDIDATES -->`,
+    `<!-- DESIGN_LIBRARY_PHASE_3 -->`,
+    `<!-- DESIGN_LIBRARY_PHASE_3B_QUALITY_SELECTED -->`,
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${w} ${h}" width="${widthMm}mm" height="${heightMm}mm" role="img" aria-label="${title}">`,
     `<title>${title}</title>`,
     defs ? `<defs>${defs}</defs>` : "",

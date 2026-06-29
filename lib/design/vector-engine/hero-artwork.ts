@@ -28,7 +28,6 @@ function arcSegment(
   return `M ${fmt(start.x)} ${fmt(start.y)} A ${fmt(r)} ${fmt(r)} 0 ${large} 1 ${fmt(end.x)} ${fmt(end.y)}`;
 }
 
-/** Twin interrupted arcs — signature premium mark with east/west gaps. */
 function renderDualInterruptedArcs(
   cx: number,
   cy: number,
@@ -61,7 +60,29 @@ function renderDualInterruptedArcs(
   ].join("");
 }
 
-/** Missing-center void — inward corner brackets + hollow inner ring. */
+function renderBrokenCircleMark(
+  cx: number,
+  cy: number,
+  r: number,
+  stroke: string,
+  sw: number,
+  opacity: number,
+  rotation: number,
+): string {
+  const gap = 28;
+  const seg = (start: number, sweep: number) => {
+    const s = rotatePoint(cx + r, cy, cx, cy, start);
+    const e = rotatePoint(cx + r, cy, cx, cy, start + sweep);
+    return `M ${fmt(s.x)} ${fmt(s.y)} A ${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(e.x)} ${fmt(e.y)}`;
+  };
+  const attrs = { fill: "none", stroke, "stroke-width": sw, opacity, "stroke-linecap": "round" };
+  return [
+    path(seg(rotation, 85), attrs),
+    path(seg(rotation + 120 + gap, 85), attrs),
+    path(seg(rotation + 240 + gap, 85), { ...attrs, "stroke-width": sw * 0.7, opacity: opacity * 0.7 }),
+  ].join("");
+}
+
 function renderMissingCenter(
   cx: number,
   cy: number,
@@ -107,7 +128,28 @@ function renderMissingCenter(
   return parts.join("");
 }
 
-/** Hairline micro-lines beneath the hero mark. */
+function renderArchitecturalFrame(
+  cx: number,
+  cy: number,
+  span: number,
+  stroke: string,
+  sw: number,
+  opacity: number,
+): string {
+  const w = span * 0.55;
+  const h = span * 0.68;
+  const inset = sw * 2.5;
+  return [
+    rect(cx - w / 2, cy - h / 2, w, h, { fill: "none", stroke, "stroke-width": sw, opacity: opacity * 0.7 }),
+    rect(cx - w / 2 + inset, cy - h / 2 + inset, w - inset * 2, h - inset * 2, {
+      fill: "none",
+      stroke,
+      "stroke-width": sw * 0.55,
+      opacity: opacity * 0.4,
+    }),
+  ].join("");
+}
+
 function renderMicroLines(
   cx: number,
   cy: number,
@@ -115,19 +157,18 @@ function renderMicroLines(
   stroke: string,
   sw: number,
   seed: number,
+  count: number,
 ): string {
-  const widths = [0.42, 0.28, 0.55, 0.18];
+  const widths = [0.42, 0.28, 0.55, 0.18, 0.36, 0.24];
   const lines: string[] = [];
   const startY = cy + span * 0.08;
 
-  widths.forEach((ratio, i) => {
+  widths.slice(0, count).forEach((ratio, i) => {
     const w = span * ratio;
     const y = startY + i * (sw * 3.2);
-    const x1 = cx - w / 2;
-    const x2 = cx + w / 2;
     const op = 0.28 + range(seed, i + 90, 0, 0.22);
     lines.push(
-      line(x1, y, x2, y, {
+      line(cx - w / 2, y, cx + w / 2, y, {
         stroke,
         "stroke-width": sw * (i === 1 ? 0.35 : 0.5),
         opacity: op,
@@ -139,12 +180,12 @@ function renderMicroLines(
   return lines.join("");
 }
 
-/** Tiny geometric coordinate marks — crosses, not text labels. */
 function renderCoordinateMarks(
   safeZone: { x: number; y: number; width: number; height: number },
   stroke: string,
   sw: number,
   seed: number,
+  count: number,
 ): string {
   const inset = safeZone.width * 0.06;
   const arm = sw * 2.2;
@@ -153,7 +194,7 @@ function renderCoordinateMarks(
     { x: safeZone.x + safeZone.width - inset, y: safeZone.y + inset },
     { x: safeZone.x + inset, y: safeZone.y + safeZone.height - inset },
     { x: safeZone.x + safeZone.width - inset, y: safeZone.y + safeZone.height - inset },
-  ].slice(0, 2 + (seed % 3));
+  ].slice(0, count);
 
   return anchors
     .map((p, i) => {
@@ -167,7 +208,6 @@ function renderCoordinateMarks(
     .join("");
 }
 
-/** Capsule code pill — roman numeral + edition code. */
 function renderCapsuleCode(
   cx: number,
   cy: number,
@@ -196,7 +236,7 @@ function renderCapsuleCode(
   ].join("");
 }
 
-function renderAccentFromBrief(
+function renderMicroAccent(
   cx: number,
   cy: number,
   size: number,
@@ -231,18 +271,20 @@ export interface HeroArtwork {
   decorative: string;
 }
 
-/** Premium hero composition — dual arcs, missing center, micro-detail. */
 export function renderHeroArtwork(spec: DesignSpec, colors: ColorScheme): HeroArtwork {
-  const { focalPoint, safeZone, seed, composition, primaryShape } = spec;
+  const { safeZone, seed, composition, primaryShape, compositionCandidate } = spec;
+  const geo = compositionCandidate.geometrySystem;
+  const details = compositionCandidate.detailSystem;
   const sw =
-    composition === "minimal"
+    composition === "minimal" || compositionCandidate.printScale === "micro"
       ? DESIGN_TOKENS.stroke.hairline
-      : composition.includes("oversized")
+      : composition.includes("oversized") || compositionCandidate.printScale === "oversized"
         ? DESIGN_TOKENS.stroke.medium
         : primaryShape.strokeWidth || DESIGN_TOKENS.stroke.thin;
-  const cx = focalPoint.x;
-  const cy = snap(focalPoint.y - safeZone.height * 0.04);
-  const heroScale = safeZone.width * (composition.includes("oversized") ? 0.62 : 0.56);
+
+  const cx = primaryShape.cx;
+  const cy = primaryShape.cy;
+  const heroScale = primaryShape.scale;
   const r = heroScale * 0.42;
   const rotation = range(seed, 7, -4, 4);
 
@@ -250,40 +292,90 @@ export function renderHeroArtwork(spec: DesignSpec, colors: ColorScheme): HeroAr
   const inkSecondary = colors.secondary;
   const accent = colors.accent;
 
-  const dualArcs = group(
-    "hero-dual-arcs",
-    renderDualInterruptedArcs(cx, cy, r, primary, sw, 0.92, rotation),
-  );
+  const baseParts: string[] = [];
 
-  const missingCenter = group(
-    "hero-missing-center",
-    renderMissingCenter(cx, cy, r, primary, sw, 0.88),
-  );
+  if (geo.includeOuterFrame) {
+    baseParts.push(
+      group(
+        "hero-outer-frame",
+        circle(cx, cy, r * 1.06, {
+          fill: "none",
+          stroke: inkSecondary,
+          "stroke-width": sw * 0.3,
+          opacity: 0.22,
+          "stroke-dasharray": "2 5",
+        }),
+      ),
+    );
+  }
 
-  const outerFrame = group(
-    "hero-outer-frame",
-    circle(cx, cy, r * 1.06, {
-      fill: "none",
-      stroke: inkSecondary,
-      "stroke-width": sw * 0.3,
-      opacity: 0.22,
-      "stroke-dasharray": "2 5",
-    }),
-  );
+  if (geo.includeDualArcs) {
+    baseParts.push(
+      group("hero-dual-arcs", renderDualInterruptedArcs(cx, cy, r, primary, sw, 0.92, rotation)),
+    );
+  }
 
-  const base = group("mark-hero", [outerFrame, dualArcs, missingCenter].join(""));
+  if (geo.includeBrokenCircle) {
+    baseParts.push(
+      group("hero-broken-circle", renderBrokenCircleMark(cx, cy, r * 0.95, primary, sw, 0.9, rotation)),
+    );
+  }
 
-  const microLines = group(
-    "hero-micro-lines",
-    renderMicroLines(cx, cy + r * 0.55, heroScale, inkSecondary, sw, seed),
-  );
+  if (geo.includeMissingCenter) {
+    baseParts.push(group("hero-missing-center", renderMissingCenter(cx, cy, r, primary, sw, 0.88)));
+  }
 
-  const briefAccents = spec.secondaryShapes
-    .slice(0, 3)
-    .map((_, i) =>
+  if (geo.primaryKind === "frame") {
+    baseParts.push(
+      group("hero-architectural-frame", renderArchitecturalFrame(cx, cy, heroScale, inkSecondary, sw, 0.75)),
+    );
+  }
+
+  if (!geo.includeDualArcs && !geo.includeBrokenCircle && geo.primaryKind !== "frame") {
+    baseParts.push(
+      group(
+        "hero-primary-mark",
+        circle(cx, cy, r, {
+          fill: "none",
+          stroke: primary,
+          "stroke-width": sw,
+          opacity: 0.85,
+        }),
+      ),
+    );
+  }
+
+  const base = group("mark-hero", baseParts.join(""));
+
+  const secondaryParts: string[] = [];
+
+  if (details.includeFlankLines) {
+    secondaryParts.push(
+      group(
+        "hero-flank-lines",
+        [
+          line(cx - r * 1.2, cy, cx - r * 0.62, cy, { stroke: inkSecondary, "stroke-width": sw * 0.35, opacity: 0.3, "stroke-linecap": "round" }),
+          line(cx + r * 0.62, cy, cx + r * 1.2, cy, { stroke: inkSecondary, "stroke-width": sw * 0.35, opacity: 0.3, "stroke-linecap": "round" }),
+        ].join(""),
+      ),
+    );
+  }
+
+  if (details.includeMicroLines) {
+    secondaryParts.push(
+      group(
+        "hero-micro-lines",
+        renderMicroLines(cx, cy + r * 0.55, heroScale, inkSecondary, sw, seed, details.microDetailCount - 2),
+      ),
+    );
+  }
+
+  const accentCount = Math.min(details.microDetailCount, spec.secondaryShapes.length + 2);
+  for (let i = 0; i < accentCount; i++) {
+    secondaryParts.push(
       group(
         `hero-accent-${i}`,
-        renderAccentFromBrief(
+        renderMicroAccent(
           cx,
           cy + r * 0.35,
           heroScale,
@@ -293,63 +385,64 @@ export function renderHeroArtwork(spec: DesignSpec, colors: ColorScheme): HeroAr
           i,
         ),
       ),
-    )
-    .join("");
+    );
+  }
 
-  const flankingLines = group(
-    "hero-flank-lines",
-    [
-      line(cx - r * 1.2, cy, cx - r * 0.62, cy, { stroke: inkSecondary, "stroke-width": sw * 0.35, opacity: 0.3, "stroke-linecap": "round" }),
-      line(cx + r * 0.62, cy, cx + r * 1.2, cy, { stroke: inkSecondary, "stroke-width": sw * 0.35, opacity: 0.3, "stroke-linecap": "round" }),
-    ].join(""),
-  );
+  const secondaryLayer = group("hero-secondary", secondaryParts.join(""));
 
-  const secondaryLayer = group("hero-secondary", [flankingLines, microLines, briefAccents].join(""));
+  const decorativeParts: string[] = [];
 
-  const coordMarks = group(
-    "hero-coordinate-marks",
-    renderCoordinateMarks(safeZone, inkSecondary, sw, seed),
-  );
+  if (details.includeCoordinateMarks) {
+    decorativeParts.push(
+      group(
+        "hero-coordinate-marks",
+        renderCoordinateMarks(safeZone, inkSecondary, sw, seed, Math.min(4, details.microDetailCount)),
+      ),
+    );
+  }
 
   const roman = toRomanNumeral(seed);
-  const editionCode = `${roman} · ${String(2020 + (seed % 6)).slice(-2)}`;
-  const capsule = group(
-    "hero-capsule-code",
-    renderCapsuleCode(
-      cx,
-      cy + r * 0.68,
-      editionCode,
-      inkSecondary,
-      colors.ink,
-      sw,
-    ),
-  );
 
-  const sideRoman = group(
-    "hero-roman-mark",
-  `<text x="${fmt(safeZone.x + safeZone.width * 0.07)}" y="${fmt(safeZone.y + safeZone.height * 0.1)}" fill="${inkSecondary}" font-family="${DESIGN_TOKENS.fonts.display}" font-size="8" font-weight="400" letter-spacing="3.2" opacity="0.4">${escapeXml(roman)}</text>`,
-  );
+  if (details.includeCapsuleCode) {
+    const editionCode = `${roman} · ${String(2020 + (seed % 6)).slice(-2)}`;
+    decorativeParts.push(
+      group(
+        "hero-capsule-code",
+        renderCapsuleCode(cx, cy + r * 0.68, editionCode, inkSecondary, colors.ink, sw),
+      ),
+    );
+  }
 
-  const verticalRules = group(
-    "hero-vertical-rules",
-    [
-      line(safeZone.x + safeZone.width * 0.12, safeZone.y + safeZone.height * 0.18, safeZone.x + safeZone.width * 0.12, safeZone.y + safeZone.height * 0.32, {
-        stroke: inkSecondary,
-        "stroke-width": sw * 0.3,
-        opacity: 0.22,
-      }),
-      line(safeZone.x + safeZone.width * 0.88, safeZone.y + safeZone.height * 0.68, safeZone.x + safeZone.width * 0.88, safeZone.y + safeZone.height * 0.82, {
-        stroke: inkSecondary,
-        "stroke-width": sw * 0.3,
-        opacity: 0.22,
-      }),
-    ].join(""),
-  );
+  if (details.includeSideRoman) {
+    decorativeParts.push(
+      group(
+        "hero-roman-mark",
+        `<text x="${fmt(safeZone.x + safeZone.width * 0.07)}" y="${fmt(safeZone.y + safeZone.height * 0.1)}" fill="${inkSecondary}" font-family="${DESIGN_TOKENS.fonts.display}" font-size="8" font-weight="400" letter-spacing="3.2" opacity="0.4">${escapeXml(roman)}</text>`,
+      ),
+    );
+  }
 
-  const decorative = group(
-    "hero-decorative",
-    [coordMarks, capsule, sideRoman, verticalRules].join(""),
-  );
+  if (details.includeVerticalRules) {
+    decorativeParts.push(
+      group(
+        "hero-vertical-rules",
+        [
+          line(safeZone.x + safeZone.width * 0.12, safeZone.y + safeZone.height * 0.18, safeZone.x + safeZone.width * 0.12, safeZone.y + safeZone.height * 0.32, {
+            stroke: inkSecondary,
+            "stroke-width": sw * 0.3,
+            opacity: 0.22,
+          }),
+          line(safeZone.x + safeZone.width * 0.88, safeZone.y + safeZone.height * 0.68, safeZone.x + safeZone.width * 0.88, safeZone.y + safeZone.height * 0.82, {
+            stroke: inkSecondary,
+            "stroke-width": sw * 0.3,
+            opacity: 0.22,
+          }),
+        ].join(""),
+      ),
+    );
+  }
+
+  const decorative = group("hero-decorative", decorativeParts.join(""));
 
   return { defs: "", base, secondary: secondaryLayer, decorative };
 }

@@ -1,12 +1,13 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
+import { selectBestCompositionCandidate } from "@/lib/design/vector-engine/composition-candidates";
 import { buildColorScheme } from "@/lib/design/vector-engine/color";
-import { hashString, pick, range } from "@/lib/design/vector-engine/hash";
+import { hashString, range } from "@/lib/design/vector-engine/hash";
 import { DESIGN_TOKENS, snap } from "@/lib/design/vector-engine/tokens";
 import type {
+  CompositionCandidate,
   CompositionId,
   DesignSpec,
   Point,
-  PrimitiveKind,
   PrintEffect,
   Rect,
   ShapePlacement,
@@ -15,65 +16,14 @@ import type {
 import {
   extractHeadline,
   formatCoordinates,
+  toRomanNumeral,
 } from "@/lib/design/vector-engine/typography";
-
-const KEYWORD_MAP: Array<{ keys: string[]; kind: PrimitiveKind }> = [
-  { keys: ["ring", "halo", "orbital"], kind: "ring" },
-  { keys: ["circle", "orb", "dot", "sphere"], kind: "circle" },
-  { keys: ["arc", "crescent", "curve"], kind: "arc" },
-  { keys: ["half", "semicircle", "dome"], kind: "half-circle" },
-  { keys: ["broken", "segment", "incomplete", "interrupted"], kind: "broken-circle" },
-  { keys: ["parallel", "bars", "lines", "stroke", "bar"], kind: "parallel-lines" },
-  { keys: ["radial", "spoke", "sunburst"], kind: "radial-lines" },
-  { keys: ["cross", "plus", "intersect"], kind: "cross" },
-  { keys: ["grid", "matrix", "woven"], kind: "grid" },
-  { keys: ["dot", "speckle", "stipple"], kind: "dots" },
-  { keys: ["organic", "blob", "fluid"], kind: "organic-blob" },
-  { keys: ["bezier", "swoosh", "flow"], kind: "bezier-curve" },
-  { keys: ["noise", "grain", "texture"], kind: "noise-pattern" },
-  { keys: ["frame", "border", "box"], kind: "frame" },
-  { keys: ["rounded", "pill", "soft rect"], kind: "rounded-rectangle" },
-  { keys: ["rect", "block", "plaque"], kind: "rectangle" },
-  { keys: ["diamond", "rhombus", "lozenge"], kind: "diamond" },
-  { keys: ["star", "asterisk"], kind: "star" },
-  { keys: ["symbol", "mark", "glyph", "icon"], kind: "minimal-symbol" },
-];
 
 function parsePrintSizeCm(dimensions: string): { width: number; height: number } {
   const numbers = dimensions.match(/(\d+(?:\.\d+)?)/g)?.map(Number) ?? [];
   if (numbers.length >= 2) return { width: Math.max(2, numbers[0]), height: Math.max(2, numbers[1]) };
   if (numbers.length === 1) return { width: numbers[0], height: numbers[0] * 1.15 };
   return { width: 28, height: 32 };
-}
-
-function detectComposition(placement: string, printArea: string, role: string): CompositionId {
-  const text = `${placement} ${printArea} ${role}`.toLowerCase();
-  if (text.includes("dual") || text.includes("split") || text.includes("two placement")) return "dual-print";
-  if (text.includes("left chest") || text.includes("left-chest")) return "left-chest";
-  if (text.includes("upper chest") || text.includes("high chest")) return "upper-chest";
-  if (text.includes("oversized") && text.includes("back")) return "oversized-back";
-  if (text.includes("oversized") || text.includes("full front") || text.includes("statement front")) return "oversized-front";
-  if (text.includes("shoulder") || text.includes("nape")) return "back-shoulder";
-  if (text.includes("hem") || text.includes("bottom")) return "bottom-hem";
-  if (text.includes("vertical") || text.includes("stacked") || text.includes("column")) return "vertical";
-  if (text.includes("asym") || text.includes("offset") || text.includes("off-center")) return "asymmetrical";
-  if (text.includes("minimal") || text.includes("subtle") || text.includes("micro")) return "minimal";
-  if (text.includes("center") || text.includes("chest")) return "center-chest";
-  return "center-chest";
-}
-
-function matchPrimitive(text: string, seed: number, fallbackIndex: number): PrimitiveKind {
-  const lower = text.toLowerCase();
-  const ranked = [...KEYWORD_MAP].sort((a, b) => {
-    const lenA = Math.max(...a.keys.map((k) => k.length));
-    const lenB = Math.max(...b.keys.map((k) => k.length));
-    return lenB - lenA;
-  });
-  for (const entry of ranked) {
-    if (entry.keys.some((k) => lower.includes(k))) return entry.kind;
-  }
-  const fallbacks: PrimitiveKind[] = ["ring", "parallel-lines", "arc", "minimal-symbol", "frame", "cross"];
-  return pick(seed, fallbackIndex, fallbacks);
 }
 
 function detectEffects(material: string, production: string): PrintEffect[] {
@@ -93,13 +43,14 @@ function detectEffects(material: string, production: string): PrintEffect[] {
 function layoutFrame(
   composition: CompositionId,
   artboard: Rect,
+  candidate: CompositionCandidate,
 ): { safeZone: Rect; focal: Point; secondary?: Point } {
-  const m = DESIGN_TOKENS.margins.safe;
+  const marginBias = candidate.negativeSpaceRatio * 0.12 + DESIGN_TOKENS.margins.safe;
   const safeZone: Rect = {
-    x: artboard.x + artboard.width * m,
-    y: artboard.y + artboard.height * m,
-    width: artboard.width * (1 - m * 2),
-    height: artboard.height * (1 - m * 2),
+    x: artboard.x + artboard.width * marginBias,
+    y: artboard.y + artboard.height * marginBias,
+    width: artboard.width * (1 - marginBias * 2),
+    height: artboard.height * (1 - marginBias * 2),
   };
 
   const center: Point = {
@@ -111,7 +62,13 @@ function layoutFrame(
     case "upper-chest":
       return { safeZone, focal: { x: center.x, y: snap(safeZone.y + safeZone.height * 0.34) } };
     case "left-chest":
-      return { safeZone, focal: { x: snap(safeZone.x + safeZone.width * 0.34), y: snap(safeZone.y + safeZone.height * 0.32) } };
+      return {
+        safeZone,
+        focal: {
+          x: snap(safeZone.x + safeZone.width * 0.34),
+          y: snap(safeZone.y + safeZone.height * 0.32),
+        },
+      };
     case "oversized-front":
     case "oversized-back":
       return { safeZone, focal: center };
@@ -124,8 +81,14 @@ function layoutFrame(
     case "asymmetrical":
       return {
         safeZone,
-        focal: { x: snap(safeZone.x + safeZone.width * 0.58), y: snap(safeZone.y + safeZone.height * 0.44) },
-        secondary: { x: snap(safeZone.x + safeZone.width * 0.28), y: snap(safeZone.y + safeZone.height * 0.62) },
+        focal: {
+          x: snap(safeZone.x + safeZone.width * 0.58),
+          y: snap(safeZone.y + safeZone.height * 0.44),
+        },
+        secondary: {
+          x: snap(safeZone.x + safeZone.width * 0.28),
+          y: snap(safeZone.y + safeZone.height * 0.62),
+        },
       };
     case "dual-print":
       return {
@@ -135,91 +98,159 @@ function layoutFrame(
       };
     case "minimal":
       return { safeZone, focal: { x: center.x, y: snap(safeZone.y + safeZone.height * 0.46) } };
-  default:
+    default:
       return { safeZone, focal: center };
   }
 }
 
 function buildTypography(
   brief: DesignStudioBrief,
-  layout: { focal: Point; safeZone: Rect; composition: CompositionId },
+  layout: { focal: Point; safeZone: Rect; composition: CompositionId; secondary?: Point },
   seed: number,
+  candidate: CompositionCandidate,
 ): TypographyBlock[] {
   const blocks: TypographyBlock[] = [];
   const typeText = brief.typography.toLowerCase();
   const headline = extractHeadline(brief.title);
   const tokens = DESIGN_TOKENS.typography;
+  const typeSys = candidate.typographySystem;
+  const geoSys = candidate.geometrySystem;
 
-  const heroR = layout.safeZone.width * (layout.composition.includes("oversized") ? 0.62 : 0.56) * 0.42;
-  const typeAnchorY = snap(layout.focal.y + heroR * 0.82 + layout.safeZone.height * 0.1);
-  const isHero =
-    brief.role.toLowerCase().includes("hero") ||
-    layout.composition.includes("oversized") ||
-    !typeText.includes("graphic only");
+  const heroR = layout.safeZone.width * geoSys.scale * 0.82;
+  const typeAnchorX =
+    typeSys.alignment === "asymmetric"
+      ? snap(layout.focal.x - layout.safeZone.width * 0.06)
+      : typeSys.alignment === "left"
+        ? snap(layout.safeZone.x + layout.safeZone.width * 0.14)
+        : layout.focal.x;
+  const typeAnchorY = snap(
+    layout.focal.y +
+      heroR * 0.72 +
+      layout.safeZone.height * typeSys.headlineYOffset,
+  );
 
   const headlineScale =
-    layout.composition === "minimal" ? 0.88 : layout.composition.includes("oversized") ? 1.08 : 1;
+    typeSys.headlineScale *
+    (candidate.printScale === "micro" ? 0.82 : candidate.printScale === "oversized" ? 1.06 : 1);
 
   if (!typeText.includes("no type") && !typeText.includes("graphic only")) {
     const headlineWords = headline.trim().split(/\s+/);
     const displayHeadline =
-      headlineWords.length > 2 ? headlineWords.slice(0, 2).join(" ") : headline;
+      candidate.printScale === "oversized" && headlineWords.length > 1
+        ? headlineWords.slice(0, 2).join(" ")
+        : headlineWords.length > 2
+          ? headlineWords.slice(0, 2).join(" ")
+          : headline;
+
+    const typeOpacity =
+      typeSys.hierarchy === "type-first" ? 0.96 : typeSys.hierarchy === "geometry-first" ? 0.82 : 0.9;
 
     blocks.push({
       role: "headline",
       text: displayHeadline,
-      x: layout.focal.x,
+      x: typeAnchorX,
       y: typeAnchorY,
       size: tokens.headline.size * headlineScale,
-      tracking: tokens.headline.tracking + 0.06,
+      tracking: tokens.headline.tracking + typeSys.trackingBoost,
       lineHeight: tokens.headline.lineHeight,
-      align: "middle",
+      align: typeSys.alignment === "left" ? "start" : "middle",
       rotation: 0,
-      opacity: 0.94,
-      weight: 500,
+      opacity: typeOpacity,
+      weight: typeSys.hierarchy === "type-first" ? 500 : 450,
     });
 
-    if (isHero && layout.composition !== "minimal") {
+    if (typeSys.includeSubHeadline) {
       const editionYear = String(2020 + (seed % 6));
       blocks.push({
         role: "sub-headline",
         text: `${brief.product.split(" ")[0]?.toUpperCase() ?? "STUDIO"} · ${editionYear}`,
-        x: layout.focal.x,
-        y: snap(typeAnchorY + tokens.headline.size * headlineScale * 1.15),
-        size: tokens.subHeadline.size,
-        tracking: tokens.subHeadline.tracking + 0.12,
+        x: typeAnchorX,
+        y: snap(typeAnchorY + tokens.headline.size * headlineScale * 1.12),
+        size: tokens.subHeadline.size * (candidate.printScale === "micro" ? 0.9 : 1),
+        tracking: tokens.subHeadline.tracking + typeSys.trackingBoost * 0.6,
         lineHeight: tokens.subHeadline.lineHeight,
-        align: "middle",
+        align: typeSys.alignment === "left" ? "start" : "middle",
         rotation: 0,
-        opacity: 0.58,
+        opacity: 0.52,
         weight: 400,
       });
     }
   }
 
-  const coordCount = 2 + (seed % 3);
-  const coordPositions = [
-    { x: layout.safeZone.x + layout.safeZone.width * 0.14, y: layout.safeZone.y + layout.safeZone.height * 0.88, align: "start" as const },
-    { x: layout.safeZone.x + layout.safeZone.width * 0.86, y: layout.safeZone.y + layout.safeZone.height * 0.88, align: "end" as const },
-    { x: layout.safeZone.x + layout.safeZone.width * 0.86, y: layout.safeZone.y + layout.safeZone.height * 0.12, align: "end" as const },
-    { x: layout.safeZone.x + layout.safeZone.width * 0.14, y: layout.safeZone.y + layout.safeZone.height * 0.12, align: "start" as const },
-  ].slice(0, coordCount);
+  if (typeSys.includeCoordinates) {
+    const coordCount = 2 + Math.min(2, candidate.detailSystem.microDetailCount - 2);
+    const coordPositions = [
+      {
+        x: layout.safeZone.x + layout.safeZone.width * 0.12,
+        y: layout.safeZone.y + layout.safeZone.height * 0.9,
+        align: "start" as const,
+      },
+      {
+        x: layout.safeZone.x + layout.safeZone.width * 0.88,
+        y: layout.safeZone.y + layout.safeZone.height * 0.9,
+        align: "end" as const,
+      },
+      {
+        x: layout.safeZone.x + layout.safeZone.width * 0.88,
+        y: layout.safeZone.y + layout.safeZone.height * 0.1,
+        align: "end" as const,
+      },
+      {
+        x: layout.safeZone.x + layout.safeZone.width * 0.12,
+        y: layout.safeZone.y + layout.safeZone.height * 0.1,
+        align: "start" as const,
+      },
+    ].slice(0, coordCount);
 
-  coordPositions.forEach((pos, i) => {
+    coordPositions.forEach((pos, i) => {
+      blocks.push({
+        role: "coordinates",
+        text: formatCoordinates(seed + i * 17).replace("° N", "°").replace("° W", ""),
+        x: snap(pos.x),
+        y: snap(pos.y),
+        size: tokens.coordinates.size,
+        tracking: tokens.coordinates.tracking + typeSys.trackingBoost * 0.4,
+        lineHeight: tokens.coordinates.lineHeight,
+        align: pos.align,
+        rotation: 0,
+        opacity: 0.32 + (i % 2) * 0.08,
+        weight: 400,
+      });
+    });
+  }
+
+  if (typeSys.includeRomanNumeral || candidate.detailSystem.includeSideRoman) {
     blocks.push({
-      role: "coordinates",
-      text: formatCoordinates(seed + i * 17).replace("° N", "°").replace("° W", ""),
-      x: snap(pos.x),
-      y: snap(pos.y),
-      size: tokens.coordinates.size,
-      tracking: tokens.coordinates.tracking + 0.08,
-      lineHeight: tokens.coordinates.lineHeight,
-      align: pos.align,
+      role: "roman-numeral",
+      text: toRomanNumeral(seed),
+      x: snap(layout.safeZone.x + layout.safeZone.width * 0.08),
+      y: snap(layout.safeZone.y + layout.safeZone.height * 0.11),
+      size: tokens.romanNumeral.size,
+      tracking: tokens.romanNumeral.tracking + 0.08,
+      lineHeight: tokens.romanNumeral.lineHeight,
+      align: "start",
       rotation: 0,
-      opacity: 0.36 + (i % 2) * 0.06,
+      opacity: 0.38,
       weight: 400,
     });
-  });
+  }
+
+  if (typeSys.includeCapsuleCode || candidate.detailSystem.includeCapsuleCode) {
+    const roman = toRomanNumeral(seed);
+    blocks.push({
+      role: "caption",
+      text: `${roman} · ${String(2020 + (seed % 6)).slice(-2)}`,
+      x: layout.focal.x,
+      y: snap(typeAnchorY + heroR * 0.42),
+      size: tokens.caption.size,
+      tracking: tokens.caption.tracking + 0.1,
+      lineHeight: tokens.caption.lineHeight,
+      align: "middle",
+      rotation: 0,
+      opacity: 0.55,
+      weight: 400,
+    });
+  }
 
   if (typeText.includes("quote") || typeText.includes("\"")) {
     const quoteMatch = brief.typography.match(/"([^"]+)"/);
@@ -265,31 +296,78 @@ function buildTypography(
   return blocks;
 }
 
-function shapeFromElement(
-  element: string,
-  index: number,
-  point: Point,
-  safeZone: Rect,
+function buildShapes(
+  brief: DesignStudioBrief,
+  layout: { focal: Point; safeZone: Rect; secondary?: Point },
   seed: number,
+  candidate: CompositionCandidate,
   strokeWidth: number,
-): ShapePlacement {
-  const kind = matchPrimitive(element, seed, index + 2);
-  const scale = safeZone.width * range(seed, index + 5, 0.22, 0.38);
-  return {
-    kind,
-    cx: point.x + range(seed, index + 10, -safeZone.width * 0.08, safeZone.width * 0.08),
-    cy: point.y + range(seed, index + 11, -safeZone.height * 0.06, safeZone.height * 0.06),
-    scale,
-    rotation: range(seed, index + 12, -12, 12),
-    opacity: range(seed, index + 13, 0.45, 0.85),
+  outlineOnly: boolean,
+): { primaryShape: ShapePlacement; secondaryShapes: ShapePlacement[] } {
+  const geo = candidate.geometrySystem;
+  const geoCx = layout.focal.x;
+  const geoCy = snap(layout.focal.y + layout.safeZone.height * geo.yOffset);
+  const primaryScale = layout.safeZone.width * geo.scale * candidate.visualWeight;
+
+  const primaryShape: ShapePlacement = {
+    kind: geo.primaryKind,
+    cx: geoCx,
+    cy: geoCy,
+    scale: primaryScale,
+    rotation: range(seed, 1, -5, 5),
+    opacity: geo.includeDualArcs ? 0.95 : 0.88,
     strokeWidth,
-    fillMode: kind === "ring" || kind === "arc" || kind === "broken-circle" ? "outline" : "both",
+    fillMode:
+      outlineOnly || geo.primaryKind === "ring" || geo.primaryKind === "arc" ? "outline" : "both",
   };
+
+  const detailCount = Math.min(geo.secondaryKinds.length, candidate.detailSystem.microDetailCount - 2);
+  const secondaryShapes: ShapePlacement[] = geo.secondaryKinds.slice(0, Math.max(1, detailCount)).map(
+    (kind, index) => {
+      const anchor = index === 0 && layout.secondary ? layout.secondary : layout.focal;
+      const offsetX =
+        candidate.symmetry === "asymmetric"
+          ? range(seed, index + 10, -layout.safeZone.width * 0.1, layout.safeZone.width * 0.1)
+          : 0;
+      const offsetY = snap(layout.safeZone.height * (0.12 + index * 0.08));
+      return {
+        kind,
+        cx: snap(anchor.x + offsetX),
+        cy: snap(anchor.y + offsetY),
+        scale: primaryScale * range(seed, index + 5, 0.18, 0.32),
+        rotation: range(seed, index + 12, -10, 10),
+        opacity: range(seed, index + 13, 0.42, 0.72),
+        strokeWidth: strokeWidth * 0.85,
+        fillMode: kind === "ring" || kind === "arc" || kind === "broken-circle" ? "outline" : "both",
+      };
+    },
+  );
+
+  brief.visualElements.slice(0, 2).forEach((element, index) => {
+    const lower = element.toLowerCase();
+    if (lower.includes("line") || lower.includes("bar")) {
+      secondaryShapes.push({
+        kind: "parallel-lines",
+        cx: layout.focal.x,
+        cy: snap(geoCy + primaryScale * 0.22),
+        scale: primaryScale * 0.28,
+        rotation: range(seed, index + 20, -4, 4),
+        opacity: 0.5,
+        strokeWidth: strokeWidth * 0.7,
+        fillMode: "outline",
+      });
+    }
+  });
+
+  return { primaryShape, secondaryShapes };
 }
 
 export function interpretBrief(brief: DesignStudioBrief): DesignSpec {
+  const compositionCandidate = selectBestCompositionCandidate(brief);
   const seed = hashString(
-    [brief.designId, brief.geometry, ...brief.visualElements, brief.placement].join("|"),
+    [brief.designId, brief.geometry, ...brief.visualElements, brief.placement, compositionCandidate.id].join(
+      "|",
+    ),
   );
   const printCm = parsePrintSizeCm(brief.dimensions);
   const artboard: Rect = {
@@ -299,50 +377,33 @@ export function interpretBrief(brief: DesignStudioBrief): DesignSpec {
     height: snap(printCm.height * DESIGN_TOKENS.cm),
   };
 
-  const composition = detectComposition(brief.placement, brief.printArea, brief.role);
-  const { safeZone, focal, secondary } = layoutFrame(composition, artboard);
+  const composition = compositionCandidate.layoutFamily;
+  const { safeZone, focal, secondary } = layoutFrame(composition, artboard, compositionCandidate);
   const colors = buildColorScheme(brief.colorPalette, brief.color, brief.materialEffects, seed);
   const effects = detectEffects(brief.materialEffects, brief.productionMethod);
   const strokeWidth =
-    composition === "minimal"
+    composition === "minimal" || compositionCandidate.printScale === "micro"
       ? DESIGN_TOKENS.stroke.hairline
-      : composition.includes("oversized")
+      : composition.includes("oversized") || compositionCandidate.printScale === "oversized"
         ? DESIGN_TOKENS.stroke.medium
         : DESIGN_TOKENS.stroke.thin;
-
-  const primaryKind = matchPrimitive(brief.geometry, seed, 0);
-  const hasRadialAccent = brief.geometry.toLowerCase().includes("radial");
-  const primaryScale =
-    safeZone.width * (composition === "minimal" ? 0.38 : composition.includes("oversized") ? 0.62 : 0.56);
   const outlineOnly = effects.includes("outline");
 
-  const primaryShape: ShapePlacement = {
-    kind: primaryKind,
-    cx: focal.x,
-    cy: snap(focal.y - safeZone.height * (hasRadialAccent ? 0.1 : 0.06)),
-    scale: primaryScale,
-    rotation: range(seed, 1, -6, 6),
-    opacity: 1,
+  const { primaryShape, secondaryShapes } = buildShapes(
+    brief,
+    { focal, safeZone, secondary },
+    seed,
+    compositionCandidate,
     strokeWidth,
-    fillMode: outlineOnly || primaryKind === "ring" || primaryKind === "arc" ? "outline" : "both",
-  };
+    outlineOnly,
+  );
 
-  const secondaryShapes: ShapePlacement[] = brief.visualElements
-    .slice(0, composition === "dual-print" ? 2 : 4)
-    .map((element, index) => {
-      const anchor = index === 0 && secondary ? secondary : focal;
-      const offsetY = snap(safeZone.height * (0.14 + index * 0.1));
-      return shapeFromElement(
-        element,
-        index,
-        { x: anchor.x, y: anchor.y + offsetY },
-        safeZone,
-        seed,
-        strokeWidth * 0.85,
-      );
-    });
-
-  const typography = buildTypography(brief, { focal, safeZone, composition }, seed);
+  const typography = buildTypography(
+    brief,
+    { focal, safeZone, composition, secondary },
+    seed,
+    compositionCandidate,
+  );
 
   return {
     composition,
@@ -356,5 +417,6 @@ export function interpretBrief(brief: DesignStudioBrief): DesignSpec {
     colors,
     effects,
     seed,
+    compositionCandidate,
   };
 }

@@ -1,13 +1,13 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
-import { runDesignEngine } from "@/lib/design/engine/pipeline";
-import type { EngineOptions } from "@/lib/design/engine/types";
+import { runDesignLibrary } from "@/lib/design/design-library/pipeline";
+import type { LibraryEngineOptions } from "@/lib/design/design-library/types";
 
-export type { EngineOptions as VectorEngineOptions } from "@/lib/design/engine/types";
+export type { LibraryEngineOptions as VectorEngineOptions } from "@/lib/design/design-library/types";
 
 /** Deterministic print-ready vector artwork from an active DesignStudioBrief. */
 export function generateDesignSvg(
   brief: DesignStudioBrief,
-  options?: EngineOptions,
+  options?: LibraryEngineOptions,
 ): string {
-  return runDesignEngine(brief, options);
+  return runDesignLibrary(brief, options);
 }
