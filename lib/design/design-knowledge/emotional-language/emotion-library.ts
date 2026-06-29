@@ -97,7 +97,7 @@ export const EMOTIONAL_LANGUAGES: EmotionalLanguage[] = [
     negativeSpaceProfile: "elevated",
     compositionRhythm: "measured",
     movement: "editorial-flow",
-    templateBias: ["gallery-composition", "vintage-washed", "editorial-poster"],
+    templateBias: ["gallery-composition", "silent-collection", "editorial-poster"],
     layoutBias: ["gallery-layout", "editorial-layout", "wrap-composition"],
     styleBias: ["vintage-washed", "editorial-fashion", "monochrome-luxury"],
     ornamentPreferences: ["roman-ids", "tiny-capsules", "minimal-labels"],

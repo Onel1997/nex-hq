@@ -1,5 +1,6 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { EmotionalDirectorDecision } from "@/lib/design/design-knowledge/emotional-language/types";
+import type { WearabilityDirectorDecision } from "@/lib/design/design-knowledge/wearability";
 import type { ColorScheme } from "@/lib/design/vector-engine/types";
 
 /* ── Geometry primitives ─────────────────────────────────────── */
@@ -372,6 +373,8 @@ export interface LibraryArtworkSpec {
   artboard: Rect;
   /** Emotional narrative layer — primary/secondary story direction. */
   emotionalDirection?: EmotionalDirectorDecision;
+  /** Wearability calibration — apparel designer lens for garment-scale composition. */
+  wearabilityDirection?: WearabilityDirectorDecision;
 }
 
 export interface LibraryEngineOptions {

@@ -329,7 +329,7 @@ const ITERATION_RECOMMENDATIONS: Partial<Record<CommercialScoreDimension, string
   emotionalImpact: "Iteration 1 — Emotional Narrative Layer (brief mood → symbol/ornament/typo selection)",
   premiumFeeling: "Iteration 3 — Premium Feeling Pass (negative space, material restraint, ornament density)",
   typographyQuality: "Iteration 2 — Hero Typography Enrichment (ghost/cropped/offset layers, focal overlap)",
-  wearability: "Iteration 4 — Wearability Calibration (logo-mark penalty vs. daily-rotation score)",
+  wearability: "Iteration 3 — Wearability Calibration (apparel designer lens, placement-aware density)",
   luxury: "Iteration 3 — Premium Feeling Pass (luxury perception + material restraint)",
   compositionQuality: "Composition Intelligence tuning — asymmetric tension and focal hierarchy",
   shareability: "Iteration 1 — Emotional Narrative Layer (scroll-stop storytelling hooks)",

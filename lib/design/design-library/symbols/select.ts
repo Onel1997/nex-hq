@@ -9,6 +9,8 @@ import type {
 } from "@/lib/design/design-library/types";
 import type { EmotionalCompositionWeights } from "@/lib/design/design-knowledge/emotional-language";
 import { rankEmotionSymbols } from "@/lib/design/design-knowledge/emotional-language";
+import type { WearabilityCompositionWeights } from "@/lib/design/design-knowledge/wearability";
+import { rankWearabilitySymbols } from "@/lib/design/design-knowledge/wearability";
 import { getSymbol } from "@/lib/design/design-library/symbols/registry";
 import { range } from "@/lib/design/vector-engine/hash";
 import { snap } from "@/lib/design/vector-engine/tokens";
@@ -37,6 +39,7 @@ export function selectSymbols(
   template: TemplateDefinition,
   seed: number,
   emotionWeights?: EmotionalCompositionWeights,
+  wearabilityWeights?: WearabilityCompositionWeights,
 ): SymbolPlacement[] {
   const placements: SymbolPlacement[] = [];
   const heroScale = zones.heroZone.width * layout.scaling.heroScale * style.geometryScale;
@@ -51,9 +54,12 @@ export function selectSymbols(
         )
       : []),
   ];
-  const primaryId = emotionWeights
-    ? rankEmotionSymbols([...new Set(candidatePrimaries)], emotionWeights)[0] ?? template.primarySymbol
-    : template.primarySymbol;
+  const rankedPrimaries = emotionWeights
+    ? rankEmotionSymbols([...new Set(candidatePrimaries)], emotionWeights)
+    : [...new Set(candidatePrimaries)];
+  const primaryId = wearabilityWeights
+    ? rankWearabilitySymbols(rankedPrimaries, wearabilityWeights)[0] ?? template.primarySymbol
+    : rankedPrimaries[0] ?? template.primarySymbol;
   placements.push({
     id: "symbol-primary",
     symbolId: primaryId,
@@ -69,9 +75,14 @@ export function selectSymbols(
   const mergedSecondary = [
     ...new Set([...template.secondarySymbols, ...briefMatches.filter((id) => id !== primaryId)]),
   ];
+  const rankedSecondary = emotionWeights
+    ? rankEmotionSymbols(mergedSecondary, emotionWeights)
+    : mergedSecondary;
   const secondaryIds = (
-    emotionWeights ? rankEmotionSymbols(mergedSecondary, emotionWeights) : mergedSecondary
-  ).slice(0, 3);
+    wearabilityWeights
+      ? rankWearabilitySymbols(rankedSecondary, wearabilityWeights)
+      : rankedSecondary
+  ).slice(0, wearabilityWeights?.symbolCountCap ?? 3);
 
   secondaryIds.forEach((symbolId, index) => {
     const def = getSymbol(symbolId);
@@ -89,7 +100,7 @@ export function selectSymbols(
     });
   });
 
-  if (layout.balance === "asymmetric") {
+  if (layout.balance === "asymmetric" && (!wearabilityWeights || wearabilityWeights.symbolCountCap > 2)) {
     placements.push({
       id: "symbol-accent",
       symbolId: style.preferredSymbols[0] ?? "minimal-star",

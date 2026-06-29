@@ -6,6 +6,7 @@ import type {
   HeroVisualAuditResult,
   SymbolId,
 } from "@/lib/design/design-library/types";
+import { evaluateWearabilityCompositionMatch } from "@/lib/design/design-knowledge/wearability";
 
 const WEIGHTS = {
   visualBalance: 0.1,
@@ -328,7 +329,26 @@ function scoreLuxuryFeeling(spec: LibraryArtworkSpec): number {
     score += 12;
   }
   if (spec.style.trackingWide >= 0.44) score += 8;
-  if (spec.template.id === "technical-blueprint") score -= 20;
+  if (spec.wearabilityDirection?.placement.id === "oversized-back") score += 10;
+  if (spec.wearabilityDirection?.apparelLens === "hero-artwork" && hasApparelScaleComposition(spec)) {
+    score += 8;
+  }
+  if (
+    spec.wearabilityDirection?.apparelLens === "statement-garment" &&
+    spec.layout.id.includes("oversized")
+  ) {
+    score += 6;
+  }
+
+  const wearability = spec.wearabilityDirection
+    ? evaluateWearabilityCompositionMatch(spec)
+    : null;
+  if (wearability?.feelsPremium) score += 14;
+  else if (wearability && wearability.score >= 72) score += 8;
+  if (wearability && !wearability.feelsPremium && wearability.mismatches.some((m) => m.includes("poster"))) {
+    score -= 10;
+  }
+
   return clamp(score);
 }
 
@@ -344,6 +364,18 @@ function scoreApparelReadiness(spec: LibraryArtworkSpec): number {
   if (isBlueprintLike(spec)) score -= 22;
   if (looksLikeLogoMark(spec)) score -= 28;
   if (isCircleArcTypoOnly(spec)) score -= 32;
+
+  const wearability = spec.wearabilityDirection
+    ? evaluateWearabilityCompositionMatch(spec)
+    : null;
+  if (wearability?.aligned) score += 16;
+  else if (wearability?.weeklyWearable) score += 10;
+  else if (wearability && wearability.score >= 65) score += 6;
+  if (wearability && !wearability.aligned) {
+    if (wearability.mismatches.some((m) => m.includes("poster"))) score -= 12;
+    if (wearability.mismatches.some((m) => m.includes("clutter"))) score -= 8;
+  }
+
   return clamp(score);
 }
 
@@ -404,10 +436,12 @@ function scoreEmotionalTranslation(spec: LibraryArtworkSpec): number {
 
 function scoreNegativeSpaceUse(spec: LibraryArtworkSpec): number {
   const density = elementDensity(spec);
-  const ideal = 6 + spec.style.negativeSpace * 10;
+  const placementTarget = spec.wearabilityDirection?.placement.negativeSpaceTarget ?? spec.style.negativeSpace;
+  const ideal = 4 + placementTarget * 8;
   const delta = Math.abs(density - ideal);
   let score = 70 - delta * 4;
   if (spec.style.negativeSpace >= 0.35 && density <= 8) score += 10;
+  if (spec.wearabilityDirection && density <= ideal + 1) score += 8;
   if (density <= 2) score -= 25;
   return clamp(score);
 }

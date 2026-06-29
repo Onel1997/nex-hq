@@ -8,6 +8,10 @@ import {
   emotionRevisionOverrides,
   evaluateEmotionCompositionMatch,
 } from "@/lib/design/design-knowledge/emotional-language";
+import {
+  evaluateWearabilityCompositionMatch,
+  wearabilityRevisionOverrides,
+} from "@/lib/design/design-knowledge/wearability";
 
 export const MAX_COMMERCIAL_REVISION_ITERATIONS = 5;
 
@@ -36,6 +40,47 @@ const REVISION_CHAINS: CompositionOverrides[] = [
   { templateId: "gallery-composition", layoutId: "gallery-layout", styleId: "editorial-fashion", forceRich: true, variantIndex: 4 },
   { templateId: "monochrome-symbol", layoutId: "gallery-layout", styleId: "architectural", forceRich: true, variantIndex: 5 },
 ];
+
+const DAILY_ESSENTIAL_REVISION: CompositionOverrides = {
+  templateId: "minimal-emblem",
+  layoutId: "micro-chest",
+  styleId: "silent-luxury",
+  forceRich: false,
+};
+
+const STATEMENT_REVISION: CompositionOverrides = {
+  templateId: "oversized-graphic",
+  layoutId: "oversized-back",
+  styleId: "editorial-fashion",
+  forceRich: true,
+};
+
+function resolveRevisionOverrides(
+  spec: LibraryArtworkSpec | undefined,
+  iteration: number,
+  chainOffset = 0,
+): CompositionOverrides {
+  const lens = spec?.wearabilityDirection?.apparelLens;
+  const variantIndex = iteration + chainOffset + 1;
+
+  if (lens === "daily-essential") {
+    return { ...DAILY_ESSENTIAL_REVISION, variantIndex };
+  }
+  if (lens === "statement-garment") {
+    return { ...STATEMENT_REVISION, variantIndex };
+  }
+  if (lens === "hero-artwork" && spec?.wearabilityDirection?.placement.id === "oversized-back") {
+    return {
+      templateId: "oversized-graphic",
+      layoutId: "oversized-back",
+      styleId: "editorial-fashion",
+      forceRich: true,
+      variantIndex,
+    };
+  }
+
+  return { ...REVISION_CHAINS[(iteration + chainOffset) % REVISION_CHAINS.length]!, variantIndex };
+}
 
 function taskId(iteration: number, index: number): string {
   return `commercial-revision-${iteration}-${index}`;
@@ -76,8 +121,10 @@ export function buildRevisionTasks(
       "critical",
       "typographyQuality",
       critique.weaknesses.find((w) => w.includes("typography")) ?? "typography too weak",
-      "Rebuild hero typography as layered fashion artwork — dominant, ghost, micro, cropped, offset layers",
-      REVISION_CHAINS[iteration % REVISION_CHAINS.length],
+      spec?.wearabilityDirection?.apparelLens === "daily-essential"
+        ? "Elevate micro emblem typography — coordinates, collection code, quiet hierarchy"
+        : "Rebuild hero typography as layered fashion artwork — dominant, ghost, micro, cropped, offset layers",
+      resolveRevisionOverrides(spec, iteration),
     );
   }
 
@@ -88,7 +135,7 @@ export function buildRevisionTasks(
       "compositionQuality",
       "composition too static",
       "Increase editorial tension — asymmetric layout, type-frame overlap, stronger focal hierarchy",
-      REVISION_CHAINS[(iteration + 1) % REVISION_CHAINS.length],
+      resolveRevisionOverrides(spec, iteration, 1),
     );
   }
 
@@ -99,7 +146,7 @@ export function buildRevisionTasks(
       "premiumFeeling",
       "luxury feeling missing",
       "Add breathing room, reduce geometry density, elevate negative space and material restraint",
-      { templateId: "editorial-poster", layoutId: "oversized-front", forceRich: true, variantIndex: iteration + 10 },
+      resolveRevisionOverrides(spec, iteration, 2),
     );
   }
 
@@ -110,7 +157,7 @@ export function buildRevisionTasks(
       "shareability",
       "would not stop scrolling",
       "Strengthen visual hook — oversized type, asymmetric crop, or frame-breaking composition",
-      REVISION_CHAINS[(iteration + 2) % REVISION_CHAINS.length],
+      resolveRevisionOverrides(spec, iteration, 3),
     );
   }
 
@@ -121,7 +168,7 @@ export function buildRevisionTasks(
       "streetwearAppeal",
       "does not read as premium streetwear",
       "Shift to oversized garment-scale editorial graphic — avoid logo-mark templates",
-      { templateId: "oversized-graphic", layoutId: "oversized-front", forceRich: true, variantIndex: iteration + 20 },
+      resolveRevisionOverrides(spec, iteration, 4),
     );
   }
 
@@ -164,14 +211,40 @@ export function buildRevisionTasks(
     );
   }
 
+  if (spec?.wearabilityDirection) {
+    const wearMatch = evaluateWearabilityCompositionMatch(spec);
+    if (!wearMatch.aligned || score.wearability < 75) {
+      const overrides = wearabilityRevisionOverrides(spec.wearabilityDirection);
+      const forceRich = spec.wearabilityDirection.apparelLens !== "daily-essential";
+      push(
+        "composition",
+        score.wearability < 75 ? "critical" : "high",
+        "wearability",
+        `wearability ${wearMatch.mismatches[0] ?? "not garment-scale"}`,
+        `Re-compose for ${spec.wearabilityDirection.placement.id} — premium apparel restraint, not poster graphic`,
+        {
+          ...overrides,
+          forceRich,
+          variantIndex: iteration + 50,
+        },
+      );
+    }
+  }
+
   if (score.wearability < 80) {
     push(
       "premium-template-engine",
       "critical",
       "wearability",
       "wearability below premium bar",
-      "Reduce poster-scale density — optimize for oversized tee chest at garment scale",
-      { templateId: "editorial-poster", layoutId: "oversized-front", forceRich: true, variantIndex: iteration + 30 },
+      "Apply wearability calibration — placement-aware density, luxury restraint, distance readability",
+      {
+        templateId: "minimal-emblem",
+        layoutId: "micro-chest",
+        styleId: "silent-luxury",
+        forceRich: false,
+        variantIndex: iteration + 30,
+      },
     );
   }
 
@@ -182,7 +255,7 @@ export function buildRevisionTasks(
       "originality",
       "lacks originality",
       "Avoid primitive circle+text or logo-mark patterns — push editorial composition",
-      REVISION_CHAINS[(iteration + 3) % REVISION_CHAINS.length],
+      resolveRevisionOverrides(spec, iteration, 5),
     );
   }
 
@@ -193,7 +266,7 @@ export function buildRevisionTasks(
       "commercialPotential",
       `commercial score ${score.overall} below 90`,
       "Re-compose with richer editorial template and stronger type hierarchy",
-      REVISION_CHAINS[iteration % REVISION_CHAINS.length],
+      resolveRevisionOverrides(spec, iteration),
     );
   }
 
@@ -203,10 +276,14 @@ export function buildRevisionTasks(
 export function selectRevisionOverrides(
   tasks: RevisionTask[],
   iteration: number,
+  spec?: LibraryArtworkSpec,
 ): CompositionOverrides {
+  const wearabilityTask = tasks.find((t) => t.dimension === "wearability" && t.overrides);
+  if (wearabilityTask?.overrides) return wearabilityTask.overrides;
+
   const withOverrides = tasks.find((t) => t.overrides);
   if (withOverrides?.overrides) return withOverrides.overrides;
-  return REVISION_CHAINS[iteration % REVISION_CHAINS.length]!;
+  return resolveRevisionOverrides(spec, iteration);
 }
 
 /** Apply revision guidance back into the brief for next iteration. */
@@ -229,6 +306,9 @@ export function applyRevisionTasks(
   }
   if (tasks.some((t) => t.dimension === "emotionalImpact")) {
     visualConceptAdditions.push("wearable emotional storytelling through symbol and typography language");
+  }
+  if (tasks.some((t) => t.dimension === "wearability")) {
+    visualConceptAdditions.push("garment-scale wearability with premium restraint and outfit compatibility");
   }
 
   const visualConcept =

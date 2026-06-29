@@ -1,6 +1,7 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { LibraryArtworkSpec } from "@/lib/design/design-library/types";
 import type { CommercialScoreBreakdown } from "@/lib/design/commercial-design-director/commercial-score";
+import { evaluateWearabilityCompositionMatch } from "@/lib/design/design-knowledge/wearability";
 
 export const BUYER_PSYCHOLOGY_DIMENSIONS = [
   "curiosity",
@@ -77,11 +78,17 @@ export function evaluateBuyerPsychology(
 
   const luxury = clamp(commercialScore.luxury * 0.7 + commercialScore.premiumFeeling * 0.3);
 
+  const wearabilityMatch = spec.wearabilityDirection
+    ? evaluateWearabilityCompositionMatch(spec)
+    : null;
+
   const wearability = clamp(
-    commercialScore.wearability * 0.75 +
+    commercialScore.wearability * 0.6 +
+      (wearabilityMatch?.weeklyWearable ? 14 : 0) +
+      (wearabilityMatch?.feelsPremium ? 10 : 0) +
       (brief.product.toLowerCase().includes("tee") ||
       brief.product.toLowerCase().includes("hoodie")
-        ? 10
+        ? 8
         : 0),
   );
 
@@ -125,7 +132,11 @@ export function evaluateBuyerPsychology(
       conversationValue * 0.1,
   );
 
-  const wouldWear = wearability >= 80 && identity >= 72 && luxury >= 70;
+  const wouldWear =
+    wearability >= 78 &&
+    (wearabilityMatch?.weeklyWearable ?? wearability >= 80) &&
+    identity >= 72 &&
+    luxury >= 70;
   const wouldStopScrolling =
     socialMediaPotential >= 78 && curiosity >= 72 && commercialScore.typographyQuality >= 75;
 

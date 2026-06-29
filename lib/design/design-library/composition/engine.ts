@@ -17,8 +17,13 @@ import {
   applyEmotionalTypography,
   buildEmotionalWeights,
   decideEmotionalDirection,
-  effectiveNegativeSpace,
 } from "@/lib/design/design-knowledge/emotional-language";
+import {
+  applyWearabilityComposition,
+  buildWearabilityWeights,
+  decideWearabilityDirection,
+  effectiveWearabilityNegativeSpace,
+} from "@/lib/design/design-knowledge/wearability";
 import { range } from "@/lib/design/vector-engine/hash";
 import { snap } from "@/lib/design/vector-engine/tokens";
 
@@ -35,22 +40,26 @@ export function composeFromBrief(
 
   const emotionalDirection = decideEmotionalDirection(brief, seed);
   const emotionWeights = buildEmotionalWeights(emotionalDirection);
+  const wearabilityDirection = decideWearabilityDirection(brief, seed);
+  const wearabilityWeights = buildWearabilityWeights(wearabilityDirection, brief);
 
-  const style = overrides.styleId ? getStyle(overrides.styleId) : selectStyle(brief, emotionWeights);
+  const style = overrides.styleId
+    ? getStyle(overrides.styleId)
+    : selectStyle(brief, emotionWeights, wearabilityWeights);
   if (!overrides.styleId && !overrides.templateId) {
     console.log(`[DESIGN LIBRARY] Style selected: ${style.name}`);
   }
 
   const layout = overrides.layoutId
     ? getLayout(overrides.layoutId)
-    : selectLayout(brief, style, emotionWeights);
+    : selectLayout(brief, style, emotionWeights, wearabilityWeights);
   if (!overrides.layoutId && !overrides.templateId) {
     console.log(`[DESIGN LIBRARY] Layout selected: ${layout.name}`);
   }
 
   const template = overrides.templateId
     ? getTemplate(overrides.templateId)
-    : selectTemplate(brief, style, layout, seed, emotionWeights);
+    : selectTemplate(brief, style, layout, seed, emotionWeights, wearabilityWeights);
   if (!overrides.templateId) {
     console.log(`[DESIGN LIBRARY] Template selected: ${template.name}`);
   }
@@ -58,7 +67,11 @@ export function composeFromBrief(
   const artboard = parseArtboard(brief.dimensions);
   const layoutZones = layout.resolveZones(
     artboard,
-    effectiveNegativeSpace(style, emotionWeights),
+    effectiveWearabilityNegativeSpace(
+      style,
+      emotionWeights.negativeSpaceMultiplier,
+      wearabilityWeights.negativeSpaceMultiplier,
+    ),
   );
 
   const typographySystem =
@@ -75,8 +88,25 @@ export function composeFromBrief(
   );
   typography = applyEmotionalTypography(typography, brief, emotionalDirection, seed);
 
-  let symbols = selectSymbols(brief, style, layout, layoutZones, template, seed, emotionWeights);
-  let ornaments = selectOrnaments(style, layout, layoutZones, template, seed, emotionWeights);
+  let symbols = selectSymbols(
+    brief,
+    style,
+    layout,
+    layoutZones,
+    template,
+    seed,
+    emotionWeights,
+    wearabilityWeights,
+  );
+  let ornaments = selectOrnaments(
+    style,
+    layout,
+    layoutZones,
+    template,
+    seed,
+    emotionWeights,
+    wearabilityWeights,
+  );
 
   if (overrides.forceRich) {
     symbols = enrichSymbols(symbols, template, layoutZones, seed);
@@ -87,7 +117,7 @@ export function composeFromBrief(
   const grid = selectGrid(style.id);
   const colors = buildColorScheme(brief.colorPalette, brief.color, brief.materialEffects, seed);
 
-  const spec: LibraryArtworkSpec = {
+  let spec: LibraryArtworkSpec = {
     brief,
     seed,
     style,
@@ -103,8 +133,10 @@ export function composeFromBrief(
     colors,
     artboard,
     emotionalDirection,
+    wearabilityDirection,
   };
 
+  spec = applyWearabilityComposition(spec, wearabilityDirection);
   return overrides.forceRich ? enrichArtworkSpec(spec) : spec;
 }
 

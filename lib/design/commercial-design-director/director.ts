@@ -151,12 +151,13 @@ export function runCommercialDesignPipeline(
   let currentBrief = brief;
   let best: CommercialPipelineResult | null = null;
   let pendingTasks: RevisionTask[] = [];
+  let lastSpec: LibraryArtworkSpec | undefined;
 
   for (let i = 0; i < MAX_COMMERCIAL_REVISION_ITERATIONS; i++) {
     const overrides =
       i === 0
         ? options.compositionOverrides
-        : selectRevisionOverrides(pendingTasks, i);
+        : selectRevisionOverrides(pendingTasks, i, lastSpec);
 
     const spec = resolveArtworkSpec(currentBrief, overrides);
     const svg = renderSvgFromSpec(spec, currentBrief, options);
@@ -177,6 +178,8 @@ export function runCommercialDesignPipeline(
       approved: review.approved,
       imageStudioBlueprint,
     };
+
+    lastSpec = spec;
 
     if (!best || review.score.overall > best.review.score.overall) {
       best = result;

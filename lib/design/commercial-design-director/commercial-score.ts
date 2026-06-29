@@ -2,6 +2,7 @@ import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { LibraryArtworkSpec } from "@/lib/design/design-library/types";
 import { scoreArtworkSpec } from "@/lib/design/design-library/quality/score";
 import { analyzePremiumSvg } from "@/lib/design/design-library/templates/premium/quality-gate";
+import { evaluateWearabilityCompositionMatch } from "@/lib/design/design-knowledge/wearability";
 
 const BLUEPRINT_TEMPLATES = new Set(["technical-blueprint"]);
 
@@ -81,11 +82,21 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
   const libraryScore = scoreArtworkSpec(spec);
   const premiumStats = svg ? analyzePremiumSvg(svg) : null;
 
+  const wearMatch = evaluateWearabilityCompositionMatch(spec);
+  const placement = spec.wearabilityDirection?.placement;
+  const oversizedPlacement =
+    placement?.id === "oversized-back" ||
+    placement?.id === "oversized-front" ||
+    (placement?.densityAllowance ?? 0) >= 0.7;
+
   const luxury = clamp(
-    libraryScore.luxuryFeeling * 0.45 +
-      libraryScore.negativeSpaceUse * 0.35 +
+    libraryScore.luxuryFeeling * 0.42 +
+      libraryScore.negativeSpaceUse * 0.38 +
       (brief.materialEffects.toLowerCase().includes("vintage") ? 8 : 0) +
-      (spec.style.id.includes("minimal") ? 6 : 0),
+      (spec.style.id.includes("minimal") || spec.style.id.includes("luxury") ? 8 : 0) +
+      (wearMatch.feelsPremium ? 10 : 0) +
+      (wearMatch.agesWell ? 6 : 0) +
+      (oversizedPlacement && spec.style.id.includes("editorial") ? 4 : 0),
   );
 
   const originality = clamp(
@@ -138,10 +149,13 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
   );
 
   const wearability = clamp(
-    libraryScore.apparelReadiness * 0.55 +
-      (brief.printArea.toLowerCase().includes("oversized") ? 10 : 0) +
+    libraryScore.apparelReadiness * 0.5 +
+      (brief.printArea.toLowerCase().includes("oversized") || oversizedPlacement ? 10 : 0) +
       (spec.layout.id.includes("oversized") || spec.layout.id.includes("chest") ? 8 : 0) -
-      (svg && countSvgGroups(svg) > 80 ? 10 : 0),
+      (svg && countSvgGroups(svg) > 80 ? 10 : 0) +
+      (wearMatch.aligned ? 14 : wearMatch.score >= 68 ? 8 : 0) +
+      (wearMatch.weeklyWearable ? 10 : 0) +
+      (wearMatch.feelsPremium ? 6 : 0),
   );
 
   const printQuality = clamp(
@@ -165,13 +179,15 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
   );
 
   const premiumFeeling = clamp(
-    luxury * 0.35 +
-      typographyQuality * 0.25 +
+    luxury * 0.38 +
+      typographyQuality * 0.24 +
       compositionQuality * 0.2 +
       (brief.materialEffects.toLowerCase().includes("luxury") ||
       brief.materialEffects.toLowerCase().includes("vintage")
         ? 8
-        : 0),
+        : 0) +
+      (wearMatch.feelsPremium ? 8 : 0) +
+      (wearMatch.aligned ? 4 : 0),
   );
 
   const overall = clamp(

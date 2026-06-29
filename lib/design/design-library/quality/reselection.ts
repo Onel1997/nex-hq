@@ -6,6 +6,7 @@ import {
   scoreArtworkSpec,
   validateArtworkCandidate,
 } from "@/lib/design/design-library/quality/score";
+import { evaluateWearabilityCompositionMatch } from "@/lib/design/design-knowledge/wearability";
 import { ALL_TEMPLATE_IDS, getTemplate } from "@/lib/design/design-library/templates/registry";
 import { selectTemplateSeed } from "@/lib/design/design-library/templates/select";
 import type {
@@ -15,6 +16,28 @@ import type {
   LibraryArtworkSpec,
   TemplateId,
 } from "@/lib/design/design-library/types";
+
+const WEARABILITY_ESSENTIAL_OVERRIDES: CompositionOverrides[] = [
+  { templateId: "minimal-emblem", layoutId: "micro-chest", styleId: "silent-luxury" },
+  { templateId: "micro-graphic", layoutId: "micro-chest", styleId: "minimal-luxury" },
+  { templateId: "silent-collection", layoutId: "center-chest", styleId: "silent-luxury" },
+  { templateId: "monochrome-symbol", layoutId: "micro-chest", styleId: "monochrome-luxury" },
+];
+
+const WEARABILITY_STATEMENT_OVERRIDES: CompositionOverrides[] = [
+  { templateId: "oversized-graphic", layoutId: "oversized-back", styleId: "editorial-fashion" },
+  { templateId: "editorial-poster", layoutId: "oversized-back", styleId: "editorial-fashion", forceRich: true },
+  { templateId: "gallery-composition", layoutId: "gallery-layout", styleId: "editorial-fashion" },
+];
+
+function isCoreEssentialRole(role: string): boolean {
+  const r = role.toLowerCase();
+  return r.includes("core essential") || r.includes("core-essential") || r.includes("essential");
+}
+
+function isStatementRole(role: string): boolean {
+  return role.toLowerCase().includes("statement");
+}
 
 const MIN_CANDIDATES = 8;
 
@@ -30,9 +53,9 @@ const FALLBACK_OVERRIDES: CompositionOverrides[] = [
 
 /** Hero Piece fallback chain when visual audit fails. */
 const HERO_FALLBACK_OVERRIDES: CompositionOverrides[] = [
-  { templateId: "editorial-poster", layoutId: "oversized-front", forceRich: true },
-  { templateId: "oversized-graphic", layoutId: "oversized-front", forceRich: true },
-  { templateId: "faith-collection", layoutId: "symbol-above-type", forceRich: true },
+  { templateId: "oversized-graphic", layoutId: "oversized-back", styleId: "editorial-fashion", forceRich: true },
+  { templateId: "editorial-poster", layoutId: "oversized-back", styleId: "architectural", forceRich: true },
+  { templateId: "faith-collection", layoutId: "oversized-back", styleId: "faith", forceRich: true },
   { templateId: "monochrome-symbol", styleId: "architectural", layoutId: "gallery-layout", forceRich: true },
 ];
 
@@ -89,6 +112,21 @@ export function generateArtworkCandidates(brief: DesignStudioBrief): LibraryArtw
     );
   });
 
+  const wearabilityOverrides = isCoreEssentialRole(brief.role)
+    ? WEARABILITY_ESSENTIAL_OVERRIDES
+    : isStatementRole(brief.role)
+      ? WEARABILITY_STATEMENT_OVERRIDES
+      : [];
+
+  wearabilityOverrides.forEach((overrides, index) => {
+    push(
+      composeFromBrief(brief, {
+        ...overrides,
+        variantIndex: rotated.length + styleVariants.length + index + 1,
+      }),
+    );
+  });
+
   while (candidates.length < MIN_CANDIDATES) {
     const templateId = rotated[candidates.length % rotated.length]!;
     const template = getTemplate(templateId);
@@ -120,14 +158,36 @@ function sortCandidates(
   a: ReturnType<typeof scoreCandidate>,
   b: ReturnType<typeof scoreCandidate>,
   hero: boolean,
+  essential: boolean,
 ) {
-  if (hero) {
-    const richnessDelta = b.score.compositionRichness - a.score.compositionRichness;
-    if (richnessDelta !== 0) return richnessDelta;
+  const wearA = evaluateWearabilityCompositionMatch(a.spec).score;
+  const wearB = evaluateWearabilityCompositionMatch(b.spec).score;
+
+  if (essential) {
+    const aChest =
+      a.spec.layout.id.includes("chest") || a.spec.layout.id.includes("micro");
+    const bChest =
+      b.spec.layout.id.includes("chest") || b.spec.layout.id.includes("micro");
+    if (aChest !== bChest) return bChest ? 1 : -1;
+
+    const wearDelta = wearB - wearA;
+    if (wearDelta !== 0) return wearDelta;
     const apparelDelta = b.score.apparelReadiness - a.score.apparelReadiness;
     if (apparelDelta !== 0) return apparelDelta;
   }
+
+  if (hero) {
+    const richnessDelta = b.score.compositionRichness - a.score.compositionRichness;
+    if (richnessDelta !== 0) return richnessDelta;
+    const wearHeroDelta = wearB - wearA;
+    if (wearHeroDelta !== 0) return wearHeroDelta;
+    const apparelDelta = b.score.apparelReadiness - a.score.apparelReadiness;
+    if (apparelDelta !== 0) return apparelDelta;
+  }
+
   if (b.score.overall !== a.score.overall) return b.score.overall - a.score.overall;
+  const wearTie = wearB - wearA;
+  if (wearTie !== 0) return wearTie;
   return b.score.apparelReadiness - a.score.apparelReadiness;
 }
 
@@ -146,6 +206,7 @@ function buildFallbackCandidates(
 
 export function selectBestArtwork(brief: DesignStudioBrief): LibraryArtworkSpec {
   const hero = isHeroRole(brief.role);
+  const essential = isCoreEssentialRole(brief.role);
   const candidates = generateArtworkCandidates(brief);
   const scored = candidates.map((spec) => scoreCandidate(spec, brief));
 
@@ -155,7 +216,7 @@ export function selectBestArtwork(brief: DesignStudioBrief): LibraryArtworkSpec 
     : valid;
   const pool = heroSafe.length > 0 ? heroSafe : valid.length > 0 ? valid : scored;
 
-  pool.sort((a, b) => sortCandidates(a, b, hero));
+  pool.sort((a, b) => sortCandidates(a, b, hero, essential));
 
   let selected = pool[0];
 
@@ -165,7 +226,11 @@ export function selectBestArtwork(brief: DesignStudioBrief): LibraryArtworkSpec 
     (!selected.validation.valid || !auditHeroVisualComplexity(selected.spec).passed);
 
   if (!selected || !selected.validation.valid || needsHeroFallback) {
-    const fallbackOverrides = hero ? HERO_FALLBACK_OVERRIDES : FALLBACK_OVERRIDES;
+    const fallbackOverrides = hero
+      ? HERO_FALLBACK_OVERRIDES
+      : essential
+        ? WEARABILITY_ESSENTIAL_OVERRIDES
+        : FALLBACK_OVERRIDES;
     console.log(
       hero
         ? "[DESIGN LIBRARY] Hero visual audit failed — forcing hero fallback chain"
@@ -173,7 +238,7 @@ export function selectBestArtwork(brief: DesignStudioBrief): LibraryArtworkSpec 
     );
 
     const fallbackScored = buildFallbackCandidates(brief, fallbackOverrides, 200);
-    fallbackScored.sort((a, b) => sortCandidates(a, b, hero));
+    fallbackScored.sort((a, b) => sortCandidates(a, b, hero, essential));
 
     const passingFallback = fallbackScored.find((c) => c.validation.valid);
     selected = passingFallback ?? fallbackScored[0] ?? selected;

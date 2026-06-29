@@ -3,6 +3,8 @@ import { hashString, pick } from "@/lib/design/vector-engine/hash";
 import type { DesignStyleDefinition, DesignStyleId } from "@/lib/design/design-library/types";
 import type { EmotionalCompositionWeights } from "@/lib/design/design-knowledge/emotional-language";
 import { applyEmotionStyleScore } from "@/lib/design/design-knowledge/emotional-language";
+import type { WearabilityCompositionWeights } from "@/lib/design/design-knowledge/wearability";
+import { applyWearabilityStyleScore } from "@/lib/design/design-knowledge/wearability";
 import { ALL_STYLE_IDS, getStyle } from "@/lib/design/design-library/styles/registry";
 
 function briefText(brief: DesignStudioBrief): string {
@@ -38,6 +40,7 @@ export function detectStyleFromBrief(
   brief: DesignStudioBrief,
   seed: number,
   emotionWeights?: EmotionalCompositionWeights,
+  wearabilityWeights?: WearabilityCompositionWeights,
 ): DesignStyleId {
   const text = briefText(brief);
   let best: DesignStyleId = "minimal-luxury";
@@ -48,6 +51,9 @@ export function detectStyleFromBrief(
     let score = keywords.reduce((sum, kw) => sum + (text.includes(kw) ? 1 : 0), 0);
     if (emotionWeights) {
       score = applyEmotionStyleScore(score, id, emotionWeights);
+    }
+    if (wearabilityWeights) {
+      score = applyWearabilityStyleScore(score, id, wearabilityWeights);
     }
     if (score > bestScore) {
       bestScore = score;
@@ -72,8 +78,9 @@ export function detectStyleFromBrief(
 export function selectStyle(
   brief: DesignStudioBrief,
   emotionWeights?: EmotionalCompositionWeights,
+  wearabilityWeights?: WearabilityCompositionWeights,
 ): DesignStyleDefinition {
   const seed = hashString([brief.designId, brief.geometry, brief.placement].join("|"));
-  const styleId = detectStyleFromBrief(brief, seed, emotionWeights);
+  const styleId = detectStyleFromBrief(brief, seed, emotionWeights, wearabilityWeights);
   return getStyle(styleId);
 }

@@ -7,6 +7,8 @@ import type {
 } from "@/lib/design/design-library/types";
 import type { EmotionalCompositionWeights } from "@/lib/design/design-knowledge/emotional-language";
 import { applyEmotionTemplateScore } from "@/lib/design/design-knowledge/emotional-language";
+import type { WearabilityCompositionWeights } from "@/lib/design/design-knowledge/wearability";
+import { applyWearabilityTemplateScore } from "@/lib/design/design-knowledge/wearability";
 import { ALL_TEMPLATE_IDS, getTemplate, TEMPLATE_REGISTRY } from "@/lib/design/design-library/templates/registry";
 import { hashString } from "@/lib/design/vector-engine/hash";
 
@@ -45,11 +47,15 @@ export function selectTemplate(
   layout: LayoutDefinition,
   seed: number,
   emotionWeights?: EmotionalCompositionWeights,
+  wearabilityWeights?: WearabilityCompositionWeights,
 ): TemplateDefinition {
   const scored = ALL_TEMPLATE_IDS.map((id) => {
     let score = scoreTemplate(TEMPLATE_REGISTRY[id], brief, style, layout);
     if (emotionWeights) {
       score = applyEmotionTemplateScore(score, id, emotionWeights);
+    }
+    if (wearabilityWeights) {
+      score = applyWearabilityTemplateScore(score, id, wearabilityWeights);
     }
     return { template: TEMPLATE_REGISTRY[id], score };
   }).sort((a, b) => b.score - a.score);
