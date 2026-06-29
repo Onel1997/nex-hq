@@ -10,4 +10,6 @@ export * from "@/lib/design/design-library/grids";
 export * from "@/lib/design/design-library/effects";
 export * from "@/lib/design/design-library/templates";
 export * from "@/lib/design/design-library/composition";
+export * from "@/lib/design/design-library/composition-intelligence";
+export * from "@/lib/design/design-knowledge";
 export * from "@/lib/design/design-library/quality";

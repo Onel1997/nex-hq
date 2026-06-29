@@ -5,7 +5,12 @@ import type {
   PremiumTemplateRenderResult,
 } from "@/lib/design/design-library/templates/premium/types";
 import { buildPremiumRenderContext, detectApparelPlacement } from "@/lib/design/design-library/templates/premium/shared/context";
-import { renderPremiumTemplateFromRecipe } from "@/lib/design/design-library/templates/premium/shared/assemble";
+import {
+  evaluateRecipeComposition,
+  renderPremiumTemplateFromRecipe,
+} from "@/lib/design/design-library/templates/premium/shared/assemble";
+import { logCompositionScore } from "@/lib/design/design-library/composition-intelligence";
+import { evaluateKnowledgeGate, getKnowledgeBaseStats } from "@/lib/design/design-knowledge";
 import { validatePremiumTemplateOutput } from "@/lib/design/design-library/templates/premium/quality-gate";
 import {
   ARCHITECTURAL_FRAME_RECIPE,
@@ -116,10 +121,71 @@ function logStats(templateId: PremiumTemplateId, result: PremiumTemplateRenderRe
   console.log(`[PREMIUM TEMPLATE] Layer count: ${result.stats.layerCount}`);
 }
 
+function tryRenderCandidate(
+  ctx: PremiumRenderContext,
+  templateId: PremiumTemplateId,
+  isHero: boolean,
+): PremiumTemplateRenderResult | null {
+  const knowledgeGate = evaluateKnowledgeGate(ctx, templateId);
+  if (!knowledgeGate.passed) {
+    console.log(`[DESIGN KNOWLEDGE] Rejected: ${knowledgeGate.reason}`);
+    return null;
+  }
+
+  const recipe = RECIPES[templateId];
+  const compositionGate = evaluateRecipeComposition(ctx, recipe);
+
+  if (isHero) {
+    logCompositionScore(templateId, compositionGate.score, compositionGate.passed);
+    if (!compositionGate.passed) {
+      console.log(`[COMPOSITION INTELLIGENCE] Rejected: ${compositionGate.reason}`);
+      return null;
+    }
+  }
+
+  const knowledgeResult = renderPremiumTemplateFromRecipe(ctx, {
+    layout: knowledgeGate.applied.layout,
+    symbols: knowledgeGate.applied.symbols,
+    ornaments: knowledgeGate.applied.ornaments,
+    decision: knowledgeGate.applied.decision,
+  });
+  const knowledgeValidation = validatePremiumTemplateOutput(flattenResult(knowledgeResult));
+  if (knowledgeValidation.passed) {
+    logStats(templateId, { ...knowledgeResult, stats: knowledgeValidation.stats });
+    return { ...knowledgeResult, stats: knowledgeValidation.stats };
+  }
+  console.log(`[PREMIUM TEMPLATE] Knowledge render rejected: ${knowledgeValidation.reason}`);
+
+  const render = RENDERERS[templateId];
+  const result = render(ctx);
+  const validation = validatePremiumTemplateOutput(flattenResult(result));
+
+  if (validation.passed) {
+    logStats(templateId, { ...result, stats: validation.stats });
+    return { ...result, stats: validation.stats };
+  }
+
+  console.log(`[PREMIUM TEMPLATE] Rejected: ${validation.reason}`);
+
+  const fallbackResult = renderPremiumTemplateFromRecipe(ctx, recipe);
+  const fallbackValidation = validatePremiumTemplateOutput(flattenResult(fallbackResult));
+  if (fallbackValidation.passed) {
+    logStats(templateId, { ...fallbackResult, stats: fallbackValidation.stats });
+    return { ...fallbackResult, stats: fallbackValidation.stats };
+  }
+  console.log(`[PREMIUM TEMPLATE] Rejected: ${fallbackValidation.reason}`);
+  return null;
+}
+
 export function renderPremiumTemplateEngine(
   spec: LibraryArtworkSpec,
   strokeWidth: number,
 ): PremiumTemplateRenderResult {
+  const stats = getKnowledgeBaseStats();
+  console.log(
+    `[DESIGN KNOWLEDGE] Brain loaded: ${stats.totalRecipes} recipes (${stats.layouts} layouts, ${stats.typography} typography, ${stats.symbols} symbols, ${stats.ornaments} ornaments)`,
+  );
+
   const isHero = spec.brief.role.toLowerCase().includes("hero");
   const placement = detectApparelPlacement(spec);
   const preferred = selectPremiumTemplate(spec);
@@ -131,32 +197,29 @@ export function renderPremiumTemplateEngine(
         : placement
       : placement;
 
-  const ctx = buildPremiumRenderContext(spec, strokeWidth, placementOverride);
+  const baseCtx = buildPremiumRenderContext(spec, strokeWidth, placementOverride);
   const candidates = [preferred, ...FALLBACK_CHAIN.filter((t) => t !== preferred)];
 
   for (const templateId of candidates) {
-    const render = RENDERERS[templateId];
-    const result = render(ctx);
-    const validation = validatePremiumTemplateOutput(flattenResult(result));
-
-    if (validation.passed) {
-      logStats(templateId, { ...result, stats: validation.stats });
-      return { ...result, stats: validation.stats };
-    }
-
-    console.log(`[PREMIUM TEMPLATE] Rejected: ${validation.reason}`);
-
-    const recipe = RECIPES[templateId];
-    const fallbackResult = renderPremiumTemplateFromRecipe(ctx, recipe);
-    const fallbackValidation = validatePremiumTemplateOutput(flattenResult(fallbackResult));
-    if (fallbackValidation.passed) {
-      logStats(templateId, { ...fallbackResult, stats: fallbackValidation.stats });
-      return { ...fallbackResult, stats: fallbackValidation.stats };
-    }
-    console.log(`[PREMIUM TEMPLATE] Rejected: ${fallbackValidation.reason}`);
+    const result = tryRenderCandidate(baseCtx, templateId, isHero);
+    if (result) return result;
   }
 
-  const forced = renderPremiumTemplateFromRecipe(ctx, LUXURY_EDITORIAL_RECIPE);
+  if (isHero) {
+    for (let variant = 1; variant <= 6; variant++) {
+      const variantCtx = { ...baseCtx, seed: baseCtx.seed + variant * 37 };
+      for (const templateId of candidates) {
+        const result = tryRenderCandidate(variantCtx, templateId, isHero);
+        if (result) return result;
+      }
+    }
+    console.log("[COMPOSITION INTELLIGENCE] No composition above 92 — forcing best-effort luxury-editorial");
+  }
+
+  const forced = renderPremiumTemplateFromRecipe(baseCtx, {
+    ...LUXURY_EDITORIAL_RECIPE,
+    ...evaluateKnowledgeGate(baseCtx, "luxury-editorial").applied,
+  });
   logStats("luxury-editorial", forced);
   return forced;
 }

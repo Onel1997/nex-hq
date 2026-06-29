@@ -11,6 +11,15 @@ import { renderTypographySvg } from "@/lib/design/design-library/templates/premi
 import { buildSymbolLayers } from "@/lib/design/design-library/templates/premium/shared/symbols-build";
 import { buildOrnamentLayers } from "@/lib/design/design-library/templates/premium/shared/ornaments-build";
 import { analyzePremiumSvg } from "@/lib/design/design-library/templates/premium/quality-gate";
+import {
+  applyDirectiveToContext,
+  directComposition,
+  type CompositionQualityGate,
+} from "@/lib/design/design-library/composition-intelligence";
+import {
+  applyKnowledgeToRecipe,
+  applyKnowledgeTypography,
+} from "@/lib/design/design-knowledge";
 import { DESIGN_TOKENS, fmt } from "@/lib/design/vector-engine/tokens";
 import { escapeXml, group, rect } from "@/lib/design/vector-engine/xml";
 
@@ -18,6 +27,43 @@ export interface TemplateRecipe {
   layout: PremiumTemplateLayoutConfig;
   symbols: SymbolRecipe;
   ornaments: OrnamentId[][];
+  decision?: import("@/lib/design/design-knowledge/art-direction/creative-director").CreativeDirectorDecision;
+}
+
+function estimateElementCount(recipe: TemplateRecipe, typographyCount: number): number {
+  const symbolCount =
+    2 +
+    recipe.symbols.nested.length +
+    (recipe.symbols.includeHalo ? 1 : 0) +
+    (recipe.symbols.includeDirectional ? 1 : 0);
+  const ornamentCount = recipe.ornaments.flat().length * 2;
+  return symbolCount + ornamentCount + typographyCount + 12;
+}
+
+export function evaluateRecipeComposition(
+  ctx: PremiumRenderContext,
+  recipe: TemplateRecipe,
+): CompositionQualityGate {
+  const layout = recipe.layout;
+  const scale = ctx.heroScale * layout.scaleMultiplier;
+  const adjustedCtx = { ...ctx, heroScale: scale };
+  const rawType = buildPremiumTypographyPlacements(adjustedCtx, layout);
+  const elementCount = estimateElementCount(recipe, rawType.length);
+  const directed = directComposition(adjustedCtx, layout, rawType, elementCount);
+  return directed.gate;
+}
+
+export function renderPremiumTemplateFromKnowledge(
+  ctx: PremiumRenderContext,
+  templateId: PremiumTemplateLayoutConfig["id"],
+): PremiumTemplateRenderResult {
+  const knowledge = applyKnowledgeToRecipe(ctx, templateId);
+  return renderPremiumTemplateFromRecipe(ctx, {
+    layout: knowledge.layout,
+    symbols: knowledge.symbols,
+    ornaments: knowledge.ornaments,
+    decision: knowledge.decision,
+  });
 }
 
 export function renderPremiumTemplateFromRecipe(
@@ -26,9 +72,18 @@ export function renderPremiumTemplateFromRecipe(
 ): PremiumTemplateRenderResult {
   const layout = recipe.layout;
   const scale = ctx.heroScale * layout.scaleMultiplier;
-  const adjustedCtx = { ...ctx, heroScale: scale };
+  let adjustedCtx = { ...ctx, heroScale: scale };
 
-  const typographyPlacements = buildPremiumTypographyPlacements(adjustedCtx, layout);
+  let rawTypography = buildPremiumTypographyPlacements(adjustedCtx, layout);
+  if (recipe.decision) {
+    rawTypography = applyKnowledgeTypography(rawTypography, recipe.decision);
+  }
+
+  const elementCount = estimateElementCount(recipe, rawTypography.length);
+  const directed = directComposition(adjustedCtx, layout, rawTypography, elementCount);
+  adjustedCtx = applyDirectiveToContext(adjustedCtx, directed.directive);
+
+  const typographyPlacements = directed.typography;
   const typeRender = renderTypographySvg(
     typographyPlacements,
     ctx.colors.ink,
