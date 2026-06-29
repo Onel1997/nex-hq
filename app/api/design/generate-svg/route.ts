@@ -27,13 +27,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const { svg } = runGenerateDesignSvg(parsed.data.brief);
+    const result = runGenerateDesignSvg(parsed.data.brief);
 
     return NextResponse.json({
       ok: true,
-      svg,
+      svg: result.svg,
       designId: parsed.data.brief.designId,
       timestamp: new Date().toISOString(),
+      commercialReview: {
+        approved: result.approved,
+        iterations: result.iterations,
+        score: result.commercialReview.score,
+        critique: result.commercialReview.critique,
+        revisionTasks: result.commercialReview.revisionTasks,
+        imageStudioBlueprint: result.imageStudioBlueprint,
+      },
     });
   } catch (error) {
     const message =

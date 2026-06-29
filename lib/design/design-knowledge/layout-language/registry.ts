@@ -1,7 +1,7 @@
 import type { LayoutRecipe } from "@/lib/design/design-knowledge/layout-language/types";
 import { buildAllLayoutRecipes, LAYOUT_RECIPE_TARGET } from "@/lib/design/design-knowledge/layout-language/archetypes";
 import type { KnowledgeQuery } from "@/lib/design/design-knowledge/types";
-import { knuth } from "@/lib/design/design-knowledge/shared/variant";
+import { knuth, pickScoredRecipe } from "@/lib/design/design-knowledge/shared/variant";
 
 let _cache: LayoutRecipe[] | null = null;
 
@@ -48,7 +48,5 @@ export function selectLayoutRecipe(query: KnowledgeQuery): LayoutRecipe {
   });
 
   scored.sort((a, b) => b.score - a.score);
-  const topN = Math.min(8, scored.length);
-  const pick = Math.floor(knuth(query.seed, 99) * topN);
-  return scored[pick]!.recipe;
+  return pickScoredRecipe(scored, query.seed, 99);
 }

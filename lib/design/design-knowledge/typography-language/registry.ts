@@ -1,7 +1,7 @@
 import type { TypographyRecipe } from "@/lib/design/design-knowledge/typography-language/types";
 import { buildAllTypographyRecipes, TYPOGRAPHY_RECIPE_TARGET } from "@/lib/design/design-knowledge/typography-language/archetypes";
 import type { KnowledgeQuery } from "@/lib/design/design-knowledge/types";
-import { knuth } from "@/lib/design/design-knowledge/shared/variant";
+import { knuth, pickScoredRecipe } from "@/lib/design/design-knowledge/shared/variant";
 
 let _cache: TypographyRecipe[] | null = null;
 
@@ -35,6 +35,5 @@ export function selectTypographyRecipe(query: KnowledgeQuery, layoutFamily?: str
   });
 
   scored.sort((a, b) => b.score - a.score);
-  const pick = Math.floor(knuth(query.seed, 199) * Math.min(8, scored.length));
-  return scored[pick]!.recipe;
+  return pickScoredRecipe(scored, query.seed, 199);
 }

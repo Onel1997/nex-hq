@@ -23,6 +23,7 @@ import {
   type CompositionScoreInput,
   type CreativeDirectorScore,
 } from "@/lib/design/design-library/composition-intelligence/score";
+import { isHeroTypographyArtwork } from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
 import { range } from "@/lib/design/vector-engine/hash";
 import { snap } from "@/lib/design/vector-engine/tokens";
 
@@ -67,11 +68,18 @@ export function directComposition(
   const fashion = resolveFashionProfile(spec.style.id, spec.brief.visualConcept);
   const apparel = resolveApparelContext(ctx);
 
-  let enhancedType = applyTypographyOverlap(typography, focalSystem, overlap, seed);
-  enhancedType = applyDramaticTypeScale(enhancedType, focalSystem, seed);
+  const preserveArtwork = isHeroTypographyArtwork(ctx);
+  let enhancedType = preserveArtwork
+    ? typography
+    : applyTypographyOverlap(typography, focalSystem, overlap, seed);
+  if (!preserveArtwork) {
+    enhancedType = applyDramaticTypeScale(enhancedType, focalSystem, seed);
+  }
 
   const depth = buildDepthPlan(focalSystem, enhancedType, seed, layout.depthOpacity);
-  enhancedType = [...applyDepthToTypography(enhancedType, depth), ...depth.ghostTypography];
+  enhancedType = preserveArtwork
+    ? enhancedType
+    : [...applyDepthToTypography(enhancedType, depth), ...depth.ghostTypography];
 
   const contrast = analyzeContrast(focalSystem, enhancedType);
   const balance = analyzeBalance(focalSystem, enhancedType, safeZone);

@@ -14,7 +14,12 @@ import {
   updatePromptOverride,
   updateWorkspace,
 } from "@/lib/design/design-mission-store";
-import { svgMarkupToDataUrl } from "@/lib/design/svg-data-url";
+import {
+  extractGeneratedImageUrl,
+  extractGeneratedSvg,
+  readGenerationPayload,
+  svgMarkupToDataUrl,
+} from "@/lib/design/svg-data-url";
 import { saveImageStudioHandoff } from "@/lib/image/image-handoff-store";
 import { cn } from "@/lib/utils";
 import {
@@ -113,16 +118,21 @@ export function DesignLabWorkspace({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brief }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string; svg?: string };
-      if (!res.ok || !data.ok || !data.svg) {
-        throw new Error(data.error ?? "SVG generation failed");
+      const payload = await readGenerationPayload(res);
+      if (!res.ok) {
+        const err =
+          payload && typeof payload === "object" && "error" in payload
+            ? String((payload as { error?: unknown }).error ?? "")
+            : "";
+        throw new Error(err || "SVG generation failed");
       }
 
-      const svgUrl = svgMarkupToDataUrl(data.svg);
+      const svgMarkup = extractGeneratedSvg(payload);
+      const svgUrl = svgMarkupToDataUrl(svgMarkup);
 
       onPatchMission((state) => {
         let next = setPipelineStage(state, "design");
-        next = updateMissionAssets(next, { svgUrl });
+        next = updateMissionAssets(next, { svgUrl, svgMarkup });
         next = appendVersionEntry(next, "SVG generated", "svg");
         return next;
       });
@@ -167,16 +177,16 @@ export function DesignLabWorkspace({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ brief: prompt }),
         });
-        const data = (await res.json()) as {
-          error?: string;
-          reportId?: string;
-          imageUrl?: string;
-          assets?: Array<{ imageUrl?: string }>;
-        };
-        if (!res.ok) throw new Error(data.error ?? "Generation failed");
+        const payload = await readGenerationPayload(res);
+        if (!res.ok) {
+          const err =
+            payload && typeof payload === "object" && "error" in payload
+              ? String((payload as { error?: unknown }).error ?? "")
+              : "";
+          throw new Error(err || "Generation failed");
+        }
 
-        const imageUrl =
-          data.imageUrl ?? data.assets?.find((a) => a.imageUrl)?.imageUrl;
+        const imageUrl = extractGeneratedImageUrl(payload);
 
         onPatchMission((state) => {
           let next = setPipelineStage(state, nextStage);

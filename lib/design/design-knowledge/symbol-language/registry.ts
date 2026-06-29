@@ -1,7 +1,7 @@
 import type { SymbolSystemRecipe } from "@/lib/design/design-knowledge/symbol-language/types";
 import { buildAllSymbolSystems, SYMBOL_RECIPE_TARGET } from "@/lib/design/design-knowledge/symbol-language/archetypes";
 import type { KnowledgeQuery } from "@/lib/design/design-knowledge/types";
-import { knuth } from "@/lib/design/design-knowledge/shared/variant";
+import { knuth, pickScoredRecipe } from "@/lib/design/design-knowledge/shared/variant";
 
 let _cache: SymbolSystemRecipe[] | null = null;
 
@@ -35,6 +35,5 @@ export function selectSymbolSystem(query: KnowledgeQuery, layoutFamily?: string)
   });
 
   scored.sort((a, b) => b.score - a.score);
-  const pick = Math.floor(knuth(query.seed, 299) * Math.min(8, scored.length));
-  return scored[pick]!.recipe;
+  return pickScoredRecipe(scored, query.seed, 299);
 }

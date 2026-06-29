@@ -192,6 +192,15 @@ export interface TypographyPlacement {
   layer: "typography" | "decorative";
   curved?: boolean;
   curveRadius?: number;
+  /** Editorial artwork variant — drives layered fashion typography. */
+  variant?: "ghost" | "dominant" | "cropped" | "offset" | "micro" | "capsule" | "masked" | "stretched";
+  clipPathId?: string;
+  clipRect?: { x: number; y: number; width: number; height: number };
+  maskId?: string;
+  maskCircle?: { cx: number; cy: number; r: number };
+  /** SVG textLength — stretches letterforms across a span. */
+  textLength?: number;
+  zOrder?: number;
 }
 
 /* ── Symbol library ──────────────────────────────────────────── */
@@ -364,6 +373,10 @@ export interface LibraryArtworkSpec {
 
 export interface LibraryEngineOptions {
   includeProductionGuides?: boolean;
+  /** Force a specific composition variant (commercial revision loop). */
+  compositionOverrides?: CompositionOverrides;
+  /** Skip commercial design director gate (testing only). */
+  skipCommercialGate?: boolean;
 }
 
 /* ── Composition overrides (quality reselection) ─────────────── */

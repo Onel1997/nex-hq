@@ -1,29 +1,67 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import { renderArtwork } from "@/lib/design/design-library/composition";
 import { selectBestArtwork } from "@/lib/design/design-library/quality";
-import type { LibraryEngineOptions } from "@/lib/design/design-library/types";
+import { composeFromBrief, enrichArtworkSpec } from "@/lib/design/design-library/composition/engine";
+import type { CompositionOverrides, LibraryArtworkSpec, LibraryEngineOptions } from "@/lib/design/design-library/types";
 import { serializeVectorSvg } from "@/lib/design/vector-engine/serialize";
+import {
+  runCommercialDesignPipeline,
+  runCommercialDesignReview,
+  buildImageStudioBlueprint,
+  type CommercialPipelineResult,
+} from "@/lib/design/commercial-design-director";
 
 /**
  * Milaene Design Library pipeline.
  * Brief → Candidate Generation → Quality Scoring → Best Selection → SVG Renderer
+ * → Commercial Design Director (critique + revision loop)
  */
+export function resolveArtworkSpec(
+  brief: DesignStudioBrief,
+  overrides?: CompositionOverrides,
+): LibraryArtworkSpec {
+  if (overrides) {
+    return enrichArtworkSpec(composeFromBrief(brief, overrides));
+  }
+  return selectBestArtwork(brief);
+}
+
+export function runDesignLibraryPipeline(
+  brief: DesignStudioBrief,
+  options: LibraryEngineOptions = {},
+): CommercialPipelineResult {
+  if (options.skipCommercialGate) {
+    const spec = resolveArtworkSpec(brief, options.compositionOverrides);
+    const { layers, defs } = renderArtwork(spec);
+    const svg = serializeVectorSvg({
+      title: brief.title,
+      designId: brief.designId,
+      artboard: spec.artboard,
+      layers,
+      defs,
+      includeProductionGuides: options.includeProductionGuides ?? true,
+    });
+    const review = runCommercialDesignReview({ brief, spec, svg, iteration: 1 });
+    return {
+      svg,
+      spec,
+      review,
+      iterations: 1,
+      approved: review.approved,
+      imageStudioBlueprint: buildImageStudioBlueprint(brief, review),
+    };
+  }
+
+  return runCommercialDesignPipeline(brief, options);
+}
+
 export function runDesignLibrary(
   brief: DesignStudioBrief,
   options: LibraryEngineOptions = {},
 ): string {
-  const artwork = selectBestArtwork(brief);
-  const { layers, defs } = renderArtwork(artwork);
-
-  return serializeVectorSvg({
-    title: brief.title,
-    designId: brief.designId,
-    artboard: artwork.artboard,
-    layers,
-    defs,
-    includeProductionGuides: options.includeProductionGuides ?? true,
-  });
+  return runDesignLibraryPipeline(brief, options).svg;
 }
 
 export { composeFromBrief } from "@/lib/design/design-library/composition";
 export type { LibraryArtworkSpec, LibraryEngineOptions } from "@/lib/design/design-library/types";
+export type { CommercialPipelineResult } from "@/lib/design/commercial-design-director";

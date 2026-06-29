@@ -3,6 +3,10 @@ import type {
   PremiumRenderContext,
   PremiumTemplateLayoutConfig,
 } from "@/lib/design/design-library/templates/premium/types";
+import {
+  buildHeroTypographyArtwork,
+  isHeroTypographyArtwork,
+} from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
 import { assetPoint } from "@/lib/design/design-library/templates/premium/shared/context";
 import { extractHeadline, formatCoordinates, toRomanNumeral } from "@/lib/design/vector-engine/typography";
 import { range } from "@/lib/design/vector-engine/hash";
@@ -12,6 +16,10 @@ export function buildPremiumTypographyPlacements(
   ctx: PremiumRenderContext,
   layout: PremiumTemplateLayoutConfig,
 ): TypographyPlacement[] {
+  if (isHeroTypographyArtwork(ctx)) {
+    return buildHeroTypographyArtwork(ctx, layout);
+  }
+
   const { spec, seed, colors, focal, heroScale } = ctx;
   const { safeZone } = ctx;
   const tokens = DESIGN_TOKENS.typography;

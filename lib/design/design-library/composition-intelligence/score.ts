@@ -26,6 +26,7 @@ import {
 import { fashionEditorialScore, fashionLuxuryScore } from "@/lib/design/design-library/composition-intelligence/fashion";
 import { isPosterScale } from "@/lib/design/design-library/composition-intelligence/apparel";
 import type { Rect } from "@/lib/design/design-library/types";
+import { validateTypographyArtworkRules } from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
 
 export const HERO_COMPOSITION_MINIMUM = 92;
 
@@ -184,6 +185,19 @@ export function evaluateCompositionGate(
   }
   if (isPosterScale(input.apparel) && isHero) {
     return reject("poster scale, not garment scale");
+  }
+
+  if (isHero) {
+    const artworkReject = validateTypographyArtworkRules(
+      input.typography,
+      input.safeZone,
+      { x: input.focal.primary.x, y: input.focal.primary.y },
+      input.focal.primary.scale,
+      true,
+    );
+    if (artworkReject) {
+      return reject(artworkReject);
+    }
   }
 
   const minimum = isHero ? HERO_COMPOSITION_MINIMUM : 78;

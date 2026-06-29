@@ -8,6 +8,7 @@ import type { SymbolRecipe } from "@/lib/design/design-library/templates/premium
 import { PREMIUM_ENGINE_COMMENT } from "@/lib/design/design-library/templates/premium/types";
 import { buildPremiumTypographyPlacements } from "@/lib/design/design-library/templates/premium/shared/typography-build";
 import { renderTypographySvg } from "@/lib/design/design-library/templates/premium/shared/typography-render";
+import { isHeroTypographyArtwork } from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
 import { buildSymbolLayers } from "@/lib/design/design-library/templates/premium/shared/symbols-build";
 import { buildOrnamentLayers } from "@/lib/design/design-library/templates/premium/shared/ornaments-build";
 import { analyzePremiumSvg } from "@/lib/design/design-library/templates/premium/quality-gate";
@@ -20,6 +21,11 @@ import {
   applyKnowledgeToRecipe,
   applyKnowledgeTypography,
 } from "@/lib/design/design-knowledge";
+import {
+  renderSvgAssetPack,
+  selectAssetsFromPremiumContext,
+  SVG_ASSETS_COMMENT,
+} from "@/lib/design/svg-assets";
 import { DESIGN_TOKENS, fmt } from "@/lib/design/vector-engine/tokens";
 import { escapeXml, group, rect } from "@/lib/design/vector-engine/xml";
 
@@ -75,7 +81,7 @@ export function renderPremiumTemplateFromRecipe(
   let adjustedCtx = { ...ctx, heroScale: scale };
 
   let rawTypography = buildPremiumTypographyPlacements(adjustedCtx, layout);
-  if (recipe.decision) {
+  if (recipe.decision && !isHeroTypographyArtwork(adjustedCtx)) {
     rawTypography = applyKnowledgeTypography(rawTypography, recipe.decision);
   }
 
@@ -92,6 +98,15 @@ export function renderPremiumTemplateFromRecipe(
 
   const symbols = buildSymbolLayers(adjustedCtx, recipe.symbols);
   const ornaments = buildOrnamentLayers(adjustedCtx, recipe.ornaments);
+
+  const assetPack = selectAssetsFromPremiumContext(adjustedCtx, layout.id, directed.gate.score.overall);
+  const svgAssetLayer =
+    assetPack.validation.passed
+      ? group(
+          "premium-svg-asset-layer",
+          renderSvgAssetPack(assetPack.assets, ctx.strokeWidth, ctx.colors),
+        )
+      : "";
 
   const negativeSpace = group(
     "premium-negative-space",
@@ -134,12 +149,12 @@ export function renderPremiumTemplateFromRecipe(
 
   const decorativeDetails = group(
     "layer-decorative-details",
-    [ornaments.ornamentLayer, ornaments.editorialLayer, ornaments.microLayer].join(""),
+    [svgAssetLayer, ornaments.ornamentLayer, ornaments.editorialLayer, ornaments.microLayer].join(""),
   );
 
   const typography = group("layer-typography", typeRender.svg);
 
-  const defs = [PREMIUM_ENGINE_COMMENT, symbols.defs, typeRender.defs].filter(Boolean).join("");
+  const defs = [PREMIUM_ENGINE_COMMENT, SVG_ASSETS_COMMENT, symbols.defs, typeRender.defs].filter(Boolean).join("");
 
   const combined = [baseGeometry, secondaryShapes, typography, decorativeDetails, defs].join("");
   const stats = analyzePremiumSvg(combined);

@@ -1,4 +1,8 @@
 import type { PremiumTemplateStats } from "@/lib/design/design-library/templates/premium/types";
+import type { TypographyPlacement } from "@/lib/design/design-library/types";
+import {
+  validateTypographyArtworkRules,
+} from "@/lib/design/design-library/templates/premium/shared/typography-artwork";
 
 export interface QualityGateResult {
   passed: boolean;
@@ -64,8 +68,8 @@ export function validatePremiumTemplateOutput(svg: string): QualityGateResult {
   if (stats.layerCount < 6) {
     return { passed: false, reason: `fewer than 6 grouped layers (${stats.layerCount})`, stats };
   }
-  if (stats.typographyGroups < 3) {
-    return { passed: false, reason: `fewer than 3 typography groups (${stats.typographyGroups})`, stats };
+  if (stats.typographyGroups < 4) {
+    return { passed: false, reason: `fewer than 4 typography groups (${stats.typographyGroups})`, stats };
   }
   if (stats.ornamentGroups < 2) {
     return { passed: false, reason: `fewer than 2 ornament groups (${stats.ornamentGroups})`, stats };
@@ -79,5 +83,19 @@ export function validatePremiumTemplateOutput(svg: string): QualityGateResult {
     return { passed: false, reason: primitive, stats };
   }
 
+  if (!svg.includes("clip-path=") && !svg.includes("textLength=")) {
+    return { passed: false, reason: "no cropped or offset typography in output", stats };
+  }
+
   return { passed: true, stats };
+}
+
+export function validatePremiumTypographyArtwork(
+  placements: TypographyPlacement[],
+  safeZone: { width: number; height: number },
+  focal: { x: number; y: number },
+  heroScale: number,
+  isHero: boolean,
+): string | undefined {
+  return validateTypographyArtworkRules(placements, safeZone, focal, heroScale, isHero);
 }

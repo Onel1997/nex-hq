@@ -13,6 +13,7 @@ const STORAGE_KEY = "nexhq-design-mission";
 export type PipelineStage =
   | "research"
   | "design"
+  | "commercial-review"
   | "image"
   | "mockup"
   | "approval"
@@ -77,8 +78,13 @@ export interface DesignVersionEntry {
 
 export interface DesignMissionAssets {
   svgUrl?: string;
+  svgMarkup?: string;
   mockupUrl?: string;
   renderUrl?: string;
+  commercialApproved?: boolean;
+  commercialScore?: number;
+  commercialIterations?: number;
+  imageStudioBlueprint?: string;
 }
 
 export interface DesignPromptOverrides {

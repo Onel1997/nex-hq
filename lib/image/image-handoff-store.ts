@@ -8,6 +8,10 @@ export interface ImageStudioHandoff {
   designId?: string;
   reportId?: string;
   handoffAt: string;
+  /** Full blueprint from Commercial Design Director for Image Studio. */
+  commercialBlueprint?: string;
+  commercialScore?: number;
+  commercialApproved?: boolean;
 }
 
 export function saveImageStudioHandoff(handoff: ImageStudioHandoff): void {

@@ -5,7 +5,8 @@ export function knuth(seed: number, index: number): number {
   let h = (seed * 2654435761 + index * 2246822519) >>> 0;
   h = ((h ^ (h >>> 16)) * 0x45d9f3b) >>> 0;
   h = ((h ^ (h >>> 16)) * 0x45d9f3b) >>> 0;
-  return (h ^ (h >>> 16)) / 0xffffffff;
+  h = (h ^ (h >>> 16)) >>> 0;
+  return h / 0x100000000;
 }
 
 export function lerp(seed: number, index: number, min: number, max: number): number {
@@ -13,7 +14,25 @@ export function lerp(seed: number, index: number, min: number, max: number): num
 }
 
 export function pick<T>(seed: number, index: number, items: readonly T[]): T {
-  return items[Math.floor(knuth(seed, index) * items.length)]!;
+  if (items.length === 0) {
+    throw new Error("Cannot pick from an empty list");
+  }
+  const pickIndex = Math.min(items.length - 1, Math.floor(knuth(seed, index) * items.length));
+  return items[pickIndex]!;
+}
+
+export function pickScoredRecipe<T>(
+  scored: Array<{ recipe: T; score: number }>,
+  seed: number,
+  salt: number,
+  top = 8,
+): T {
+  if (scored.length === 0) {
+    throw new Error("Knowledge registry has no recipes");
+  }
+  const topN = Math.min(top, scored.length);
+  const pickIndex = Math.min(topN - 1, Math.floor(knuth(seed, salt) * topN));
+  return scored[pickIndex]!.recipe;
 }
 
 export function buildMeta(

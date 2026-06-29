@@ -1,7 +1,7 @@
 import type { OrnamentSystemRecipe } from "@/lib/design/design-knowledge/ornament-language/types";
 import { buildAllOrnamentSystems, ORNAMENT_RECIPE_TARGET } from "@/lib/design/design-knowledge/ornament-language/archetypes";
 import type { KnowledgeQuery } from "@/lib/design/design-knowledge/types";
-import { knuth } from "@/lib/design/design-knowledge/shared/variant";
+import { knuth, pickScoredRecipe } from "@/lib/design/design-knowledge/shared/variant";
 
 let _cache: OrnamentSystemRecipe[] | null = null;
 
@@ -33,6 +33,5 @@ export function selectOrnamentSystem(query: KnowledgeQuery, layoutFamily?: strin
   });
 
   scored.sort((a, b) => b.score - a.score);
-  const pick = Math.floor(knuth(query.seed, 399) * Math.min(8, scored.length));
-  return scored[pick]!.recipe;
+  return pickScoredRecipe(scored, query.seed, 399);
 }
