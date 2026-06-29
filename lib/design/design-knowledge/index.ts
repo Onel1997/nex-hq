@@ -42,6 +42,7 @@ export * from "@/lib/design/design-knowledge/composition-language";
 export * from "@/lib/design/design-knowledge/collection-language";
 export * from "@/lib/design/design-knowledge/emotional-language";
 export * from "@/lib/design/design-knowledge/wearability";
+export * from "@/lib/design/design-knowledge/hero-typography";
 export * from "@/lib/design/design-knowledge/art-direction";
 export * from "@/lib/design/design-knowledge/visual-systems";
 export * from "@/lib/design/design-knowledge/knowledge-score";

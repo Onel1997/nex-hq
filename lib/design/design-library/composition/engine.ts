@@ -19,6 +19,11 @@ import {
   decideEmotionalDirection,
 } from "@/lib/design/design-knowledge/emotional-language";
 import {
+  applyHeroTypography,
+  buildHeroTypographyWeights,
+  decideHeroTypographyDirection,
+} from "@/lib/design/design-knowledge/hero-typography";
+import {
   applyWearabilityComposition,
   buildWearabilityWeights,
   decideWearabilityDirection,
@@ -42,24 +47,26 @@ export function composeFromBrief(
   const emotionWeights = buildEmotionalWeights(emotionalDirection);
   const wearabilityDirection = decideWearabilityDirection(brief, seed);
   const wearabilityWeights = buildWearabilityWeights(wearabilityDirection, brief);
+  const heroTypographyDirection = decideHeroTypographyDirection(brief, seed, wearabilityDirection);
+  const heroTypographyWeights = buildHeroTypographyWeights(heroTypographyDirection);
 
   const style = overrides.styleId
     ? getStyle(overrides.styleId)
-    : selectStyle(brief, emotionWeights, wearabilityWeights);
+    : selectStyle(brief, emotionWeights, wearabilityWeights, heroTypographyWeights);
   if (!overrides.styleId && !overrides.templateId) {
     console.log(`[DESIGN LIBRARY] Style selected: ${style.name}`);
   }
 
   const layout = overrides.layoutId
     ? getLayout(overrides.layoutId)
-    : selectLayout(brief, style, emotionWeights, wearabilityWeights);
+    : selectLayout(brief, style, emotionWeights, wearabilityWeights, heroTypographyWeights);
   if (!overrides.layoutId && !overrides.templateId) {
     console.log(`[DESIGN LIBRARY] Layout selected: ${layout.name}`);
   }
 
   const template = overrides.templateId
     ? getTemplate(overrides.templateId)
-    : selectTemplate(brief, style, layout, seed, emotionWeights, wearabilityWeights);
+    : selectTemplate(brief, style, layout, seed, emotionWeights, wearabilityWeights, heroTypographyWeights);
   if (!overrides.templateId) {
     console.log(`[DESIGN LIBRARY] Template selected: ${template.name}`);
   }
@@ -87,6 +94,16 @@ export function composeFromBrief(
     seed,
   );
   typography = applyEmotionalTypography(typography, brief, emotionalDirection, seed);
+  const heroTypography = applyHeroTypography(
+    typography,
+    brief,
+    layout,
+    layoutZones,
+    seed,
+    wearabilityDirection,
+    heroTypographyDirection,
+  );
+  typography = heroTypography.typography;
 
   let symbols = selectSymbols(
     brief,
@@ -134,6 +151,7 @@ export function composeFromBrief(
     artboard,
     emotionalDirection,
     wearabilityDirection,
+    heroTypographyDirection: heroTypography.decision,
   };
 
   spec = applyWearabilityComposition(spec, wearabilityDirection);

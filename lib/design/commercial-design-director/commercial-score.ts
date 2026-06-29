@@ -3,6 +3,7 @@ import type { LibraryArtworkSpec } from "@/lib/design/design-library/types";
 import { scoreArtworkSpec } from "@/lib/design/design-library/quality/score";
 import { analyzePremiumSvg } from "@/lib/design/design-library/templates/premium/quality-gate";
 import { evaluateWearabilityCompositionMatch } from "@/lib/design/design-knowledge/wearability";
+import { evaluateCommercialTypography } from "@/lib/design/commercial-design-director/typography";
 
 const BLUEPRINT_TEMPLATES = new Set(["technical-blueprint"]);
 
@@ -64,8 +65,15 @@ function countSvgGroups(svg: string): number {
   return (svg.match(/<g id="/g) ?? []).length;
 }
 
-function hasPremiumTypography(svg: string): boolean {
-  return svg.includes("premium-type-") && (svg.includes("clip-path=") || svg.includes("textLength="));
+function hasPremiumTypography(svg: string, spec: LibraryArtworkSpec): boolean {
+  if (svg.includes("premium-type-") && (svg.includes("clip-path=") || svg.includes("textLength="))) {
+    return true;
+  }
+  return spec.typography.some(
+    (t) =>
+      t.id.startsWith("hero-type-") &&
+      (t.variant === "ghost" || t.variant === "cropped" || t.clipPathId || t.textLength),
+  );
 }
 
 function typographyLayerCount(spec: LibraryArtworkSpec): number {
@@ -84,6 +92,7 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
 
   const wearMatch = evaluateWearabilityCompositionMatch(spec);
   const placement = spec.wearabilityDirection?.placement;
+  const typographyAssessment = evaluateCommercialTypography(spec);
   const oversizedPlacement =
     placement?.id === "oversized-back" ||
     placement?.id === "oversized-front" ||
@@ -100,9 +109,10 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
   );
 
   const originality = clamp(
-    libraryScore.originality * 0.7 +
+    libraryScore.originality * 0.65 +
       (spec.template.id.includes("editorial") || spec.template.id.includes("oversized") ? 10 : 0) -
-      (BLUEPRINT_TEMPLATES.has(spec.template.id) ? 18 : 0),
+      (BLUEPRINT_TEMPLATES.has(spec.template.id) ? 18 : 0) +
+      (typographyAssessment.conceptHits.length >= 3 ? 8 : 0),
   );
 
   const streetwearAppeal = clamp(
@@ -133,11 +143,13 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
   const typeLayers = typographyLayerCount(spec);
   const decorLayers = decorLayerCount(spec);
   const typographyQuality = clamp(
-    libraryScore.typographyHierarchy * 0.45 +
+    libraryScore.typographyHierarchy * 0.35 +
+      typographyAssessment.score * 0.35 +
       (typeLayers >= 3 ? 14 : typeLayers >= 2 ? 6 : -12) +
       (decorLayers >= 2 ? 8 : 0) +
-      (svg && hasPremiumTypography(svg) ? 12 : 0) +
-      (premiumStats && premiumStats.typographyGroups >= 4 ? 8 : 0),
+      (svg && hasPremiumTypography(svg, spec) ? 12 : 0) +
+      (premiumStats && premiumStats.typographyGroups >= 4 ? 8 : 0) +
+      typographyAssessment.scrollStopBoost * 0.15,
   );
 
   const compositionQuality = clamp(
@@ -175,6 +187,7 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
       emotionalImpact * 0.25 +
       typographyQuality * 0.2 +
       fashionAppeal * 0.15 +
+      typographyAssessment.scrollStopBoost * 0.12 +
       (brief.title.split(/\s+/).length >= 2 ? 6 : 0),
   );
 
@@ -182,6 +195,7 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
     luxury * 0.38 +
       typographyQuality * 0.24 +
       compositionQuality * 0.2 +
+      typographyAssessment.luxuryBoost * 0.08 +
       (brief.materialEffects.toLowerCase().includes("luxury") ||
       brief.materialEffects.toLowerCase().includes("vintage")
         ? 8

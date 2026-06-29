@@ -7,6 +7,7 @@ import type {
   SymbolId,
 } from "@/lib/design/design-library/types";
 import { evaluateWearabilityCompositionMatch } from "@/lib/design/design-knowledge/wearability";
+import { evaluateHeroTypographyMatch } from "@/lib/design/design-knowledge/hero-typography";
 
 const WEIGHTS = {
   visualBalance: 0.1,
@@ -304,6 +305,8 @@ function scoreTypographyHierarchy(spec: LibraryArtworkSpec): number {
   let score = 45;
   const typeCount = countTypographyLayers(spec);
   const decorCount = countDecorTypography(spec);
+  const heroMatch = evaluateHeroTypographyMatch(spec);
+
   if (hasHeadlineHierarchy(spec)) score += 18;
   if (hasSubHierarchy(spec)) score += 14;
   if (typeCount >= 2) score += 12;
@@ -311,6 +314,21 @@ function scoreTypographyHierarchy(spec: LibraryArtworkSpec): number {
   if (spec.template.hierarchy === "type-first" && hasHeadlineHierarchy(spec)) score += 8;
   if (typeCount <= 1 && decorCount <= 1) score -= 25;
   if (spec.typography.some((t) => t.tracking >= 0.3)) score += 6;
+
+  // Hero typography enrichment
+  if (spec.typography.some((t) => t.variant === "ghost")) score += 10;
+  if (spec.typography.some((t) => t.variant === "cropped" || t.clipPathId)) score += 8;
+  if (spec.typography.some((t) => t.variant === "offset" || t.variant === "stretched")) score += 6;
+  if (heroMatch.scaleCount >= 3) score += 12;
+  else if (heroMatch.scaleCount >= 2) score += 6;
+  if (heroMatch.compositionShare >= 0.55) score += 10;
+  else if (heroMatch.compositionShare >= 0.4) score += 5;
+  score += Math.round(heroMatch.score * 0.15);
+  for (const penalty of heroMatch.penalties) {
+    if (penalty.includes("single text") || penalty.includes("centered title")) score -= 12;
+    else if (penalty.includes("equal font") || penalty.includes("flat typography")) score -= 8;
+  }
+
   return clamp(score);
 }
 
@@ -400,10 +418,14 @@ function scoreOriginality(spec: LibraryArtworkSpec): number {
   let score = 55;
   const uniqueSymbols = new Set(spec.symbols.map((s) => s.symbolId)).size;
   const uniqueOrnaments = new Set(spec.ornaments.map((o) => o.ornamentId)).size;
+  const heroMatch = evaluateHeroTypographyMatch(spec);
   score += uniqueSymbols * 6;
   score += uniqueOrnaments * 4;
   if (RICH_TEMPLATES.has(spec.template.id)) score += 8;
   if (spec.template.id === "minimal-emblem" && elementDensity(spec) < 5) score -= 10;
+  if (heroMatch.conceptHits.length >= 4) score += 10;
+  else if (heroMatch.conceptHits.length >= 2) score += 5;
+  if (spec.typography.some((t) => t.id.startsWith("hero-type-"))) score += 6;
   return clamp(score);
 }
 

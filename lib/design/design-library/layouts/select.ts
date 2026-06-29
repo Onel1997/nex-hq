@@ -4,6 +4,8 @@ import type { EmotionalCompositionWeights } from "@/lib/design/design-knowledge/
 import { applyEmotionLayoutScore } from "@/lib/design/design-knowledge/emotional-language";
 import type { WearabilityCompositionWeights } from "@/lib/design/design-knowledge/wearability";
 import { applyWearabilityLayoutScore } from "@/lib/design/design-knowledge/wearability";
+import type { HeroTypographyCompositionWeights } from "@/lib/design/design-knowledge/hero-typography";
+import { applyHeroLayoutScore } from "@/lib/design/design-knowledge/hero-typography";
 import { getLayout, LAYOUT_REGISTRY } from "@/lib/design/design-library/layouts/registry";
 import { hashString, pick } from "@/lib/design/vector-engine/hash";
 
@@ -38,11 +40,12 @@ export function selectLayout(
   style: DesignStyleDefinition,
   emotionWeights?: EmotionalCompositionWeights,
   wearabilityWeights?: WearabilityCompositionWeights,
+  heroTypographyWeights?: HeroTypographyCompositionWeights,
 ): LayoutDefinition {
   const seed = hashString([brief.designId, brief.placement, brief.printArea].join("|"));
   const detected = detectLayoutId(brief, style);
 
-  if (emotionWeights || wearabilityWeights) {
+  if (emotionWeights || wearabilityWeights || heroTypographyWeights) {
     const candidates = style.preferredLayouts.includes(detected)
       ? [detected, ...style.preferredLayouts.filter((id) => id !== detected)]
       : [detected, ...style.preferredLayouts];
@@ -53,6 +56,7 @@ export function selectLayout(
         let score = id === detected ? 2 : 0;
         if (emotionWeights) score = applyEmotionLayoutScore(score, id, emotionWeights);
         if (wearabilityWeights) score = applyWearabilityLayoutScore(score, id, wearabilityWeights);
+        if (heroTypographyWeights) score = applyHeroLayoutScore(score, id, heroTypographyWeights);
         return { id, score };
       });
       scored.sort((a, b) => b.score - a.score);

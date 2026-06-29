@@ -1,5 +1,6 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { EmotionalDirectorDecision } from "@/lib/design/design-knowledge/emotional-language/types";
+import type { HeroTypographyDirectorDecision } from "@/lib/design/design-knowledge/hero-typography/types";
 import type { WearabilityDirectorDecision } from "@/lib/design/design-knowledge/wearability";
 import type { ColorScheme } from "@/lib/design/vector-engine/types";
 
@@ -375,6 +376,8 @@ export interface LibraryArtworkSpec {
   emotionalDirection?: EmotionalDirectorDecision;
   /** Wearability calibration — apparel designer lens for garment-scale composition. */
   wearabilityDirection?: WearabilityDirectorDecision;
+  /** Hero typography language — ONE editorial direction per artwork. */
+  heroTypographyDirection?: HeroTypographyDirectorDecision;
 }
 
 export interface LibraryEngineOptions {

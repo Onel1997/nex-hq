@@ -15,6 +15,7 @@ import { evaluateBrandDna } from "@/lib/design/commercial-design-director/brand-
 import { evaluateStreetwearAppeal } from "@/lib/design/commercial-design-director/streetwear";
 import { evaluateTrendFit } from "@/lib/design/commercial-design-director/trend-fit";
 import { evaluateCollectionFit } from "@/lib/design/commercial-design-director/collection-fit";
+import { evaluateCommercialTypography } from "@/lib/design/commercial-design-director/typography";
 import { evaluateEmotionalImpact } from "@/lib/design/commercial-design-director/emotion";
 import { buildDesignCritique, type DesignCritique } from "@/lib/design/commercial-design-director/critique";
 import type { RevisionTask } from "@/lib/design/commercial-design-director/revision";
@@ -81,7 +82,7 @@ function renderSvgFromSpec(
   });
 }
 
-function logCommercialReview(review: CommercialDesignReview): void {
+function logCommercialReview(review: CommercialDesignReview, spec: LibraryArtworkSpec): void {
   const status = review.approved ? "APPROVED" : "REVISION REQUIRED";
   console.log(
     `[COMMERCIAL DESIGN DIRECTOR] ${status} — score ${review.score.overall}/${COMMERCIAL_APPROVAL_THRESHOLD} · iteration ${review.iteration}`,
@@ -91,6 +92,12 @@ function logCommercialReview(review: CommercialDesignReview): void {
   );
   if (review.critique.weaknesses.length > 0) {
     console.log(`[COMMERCIAL DESIGN DIRECTOR] Weakness: ${review.critique.weaknesses[0]}`);
+  }
+  if (spec.heroTypographyDirection) {
+    const typo = evaluateCommercialTypography(spec);
+    console.log(
+      `[COMMERCIAL DESIGN DIRECTOR] Hero typography: ${spec.heroTypographyDirection.direction} · share ${Math.round(typo.compositionShare * 100)}% · score ${typo.score}`,
+    );
   }
 }
 
@@ -135,7 +142,7 @@ export function runCommercialDesignReview(input: CommercialDirectorInput): Comme
     approved: passesCommercialGate(score),
   };
 
-  logCommercialReview(review);
+  logCommercialReview(review, input.spec);
   return review;
 }
 

@@ -12,6 +12,10 @@ import {
   evaluateWearabilityCompositionMatch,
   wearabilityRevisionOverrides,
 } from "@/lib/design/design-knowledge/wearability";
+import {
+  heroTypographyRevisionOverrides,
+  evaluateHeroTypographyMatch,
+} from "@/lib/design/design-knowledge/hero-typography";
 
 export const MAX_COMMERCIAL_REVISION_ITERATIONS = 5;
 
@@ -116,6 +120,9 @@ export function buildRevisionTasks(
   };
 
   if (score.typographyQuality < 85) {
+    const heroOverrides = spec?.heroTypographyDirection
+      ? heroTypographyRevisionOverrides(spec.heroTypographyDirection)
+      : {};
     push(
       "typography",
       "critical",
@@ -124,7 +131,11 @@ export function buildRevisionTasks(
       spec?.wearabilityDirection?.apparelLens === "daily-essential"
         ? "Elevate micro emblem typography — coordinates, collection code, quiet hierarchy"
         : "Rebuild hero typography as layered fashion artwork — dominant, ghost, micro, cropped, offset layers",
-      resolveRevisionOverrides(spec, iteration),
+      {
+        ...resolveRevisionOverrides(spec, iteration),
+        ...heroOverrides,
+        forceRich: spec?.wearabilityDirection?.apparelLens !== "daily-essential",
+      },
     );
   }
 
@@ -209,6 +220,25 @@ export function buildRevisionTasks(
       "weak collection fit",
       "Align palette, mood, and scale with Milaene drop narrative and role hierarchy",
     );
+  }
+
+  if (spec?.heroTypographyDirection) {
+    const heroMatch = evaluateHeroTypographyMatch(spec);
+    if (!heroMatch.aligned || score.typographyQuality < 80) {
+      const overrides = heroTypographyRevisionOverrides(spec.heroTypographyDirection);
+      push(
+        "typography",
+        "high",
+        "typographyQuality",
+        heroMatch.mismatches[0] ?? heroMatch.penalties[0] ?? "hero typography not editorial",
+        `Apply ${spec.heroTypographyDirection.direction} direction — ghost, cropped, multi-scale hierarchy`,
+        {
+          ...overrides,
+          forceRich: true,
+          variantIndex: iteration + 60,
+        },
+      );
+    }
   }
 
   if (spec?.wearabilityDirection) {
@@ -297,6 +327,7 @@ export function applyRevisionTasks(
   const visualConceptAdditions: string[] = [];
   if (tasks.some((t) => t.dimension === "typographyQuality")) {
     visualConceptAdditions.push("layered editorial typography as primary artwork system");
+    visualConceptAdditions.push("hero typography occupying 55–75% of composition with ghost and cropped layers");
   }
   if (tasks.some((t) => t.dimension === "compositionQuality")) {
     visualConceptAdditions.push("asymmetric composition with type-frame interaction");
