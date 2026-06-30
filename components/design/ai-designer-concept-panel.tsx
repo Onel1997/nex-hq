@@ -7,12 +7,15 @@ import type {
   RenderPlan,
 } from "@/lib/design/ai-designer/types";
 import { cn } from "@/lib/utils";
+import { Copy, Send } from "lucide-react";
 import type { ReactNode } from "react";
 
 interface AiDesignerConceptPanelProps {
   concept?: DesignConcept;
   renderPlan?: RenderPlan;
   review?: DesignConceptReview;
+  onSendToImageStudio?: () => void;
+  onCopyImagePrompt?: () => void;
 }
 
 function ConceptBlock({ title, children }: { title: string; children: ReactNode }) {
@@ -32,9 +35,12 @@ export function AiDesignerConceptPanel({
   concept,
   renderPlan,
   review,
+  onSendToImageStudio,
+  onCopyImagePrompt,
 }: AiDesignerConceptPanelProps) {
   if (!concept) return null;
 
+  const readyForImageStudio = review?.readyForImageStudio === true;
   const reviewMeta = review
     ? `Review ${review.score}/100 · Image Studio ${review.readyForImageStudio ? "ready" : "pending"}`
     : undefined;
@@ -46,6 +52,32 @@ export function AiDesignerConceptPanel({
         meta={reviewMeta ?? concept.collection}
         defaultOpen
       >
+        {readyForImageStudio ? (
+          <div className="cw-ai-concept-handoff">
+            <p className="cw-ai-concept-handoff-status">
+              AI Design Concept ready for Image Studio
+            </p>
+            <div className="cw-ai-concept-handoff-actions">
+              <button
+                type="button"
+                className="cw-toolbar-btn cw-btn-primary"
+                onClick={onSendToImageStudio}
+              >
+                <Send className="size-3.5" />
+                <span>Send AI Concept to Image Studio</span>
+              </button>
+              <button
+                type="button"
+                className="cw-toolbar-btn cw-btn-secondary"
+                onClick={onCopyImagePrompt}
+              >
+                <Copy className="size-3.5" />
+                <span>Copy Image Prompt</span>
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div className="cw-ai-concept-grid">
           <ConceptBlock title="Creative Direction">
             <p>{concept.creativeDirection.summary}</p>

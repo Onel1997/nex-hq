@@ -6,10 +6,12 @@ import { DesignLabCollapse } from "@/components/design/design-lab-workspace";
 import type {
   CollectionTimelineStage,
   DesignIteration,
+  DesignMissionAssets,
   DesignMissionState,
   DesignPromptOverrides,
   PerDesignWorkspace,
   PipelineStage,
+  ApprovalStatus,
 } from "@/lib/design/design-mission-store";
 import {
   addChatMessage,
@@ -57,7 +59,6 @@ import {
   Minus,
   MoreHorizontal,
   Plus,
-  RefreshCw,
   RotateCcw,
   Save,
   Send,
@@ -72,14 +73,86 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
+  useEffect,
   useMemo,
   useState,
-  type CSSProperties,
   type ReactNode,
 } from "react";
 
 type CanvasTab = "svg" | "mockup" | "render" | "split";
 type ZoomLevel = 0.25 | 0.5 | 0.75 | 1 | 1.5 | "fit";
+
+function resolveCanvasTab(): CanvasTab {
+  return "svg";
+}
+
+function hasCanvasAsset(assets: PerDesignWorkspace["assets"]): boolean {
+  return Boolean(assets.svgUrl || assets.mockupUrl || assets.renderUrl);
+}
+
+function countCanvasAssets(assets: DesignMissionAssets): number {
+  return [assets.svgUrl, assets.mockupUrl, assets.renderUrl].filter(Boolean).length;
+}
+
+function getCommercialStatusLabel(
+  assets: DesignMissionAssets,
+  approvalStatus: ApprovalStatus,
+): string {
+  if (approvalStatus === "approved") return "Approved";
+  if (approvalStatus === "revision") return "In Revision";
+  if (approvalStatus === "archived") return "Archived";
+  if (assets.commercialApproved) return "Commercial Ready";
+  if (assets.commercialScore != null) return `Scored ${assets.commercialScore}%`;
+  return "Pending Review";
+}
+
+type PipelineStepStatus = "complete" | "current" | "future";
+
+const AI_PIPELINE_STEPS = [
+  { id: "ceo", label: "CEO" },
+  { id: "creative", label: "Creative Director" },
+  { id: "research", label: "Research Director" },
+  { id: "ai-designer", label: "AI Designer" },
+  { id: "image-studio", label: "Image Studio" },
+  { id: "commercial", label: "Commercial Director" },
+  { id: "production", label: "Production" },
+] as const;
+
+function derivePipelineStepStates(
+  assets: DesignMissionAssets,
+  approvalStatus: ApprovalStatus,
+  pipelineStage: PipelineStage,
+): Array<{ id: string; label: string; status: PipelineStepStatus }> {
+  const hasConcept = Boolean(assets.aiDesignerConcept);
+  const hasImage = Boolean(assets.mockupUrl || assets.renderUrl);
+  const hasCommercial =
+    Boolean(assets.commercialApproved) || approvalStatus === "approved";
+  const inProduction = pipelineStage === "shopify" || pipelineStage === "launch";
+
+  let currentIndex = 3;
+  if (!hasConcept) currentIndex = 3;
+  else if (!hasImage) currentIndex = 4;
+  else if (!hasCommercial) currentIndex = 5;
+  else if (!inProduction) currentIndex = 6;
+  else currentIndex = 7;
+
+  return AI_PIPELINE_STEPS.map((step, index) => ({
+    ...step,
+    status:
+      index < currentIndex
+        ? "complete"
+        : index === currentIndex
+          ? "current"
+          : "future",
+  }));
+}
+
+/** Canvas reads only the active workspace iteration — never legacy mission-level fallbacks. */
+function getMissionCanvasAssets(mission: DesignMissionState): DesignMissionAssets {
+  const workspace = mission.designWorkspaces[mission.brief.designId];
+  if (!workspace) return {};
+  return getActiveIteration(workspace).assets;
+}
 
 const TIMELINE: Array<{ id: CollectionTimelineStage; label: string }> = [
   { id: "research", label: "Research" },
@@ -119,12 +192,16 @@ export function CreativeWorkspace({
   const workspace = getActiveWorkspace(mission);
   const iteration = getActiveIteration(workspace);
   const brief = iteration.brief;
+  const canvasAssets = useMemo(
+    () => getMissionCanvasAssets(mission),
+    [mission],
+  );
   const prompts = useMemo(
     () => getEffectivePrompts(brief, iteration.promptOverrides, iteration.assets),
     [brief, iteration.promptOverrides, iteration.assets],
   );
 
-  const [canvasTab, setCanvasTab] = useState<CanvasTab>("mockup");
+  const [canvasTab, setCanvasTab] = useState<CanvasTab>("svg");
   const [zoom, setZoom] = useState<ZoomLevel>(1);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -137,6 +214,20 @@ export function CreativeWorkspace({
     setToast(msg);
     setError(null);
   }, []);
+
+  useEffect(() => {
+    setCanvasTab(resolveCanvasTab());
+  }, [brief.designId, mission.reportId]);
+
+  const pipelineSteps = useMemo(
+    () =>
+      derivePipelineStepStates(
+        canvasAssets,
+        workspace.approvalStatus,
+        mission.pipelineStage,
+      ),
+    [canvasAssets, workspace.approvalStatus, mission.pipelineStage],
+  );
 
   const resetProductionStatus = useCallback(
     (itemId: "svg" | "mockup" | "aiRender") => {
@@ -261,11 +352,11 @@ export function CreativeWorkspace({
         sourceTitle: brief.title,
         designId: brief.designId,
         reportId: mission.reportId,
-        assets: workspace.assets,
+        assets: canvasAssets,
       }),
     );
     router.push("/agents/image");
-  }, [brief, mission.reportId, prompts.imagePrompt, router, workspace.assets]);
+  }, [brief, mission.reportId, prompts.imagePrompt, router, canvasAssets]);
 
   const runGeneration = useCallback(
     async (
@@ -422,22 +513,17 @@ export function CreativeWorkspace({
       />
 
       <div className="cw-main">
-        <header className="cw-mission-bar">
-          <div className="cw-mission-bar-primary">
-            <p className="cw-eyebrow">Active Design Mission</p>
-            <h1>{brief.title}</h1>
-            <p className="cw-mission-meta">
-              {mission.collectionName} · {brief.role} · {brief.product} · {brief.color}
-            </p>
-            <div className="cw-mission-inline-meta">
-              {brief.dnaScore !== undefined ? (
-                <ScorePill label="DNA" value={`${brief.dnaScore}%`} />
-              ) : null}
-              <ScorePill label="Print Ready" value={`${brief.printReadinessScore}%`} />
-              <span className="cw-version-badge">{iteration.label}</span>
-            </div>
-          </div>
-        </header>
+        <MissionHeader
+          missionName={brief.title}
+          collectionName={mission.collectionName}
+          garment={brief.product}
+          role={brief.role}
+          colorway={brief.color}
+          dnaScore={brief.dnaScore}
+          printReadyScore={brief.printReadinessScore}
+          commercialStatus={getCommercialStatusLabel(canvasAssets, workspace.approvalStatus)}
+          versionLabel={iteration.label}
+        />
 
         <div className="cw-toolbar-sticky">
         <ProductionToolbar
@@ -468,9 +554,9 @@ export function CreativeWorkspace({
           }
           onSendImageStudio={sendToImageStudio}
           onExportSvg={() => {
-            if (workspace.assets.svgUrl) {
+            if (canvasAssets.svgUrl) {
               const a = document.createElement("a");
-              a.href = workspace.assets.svgUrl;
+              a.href = canvasAssets.svgUrl;
               a.download = `${brief.designId}.svg`;
               a.click();
             } else {
@@ -479,7 +565,7 @@ export function CreativeWorkspace({
             }
           }}
           onExportPng={() => {
-            const url = workspace.assets.mockupUrl ?? workspace.assets.renderUrl;
+            const url = canvasAssets.mockupUrl ?? canvasAssets.renderUrl;
             if (url) window.open(url, "_blank");
             else notify("Generate a mockup or render first");
           }}
@@ -490,21 +576,32 @@ export function CreativeWorkspace({
         />
         </div>
 
+        <AiPipelinePreview steps={pipelineSteps} />
+
         <div className="cw-workspace-core">
           <DesignCanvas
             tab={canvasTab}
             onTabChange={setCanvasTab}
             zoom={zoom}
             onZoomChange={setZoom}
-            assets={workspace.assets}
+            assets={canvasAssets}
             title={brief.title}
+            onGenerateConcept={() => void runAiDesignerConcept()}
+            actionLoading={actionLoading}
           />
         </div>
 
         <AiDesignerConceptPanel
-          concept={workspace.assets.aiDesignerConcept}
-          renderPlan={workspace.assets.aiDesignerRenderPlan}
-          review={workspace.assets.aiDesignerReview}
+          concept={canvasAssets.aiDesignerConcept}
+          renderPlan={canvasAssets.aiDesignerRenderPlan}
+          review={canvasAssets.aiDesignerReview}
+          onSendToImageStudio={sendToImageStudio}
+          onCopyImagePrompt={() => {
+            const prompt =
+              canvasAssets.aiDesignerConcept?.imagePrompt.primary ?? prompts.imagePrompt;
+            void navigator.clipboard.writeText(prompt);
+            notify("Image prompt copied");
+          }}
         />
 
         <CreativeDirectorPanel
@@ -596,19 +693,124 @@ export function CreativeWorkspace({
 export function CreativeWorkspaceEmpty() {
   return (
     <section className="cw-empty">
-      <div className="cw-empty-canvas">
-        <GarmentPlaceholder />
-        <p>Ready to create.</p>
+      <div className="cw-empty-canvas cw-canvas-studio-empty">
+        <div className="cw-canvas-luxury-bg" aria-hidden />
+        <StudioSilhouette large />
+        <div className="cw-canvas-glass-overlay" aria-hidden />
+        <div className="cw-canvas-studio-card">
+          <h2 className="cw-canvas-studio-card-title">Create your next premium collection.</h2>
+          <p className="cw-canvas-studio-card-caption">Your next collection begins here.</p>
+          <p className="cw-canvas-studio-card-sub">
+            Open a collection brief from Reports Center to enter the Creative Director workspace.
+          </p>
+          <Link href="/facility/reports" className="cw-toolbar-btn cw-btn-primary">
+            Browse Reports
+          </Link>
+        </div>
       </div>
       <div>
         <p className="cw-eyebrow">Creative Director Workspace</p>
-        <h1>No design selected</h1>
+        <h1>Design Studio</h1>
         <p className="cw-empty-copy">
-          Send a concept from{" "}
-          <Link href="/facility/reports">Reports Center</Link> to enter the lab.
+          A calm editorial space for concept direction, canvas artwork, and campaign visuals.
         </p>
       </div>
     </section>
+  );
+}
+
+function MissionHeader({
+  missionName,
+  collectionName,
+  garment,
+  role,
+  colorway,
+  dnaScore,
+  printReadyScore,
+  commercialStatus,
+  versionLabel,
+}: {
+  missionName: string;
+  collectionName?: string;
+  garment: string;
+  role: string;
+  colorway: string;
+  dnaScore?: number;
+  printReadyScore: number;
+  commercialStatus: string;
+  versionLabel: string;
+}) {
+  return (
+    <header className="cw-mission-header" aria-label="Design mission">
+      <div className="cw-mission-header-lead">
+        {collectionName ? (
+          <p className="cw-mission-header-collection">{collectionName}</p>
+        ) : null}
+        <span className="cw-mission-header-version">{versionLabel}</span>
+      </div>
+      <h1 className="cw-mission-header-title">{missionName}</h1>
+      <div className="cw-mission-header-specs">
+        <MissionSpec label="Garment" value={garment} />
+        <MissionSpec label="Role" value={role} />
+        <MissionSpec label="Colorway" value={colorway} />
+      </div>
+      <div className="cw-mission-header-metrics">
+        <MissionMetric label="Commercial Status" value={commercialStatus} highlight />
+        {dnaScore !== undefined ? (
+          <MissionMetric label="DNA" value={`${dnaScore}%`} />
+        ) : null}
+        <MissionMetric label="Print Ready" value={`${printReadyScore}%`} />
+      </div>
+    </header>
+  );
+}
+
+function MissionSpec({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="cw-mission-spec">
+      <span className="cw-mission-spec-label">{label}</span>
+      <span className="cw-mission-spec-value">{value}</span>
+    </div>
+  );
+}
+
+function MissionMetric({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={cn("cw-mission-metric", highlight && "is-highlight")}>
+      <span className="cw-mission-metric-label">{label}</span>
+      <span className="cw-mission-metric-value">{value}</span>
+    </div>
+  );
+}
+
+function AiPipelinePreview({
+  steps,
+}: {
+  steps: Array<{ id: string; label: string; status: PipelineStepStatus }>;
+}) {
+  return (
+    <nav className="cw-ai-pipeline" aria-label="AI creative pipeline">
+      <ol className="cw-ai-pipeline-track">
+        {steps.map((step, index) => (
+          <li key={step.id} className="cw-ai-pipeline-item">
+            <span className={cn("cw-ai-pipeline-node", `is-${step.status}`)}>
+              {step.label}
+            </span>
+            {index < steps.length - 1 ? (
+              <ChevronRight className="cw-ai-pipeline-sep" aria-hidden />
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }
 
@@ -655,6 +857,8 @@ function DesignCanvas({
   onZoomChange,
   assets,
   title,
+  onGenerateConcept,
+  actionLoading,
 }: {
   tab: CanvasTab;
   onTabChange: (t: CanvasTab) => void;
@@ -662,15 +866,23 @@ function DesignCanvas({
   onZoomChange: (z: ZoomLevel) => void;
   assets: PerDesignWorkspace["assets"];
   title: string;
+  onGenerateConcept?: () => void;
+  actionLoading?: string | null;
 }) {
-  const tabs: Array<{ id: CanvasTab; label: string }> = [
-    { id: "svg", label: "SVG" },
-    { id: "mockup", label: "Mockup" },
-    { id: "render", label: "AI Render" },
-    { id: "split", label: "Split View" },
+  const assetCount = countCanvasAssets(assets);
+  const tabs: Array<{ id: CanvasTab; label: string; available: boolean }> = [
+    { id: "svg", label: "Canvas", available: true },
+    { id: "mockup", label: "Mockup", available: true },
+    { id: "render", label: "AI Artwork", available: true },
+    {
+      id: "split",
+      label: "Compare",
+      available: assetCount >= 2,
+    },
   ];
 
   const zoomOptions: ZoomLevel[] = [0.25, 0.5, 0.75, 1, 1.5, "fit"];
+  const anyAsset = hasCanvasAsset(assets);
 
   const renderLayer = (kind: "svg" | "mockup" | "render") => {
     const url =
@@ -681,10 +893,12 @@ function DesignCanvas({
           : assets.renderUrl;
     if (!url) {
       return (
-        <div className="cw-canvas-empty">
-          <GarmentPlaceholder />
-          <p>Ready to create.</p>
-        </div>
+        <CanvasStudioEmpty
+          layer={kind}
+          hasAnyAsset={anyAsset}
+          onGenerateConcept={onGenerateConcept}
+          loading={actionLoading ?? null}
+        />
       );
     }
     return (
@@ -693,8 +907,7 @@ function DesignCanvas({
     );
   };
 
-  const scale =
-    zoom === "fit" ? 1 : zoom;
+  const scale = zoom === "fit" ? 1 : zoom;
 
   return (
     <section className="cw-canvas-section">
@@ -704,8 +917,16 @@ function DesignCanvas({
             <button
               key={t.id}
               type="button"
-              className={cn("cw-canvas-tab", tab === t.id && "active")}
-              onClick={() => onTabChange(t.id)}
+              className={cn(
+                "cw-canvas-tab",
+                tab === t.id && "active",
+                !t.available && "is-unavailable",
+              )}
+              disabled={!t.available}
+              onClick={() => {
+                if (!t.available) return;
+                onTabChange(t.id);
+              }}
             >
               {t.label}
             </button>
@@ -730,15 +951,11 @@ function DesignCanvas({
           </button>
         </div>
       </div>
-      <div className="cw-canvas-stage">
-        <div className="cw-canvas-atmosphere" aria-hidden>
-          <div className="cw-canvas-spotlight" />
-          <div className="cw-canvas-particles">
-            {Array.from({ length: 14 }, (_, i) => (
-              <span key={i} className="cw-particle" style={{ "--i": i } as CSSProperties} />
-            ))}
-          </div>
-        </div>
+      <div className={cn("cw-canvas-stage", anyAsset ? "has-assets" : "is-studio-empty")}>
+        <div className="cw-canvas-luxury-bg" aria-hidden />
+        <div className="cw-canvas-ambient" aria-hidden />
+        <div className="cw-canvas-vignette" aria-hidden />
+        {!anyAsset ? <div className="cw-canvas-glass-overlay" aria-hidden /> : null}
         <div
           className="cw-canvas-viewport"
           style={{
@@ -763,6 +980,58 @@ function DesignCanvas({
   );
 }
 
+function CanvasStudioEmpty({
+  layer,
+  hasAnyAsset,
+  onGenerateConcept,
+  loading,
+}: {
+  layer: "svg" | "mockup" | "render";
+  hasAnyAsset: boolean;
+  onGenerateConcept?: () => void;
+  loading: string | null;
+}) {
+  if (!hasAnyAsset && layer === "svg") {
+    return (
+      <div className="cw-canvas-studio-empty">
+        <StudioSilhouette large />
+        <div className="cw-canvas-studio-card">
+          <h3 className="cw-canvas-studio-card-title">Create your next premium collection.</h3>
+          <p className="cw-canvas-studio-card-caption">Your next collection begins here.</p>
+          <div className="cw-canvas-studio-empty-actions">
+            <button
+              type="button"
+              className="cw-toolbar-btn cw-btn-primary"
+              disabled={loading === "Generate AI Design Concept"}
+              onClick={onGenerateConcept}
+            >
+              {loading === "Generate AI Design Concept" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              <span>Generate AI Design Concept</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const layerCopy: Record<typeof layer, string> = {
+    svg: "No canvas artwork yet. Generate an SVG draft or begin with an AI Design Concept.",
+    mockup: "No mockup generated yet.",
+    render: "No AI artwork generated yet.",
+  };
+
+  return (
+    <div className="cw-canvas-layer-empty">
+      <StudioSilhouette subtle />
+      <p className="cw-canvas-layer-empty-copy">{layerCopy[layer]}</p>
+    </div>
+  );
+}
+
 function ProductionToolbar({
   loading,
   onGenerateSvg,
@@ -784,24 +1053,6 @@ function ProductionToolbar({
   onExportPng: () => void;
   onSaveDraft: () => void;
 }) {
-  const generateTools = [
-    { label: "Generate SVG", icon: Shapes, action: onGenerateSvg },
-    { label: "Generate AI Design Concept", icon: Sparkles, action: onGenerateAiConcept },
-    { label: "Generate Mockup", icon: ImageIcon, action: onGenerateMockup },
-    { label: "Generate AI Render", icon: Wand2, action: onGenerateRender },
-    { label: "Upscale", icon: ZoomIn, action: () => {} },
-    { label: "Remove Background", icon: Maximize2, action: () => {} },
-  ];
-
-  const exportTools = [
-    { label: "Export SVG", icon: Download, action: onExportSvg },
-    { label: "Export PNG", icon: Download, action: onExportPng },
-    { label: "Export PDF", icon: Download, action: onExportPng },
-    { label: "Send to Image Studio", icon: Send, action: onSendImageStudio },
-    { label: "Send to Shopify", icon: Send, action: () => {} },
-    { label: "Save Draft", icon: Save, action: onSaveDraft },
-  ];
-
   const renderBtn = (
     tool: { label: string; icon: typeof Shapes; action: () => void },
     variant: "primary" | "secondary" | "success" = "secondary",
@@ -822,15 +1073,66 @@ function ProductionToolbar({
     </button>
   );
 
+  const groups: Array<{
+    label: string;
+    tools: Array<{
+      label: string;
+      icon: typeof Shapes;
+      action: () => void;
+      variant?: "primary" | "secondary" | "success";
+    }>;
+  }> = [
+    {
+      label: "Create",
+      tools: [
+        {
+          label: "Generate AI Design Concept",
+          icon: Sparkles,
+          action: onGenerateAiConcept,
+          variant: "primary",
+        },
+        { label: "Generate SVG", icon: Shapes, action: onGenerateSvg },
+      ],
+    },
+    {
+      label: "Image",
+      tools: [
+        { label: "Generate Mockup", icon: ImageIcon, action: onGenerateMockup },
+        { label: "Generate AI Render", icon: Wand2, action: onGenerateRender },
+        { label: "Send to Image Studio", icon: Send, action: onSendImageStudio },
+      ],
+    },
+    {
+      label: "Export",
+      tools: [
+        { label: "PNG", icon: Download, action: onExportPng },
+        { label: "PDF", icon: Download, action: onExportPng },
+        { label: "SVG", icon: Download, action: onExportSvg },
+      ],
+    },
+    {
+      label: "Production",
+      tools: [
+        { label: "Send to Shopify", icon: Send, action: () => {} },
+        { label: "Save Draft", icon: Save, action: onSaveDraft, variant: "success" },
+        { label: "Upscale", icon: ZoomIn, action: () => {} },
+        { label: "Remove Background", icon: Maximize2, action: () => {} },
+      ],
+    },
+  ];
+
   return (
-    <div className="cw-toolbar">
-      <div className="cw-toolbar-row">
-        {generateTools.map((t) => renderBtn(t, "primary"))}
-      </div>
-      <div className="cw-toolbar-row">
-        {exportTools.slice(0, 5).map((t) => renderBtn(t, "secondary"))}
-        {renderBtn(exportTools[5], "success")}
-      </div>
+    <div className="cw-toolbar cw-toolbar-grouped">
+      {groups.map((group) => (
+        <div key={group.label} className="cw-toolbar-group">
+          <span className="cw-toolbar-group-label">{group.label}</span>
+          <div className="cw-toolbar-group-actions">
+            {group.tools.map((tool) =>
+              renderBtn(tool, tool.variant ?? "secondary"),
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1219,12 +1521,49 @@ function CompareColumn({
   );
 }
 
-function ScorePill({ label, value }: { label: string; value: string }) {
+function StudioSilhouette({
+  subtle = false,
+  large = false,
+}: {
+  subtle?: boolean;
+  large?: boolean;
+}) {
   return (
-    <span className="cw-score-pill cw-score-pill-inline">
-      <span>{label}</span>
-      <strong className="capitalize">{value}</strong>
-    </span>
+    <div
+      className={cn(
+        "cw-studio-silhouette-wrap",
+        subtle && "is-subtle",
+        large && "is-large",
+      )}
+      aria-hidden
+    >
+      <svg viewBox="0 0 320 400" className="cw-studio-silhouette">
+        <path
+          d="M88 108 Q160 62 232 108 L248 138 L232 348 L88 348 L72 138 Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M136 108 Q160 88 184 108"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.75"
+        />
+        <rect
+          x="132"
+          y="178"
+          width="56"
+          height="72"
+          rx="4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.75"
+          strokeDasharray="4 6"
+        />
+      </svg>
+    </div>
   );
 }
 

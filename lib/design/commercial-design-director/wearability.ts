@@ -35,7 +35,7 @@ export function evaluateWearability(
   const restraint = evaluateLuxuryRestraint(spec, placement);
   const distance = evaluateDistanceReadability(spec, placement);
 
-  let score =
+  const score =
     commercialScore.wearability * 0.35 +
     match.score * 0.25 +
     rotation.score * 0.2 +
