@@ -45,7 +45,7 @@ function sanitizeUrlField(value: unknown): string | undefined {
   return undefined;
 }
 
-function slimConceptForStorage(concept: DesignConcept): DesignConcept {
+export function slimConceptForStorage(concept: DesignConcept): DesignConcept {
   return {
     designId: concept.designId,
     title: concept.title,
@@ -145,7 +145,7 @@ function slimConceptForStorage(concept: DesignConcept): DesignConcept {
   };
 }
 
-function slimRenderPlanForStorage(plan: RenderPlan): RenderPlan {
+export function slimRenderPlanForStorage(plan: RenderPlan): RenderPlan {
   return {
     ...plan,
     deliverables: plan.deliverables.slice(0, 8).map((deliverable) => ({

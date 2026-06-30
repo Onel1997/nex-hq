@@ -40,7 +40,7 @@ import {
 } from "@/lib/design/svg-data-url";
 import { buildDesignMockupPayload } from "@/lib/design/mockup-request";
 import { buildDesignRenderPayload } from "@/lib/design/render-request";
-import { saveImageStudioHandoff, buildImageStudioHandoff, type HandoffSaveResult } from "@/lib/image/image-handoff-store";
+import { sendDesignHandoffToImageStudio, type HandoffSaveResult } from "@/lib/image/image-handoff-store";
 import { HandoffDebugOverlay } from "@/components/image/handoff-debug-overlay";
 import { cn } from "@/lib/utils";
 import {
@@ -390,20 +390,38 @@ export function CreativeWorkspace({
   }, [brief, notify, onPatchMission]);
 
   const sendToImageStudio = useCallback(() => {
-    const handoff = buildImageStudioHandoff({
-      brief: prompts.imagePrompt,
-      sourceTitle: brief.title,
+    const saveResult = sendDesignHandoffToImageStudio({
+      title: brief.title,
+      collection: mission.collectionName ?? "",
+      garment: brief.product,
+      colorway: brief.color,
+      version: `V${iteration.version}`,
+      imagePrompt: prompts.imagePrompt,
+      mockupPrompt: prompts.mockupPrompt,
       designId: brief.designId,
       reportId: mission.reportId,
       assets: canvasAssets,
-      collectionName: mission.collectionName,
-      productName: brief.product,
-      colorName: brief.color,
+      aiDesignerConcept: canvasAssets.aiDesignerConcept,
+      renderPlan: canvasAssets.aiDesignerRenderPlan,
+      review: canvasAssets.aiDesignerReview,
     });
-    const saveResult = saveImageStudioHandoff(handoff);
     setHandoffSendDebug(saveResult);
+    if (!saveResult.saved) {
+      setError(saveResult.error ?? "Failed to save Image Studio handoff");
+      return;
+    }
+    console.info("[Design Studio] navigating to Image Studio");
     router.push("/agents/image");
-  }, [brief, mission.collectionName, mission.reportId, prompts.imagePrompt, router, canvasAssets]);
+  }, [
+    brief,
+    mission.collectionName,
+    mission.reportId,
+    prompts.imagePrompt,
+    prompts.mockupPrompt,
+    iteration.version,
+    router,
+    canvasAssets,
+  ]);
 
   const runGeneration = useCallback(
     async (

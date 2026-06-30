@@ -22,7 +22,7 @@ import {
 } from "@/lib/design/svg-data-url";
 import { buildDesignMockupPayload } from "@/lib/design/mockup-request";
 import { buildDesignRenderPayload } from "@/lib/design/render-request";
-import { saveImageStudioHandoff, buildImageStudioHandoff, type HandoffSaveResult } from "@/lib/image/image-handoff-store";
+import { sendDesignHandoffToImageStudio, type HandoffSaveResult } from "@/lib/image/image-handoff-store";
 import { HandoffDebugOverlay } from "@/components/image/handoff-debug-overlay";
 import { cn } from "@/lib/utils";
 import {
@@ -247,21 +247,39 @@ export function DesignLabWorkspace({
   );
 
   const handleSendToImageStudio = useCallback(() => {
-    const handoff = buildImageStudioHandoff({
-      brief: prompts.imagePrompt,
-      sourceTitle: brief.title,
+    const saveResult = sendDesignHandoffToImageStudio({
+      title: brief.title,
+      collection: mission.collectionName ?? "",
+      garment: brief.product,
+      colorway: brief.color,
+      version: "V1",
+      imagePrompt: prompts.imagePrompt,
+      mockupPrompt: prompts.mockupPrompt,
       designId: brief.designId,
       reportId: mission.reportId,
       assets: mission.assets,
-      collectionName: mission.collectionName,
-      productName: brief.product,
-      colorName: brief.color,
+      aiDesignerConcept: mission.assets.aiDesignerConcept,
+      renderPlan: mission.assets.aiDesignerRenderPlan,
+      review: mission.assets.aiDesignerReview,
     });
-    const saveResult = saveImageStudioHandoff(handoff);
     setHandoffSendDebug(saveResult);
+    if (!saveResult.saved) {
+      setActionError(saveResult.error ?? "Failed to save Image Studio handoff");
+      return;
+    }
+    console.info("[Design Studio] navigating to Image Studio");
     onPatchMission((s) => setPipelineStage(s, "image"));
     router.push("/agents/image");
-  }, [brief, mission.assets, mission.collectionName, mission.reportId, prompts.imagePrompt, onPatchMission, router]);
+  }, [
+    brief,
+    mission.assets,
+    mission.collectionName,
+    mission.reportId,
+    prompts.imagePrompt,
+    prompts.mockupPrompt,
+    onPatchMission,
+    router,
+  ]);
 
   const handleSaveDraft = useCallback(() => {
     onSaveDraft?.();

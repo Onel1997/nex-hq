@@ -346,7 +346,7 @@ export function deriveMissionStatus(
 
   const asset = findAssetForSlot(slot, assets, used);
   if (!asset) {
-    return options?.hasBlueprint ? "preparing" : "waiting";
+    return "waiting";
   }
   if (asset.id === options?.preparingAssetId) {
     return "preparing";

@@ -11,9 +11,8 @@ import {
   ProgressRing,
 } from "@/components/image/image-studio-primitives";
 import {
-  acknowledgeImageStudioHandoff,
+  applyImageStudioHandoff,
   loadHandoffSendDebug,
-  loadImageStudioHandoffWithDebug,
   type HandoffLoadDebug,
   type HandoffSaveResult,
   type ImageStudioHandoff,
@@ -43,6 +42,11 @@ import {
   resolveGenerationStatus,
   resolveImportedBlueprint,
 } from "@/lib/image/image-studio-mission";
+import {
+  executeGeneration,
+  runProductionPipeline as runProductionPipelineEngine,
+  type ImageProductionProject,
+} from "@/lib/image/image-production-pipeline";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -56,6 +60,7 @@ import {
 import Link from "next/link";
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -86,6 +91,21 @@ const INSPECTOR_SECTIONS = [
 ] as const;
 
 type InspectorSection = (typeof INSPECTOR_SECTIONS)[number];
+
+/** Survives React Strict Mode remounts so handoff apply/bootstrap runs once per navigation. */
+let handoffBootstrapLock = false;
+let cachedAppliedHandoff: ImageStudioHandoff | null = null;
+let cachedProductionProject: ImageRunResult | null = null;
+let productionPackagePromise: Promise<ImageRunResult | null> | null = null;
+
+let autoGenerateMissionKey: string | null = null;
+let autoGenerateInflight: Promise<void> | null = null;
+
+function buildAutoGenerateMissionKey(handoff: ImageStudioHandoff): string {
+  return handoff.designId ?? handoff.handoffAt ?? handoff.mission?.title ?? "mission";
+}
+
+const HANDOFF_RETRY_DELAYS_MS = [50, 250, 1000] as const;
 
 function InspectorCard({
   title,
@@ -134,10 +154,7 @@ export function ImageStudioWorkspace() {
   const [generatingAssetId, setGeneratingAssetId] = useState<string | null>(null);
   const [preparingAssetId, setPreparingAssetId] = useState<string | null>(null);
   const [pipelineActive, setPipelineActive] = useState(false);
-  const shouldAutoPipelineRef = useRef(false);
   const pipelineLockRef = useRef(false);
-  const packageLockRef = useRef(false);
-  const bootstrapAttemptRef = useRef(0);
   const [handoffLoadDebug, setHandoffLoadDebug] = useState<HandoffLoadDebug | null>(null);
   const [handoffSendDebug] = useState<HandoffSaveResult | null>(() =>
     typeof window === "undefined" ? null : loadHandoffSendDebug(),
@@ -241,138 +258,104 @@ export function ImageStudioWorkspace() {
       asset: ImageStudioAsset,
       project: ImageRunResult,
     ): Promise<ImageStudioAsset | null> => {
-      console.info("[Image Studio] startNextAsset → generating", {
-        assetId: asset.id,
-        assetType: asset.assetType,
-        title: asset.title,
-      });
-      setPreparingAssetId(null);
-      setGeneratingAssetId(asset.id);
-      setProductionAssets((list) =>
-        list.map((item) =>
-          item.id === asset.id ? { ...item, status: "generating" } : item,
-        ),
-      );
-
-      try {
-        const res = await fetch("/api/image/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reportRecordId: project.reportRecordId,
-            reportId: project.reportId,
-            assetId: asset.id,
-            provider: "openai",
-            promptVariant: "openai",
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? t("image.errors.unexpected"));
-
-        const updated: ImageStudioAsset = {
-          ...asset,
-          status: data.asset.status,
-          imageUrl: data.asset.imageUrl,
-          createdAt: data.asset.createdAt,
-        };
-        setProductionAssets((list) =>
-          list.map((item) => (item.id === asset.id ? updated : item)),
-        );
-        console.info("[Image Studio] asset completed", {
-          assetId: updated.id,
-          status: updated.status,
-          hasImage: Boolean(updated.imageUrl),
-        });
-        return updated;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : t("image.errors.unexpected");
-        console.error("[Image Studio] asset generation failed", {
-          assetId: asset.id,
-          error: message,
-        });
-        setError(message);
-        setProductionAssets((list) =>
-          list.map((item) =>
-            item.id === asset.id ? { ...item, status: "failed", message } : item,
-          ),
-        );
-        return null;
-      } finally {
+      return executeGeneration(
+        asset,
+        {
+          reportId: project.reportId,
+          reportRecordId: project.reportRecordId,
+          projectName: project.projectName,
+          productionAssets: project.productionAssets,
+        },
+        {
+          onPreparingAsset: (assetId, slotId) => {
+            setPreparingAssetId(assetId);
+            setSelectedSlotId(slotId);
+            setSelectedAssetId(assetId);
+          },
+          onGeneratingAsset: (assetId) => {
+            setPreparingAssetId(null);
+            setGeneratingAssetId(assetId);
+          },
+          onAssetUpdated: (updated) => {
+            setProductionAssets((list) =>
+              list.map((item) => (item.id === updated.id ? updated : item)),
+            );
+          },
+          onPipelineActive: () => {},
+          onError: (message) => setError(message),
+        },
+      ).finally(() => {
         setGeneratingAssetId(null);
-      }
+        setPreparingAssetId(null);
+      });
     },
-    [t],
+    [],
   );
 
+  const syncCachedProductionAssets = useCallback((nextAssets: ImageStudioAsset[]) => {
+    if (!cachedProductionProject) return;
+    cachedProductionProject = {
+      ...cachedProductionProject,
+      productionAssets: nextAssets,
+    };
+  }, []);
+
   const runProductionPipeline = useCallback(
-    async (project: ImageRunResult, assets: ImageStudioAsset[]) => {
-      if (pipelineLockRef.current) {
-        console.warn("[Image Studio] queue runner skipped — pipeline already active");
-        return;
-      }
-
-      const queue = resolveMissionSlotAssets(assets).filter(
-        ({ asset }) => !asset.imageUrl && asset.status !== "completed",
-      );
-
-      console.info("[Image Studio] queue runner starting", {
-        queuedCount: queue.length,
-        slots: queue.map(({ slot, asset }) => ({
-          slot: slot.id,
-          assetId: asset.id,
-          assetType: asset.assetType,
-        })),
+    async (project: ImageRunResult, assets: ImageStudioAsset[]): Promise<boolean> => {
+      console.info("[Image Studio] runProductionPipeline wrapper invoked", {
+        pipelineLockRef: pipelineLockRef.current,
+        reportId: project.reportId,
+        assetCount: assets.length,
+        pendingCount: queuedAssetsForPipeline(assets).length,
       });
 
-      if (queue.length === 0) {
-        console.warn("[Image Studio] queue runner aborted — no queued assets");
-        return;
+      if (pipelineLockRef.current) {
+        console.warn("[Image Studio] runProductionPipeline wrapper abort", {
+          abortReason: "pipelineLockRef.current is true",
+        });
+        return false;
       }
 
       pipelineLockRef.current = true;
-      setPipelineActive(true);
       setError(null);
 
-      let currentAssets = assets;
+      const productionProject: ImageProductionProject = {
+        reportId: project.reportId,
+        reportRecordId: project.reportRecordId,
+        projectName: project.projectName,
+        productionAssets: assets,
+      };
+
       try {
-        for (const { slot, asset } of queue) {
-          setPreparingAssetId(asset.id);
-          setSelectedSlotId(slot.id);
-          setSelectedAssetId(asset.id);
-          if (queue[0]?.asset.id === asset.id) {
-            console.info("[Image Studio] first asset preparing", {
-              slot: slot.id,
-              assetId: asset.id,
+        return await runProductionPipelineEngine(productionProject, assets, {
+          onPreparingAsset: (assetId, slotId) => {
+            setPreparingAssetId(assetId);
+            setSelectedSlotId(slotId);
+            setSelectedAssetId(assetId);
+          },
+          onGeneratingAsset: (assetId) => {
+            setPreparingAssetId(null);
+            setGeneratingAssetId(assetId);
+          },
+          onAssetUpdated: (updated) => {
+            setProductionAssets((list) => {
+              const next = list.map((item) => (item.id === updated.id ? updated : item));
+              syncCachedProductionAssets(next);
+              return next;
             });
-          } else {
-            console.info("[Image Studio] startNextAsset → preparing", {
-              slot: slot.id,
-              assetId: asset.id,
-            });
-          }
-
-          if (queue[0]?.asset.id === asset.id) {
-            console.info("[Image Studio] first asset generating", {
-              slot: slot.id,
-              assetId: asset.id,
-            });
-          }
-
-          const updated = await generateAssetInternal(asset, project);
-          if (!updated) continue;
-
-          currentAssets = currentAssets.map((item) =>
-            item.id === updated.id ? updated : item,
-          );
-        }
+          },
+          onPipelineActive: (active) => {
+            setPipelineActive(active);
+          },
+          onError: (message) => setError(message),
+        });
       } finally {
-        setPreparingAssetId(null);
         pipelineLockRef.current = false;
-        setPipelineActive(false);
-        console.info("[Image Studio] queue runner finished");
+        setPreparingAssetId(null);
+        setGeneratingAssetId(null);
       }
     },
-    [generateAssetInternal],
+    [syncCachedProductionAssets],
   );
 
   const createProductionPackage = useCallback(
@@ -382,124 +365,174 @@ export function ImageStudioWorkspace() {
         console.warn("[Image Studio] createProductionPackage skipped — empty brief");
         return null;
       }
-      if (packageLockRef.current) {
-        console.warn("[Image Studio] createProductionPackage skipped — package request in flight");
-        return null;
+
+      if (cachedProductionProject) {
+        console.info("[Image Studio] createProductionPackage using cached project", {
+          reportId: cachedProductionProject.reportId,
+          assetCount: cachedProductionProject.productionAssets?.length ?? 0,
+        });
+        setResult(cachedProductionProject);
+        setProductionAssets(cachedProductionProject.productionAssets ?? []);
+        return cachedProductionProject;
       }
 
-      packageLockRef.current = true;
-      setIsLoading(true);
-      setError(null);
+      if (productionPackagePromise) {
+        console.info("[Image Studio] createProductionPackage awaiting in-flight request");
+        return productionPackagePromise;
+      }
 
-      try {
-        console.info("[Image Studio] creating production package", { briefLength: text.length });
-        const res = await fetch("/api/image/run", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brief: text }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error ?? t("image.errors.unexpected"));
+      productionPackagePromise = (async () => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+          console.info("[Image Studio] creating production package", { briefLength: text.length });
+          const res = await fetch("/api/image/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ brief: text }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error ?? t("image.errors.unexpected"));
+          }
+
+          const project = data as ImageRunResult;
+          cachedProductionProject = project;
+          setResult(project);
+          setProductionAssets(project.productionAssets ?? []);
+          console.info("[Image Studio] queue created", {
+            reportId: project.reportId,
+            assetCount: project.productionAssets?.length ?? 0,
+            queuedCount: queuedAssetsForPipeline(project.productionAssets ?? []).length,
+          });
+          return project;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : t("image.errors.unexpected");
+          console.error("[Image Studio] production package failed", { error: message });
+          setError(message);
+          productionPackagePromise = null;
+          return null;
+        } finally {
+          setIsLoading(false);
         }
+      })();
 
-        const project = data as ImageRunResult;
-        setResult(project);
-        setProductionAssets(project.productionAssets ?? []);
-        console.info("[Image Studio] queue created", {
-          reportId: project.reportId,
-          assetCount: project.productionAssets?.length ?? 0,
-          queuedCount: queuedAssetsForPipeline(project.productionAssets ?? []).length,
-        });
-        return project;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : t("image.errors.unexpected");
-        console.error("[Image Studio] production package failed", { error: message });
-        setError(message);
-        return null;
-      } finally {
-        packageLockRef.current = false;
-        setIsLoading(false);
-      }
+      return productionPackagePromise;
     },
     [t],
   );
 
-  const bootstrapFromHandoff = useCallback(
-    async (handoffData: ImageStudioHandoff) => {
-      const attempt = ++bootstrapAttemptRef.current;
-      console.info("[Image Studio] mission state populated", {
-        attempt,
-        title: handoffData.mission?.title ?? handoffData.sourceTitle,
-        collection: handoffData.mission?.collection,
-        garment: handoffData.mission?.garment,
-        colorway: handoffData.mission?.colorway,
-        version: handoffData.mission?.version,
-      });
-
-      const project = await createProductionPackage(handoffData.brief);
-      if (!project) {
-        console.warn("[Image Studio] auto pipeline aborted — queue not created", { attempt });
-        return;
-      }
-
-      if (!shouldAutoPipelineRef.current) {
-        console.info("[Image Studio] auto pipeline disabled after package creation", { attempt });
-        return;
-      }
-
-      console.info("[Image Studio] auto pipeline starting", {
-        attempt,
-        queuedCount: queuedAssetsForPipeline(project.productionAssets ?? []).length,
-      });
+  const runImage = useCallback(async () => {
+    const project = await createProductionPackage(brief);
+    if (project && !pipelineLockRef.current) {
       await runProductionPipeline(project, project.productionAssets ?? []);
-    },
-    [createProductionPackage, runProductionPipeline],
-  );
+    }
+    return project;
+  }, [brief, createProductionPackage, runProductionPipeline]);
 
-  const bootstrapFromHandoffRef = useRef(bootstrapFromHandoff);
-  bootstrapFromHandoffRef.current = bootstrapFromHandoff;
+  const runImageRef = useRef(runImage);
+  runImageRef.current = runImage;
+
+  const hydrateCachedProduction = useCallback(() => {
+    if (!cachedProductionProject) return false;
+    setResult(cachedProductionProject);
+    setProductionAssets(cachedProductionProject.productionAssets ?? []);
+    return true;
+  }, []);
 
   useLayoutEffect(() => {
-    const { handoff: normalized, debug } = loadImageStudioHandoffWithDebug();
-    setHandoffLoadDebug(debug);
+    let cancelled = false;
+    const retryTimers: ReturnType<typeof setTimeout>[] = [];
 
-    console.info("[Image Studio] handoff raw loaded", {
-      rawFound: debug.rawFound,
-      source: debug.source,
-      parsed: debug.parsed,
-      rejectReason: debug.rejectReason,
-    });
+    const restoreCachedHandoff = () => {
+      if (!cachedAppliedHandoff) return false;
+      setHandoff(cachedAppliedHandoff);
+      setBrief(cachedAppliedHandoff.brief);
+      setHandoffStateApplied(true);
+      return true;
+    };
 
-    if (!normalized) {
-      console.info("[Image Studio] handoff not present or invalid", debug.rejectReason);
+    const tryApplyHandoff = (attemptLabel: string) => {
+      if (cancelled) return;
+
+      if (handoffBootstrapLock) {
+        if (restoreCachedHandoff()) {
+          console.info("[Image Studio] handoff restored from cache", { attempt: attemptLabel });
+        }
+        hydrateCachedProduction();
+        return;
+      }
+
+      const { handoff: normalized, debug } = applyImageStudioHandoff();
+      setHandoffLoadDebug(debug);
+
+      console.info("[Image Studio] handoff raw loaded", {
+        attempt: attemptLabel,
+        rawFound: debug.rawFound,
+        source: debug.source,
+        parsed: debug.parsed,
+        rejectReason: debug.rejectReason,
+      });
+
+      if (!normalized) {
+        console.info("[Image Studio] handoff not present or invalid", debug.rejectReason);
+        return;
+      }
+
+      console.info("[Image Studio] handoff brief validated", {
+        briefLength: normalized.brief.length,
+        title: normalized.mission?.title ?? normalized.sourceTitle,
+        hasConcept: Boolean(normalized.concept),
+        imagePrompt: Boolean(normalized.imagePromptPrimary),
+        mockupPrompt: Boolean(normalized.mockupPromptPrimary),
+      });
+
+      handoffBootstrapLock = true;
+      cachedAppliedHandoff = normalized;
+      setHandoff(normalized);
+      setBrief(normalized.brief);
+      setHandoffStateApplied(true);
+
+      console.info("[Image Studio] mission state populated", {
+        title: normalized.mission?.title,
+        collection: normalized.mission?.collection,
+        garment: normalized.mission?.garment,
+        colorway: normalized.mission?.colorway,
+        version: normalized.mission?.version,
+      });
+    };
+
+    tryApplyHandoff("sync");
+    for (const delay of HANDOFF_RETRY_DELAYS_MS) {
+      retryTimers.push(setTimeout(() => tryApplyHandoff(`${delay}ms`), delay));
+    }
+
+    return () => {
+      cancelled = true;
+      retryTimers.forEach((timer) => clearTimeout(timer));
+    };
+  }, [hydrateCachedProduction]);
+
+  useEffect(() => {
+    if (!handoffStateApplied || !handoff || !brief.trim()) return;
+
+    const missionKey = buildAutoGenerateMissionKey(handoff);
+    if (autoGenerateMissionKey === missionKey) {
+      if (autoGenerateInflight) void autoGenerateInflight;
       return;
     }
 
-    console.info("[Image Studio] handoff brief validated", {
-      briefLength: normalized.brief.length,
-      title: normalized.mission?.title ?? normalized.sourceTitle,
-      hasConcept: Boolean(normalized.concept),
-      imagePrompt: Boolean(normalized.imagePromptPrimary),
-      mockupPrompt: Boolean(normalized.mockupPromptPrimary),
+    autoGenerateMissionKey = missionKey;
+    autoGenerateInflight = (async () => {
+      console.info("[Image Studio] auto-click generate assets after handoff");
+      await runImageRef.current();
+    })().finally(() => {
+      autoGenerateInflight = null;
     });
 
-    shouldAutoPipelineRef.current = true;
-    setHandoff(normalized);
-    setBrief(normalized.brief);
-    setHandoffStateApplied(true);
-    acknowledgeImageStudioHandoff();
-
-    console.info("[Image Studio] mission state populated", {
-      title: normalized.mission?.title,
-      collection: normalized.mission?.collection,
-      garment: normalized.mission?.garment,
-      colorway: normalized.mission?.colorway,
-      version: normalized.mission?.version,
-    });
-
-    void bootstrapFromHandoffRef.current(normalized);
-  }, []);
+    void autoGenerateInflight;
+  }, [handoffStateApplied, handoff, brief]);
 
   const generateSingleAsset = useCallback(
     async (asset: ImageStudioAsset) => {
@@ -508,14 +541,6 @@ export function ImageStudioWorkspace() {
     },
     [generateAssetInternal, generatingAssetId, pipelineActive, result],
   );
-
-  const runImage = useCallback(async () => {
-    const project = await createProductionPackage(brief);
-    if (project && shouldAutoPipelineRef.current && !pipelineLockRef.current) {
-      await runProductionPipeline(project, project.productionAssets ?? []);
-    }
-    return project;
-  }, [brief, createProductionPackage, runProductionPipeline]);
 
   const updateAsset = useCallback((updated: ImageStudioAsset) => {
     setProductionAssets((list) =>
