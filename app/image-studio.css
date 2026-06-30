@@ -819,6 +819,20 @@ body:has(.image-studio-shell) {
   z-index: 2;
 }
 
+.is-canvas-production {
+  position: relative;
+  height: 100%;
+  min-height: inherit;
+}
+
+.is-production-overlay--inline {
+  pointer-events: none;
+}
+
+.is-production-overlay--inline .is-production-overlay-content {
+  padding-bottom: var(--is-space-lg);
+}
+
 .is-production-overlay-content {
   position: absolute;
   bottom: 0;

@@ -69,18 +69,24 @@ export function resolveImportedBlueprint(
   if (!handoff) return null;
 
   const concept = handoff.concept;
+  const mission = handoff.mission;
   const imported = Boolean(
-    concept || handoff.imagePromptPrimary || handoff.commercialBlueprint || handoff.brief?.trim(),
+    mission ||
+      concept ||
+      handoff.imagePromptPrimary ||
+      handoff.commercialBlueprint ||
+      handoff.brief?.trim(),
   );
 
   if (!imported) return null;
 
   return {
-    designName: concept?.title ?? handoff.sourceTitle ?? projectName ?? "Design Mission",
-    collection: concept?.collection ?? "—",
-    garment: concept?.product ?? "—",
-    colorway: concept?.color ?? "—",
-    version: handoff.designId ? `V${handoff.designId.slice(-4).toUpperCase()}` : "V1",
+    designName:
+      concept?.title ?? mission?.title ?? handoff.sourceTitle ?? projectName ?? "Design Mission",
+    collection: concept?.collection ?? mission?.collection ?? "—",
+    garment: concept?.product ?? mission?.garment ?? "—",
+    colorway: concept?.color ?? mission?.colorway ?? "—",
+    version: mission?.version ?? "V1",
     classification: concept ? resolveClassification(concept) : "—",
     creativeDirection: concept?.creativeDirection?.summary ?? handoff.commercialBlueprint?.slice(0, 200) ?? "—",
     designStory: concept?.designStory ?? "—",
@@ -111,8 +117,14 @@ export function resolveGenerationStatus(input: {
   isLoading: boolean;
   hasResults: boolean;
   hasBlueprint: boolean;
+  pipelineActive?: boolean;
+  allAssetsComplete?: boolean;
+  preparingAssetId?: string | null;
+  generatingAssetId?: string | null;
 }): string {
-  if (input.isLoading) return "In Production";
+  if (input.generatingAssetId || input.pipelineActive || input.isLoading) return "In Production";
+  if (input.preparingAssetId) return "Preparing";
+  if (input.allAssetsComplete) return "Production Complete";
   if (input.hasResults) return "Assets Staged";
   if (input.hasBlueprint) return "Ready to Generate";
   return "Standby";

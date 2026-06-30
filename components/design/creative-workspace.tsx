@@ -40,7 +40,8 @@ import {
 } from "@/lib/design/svg-data-url";
 import { buildDesignMockupPayload } from "@/lib/design/mockup-request";
 import { buildDesignRenderPayload } from "@/lib/design/render-request";
-import { saveImageStudioHandoff, buildImageStudioHandoff } from "@/lib/image/image-handoff-store";
+import { saveImageStudioHandoff, buildImageStudioHandoff, type HandoffSaveResult } from "@/lib/image/image-handoff-store";
+import { HandoffDebugOverlay } from "@/components/image/handoff-debug-overlay";
 import { cn } from "@/lib/utils";
 import {
   Archive,
@@ -242,6 +243,7 @@ export function CreativeWorkspace({
   const [chatLoading, setChatLoading] = useState(false);
   const [directorOpen, setDirectorOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [handoffSendDebug, setHandoffSendDebug] = useState<HandoffSaveResult | null>(null);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
@@ -388,17 +390,20 @@ export function CreativeWorkspace({
   }, [brief, notify, onPatchMission]);
 
   const sendToImageStudio = useCallback(() => {
-    saveImageStudioHandoff(
-      buildImageStudioHandoff({
-        brief: prompts.imagePrompt,
-        sourceTitle: brief.title,
-        designId: brief.designId,
-        reportId: mission.reportId,
-        assets: canvasAssets,
-      }),
-    );
+    const handoff = buildImageStudioHandoff({
+      brief: prompts.imagePrompt,
+      sourceTitle: brief.title,
+      designId: brief.designId,
+      reportId: mission.reportId,
+      assets: canvasAssets,
+      collectionName: mission.collectionName,
+      productName: brief.product,
+      colorName: brief.color,
+    });
+    const saveResult = saveImageStudioHandoff(handoff);
+    setHandoffSendDebug(saveResult);
     router.push("/agents/image");
-  }, [brief, mission.reportId, prompts.imagePrompt, router, canvasAssets]);
+  }, [brief, mission.collectionName, mission.reportId, prompts.imagePrompt, router, canvasAssets]);
 
   const runGeneration = useCallback(
     async (
@@ -773,6 +778,28 @@ export function CreativeWorkspace({
             onPatchMission((s) => restoreIteration(s, compareIterations.right!.id));
             onPatchMission(clearCompareMode);
           }}
+        />
+      ) : null}
+
+      {handoffSendDebug ? (
+        <HandoffDebugOverlay
+          title="Design Studio — Handoff Send"
+          rows={[
+            { label: "handoff saved", value: handoffSendDebug.saved ? "yes" : "no" },
+            { label: "storage key", value: handoffSendDebug.storageKey },
+            { label: "localStorage", value: handoffSendDebug.localStorage ? "yes" : "no" },
+            { label: "sessionStorage", value: handoffSendDebug.sessionStorage ? "yes" : "no" },
+            { label: "window.name", value: handoffSendDebug.windowName ? "yes" : "no" },
+            { label: "title", value: handoffSendDebug.title },
+            { label: "collection", value: handoffSendDebug.collection },
+            { label: "garment", value: handoffSendDebug.garment },
+            { label: "colorway", value: handoffSendDebug.colorway },
+            { label: "brief length", value: String(handoffSendDebug.briefLength) },
+            { label: "prompt length", value: String(handoffSendDebug.promptLength) },
+            ...(handoffSendDebug.error
+              ? [{ label: "error", value: handoffSendDebug.error }]
+              : []),
+          ]}
         />
       ) : null}
     </div>

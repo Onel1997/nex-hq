@@ -22,7 +22,8 @@ import {
 } from "@/lib/design/svg-data-url";
 import { buildDesignMockupPayload } from "@/lib/design/mockup-request";
 import { buildDesignRenderPayload } from "@/lib/design/render-request";
-import { saveImageStudioHandoff, buildImageStudioHandoff } from "@/lib/image/image-handoff-store";
+import { saveImageStudioHandoff, buildImageStudioHandoff, type HandoffSaveResult } from "@/lib/image/image-handoff-store";
+import { HandoffDebugOverlay } from "@/components/image/handoff-debug-overlay";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -85,6 +86,7 @@ export function DesignLabWorkspace({
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [previewFocus, setPreviewFocus] = useState<"svg" | "mockup" | "render" | null>(null);
+  const [handoffSendDebug, setHandoffSendDebug] = useState<HandoffSaveResult | null>(null);
 
   const resetProductionStatus = useCallback(
     (itemId: "svg" | "mockup" | "aiRender") => {
@@ -245,18 +247,21 @@ export function DesignLabWorkspace({
   );
 
   const handleSendToImageStudio = useCallback(() => {
-    saveImageStudioHandoff(
-      buildImageStudioHandoff({
-        brief: prompts.imagePrompt,
-        sourceTitle: brief.title,
-        designId: brief.designId,
-        reportId: mission.reportId,
-        assets: mission.assets,
-      }),
-    );
+    const handoff = buildImageStudioHandoff({
+      brief: prompts.imagePrompt,
+      sourceTitle: brief.title,
+      designId: brief.designId,
+      reportId: mission.reportId,
+      assets: mission.assets,
+      collectionName: mission.collectionName,
+      productName: brief.product,
+      colorName: brief.color,
+    });
+    const saveResult = saveImageStudioHandoff(handoff);
+    setHandoffSendDebug(saveResult);
     onPatchMission((s) => setPipelineStage(s, "image"));
     router.push("/agents/image");
-  }, [brief, mission.assets, mission.reportId, prompts.imagePrompt, onPatchMission, router]);
+  }, [brief, mission.assets, mission.collectionName, mission.reportId, prompts.imagePrompt, onPatchMission, router]);
 
   const handleSaveDraft = useCallback(() => {
     onSaveDraft?.();
@@ -394,6 +399,28 @@ export function DesignLabWorkspace({
         >
           {commerceSection}
         </DesignLabCollapse>
+      ) : null}
+
+      {handoffSendDebug ? (
+        <HandoffDebugOverlay
+          title="Design Studio — Handoff Send"
+          rows={[
+            { label: "handoff saved", value: handoffSendDebug.saved ? "yes" : "no" },
+            { label: "storage key", value: handoffSendDebug.storageKey },
+            { label: "localStorage", value: handoffSendDebug.localStorage ? "yes" : "no" },
+            { label: "sessionStorage", value: handoffSendDebug.sessionStorage ? "yes" : "no" },
+            { label: "window.name", value: handoffSendDebug.windowName ? "yes" : "no" },
+            { label: "title", value: handoffSendDebug.title },
+            { label: "collection", value: handoffSendDebug.collection },
+            { label: "garment", value: handoffSendDebug.garment },
+            { label: "colorway", value: handoffSendDebug.colorway },
+            { label: "brief length", value: String(handoffSendDebug.briefLength) },
+            { label: "prompt length", value: String(handoffSendDebug.promptLength) },
+            ...(handoffSendDebug.error
+              ? [{ label: "error", value: handoffSendDebug.error }]
+              : []),
+          ]}
+        />
       ) : null}
     </div>
   );

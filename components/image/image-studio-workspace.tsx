@@ -11,24 +11,31 @@ import {
   ProgressRing,
 } from "@/components/image/image-studio-primitives";
 import {
-  consumeImageStudioHandoff,
+  acknowledgeImageStudioHandoff,
+  loadHandoffSendDebug,
+  loadImageStudioHandoffWithDebug,
+  type HandoffLoadDebug,
+  type HandoffSaveResult,
   type ImageStudioHandoff,
 } from "@/lib/image/image-handoff-store";
+import { HandoffDebugOverlay } from "@/components/image/handoff-debug-overlay";
 import {
   ASSET_ESTIMATED_SECONDS,
   ASSET_PRIORITY_LABELS,
   assetVersionLabel,
   buildHandoffChecks,
+  countCompletedMissionAssets,
   deriveFashionProductionStep,
   deriveMissionStatus,
   FASHION_PRODUCTION_PIPELINE,
-  findAssetForSlot,
   formatEstimatedTime,
   HANDOFF_CHECKLIST,
   MISSION_ASSET_SLOTS,
   MISSION_STATUS_LABELS,
   progressForMissionStatus,
   PRODUCTION_QUEUE_DOT,
+  queuedAssetsForPipeline,
+  resolveMissionSlotAssets,
   type MissionAssetSlot,
 } from "@/lib/image/image-studio-assets";
 import {
@@ -49,8 +56,9 @@ import {
 import Link from "next/link";
 import {
   useCallback,
-  useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -124,25 +132,37 @@ export function ImageStudioWorkspace() {
   const [revisions, setRevisions] = useState<Set<string>>(new Set());
   const [compareMode, setCompareMode] = useState(false);
   const [generatingAssetId, setGeneratingAssetId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const data = consumeImageStudioHandoff();
-    if (!data) return;
-    setHandoff(data);
-    setBrief(data.brief);
-  }, []);
+  const [preparingAssetId, setPreparingAssetId] = useState<string | null>(null);
+  const [pipelineActive, setPipelineActive] = useState(false);
+  const shouldAutoPipelineRef = useRef(false);
+  const pipelineLockRef = useRef(false);
+  const packageLockRef = useRef(false);
+  const bootstrapAttemptRef = useRef(0);
+  const [handoffLoadDebug, setHandoffLoadDebug] = useState<HandoffLoadDebug | null>(null);
+  const [handoffSendDebug] = useState<HandoffSaveResult | null>(() =>
+    typeof window === "undefined" ? null : loadHandoffSendDebug(),
+  );
+  const [handoffStateApplied, setHandoffStateApplied] = useState(false);
 
   const selectedSlot = useMemo(
     () => MISSION_ASSET_SLOTS.find((s) => s.id === selectedSlotId) ?? MISSION_ASSET_SLOTS[0],
     [selectedSlotId],
   );
 
+  const missionSlotAssets = useMemo(() => {
+    const map = new Map<string, ImageStudioAsset>();
+    for (const { slot, asset } of resolveMissionSlotAssets(productionAssets)) {
+      map.set(slot.id, asset);
+    }
+    return map;
+  }, [productionAssets]);
+
   const selectedAsset = useMemo(() => {
     if (selectedAssetId) {
       return productionAssets.find((a) => a.id === selectedAssetId);
     }
-    return findAssetForSlot(selectedSlot, productionAssets);
-  }, [selectedAssetId, selectedSlot, productionAssets]);
+    return missionSlotAssets.get(selectedSlotId);
+  }, [missionSlotAssets, productionAssets, selectedAssetId, selectedSlotId]);
 
   const blueprint = useMemo(
     () => resolveImportedBlueprint(handoff, result?.projectName),
@@ -152,6 +172,20 @@ export function ImageStudioWorkspace() {
   const hasBlueprint = Boolean(blueprint?.imported || brief.trim());
   const hasResults = productionAssets.length > 0;
   const hasHandoff = Boolean(handoff);
+  const completedAssetCount = useMemo(
+    () => countCompletedMissionAssets(productionAssets),
+    [productionAssets],
+  );
+  const allAssetsComplete =
+    hasResults && completedAssetCount >= MISSION_ASSET_SLOTS.length;
+  const activePipelineSlotId = useMemo(() => {
+    if (!generatingAssetId && !preparingAssetId) return null;
+    const activeId = generatingAssetId ?? preparingAssetId;
+    for (const [slotId, asset] of missionSlotAssets) {
+      if (asset.id === activeId) return slotId;
+    }
+    return null;
+  }, [generatingAssetId, missionSlotAssets, preparingAssetId]);
 
   const handoffChecks = buildHandoffChecks({
     handoff: hasHandoff,
@@ -166,9 +200,30 @@ export function ImageStudioWorkspace() {
   const colorway = blueprint?.colorway ?? selectedAsset?.color ?? "—";
   const version = blueprint?.version ?? (hasResults ? "V1" : "—");
   const commercialStatus = resolveCommercialStatus(blueprint);
-  const generationStatus = resolveGenerationStatus({ isLoading, hasResults, hasBlueprint });
+  const generationStatus = resolveGenerationStatus({
+    isLoading,
+    hasResults,
+    hasBlueprint,
+    pipelineActive,
+    allAssetsComplete,
+    preparingAssetId,
+    generatingAssetId,
+  });
 
-  const productionStep = deriveFashionProductionStep(isLoading, hasResults, hasBlueprint);
+  const productionStep = deriveFashionProductionStep(
+    isLoading,
+    hasResults,
+    hasBlueprint,
+    activePipelineSlotId,
+  );
+  const productionProgressPercent = useMemo(() => {
+    if (isLoading) return 12;
+    if (!hasResults) return hasBlueprint ? 8 : 0;
+    if (allAssetsComplete) return 100;
+    const base = 18;
+    const span = 82;
+    return Math.round(base + (completedAssetCount / MISSION_ASSET_SLOTS.length) * span);
+  }, [allAssetsComplete, completedAssetCount, hasBlueprint, hasResults, isLoading]);
 
   const commercialScore = blueprint?.commercialScore ?? (result ? Math.round((result.confidence ?? 0.82) * 100) : null);
 
@@ -181,17 +236,31 @@ export function ImageStudioWorkspace() {
     [approved, revisions],
   );
 
-  const generateSingleAsset = useCallback(
-    async (asset: ImageStudioAsset) => {
-      if (!result || generatingAssetId) return;
+  const generateAssetInternal = useCallback(
+    async (
+      asset: ImageStudioAsset,
+      project: ImageRunResult,
+    ): Promise<ImageStudioAsset | null> => {
+      console.info("[Image Studio] startNextAsset → generating", {
+        assetId: asset.id,
+        assetType: asset.assetType,
+        title: asset.title,
+      });
+      setPreparingAssetId(null);
       setGeneratingAssetId(asset.id);
+      setProductionAssets((list) =>
+        list.map((item) =>
+          item.id === asset.id ? { ...item, status: "generating" } : item,
+        ),
+      );
+
       try {
         const res = await fetch("/api/image/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            reportRecordId: result.reportRecordId,
-            reportId: result.reportId,
+            reportRecordId: project.reportRecordId,
+            reportId: project.reportId,
             assetId: asset.id,
             provider: "openai",
             promptVariant: "openai",
@@ -199,52 +268,254 @@ export function ImageStudioWorkspace() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? t("image.errors.unexpected"));
+
+        const updated: ImageStudioAsset = {
+          ...asset,
+          status: data.asset.status,
+          imageUrl: data.asset.imageUrl,
+          createdAt: data.asset.createdAt,
+        };
+        setProductionAssets((list) =>
+          list.map((item) => (item.id === asset.id ? updated : item)),
+        );
+        console.info("[Image Studio] asset completed", {
+          assetId: updated.id,
+          status: updated.status,
+          hasImage: Boolean(updated.imageUrl),
+        });
+        return updated;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : t("image.errors.unexpected");
+        console.error("[Image Studio] asset generation failed", {
+          assetId: asset.id,
+          error: message,
+        });
+        setError(message);
         setProductionAssets((list) =>
           list.map((item) =>
-            item.id === asset.id
-              ? {
-                  ...item,
-                  status: data.asset.status,
-                  imageUrl: data.asset.imageUrl,
-                  createdAt: data.asset.createdAt,
-                }
-              : item,
+            item.id === asset.id ? { ...item, status: "failed", message } : item,
           ),
         );
-      } catch (err) {
-        setError(err instanceof Error ? err.message : t("image.errors.unexpected"));
+        return null;
       } finally {
         setGeneratingAssetId(null);
       }
     },
-    [generatingAssetId, result, t],
+    [t],
+  );
+
+  const runProductionPipeline = useCallback(
+    async (project: ImageRunResult, assets: ImageStudioAsset[]) => {
+      if (pipelineLockRef.current) {
+        console.warn("[Image Studio] queue runner skipped — pipeline already active");
+        return;
+      }
+
+      const queue = resolveMissionSlotAssets(assets).filter(
+        ({ asset }) => !asset.imageUrl && asset.status !== "completed",
+      );
+
+      console.info("[Image Studio] queue runner starting", {
+        queuedCount: queue.length,
+        slots: queue.map(({ slot, asset }) => ({
+          slot: slot.id,
+          assetId: asset.id,
+          assetType: asset.assetType,
+        })),
+      });
+
+      if (queue.length === 0) {
+        console.warn("[Image Studio] queue runner aborted — no queued assets");
+        return;
+      }
+
+      pipelineLockRef.current = true;
+      setPipelineActive(true);
+      setError(null);
+
+      let currentAssets = assets;
+      try {
+        for (const { slot, asset } of queue) {
+          setPreparingAssetId(asset.id);
+          setSelectedSlotId(slot.id);
+          setSelectedAssetId(asset.id);
+          if (queue[0]?.asset.id === asset.id) {
+            console.info("[Image Studio] first asset preparing", {
+              slot: slot.id,
+              assetId: asset.id,
+            });
+          } else {
+            console.info("[Image Studio] startNextAsset → preparing", {
+              slot: slot.id,
+              assetId: asset.id,
+            });
+          }
+
+          if (queue[0]?.asset.id === asset.id) {
+            console.info("[Image Studio] first asset generating", {
+              slot: slot.id,
+              assetId: asset.id,
+            });
+          }
+
+          const updated = await generateAssetInternal(asset, project);
+          if (!updated) continue;
+
+          currentAssets = currentAssets.map((item) =>
+            item.id === updated.id ? updated : item,
+          );
+        }
+      } finally {
+        setPreparingAssetId(null);
+        pipelineLockRef.current = false;
+        setPipelineActive(false);
+        console.info("[Image Studio] queue runner finished");
+      }
+    },
+    [generateAssetInternal],
+  );
+
+  const createProductionPackage = useCallback(
+    async (briefText: string): Promise<ImageRunResult | null> => {
+      const text = briefText.trim();
+      if (!text) {
+        console.warn("[Image Studio] createProductionPackage skipped — empty brief");
+        return null;
+      }
+      if (packageLockRef.current) {
+        console.warn("[Image Studio] createProductionPackage skipped — package request in flight");
+        return null;
+      }
+
+      packageLockRef.current = true;
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        console.info("[Image Studio] creating production package", { briefLength: text.length });
+        const res = await fetch("/api/image/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ brief: text }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error ?? t("image.errors.unexpected"));
+        }
+
+        const project = data as ImageRunResult;
+        setResult(project);
+        setProductionAssets(project.productionAssets ?? []);
+        console.info("[Image Studio] queue created", {
+          reportId: project.reportId,
+          assetCount: project.productionAssets?.length ?? 0,
+          queuedCount: queuedAssetsForPipeline(project.productionAssets ?? []).length,
+        });
+        return project;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : t("image.errors.unexpected");
+        console.error("[Image Studio] production package failed", { error: message });
+        setError(message);
+        return null;
+      } finally {
+        packageLockRef.current = false;
+        setIsLoading(false);
+      }
+    },
+    [t],
+  );
+
+  const bootstrapFromHandoff = useCallback(
+    async (handoffData: ImageStudioHandoff) => {
+      const attempt = ++bootstrapAttemptRef.current;
+      console.info("[Image Studio] mission state populated", {
+        attempt,
+        title: handoffData.mission?.title ?? handoffData.sourceTitle,
+        collection: handoffData.mission?.collection,
+        garment: handoffData.mission?.garment,
+        colorway: handoffData.mission?.colorway,
+        version: handoffData.mission?.version,
+      });
+
+      const project = await createProductionPackage(handoffData.brief);
+      if (!project) {
+        console.warn("[Image Studio] auto pipeline aborted — queue not created", { attempt });
+        return;
+      }
+
+      if (!shouldAutoPipelineRef.current) {
+        console.info("[Image Studio] auto pipeline disabled after package creation", { attempt });
+        return;
+      }
+
+      console.info("[Image Studio] auto pipeline starting", {
+        attempt,
+        queuedCount: queuedAssetsForPipeline(project.productionAssets ?? []).length,
+      });
+      await runProductionPipeline(project, project.productionAssets ?? []);
+    },
+    [createProductionPackage, runProductionPipeline],
+  );
+
+  const bootstrapFromHandoffRef = useRef(bootstrapFromHandoff);
+  bootstrapFromHandoffRef.current = bootstrapFromHandoff;
+
+  useLayoutEffect(() => {
+    const { handoff: normalized, debug } = loadImageStudioHandoffWithDebug();
+    setHandoffLoadDebug(debug);
+
+    console.info("[Image Studio] handoff raw loaded", {
+      rawFound: debug.rawFound,
+      source: debug.source,
+      parsed: debug.parsed,
+      rejectReason: debug.rejectReason,
+    });
+
+    if (!normalized) {
+      console.info("[Image Studio] handoff not present or invalid", debug.rejectReason);
+      return;
+    }
+
+    console.info("[Image Studio] handoff brief validated", {
+      briefLength: normalized.brief.length,
+      title: normalized.mission?.title ?? normalized.sourceTitle,
+      hasConcept: Boolean(normalized.concept),
+      imagePrompt: Boolean(normalized.imagePromptPrimary),
+      mockupPrompt: Boolean(normalized.mockupPromptPrimary),
+    });
+
+    shouldAutoPipelineRef.current = true;
+    setHandoff(normalized);
+    setBrief(normalized.brief);
+    setHandoffStateApplied(true);
+    acknowledgeImageStudioHandoff();
+
+    console.info("[Image Studio] mission state populated", {
+      title: normalized.mission?.title,
+      collection: normalized.mission?.collection,
+      garment: normalized.mission?.garment,
+      colorway: normalized.mission?.colorway,
+      version: normalized.mission?.version,
+    });
+
+    void bootstrapFromHandoffRef.current(normalized);
+  }, []);
+
+  const generateSingleAsset = useCallback(
+    async (asset: ImageStudioAsset) => {
+      if (!result || generatingAssetId || pipelineActive) return;
+      await generateAssetInternal(asset, result);
+    },
+    [generateAssetInternal, generatingAssetId, pipelineActive, result],
   );
 
   const runImage = useCallback(async () => {
-    const text = brief.trim();
-    if (!text || isLoading) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/image/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brief: text }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? t("image.errors.unexpected"));
-      }
-      setResult(data);
-      setProductionAssets(data.productionAssets ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("image.errors.unexpected"));
-    } finally {
-      setIsLoading(false);
+    const project = await createProductionPackage(brief);
+    if (project && shouldAutoPipelineRef.current && !pipelineLockRef.current) {
+      await runProductionPipeline(project, project.productionAssets ?? []);
     }
-  }, [brief, isLoading, t]);
+    return project;
+  }, [brief, createProductionPackage, runProductionPipeline]);
 
   const updateAsset = useCallback((updated: ImageStudioAsset) => {
     setProductionAssets((list) =>
@@ -297,7 +568,7 @@ export function ImageStudioWorkspace() {
           <HeroMeta label="Colorway" value={colorway} />
           <HeroMeta label="Version" value={version} />
           <HeroMeta label="Commercial Status" value={commercialStatus} highlight="gold" />
-          <HeroMeta label="Generation Status" value={generationStatus} highlight={hasResults || isLoading ? "emerald" : undefined} />
+          <HeroMeta label="Generation Status" value={generationStatus} highlight={pipelineActive || hasResults || isLoading ? "emerald" : undefined} />
         </div>
       </header>
 
@@ -306,10 +577,10 @@ export function ImageStudioWorkspace() {
           type="button"
           className="is-toolbar-primary"
           onClick={() => void runImage()}
-          disabled={isLoading || !brief.trim()}
+          disabled={isLoading || pipelineActive || !brief.trim()}
         >
           <Sparkles className="size-4" />
-          {isLoading ? "Generating…" : "Generate Assets"}
+          {isLoading || pipelineActive ? "Generating…" : "Generate Assets"}
         </button>
         <div className="is-toolbar-divider" aria-hidden />
         <div className="is-toolbar-secondary">
@@ -340,30 +611,29 @@ export function ImageStudioWorkspace() {
             <p className="is-sidebar-sub">{MISSION_ASSET_SLOTS.length} assets · individual or batch</p>
           </div>
           <ul className="is-asset-list">
-            {MISSION_ASSET_SLOTS.map((slot) => (
+            {MISSION_ASSET_SLOTS.map((slot) => {
+              const asset = missionSlotAssets.get(slot.id);
+              return (
               <MissionAssetCard
                 key={slot.id}
                 slot={slot}
+                asset={asset}
                 assets={productionAssets}
                 active={selectedSlotId === slot.id}
                 hasBlueprint={hasBlueprint}
                 generatingAssetId={generatingAssetId}
-                reviewState={
-                  findAssetForSlot(slot, productionAssets)
-                    ? getReviewState(findAssetForSlot(slot, productionAssets)!.id)
-                    : null
-                }
+                preparingAssetId={preparingAssetId}
+                reviewState={asset ? getReviewState(asset.id) : null}
                 onSelect={() => {
                   setSelectedSlotId(slot.id);
-                  const asset = findAssetForSlot(slot, productionAssets);
                   setSelectedAssetId(asset?.id ?? null);
                 }}
                 onGenerate={() => {
-                  const asset = findAssetForSlot(slot, productionAssets);
                   if (asset) void generateSingleAsset(asset);
                 }}
               />
-            ))}
+            );
+            })}
           </ul>
         </aside>
 
@@ -380,7 +650,18 @@ export function ImageStudioWorkspace() {
                 </div>
               </div>
             ) : hasResults ? (
-              <ProductionGallery
+              <div className="is-canvas-production">
+                {(pipelineActive || generatingAssetId) && (
+                  <div className="is-production-overlay is-production-overlay--inline">
+                    <div className="is-production-overlay-content">
+                      <p className="is-production-phase">
+                        {FASHION_PRODUCTION_PIPELINE.find((s) => s.id === productionStep)?.label}
+                      </p>
+                      <FashionProductionPipeline activeStep={productionStep} />
+                    </div>
+                  </div>
+                )}
+                <ProductionGallery
                 assets={productionAssets}
                 reportId={result!.reportId}
                 reportRecordId={result!.reportRecordId}
@@ -424,6 +705,7 @@ export function ImageStudioWorkspace() {
                 }}
                 onToggleCompare={() => setCompareMode((v) => !v)}
               />
+              </div>
             ) : (
               <div className="is-staging-dashboard">
                 <CanvasPlaceholder
@@ -454,10 +736,10 @@ export function ImageStudioWorkspace() {
                           type="button"
                           className="is-btn is-btn--primary"
                           onClick={() => void runImage()}
-                          disabled={isLoading || !brief.trim()}
+                          disabled={isLoading || pipelineActive || !brief.trim()}
                         >
                           <Sparkles className="size-4" />
-                          Generate Assets
+                          {isLoading || pipelineActive ? "Starting Production…" : "Generate Assets"}
                         </button>
                       </div>
                     </>
@@ -510,10 +792,11 @@ export function ImageStudioWorkspace() {
               onToggle={() => toggleSection("queue")}
             >
               {MISSION_ASSET_SLOTS.map((slot) => {
-                const asset = findAssetForSlot(slot, productionAssets);
+                const asset = missionSlotAssets.get(slot.id);
                 const status = deriveMissionStatus(slot, productionAssets, {
                   hasBlueprint,
                   generatingAssetId,
+                  preparingAssetId,
                   reviewState: asset ? getReviewState(asset.id) : null,
                 });
                 return (
@@ -570,9 +853,7 @@ export function ImageStudioWorkspace() {
               <div className="is-progress-bar">
                 <div
                   className="is-progress-fill"
-                  style={{
-                    width: `${isLoading ? 40 : hasResults ? 100 : hasBlueprint ? 18 : 0}%`,
-                  }}
+                  style={{ width: `${productionProgressPercent}%` }}
                 />
               </div>
             </InspectorCard>
@@ -612,6 +893,33 @@ export function ImageStudioWorkspace() {
           </div>
         </aside>
       </div>
+
+      <HandoffDebugOverlay
+        title="Image Studio — Handoff Receive"
+        rows={[
+          { label: "raw handoff found", value: handoffLoadDebug?.rawFound ? "yes" : "no" },
+          { label: "storage key", value: handoffLoadDebug?.storageKey ?? "nexhq-image-studio-handoff" },
+          { label: "source", value: handoffLoadDebug?.source ?? "pending" },
+          { label: "parsed", value: handoffLoadDebug?.parsed ? "yes" : "no" },
+          { label: "state applied", value: handoffStateApplied ? "yes" : "no" },
+          { label: "title", value: handoffLoadDebug?.title ?? handoff?.mission?.title ?? "—" },
+          { label: "collection", value: handoffLoadDebug?.collection ?? blueprint?.collection ?? "—" },
+          { label: "garment", value: handoffLoadDebug?.garment ?? blueprint?.garment ?? "—" },
+          { label: "colorway", value: handoffLoadDebug?.colorway ?? blueprint?.colorway ?? "—" },
+          { label: "brief length", value: String(handoffLoadDebug?.briefLength ?? brief.length) },
+          ...(handoffLoadDebug?.rejectReason
+            ? [{ label: "reason if rejected", value: handoffLoadDebug.rejectReason }]
+            : []),
+          ...(handoffSendDebug
+            ? [
+                { label: "— send debug —", value: "" },
+                { label: "design saved", value: handoffSendDebug.saved ? "yes" : "no" },
+                { label: "design localStorage", value: handoffSendDebug.localStorage ? "yes" : "no" },
+                { label: "design sessionStorage", value: handoffSendDebug.sessionStorage ? "yes" : "no" },
+              ]
+            : []),
+        ]}
+      />
     </div>
   );
 }
@@ -715,33 +1023,38 @@ function ScoreCard({
 
 function MissionAssetCard({
   slot,
+  asset,
   assets,
   active,
   hasBlueprint,
   generatingAssetId,
+  preparingAssetId,
   reviewState,
   onSelect,
   onGenerate,
 }: {
   slot: MissionAssetSlot;
+  asset?: ImageStudioAsset;
   assets: ImageStudioAsset[];
   active: boolean;
   hasBlueprint: boolean;
   generatingAssetId?: string | null;
+  preparingAssetId?: string | null;
   reviewState?: "approved" | "needs_revision" | null;
   onSelect: () => void;
   onGenerate?: () => void;
 }) {
-  const asset = findAssetForSlot(slot, assets);
   const status = deriveMissionStatus(slot, assets, {
     hasBlueprint,
     generatingAssetId,
+    preparingAssetId,
     reviewState,
   });
   const progress = progressForMissionStatus(status);
   const version = asset ? assetVersionLabel(asset) : hasBlueprint ? "v1" : "—";
   const estimate = formatEstimatedTime(ASSET_ESTIMATED_SECONDS[slot.id] ?? 35);
-  const canGenerate = Boolean(asset && !asset.imageUrl && !generatingAssetId);
+  const canGenerate =
+    Boolean(asset && !asset.imageUrl && !generatingAssetId && !preparingAssetId && asset.status !== "completed");
 
   return (
     <li>

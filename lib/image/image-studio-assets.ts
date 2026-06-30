@@ -26,7 +26,7 @@ export const PRODUCTION_QUEUE_LABELS: Record<ProductionQueueStatus, string> = {
   waiting: "Waiting",
   preparing: "Preparing Prompt",
   generating: "Generating",
-  ready: "Ready",
+  ready: "Complete",
   approved: "Approved",
   needs_revision: "Needs Revision",
 };
@@ -84,8 +84,8 @@ export const ASSET_PRIORITY_LABELS: Record<AssetSlotPriority, string> = {
 };
 
 export const MISSION_ASSET_SLOTS: MissionAssetSlot[] = [
-  { id: "hero", label: "Hero Image", icon: Sparkles, assetTypes: ["hero_image"], commercial: true, priority: "hero" },
-  { id: "mockup", label: "Product Mockup", icon: Package, assetTypes: ["ecommerce_image", "studio_shot"], commercial: true, priority: "core" },
+  { id: "hero", label: "Hero Image", icon: Sparkles, assetTypes: ["studio_shot", "hero_image"], commercial: true, priority: "hero" },
+  { id: "mockup", label: "Product Mockup", icon: Package, assetTypes: ["ecommerce_image"], commercial: true, priority: "core" },
   { id: "flatlay", label: "Flat Lay", icon: LayoutGrid, assetTypes: ["detail_shot"], commercial: false, priority: "support" },
   { id: "lifestyle", label: "Lifestyle", icon: Camera, assetTypes: ["editorial_streetwear"], commercial: true, priority: "core" },
   { id: "editorial", label: "Editorial", icon: BookOpen, assetTypes: ["editorial_luxury"], commercial: true, priority: "core" },
@@ -213,11 +213,40 @@ export function deriveFashionProductionStep(
   isLoading: boolean,
   hasResults: boolean,
   hasBlueprint: boolean,
+  activeSlotId?: string | null,
 ): FashionProductionStepId {
+  if (activeSlotId) {
+    if (activeSlotId === "hero" || activeSlotId === "campaign") return "hero";
+    if (activeSlotId === "lifestyle" || activeSlotId === "editorial" || activeSlotId === "lookbook") {
+      return "lifestyle";
+    }
+    if (activeSlotId === "mockup" || activeSlotId === "flatlay") return "mockup";
+    if (isLoading) return "composition";
+    return "composition";
+  }
   if (hasResults && !isLoading) return "approved";
   if (isLoading) return "composition";
   if (hasBlueprint) return "blueprint";
   return "blueprint";
+}
+
+/** Ordered assets that still need image generation. */
+export function queuedAssetsForPipeline(assets: ImageStudioAsset[]): ImageStudioAsset[] {
+  return resolveMissionSlotAssets(assets)
+    .map(({ asset }) => asset)
+    .filter((asset) => !asset.imageUrl && asset.status !== "completed");
+}
+
+export function countCompletedMissionAssets(assets: ImageStudioAsset[]): number {
+  const used = new Set<string>();
+  let completed = 0;
+  for (const slot of MISSION_ASSET_SLOTS) {
+    const asset = findAssetForSlot(slot, assets, used);
+    if (!asset) continue;
+    used.add(asset.id);
+    if (asset.imageUrl || asset.status === "completed") completed += 1;
+  }
+  return completed;
 }
 
 export function mapAssetStatusToMission(
@@ -228,7 +257,7 @@ export function mapAssetStatusToMission(
   if (reviewState === "approved") return "approved";
   switch (status) {
     case "pending":
-      return "preparing";
+      return "waiting";
     case "generating":
       return "generating";
     case "completed":
@@ -272,8 +301,28 @@ export function assetVersionLabel(asset?: ImageStudioAsset): string {
 export function findAssetForSlot(
   slot: MissionAssetSlot,
   assets: ImageStudioAsset[],
+  usedAssetIds?: Set<string>,
 ): ImageStudioAsset | undefined {
-  return assets.find((asset) => slot.assetTypes.includes(asset.assetType));
+  return assets.find(
+    (asset) =>
+      slot.assetTypes.includes(asset.assetType) &&
+      (!usedAssetIds || !usedAssetIds.has(asset.id)),
+  );
+}
+
+/** Walk mission slots in order, skipping assets already assigned to earlier slots. */
+export function resolveMissionSlotAssets(
+  assets: ImageStudioAsset[],
+): Array<{ slot: MissionAssetSlot; asset: ImageStudioAsset }> {
+  const used = new Set<string>();
+  const resolved: Array<{ slot: MissionAssetSlot; asset: ImageStudioAsset }> = [];
+  for (const slot of MISSION_ASSET_SLOTS) {
+    const asset = findAssetForSlot(slot, assets, used);
+    if (!asset) continue;
+    used.add(asset.id);
+    resolved.push({ slot, asset });
+  }
+  return resolved;
 }
 
 export function deriveMissionStatus(
@@ -284,11 +333,23 @@ export function deriveMissionStatus(
     hasBlueprint?: boolean;
     reviewState?: "approved" | "needs_revision" | null;
     generatingAssetId?: string | null;
+    preparingAssetId?: string | null;
+    usedAssetIds?: Set<string>;
   },
 ): MissionAssetStatus {
-  const asset = findAssetForSlot(slot, assets);
+  const used = options?.usedAssetIds ?? new Set<string>();
+  const priorSlots = MISSION_ASSET_SLOTS.slice(0, MISSION_ASSET_SLOTS.findIndex((s) => s.id === slot.id));
+  for (const prior of priorSlots) {
+    const priorAsset = findAssetForSlot(prior, assets, used);
+    if (priorAsset) used.add(priorAsset.id);
+  }
+
+  const asset = findAssetForSlot(slot, assets, used);
   if (!asset) {
     return options?.hasBlueprint ? "preparing" : "waiting";
+  }
+  if (asset.id === options?.preparingAssetId) {
+    return "preparing";
   }
   if (asset.id === options?.generatingAssetId || asset.status === "generating") {
     return "generating";
