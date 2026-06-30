@@ -44,6 +44,7 @@ import {
   Archive,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Circle,
   Columns2,
@@ -75,9 +76,17 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
+  useId,
   useState,
   type ReactNode,
 } from "react";
+
+type GarmentType = "tee" | "hoodie";
+
+function resolveGarmentType(product: string): GarmentType {
+  return /hoodie|sweat|pullover|zip/i.test(product) ? "hoodie" : "tee";
+}
 
 type CanvasTab = "svg" | "mockup" | "render" | "split";
 type ZoomLevel = 0.25 | 0.5 | 0.75 | 1 | 1.5 | "fit";
@@ -202,7 +211,7 @@ export function CreativeWorkspace({
   );
 
   const [canvasTab, setCanvasTab] = useState<CanvasTab>("svg");
-  const [zoom, setZoom] = useState<ZoomLevel>(1);
+  const [zoom, setZoom] = useState<ZoomLevel>("fit");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -525,9 +534,10 @@ export function CreativeWorkspace({
         <MissionHeader
           missionName={brief.title}
           collectionName={mission.collectionName}
-          garment={brief.product}
-          role={brief.role}
-          colorway={brief.color}
+          narrative={
+            canvasAssets.aiDesignerConcept?.designStory ??
+            brief.visualConcept
+          }
           dnaScore={brief.dnaScore}
           printReadyScore={brief.printReadinessScore}
           commercialScore={brief.commercialScore ?? canvasAssets.commercialScore}
@@ -599,6 +609,7 @@ export function CreativeWorkspace({
                 onZoomChange={setZoom}
                 assets={canvasAssets}
                 title={brief.title}
+                garmentType={resolveGarmentType(brief.product)}
                 onGenerateConcept={() => void runAiDesignerConcept()}
                 actionLoading={actionLoading}
               />
@@ -714,7 +725,8 @@ export function CreativeWorkspaceEmpty() {
     <section className="cw-empty">
       <div className="cw-empty-canvas cw-canvas-studio-empty">
         <div className="cw-canvas-luxury-bg" aria-hidden />
-        <StudioSilhouette large />
+        <div className="cw-canvas-texture" aria-hidden />
+        <PremiumGarmentCanvas garmentType="tee" empty />
         <div className="cw-canvas-glass-overlay" aria-hidden />
         <div className="cw-canvas-studio-card">
           <h2 className="cw-canvas-studio-card-title">Create your next premium collection.</h2>
@@ -755,9 +767,7 @@ function formatMissionDate(iso?: string): string {
 function MissionHeader({
   missionName,
   collectionName,
-  garment,
-  role,
-  colorway,
+  narrative,
   dnaScore,
   printReadyScore,
   commercialScore,
@@ -767,9 +777,7 @@ function MissionHeader({
 }: {
   missionName: string;
   collectionName?: string;
-  garment: string;
-  role: string;
-  colorway: string;
+  narrative?: string;
   dnaScore?: number;
   printReadyScore: number;
   commercialScore?: number;
@@ -777,16 +785,19 @@ function MissionHeader({
   versionLabel: string;
   lastUpdated?: string;
 }) {
+  const narrativeText = narrative?.trim();
+  const displayNarrative =
+    narrativeText && narrativeText.length > 180
+      ? `${narrativeText.slice(0, 177)}…`
+      : narrativeText;
+
   return (
     <header className="cw-mission-header" aria-label="Design mission">
-      {collectionName ? (
-        <p className="cw-mission-header-collection">{collectionName}</p>
-      ) : null}
-      <h1 className="cw-mission-header-title">{missionName}</h1>
-      <div className="cw-mission-header-specs">
-        <MissionSpec label="Garment" value={garment} />
-        <MissionSpec label="Role" value={role} />
-        <MissionSpec label="Colorway" value={colorway} />
+      <div className="cw-mission-header-primary">
+        <h1 className="cw-mission-header-title">{missionName}</h1>
+        {displayNarrative ? (
+          <p className="cw-mission-header-narrative">{displayNarrative}</p>
+        ) : null}
       </div>
       <div className="cw-mission-header-metrics">
         <MissionMetric label="Commercial Status" value={commercialStatus} highlight />
@@ -798,18 +809,12 @@ function MissionHeader({
           <MissionMetric label="Commercial Score" value={`${commercialScore}%`} />
         ) : null}
         <MissionMetric label="Version" value={versionLabel} />
-        <MissionMetric label="Last Updated" value={formatMissionDate(lastUpdated)} />
+        <MissionMetric label="Updated" value={formatMissionDate(lastUpdated)} />
+        {collectionName ? (
+          <MissionMetric label="Collection" value={collectionName} />
+        ) : null}
       </div>
     </header>
-  );
-}
-
-function MissionSpec({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="cw-mission-spec">
-      <span className="cw-mission-spec-label">{label}</span>
-      <span className="cw-mission-spec-value">{value}</span>
-    </div>
   );
 }
 
@@ -898,6 +903,7 @@ function DesignCanvas({
   onZoomChange,
   assets,
   title,
+  garmentType,
   onGenerateConcept,
   actionLoading,
 }: {
@@ -907,6 +913,7 @@ function DesignCanvas({
   onZoomChange: (z: ZoomLevel) => void;
   assets: PerDesignWorkspace["assets"];
   title: string;
+  garmentType: GarmentType;
   onGenerateConcept?: () => void;
   actionLoading?: string | null;
 }) {
@@ -932,19 +939,30 @@ function DesignCanvas({
         : kind === "mockup"
           ? assets.mockupUrl
           : assets.renderUrl;
+
     if (!url) {
       return (
         <CanvasStudioEmpty
           layer={kind}
+          garmentType={garmentType}
           hasAnyAsset={anyAsset}
           onGenerateConcept={onGenerateConcept}
           loading={actionLoading ?? null}
         />
       );
     }
+
+    if (kind === "svg") {
+      return (
+        <PremiumGarmentCanvas garmentType={garmentType} artworkUrl={url} title={title} />
+      );
+    }
+
     return (
-      /* eslint-disable-next-line @next/next/no-img-element */
-      <img src={url} alt={`${title} ${kind}`} className="cw-canvas-img" />
+      <div className="cw-canvas-product-shot">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt={`${title} ${kind}`} className="cw-canvas-product-img" />
+      </div>
     );
   };
 
@@ -994,6 +1012,7 @@ function DesignCanvas({
       </div>
       <div className={cn("cw-canvas-stage", anyAsset ? "has-assets" : "is-studio-empty")}>
         <div className="cw-canvas-luxury-bg" aria-hidden />
+        <div className="cw-canvas-texture" aria-hidden />
         <div className="cw-canvas-ambient" aria-hidden />
         <div className="cw-canvas-spotlight" aria-hidden />
         <div className="cw-canvas-vignette" aria-hidden />
@@ -1024,11 +1043,13 @@ function DesignCanvas({
 
 function CanvasStudioEmpty({
   layer,
+  garmentType,
   hasAnyAsset,
   onGenerateConcept,
   loading,
 }: {
   layer: "svg" | "mockup" | "render";
+  garmentType: GarmentType;
   hasAnyAsset: boolean;
   onGenerateConcept?: () => void;
   loading: string | null;
@@ -1036,7 +1057,7 @@ function CanvasStudioEmpty({
   if (!hasAnyAsset && layer === "svg") {
     return (
       <div className="cw-canvas-studio-empty">
-        <StudioSilhouette large />
+        <PremiumGarmentCanvas garmentType={garmentType} empty />
         <div className="cw-canvas-studio-card">
           <h3 className="cw-canvas-studio-card-title">Create your next premium collection.</h3>
           <p className="cw-canvas-studio-card-caption">Your next collection begins here.</p>
@@ -1068,8 +1089,87 @@ function CanvasStudioEmpty({
 
   return (
     <div className="cw-canvas-layer-empty">
-      <StudioSilhouette subtle />
+      <PremiumGarmentCanvas garmentType={garmentType} empty subtle />
       <p className="cw-canvas-layer-empty-copy">{layerCopy[layer]}</p>
+    </div>
+  );
+}
+
+function ToolbarDropdown({
+  label,
+  icon: Icon,
+  items,
+  loading,
+}: {
+  label: string;
+  icon: typeof Shapes;
+  items: Array<{
+    label: string;
+    actionKey: string;
+    icon: typeof Shapes;
+    action: () => void;
+    variant?: "primary" | "secondary" | "success";
+  }>;
+  loading: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  const isGroupLoading = items.some((item) => loading === item.actionKey);
+
+  return (
+    <div className={cn("cw-toolbar-dropdown", open && "is-open")} ref={ref}>
+      <button
+        type="button"
+        className="cw-toolbar-dropdown-trigger"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        {isGroupLoading && !open ? (
+          <Loader2 className="cw-toolbar-pro-icon animate-spin" />
+        ) : (
+          <Icon className="cw-toolbar-pro-icon" />
+        )}
+        <span className="cw-toolbar-pro-label">{label}</span>
+        <ChevronDown className={cn("cw-toolbar-dropdown-chevron", open && "is-open")} />
+      </button>
+      {open ? (
+        <div className="cw-toolbar-dropdown-menu" role="menu">
+          {items.map((item) => (
+            <button
+              key={item.actionKey}
+              type="button"
+              role="menuitem"
+              className={cn(
+                "cw-toolbar-dropdown-item",
+                item.variant && `cw-btn-${item.variant}`,
+              )}
+              disabled={loading === item.actionKey}
+              onClick={() => {
+                setOpen(false);
+                item.action();
+              }}
+            >
+              {loading === item.actionKey ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <item.icon className="size-3.5" />
+              )}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1095,86 +1195,100 @@ function ProductionToolbar({
   onExportPng: () => void;
   onSaveDraft: () => void;
 }) {
-  const renderBtn = (
-    tool: { label: string; icon: typeof Shapes; action: () => void },
-    variant: "primary" | "secondary" | "success" = "secondary",
-  ) => (
-    <button
-      key={tool.label}
-      type="button"
-      className={cn("cw-toolbar-btn", `cw-btn-${variant}`)}
-      disabled={loading === tool.label}
-      onClick={tool.action}
-    >
-      {loading === tool.label ? (
-        <Loader2 className="size-3.5 animate-spin" />
-      ) : (
-        <tool.icon className="size-3.5" />
-      )}
-      <span>{tool.label}</span>
-    </button>
-  );
+  const createItems = [
+    {
+      label: "AI Design Concept",
+      actionKey: "Generate AI Design Concept",
+      icon: Sparkles,
+      action: onGenerateAiConcept,
+      variant: "primary" as const,
+    },
+    {
+      label: "SVG Draft",
+      actionKey: "Generate SVG",
+      icon: Shapes,
+      action: onGenerateSvg,
+    },
+  ];
 
-  const groups: Array<{
-    label: string;
-    tools: Array<{
-      label: string;
-      icon: typeof Shapes;
-      action: () => void;
-      variant?: "primary" | "secondary" | "success";
-    }>;
-  }> = [
+  const imageItems = [
     {
-      label: "Create",
-      tools: [
-        {
-          label: "Generate AI Design Concept",
-          icon: Sparkles,
-          action: onGenerateAiConcept,
-          variant: "primary",
-        },
-        { label: "Generate SVG", icon: Shapes, action: onGenerateSvg },
-      ],
+      label: "Generate AI Render",
+      actionKey: "Generate AI Render",
+      icon: Wand2,
+      action: onGenerateRender,
     },
     {
-      label: "Image",
-      tools: [
-        { label: "Generate Mockup", icon: ImageIcon, action: onGenerateMockup },
-        { label: "Generate AI Render", icon: Wand2, action: onGenerateRender },
-        { label: "Send to Image Studio", icon: Send, action: onSendImageStudio },
-      ],
+      label: "Image Studio",
+      actionKey: "Send to Image Studio",
+      icon: Send,
+      action: onSendImageStudio,
     },
+  ];
+
+  const exportItems = [
+    { label: "PNG", actionKey: "Export PNG", icon: Download, action: onExportPng },
+    { label: "PDF", actionKey: "Export PDF", icon: Download, action: onExportPng },
+    { label: "SVG", actionKey: "Export SVG", icon: Download, action: onExportSvg },
+  ];
+
+  const productionItems = [
+    { label: "Shopify", actionKey: "Shopify", icon: Send, action: () => {} },
     {
-      label: "Export",
-      tools: [
-        { label: "PNG", icon: Download, action: onExportPng },
-        { label: "PDF", icon: Download, action: onExportPng },
-        { label: "SVG", icon: Download, action: onExportSvg },
-      ],
+      label: "Save Draft",
+      actionKey: "Save Draft",
+      icon: Save,
+      action: onSaveDraft,
+      variant: "success" as const,
     },
+    { label: "Upscale", actionKey: "Upscale", icon: ZoomIn, action: () => {} },
     {
-      label: "Production",
-      tools: [
-        { label: "Send to Shopify", icon: Send, action: () => {} },
-        { label: "Save Draft", icon: Save, action: onSaveDraft, variant: "success" },
-        { label: "Upscale", icon: ZoomIn, action: () => {} },
-        { label: "Remove Background", icon: Maximize2, action: () => {} },
-      ],
+      label: "Remove Background",
+      actionKey: "Remove Background",
+      icon: Maximize2,
+      action: () => {},
     },
   ];
 
   return (
-    <div className="cw-toolbar cw-toolbar-grouped">
-      {groups.map((group) => (
-        <div key={group.label} className="cw-toolbar-group">
-          <span className="cw-toolbar-group-label">{group.label}</span>
-          <div className="cw-toolbar-group-actions">
-            {group.tools.map((tool) =>
-              renderBtn(tool, tool.variant ?? "secondary"),
-            )}
-          </div>
-        </div>
-      ))}
+    <div className="cw-toolbar cw-toolbar-menus cw-toolbar-unified cw-toolbar-pro">
+      <ToolbarDropdown
+        label="Create Design"
+        icon={Sparkles}
+        items={createItems}
+        loading={loading}
+      />
+      <ToolbarDropdown
+        label="Generate Image"
+        icon={Wand2}
+        items={imageItems}
+        loading={loading}
+      />
+      <button
+        type="button"
+        className="cw-toolbar-pro-action"
+        disabled={loading === "Generate Mockup"}
+        onClick={onGenerateMockup}
+      >
+        {loading === "Generate Mockup" ? (
+          <Loader2 className="cw-toolbar-pro-icon animate-spin" />
+        ) : (
+          <ImageIcon className="cw-toolbar-pro-icon" />
+        )}
+        <span className="cw-toolbar-pro-label">Generate Mockup</span>
+      </button>
+      <ToolbarDropdown
+        label="Export"
+        icon={Download}
+        items={exportItems}
+        loading={loading}
+      />
+      <ToolbarDropdown
+        label="Production"
+        icon={Save}
+        items={productionItems}
+        loading={loading}
+      />
     </div>
   );
 }
@@ -1563,103 +1677,141 @@ function CompareColumn({
   );
 }
 
-function StudioSilhouette({
+function PremiumGarmentCanvas({
+  garmentType,
+  artworkUrl,
+  title,
+  empty = false,
   subtle = false,
-  large = false,
 }: {
+  garmentType: GarmentType;
+  artworkUrl?: string;
+  title?: string;
+  empty?: boolean;
   subtle?: boolean;
-  large?: boolean;
 }) {
+  const uid = useId().replace(/:/g, "");
+
   return (
     <div
       className={cn(
-        "cw-studio-silhouette-wrap",
+        "cw-garment-premium-stage",
+        empty && "is-empty",
         subtle && "is-subtle",
-        large && "is-large",
+        garmentType === "hoodie" && "is-hoodie",
       )}
-      aria-hidden
+      aria-hidden={empty && !artworkUrl ? true : undefined}
     >
-      <svg viewBox="0 0 320 400" className="cw-studio-silhouette">
-        <path
-          d="M88 108 Q160 62 232 108 L248 138 L232 348 L88 348 L72 138 Z"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M136 108 Q160 88 184 108"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="0.75"
-        />
-        <rect
-          x="132"
-          y="178"
-          width="56"
-          height="72"
-          rx="4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="0.75"
-          strokeDasharray="4 6"
-        />
-      </svg>
+      <div className="cw-garment-floor-shadow" aria-hidden />
+      {garmentType === "hoodie" ? (
+        <svg viewBox="0 0 400 520" className="cw-garment-premium-svg" aria-hidden>
+          <defs>
+            <linearGradient id={`${uid}-fabric`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#1e2430" />
+              <stop offset="45%" stopColor="#141820" />
+              <stop offset="100%" stopColor="#0e1118" />
+            </linearGradient>
+            <linearGradient id={`${uid}-highlight`} x1="30%" y1="0%" x2="70%" y2="100%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.09" />
+              <stop offset="50%" stopColor="#ffffff" stopOpacity="0.02" />
+              <stop offset="100%" stopColor="#000000" stopOpacity="0.12" />
+            </linearGradient>
+            <radialGradient id={`${uid}-glow`} cx="50%" cy="35%" r="55%">
+              <stop offset="0%" stopColor="#d9b46b" stopOpacity="0.06" />
+              <stop offset="100%" stopColor="#d9b46b" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <ellipse cx="200" cy="260" rx="130" ry="160" fill={`url(#${uid}-glow)`} />
+          <path
+            d="M68 118 Q200 58 332 118 L358 168 L332 468 L68 468 L42 168 Z"
+            fill={`url(#${uid}-fabric)`}
+            stroke="rgb(255 255 255 / 0.08)"
+            strokeWidth="1.2"
+          />
+          <path
+            d="M68 118 Q200 58 332 118 L358 168 L332 468 L68 468 L42 168 Z"
+            fill={`url(#${uid}-highlight)`}
+          />
+          <path
+            d="M118 118 Q200 88 282 118 L298 148 L282 198 L118 198 L102 148 Z"
+            fill="rgb(0 0 0 / 0.28)"
+            stroke="rgb(255 255 255 / 0.06)"
+            strokeWidth="0.8"
+          />
+          <path
+            d="M128 118 Q200 96 272 118"
+            fill="none"
+            stroke="rgb(255 255 255 / 0.1)"
+            strokeWidth="1"
+          />
+          <path
+            d="M88 168 L68 248 M312 168 L332 248"
+            fill="none"
+            stroke="rgb(255 255 255 / 0.05)"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 400 500" className="cw-garment-premium-svg" aria-hidden>
+          <defs>
+            <linearGradient id={`${uid}-fabric`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#1e2430" />
+              <stop offset="45%" stopColor="#141820" />
+              <stop offset="100%" stopColor="#0e1118" />
+            </linearGradient>
+            <linearGradient id={`${uid}-highlight`} x1="30%" y1="0%" x2="70%" y2="100%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.1" />
+              <stop offset="50%" stopColor="#ffffff" stopOpacity="0.02" />
+              <stop offset="100%" stopColor="#000000" stopOpacity="0.1" />
+            </linearGradient>
+            <radialGradient id={`${uid}-glow`} cx="50%" cy="38%" r="50%">
+              <stop offset="0%" stopColor="#d9b46b" stopOpacity="0.07" />
+              <stop offset="100%" stopColor="#d9b46b" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <ellipse cx="200" cy="250" rx="120" ry="150" fill={`url(#${uid}-glow)`} />
+          <path
+            d="M72 108 Q200 52 328 108 L348 148 L328 448 L72 448 L52 148 Z"
+            fill={`url(#${uid}-fabric)`}
+            stroke="rgb(255 255 255 / 0.08)"
+            strokeWidth="1.2"
+          />
+          <path
+            d="M72 108 Q200 52 328 108 L348 148 L328 448 L72 448 L52 148 Z"
+            fill={`url(#${uid}-highlight)`}
+          />
+          <path
+            d="M138 108 Q200 82 262 108"
+            fill="none"
+            stroke="rgb(255 255 255 / 0.12)"
+            strokeWidth="1.2"
+          />
+          <path
+            d="M88 148 L72 220 M312 148 L328 220"
+            fill="none"
+            stroke="rgb(255 255 255 / 0.04)"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      )}
+      {artworkUrl ? (
+        <div className="cw-garment-artwork-layer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={artworkUrl}
+            alt={title ? `${title} artwork` : "Design artwork"}
+            className="cw-garment-artwork-img"
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function GarmentPlaceholder() {
-  return (
-    <div className="cw-garment-wrap">
-      <svg viewBox="0 0 320 400" className="cw-garment-svg" aria-hidden>
-        <defs>
-          <linearGradient id="cw-garment-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#63E3E3" stopOpacity="0.45" />
-            <stop offset="50%" stopColor="#D9B46B" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#63E3E3" stopOpacity="0.25" />
-          </linearGradient>
-          <radialGradient id="cw-garment-glow" cx="50%" cy="40%" r="50%">
-            <stop offset="0%" stopColor="#63E3E3" stopOpacity="0.12" />
-            <stop offset="100%" stopColor="#63E3E3" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <ellipse cx="160" cy="200" rx="90" ry="120" fill="url(#cw-garment-glow)" />
-        <path
-          d="M72 95 Q160 48 248 95 L268 128 L248 355 L72 355 L52 128 Z"
-          stroke="url(#cw-garment-stroke)"
-          strokeWidth="1.4"
-          fill="none"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M128 95 Q160 72 192 95"
-          stroke="url(#cw-garment-stroke)"
-          strokeWidth="1"
-          fill="none"
-          opacity="0.6"
-        />
-        <rect
-          x="128"
-          y="168"
-          width="64"
-          height="78"
-          rx="6"
-          stroke="url(#cw-garment-stroke)"
-          strokeDasharray="5 5"
-          strokeWidth="1"
-          fill="none"
-          opacity="0.5"
-        />
-        <path
-          d="M160 246 L160 310"
-          stroke="url(#cw-garment-stroke)"
-          strokeWidth="0.8"
-          opacity="0.35"
-        />
-      </svg>
-    </div>
-  );
+function GarmentPlaceholder({ garmentType = "tee" }: { garmentType?: GarmentType }) {
+  return <PremiumGarmentCanvas garmentType={garmentType} empty subtle />;
 }
 
 function formatHealthLabel(key: string): string {
