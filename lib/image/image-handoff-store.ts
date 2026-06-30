@@ -1,5 +1,12 @@
 "use client";
 
+import type {
+  DesignConcept,
+  DesignConceptReview,
+  RenderPlan,
+} from "@/lib/design/ai-designer/types";
+import type { DesignMissionAssets } from "@/lib/design/design-mission-store";
+
 const STORAGE_KEY = "nexhq-image-studio-handoff";
 
 export interface ImageStudioHandoff {
@@ -12,6 +19,44 @@ export interface ImageStudioHandoff {
   commercialBlueprint?: string;
   commercialScore?: number;
   commercialApproved?: boolean;
+  /** AI Designer primary image prompt — preferred over brief when present. */
+  imagePromptPrimary?: string;
+  /** AI Designer primary mockup prompt. */
+  mockupPromptPrimary?: string;
+  renderPlan?: RenderPlan;
+  concept?: DesignConcept;
+  review?: DesignConceptReview;
+}
+
+export function buildImageStudioHandoff(input: {
+  brief: string;
+  sourceTitle?: string;
+  designId?: string;
+  reportId?: string;
+  assets?: DesignMissionAssets;
+}): ImageStudioHandoff {
+  const concept = input.assets?.aiDesignerConcept;
+  const review = input.assets?.aiDesignerReview;
+  const renderPlan = input.assets?.aiDesignerRenderPlan;
+
+  const imagePromptPrimary = concept?.imagePrompt.primary;
+  const mockupPromptPrimary = concept?.mockupPrompt.primary;
+
+  return {
+    brief: imagePromptPrimary ?? input.brief,
+    sourceTitle: input.sourceTitle,
+    designId: input.designId,
+    reportId: input.reportId,
+    handoffAt: new Date().toISOString(),
+    commercialBlueprint: input.assets?.imageStudioBlueprint,
+    commercialScore: input.assets?.commercialScore,
+    commercialApproved: input.assets?.commercialApproved,
+    imagePromptPrimary,
+    mockupPromptPrimary,
+    renderPlan,
+    concept,
+    review,
+  };
 }
 
 export function saveImageStudioHandoff(handoff: ImageStudioHandoff): void {

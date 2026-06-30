@@ -11,6 +11,7 @@ import {
   COMMERCIAL_APPROVAL_THRESHOLD,
 } from "@/lib/design/commercial-design-director/commercial-score";
 import { evaluateBuyerPsychology } from "@/lib/design/commercial-design-director/buyer-psychology";
+import { evaluateBuyerCuriosity } from "@/lib/design/design-knowledge/buyer-curiosity";
 import { evaluateBrandDna } from "@/lib/design/commercial-design-director/brand-dna";
 import { evaluateStreetwearAppeal } from "@/lib/design/commercial-design-director/streetwear";
 import { evaluateTrendFit } from "@/lib/design/commercial-design-director/trend-fit";
@@ -82,7 +83,11 @@ function renderSvgFromSpec(
   });
 }
 
-function logCommercialReview(review: CommercialDesignReview, spec: LibraryArtworkSpec): void {
+function logCommercialReview(
+  review: CommercialDesignReview,
+  brief: DesignStudioBrief,
+  spec: LibraryArtworkSpec,
+): void {
   const status = review.approved ? "APPROVED" : "REVISION REQUIRED";
   console.log(
     `[COMMERCIAL DESIGN DIRECTOR] ${status} — score ${review.score.overall}/${COMMERCIAL_APPROVAL_THRESHOLD} · iteration ${review.iteration}`,
@@ -99,6 +104,10 @@ function logCommercialReview(review: CommercialDesignReview, spec: LibraryArtwor
       `[COMMERCIAL DESIGN DIRECTOR] Hero typography: ${spec.heroTypographyDirection.direction} · share ${Math.round(typo.compositionShare * 100)}% · score ${typo.score}`,
     );
   }
+  const curiosity = evaluateBuyerCuriosity(brief, spec);
+  console.log(
+    `[COMMERCIAL DESIGN DIRECTOR] Buyer curiosity: scrollStop=${curiosity.scrollStopPotential} desire=${curiosity.desireSignal} hooks=${curiosity.hookHits.slice(0, 2).join(", ") || "none"}`,
+  );
 }
 
 /** Critique a single design — does not create graphics. */
@@ -110,6 +119,7 @@ export function runCommercialDesignReview(input: CommercialDirectorInput): Comme
     svg: input.svg,
   });
   const psychology = evaluateBuyerPsychology(input.brief, input.spec, score);
+  const buyerCuriosity = evaluateBuyerCuriosity(input.brief, input.spec);
   const brandDna = evaluateBrandDna(input.brief, input.spec);
   const streetwear = evaluateStreetwearAppeal(input.brief, input.spec);
   const trendFit = evaluateTrendFit(input.brief, input.spec);
@@ -126,6 +136,7 @@ export function runCommercialDesignReview(input: CommercialDirectorInput): Comme
     collectionFit,
     emotion,
     weakestDimensions: weakest,
+    buyerCuriosity,
   });
 
   const revisionTasks = critique.approved
@@ -142,7 +153,7 @@ export function runCommercialDesignReview(input: CommercialDirectorInput): Comme
     approved: passesCommercialGate(score),
   };
 
-  logCommercialReview(review, input.spec);
+  logCommercialReview(review, input.brief, input.spec);
   return review;
 }
 

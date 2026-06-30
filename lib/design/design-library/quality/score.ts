@@ -6,6 +6,7 @@ import type {
   HeroVisualAuditResult,
   SymbolId,
 } from "@/lib/design/design-library/types";
+import { applyBuyerCuriosityBoost, evaluateBuyerCuriosity } from "@/lib/design/design-knowledge/buyer-curiosity";
 import { evaluateWearabilityCompositionMatch } from "@/lib/design/design-knowledge/wearability";
 import { evaluateHeroTypographyMatch } from "@/lib/design/design-knowledge/hero-typography";
 
@@ -501,6 +502,8 @@ function applyHeroTemplateCaps(spec: LibraryArtworkSpec, overall: number): numbe
 }
 
 export function scoreArtworkSpec(spec: LibraryArtworkSpec): QualityScoreBreakdown {
+  const curiosity = evaluateBuyerCuriosity(spec.brief, spec);
+
   const breakdown = {
     visualBalance: scoreVisualBalance(spec),
     typographyHierarchy: scoreTypographyHierarchy(spec),
@@ -516,6 +519,51 @@ export function scoreArtworkSpec(spec: LibraryArtworkSpec): QualityScoreBreakdow
     overall: 0,
   };
 
+  breakdown.typographyHierarchy = applyBuyerCuriosityBoost(
+    breakdown.typographyHierarchy,
+    curiosity,
+    "memorability",
+  );
+  breakdown.luxuryFeeling = applyBuyerCuriosityBoost(
+    breakdown.luxuryFeeling,
+    curiosity,
+    "luxuryRestraint",
+  );
+  breakdown.compositionRichness = applyBuyerCuriosityBoost(
+    breakdown.compositionRichness,
+    curiosity,
+    "visualHook",
+  );
+  breakdown.originality = applyBuyerCuriosityBoost(breakdown.originality, curiosity, "memorability");
+  breakdown.emotionalTranslation = applyBuyerCuriosityBoost(
+    breakdown.emotionalTranslation,
+    curiosity,
+    "curiosity",
+  );
+  breakdown.negativeSpaceUse = applyBuyerCuriosityBoost(
+    breakdown.negativeSpaceUse,
+    curiosity,
+    "premiumSimplicity",
+  );
+  breakdown.commercialPotential = applyBuyerCuriosityBoost(
+    breakdown.commercialPotential,
+    curiosity,
+    "shareability",
+  );
+
+  for (const penalty of curiosity.penalties) {
+    if (penalty.includes("noise") || penalty.includes("competing")) {
+      breakdown.compositionRichness = clamp(breakdown.compositionRichness - 8);
+    }
+    if (penalty.includes("safe layout") || penalty.includes("generic")) {
+      breakdown.originality = clamp(breakdown.originality - 6);
+      breakdown.compositionRichness = clamp(breakdown.compositionRichness - 6);
+    }
+    if (penalty.includes("template")) {
+      breakdown.commercialPotential = clamp(breakdown.commercialPotential - 5);
+    }
+  }
+
   const weights = isHeroRole(spec.brief.role) ? HERO_WEIGHTS : WEIGHTS;
 
   breakdown.overall = clamp(
@@ -524,6 +572,8 @@ export function scoreArtworkSpec(spec: LibraryArtworkSpec): QualityScoreBreakdow
       0,
     ),
   );
+
+  breakdown.overall = applyBuyerCuriosityBoost(breakdown.overall, curiosity, "overall");
 
   if (isHeroRole(spec.brief.role)) {
     breakdown.overall = applyHeroTemplateCaps(spec, breakdown.overall);

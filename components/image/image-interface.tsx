@@ -24,7 +24,9 @@ export function ImageInterface() {
     const handoff = consumeImageStudioHandoff();
     if (!handoff) return;
     setBrief(handoff.brief);
-    setHandoffSource(handoff.sourceTitle ?? null);
+    setHandoffSource(
+      handoff.concept?.title ?? handoff.sourceTitle ?? null,
+    );
   }, []);
 
   async function runImageRequest(text: string) {

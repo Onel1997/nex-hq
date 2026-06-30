@@ -1,6 +1,7 @@
 "use client";
 
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
+import { AiDesignerConceptPanel } from "@/components/design/ai-designer-concept-panel";
 import { DesignLabCollapse } from "@/components/design/design-lab-workspace";
 import type {
   CollectionTimelineStage,
@@ -35,7 +36,7 @@ import {
   readGenerationPayload,
   svgMarkupToDataUrl,
 } from "@/lib/design/svg-data-url";
-import { saveImageStudioHandoff } from "@/lib/image/image-handoff-store";
+import { saveImageStudioHandoff, buildImageStudioHandoff } from "@/lib/image/image-handoff-store";
 import { cn } from "@/lib/utils";
 import {
   Archive,
@@ -119,8 +120,8 @@ export function CreativeWorkspace({
   const iteration = getActiveIteration(workspace);
   const brief = iteration.brief;
   const prompts = useMemo(
-    () => getEffectivePrompts(brief, iteration.promptOverrides),
-    [brief, iteration.promptOverrides],
+    () => getEffectivePrompts(brief, iteration.promptOverrides, iteration.assets),
+    [brief, iteration.promptOverrides, iteration.assets],
   );
 
   const [canvasTab, setCanvasTab] = useState<CanvasTab>("mockup");
@@ -200,6 +201,71 @@ export function CreativeWorkspace({
       setActionLoading(null);
     }
   }, [brief, notify, onPatchMission, resetProductionStatus]);
+
+  const runAiDesignerConcept = useCallback(async () => {
+    const label = "Generate AI Design Concept";
+    setActionLoading(label);
+    setToast(null);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/design/ai-designer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brief }),
+      });
+      const payload = await readGenerationPayload(res);
+      if (!res.ok) {
+        const err =
+          payload && typeof payload === "object" && "error" in payload
+            ? String((payload as { error?: unknown }).error ?? "")
+            : "";
+        throw new Error(err || "AI Designer failed");
+      }
+
+      const data = payload as {
+        ok?: boolean;
+        concept?: import("@/lib/design/ai-designer/types").DesignConcept;
+        renderPlan?: import("@/lib/design/ai-designer/types").RenderPlan;
+        review?: import("@/lib/design/ai-designer/types").DesignConceptReview;
+      };
+      if (!data.ok || !data.concept) {
+        throw new Error("AI Designer returned no concept");
+      }
+
+      const concept = data.concept;
+
+      onPatchMission((state) => {
+        let next = updateMissionAssets(state, {
+          aiDesignerConcept: concept,
+          aiDesignerRenderPlan: data.renderPlan,
+          aiDesignerReview: data.review,
+        });
+        next = updatePromptOverride(next, "imagePrompt", concept.imagePrompt.primary);
+        next = updatePromptOverride(next, "mockupPrompt", concept.mockupPrompt.primary);
+        next = appendVersionEntry(next, "AI Design Concept generated", "design");
+        return next;
+      });
+      notify("AI Design Concept ready for Image Studio");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AI Designer failed");
+    } finally {
+      setActionLoading(null);
+    }
+  }, [brief, notify, onPatchMission]);
+
+  const sendToImageStudio = useCallback(() => {
+    saveImageStudioHandoff(
+      buildImageStudioHandoff({
+        brief: prompts.imagePrompt,
+        sourceTitle: brief.title,
+        designId: brief.designId,
+        reportId: mission.reportId,
+        assets: workspace.assets,
+      }),
+    );
+    router.push("/agents/image");
+  }, [brief, mission.reportId, prompts.imagePrompt, router, workspace.assets]);
 
   const runGeneration = useCallback(
     async (
@@ -377,6 +443,7 @@ export function CreativeWorkspace({
         <ProductionToolbar
           loading={actionLoading}
           onGenerateSvg={() => void runSvgGeneration()}
+          onGenerateAiConcept={() => void runAiDesignerConcept()}
           onGenerateMockup={() =>
             void runGeneration(
               prompts.mockupPrompt,
@@ -399,16 +466,7 @@ export function CreativeWorkspace({
               "images",
             )
           }
-          onSendImageStudio={() => {
-            saveImageStudioHandoff({
-              brief: prompts.imagePrompt,
-              sourceTitle: brief.title,
-              designId: brief.designId,
-              reportId: mission.reportId,
-              handoffAt: new Date().toISOString(),
-            });
-            router.push("/agents/image");
-          }}
+          onSendImageStudio={sendToImageStudio}
           onExportSvg={() => {
             if (workspace.assets.svgUrl) {
               const a = document.createElement("a");
@@ -442,6 +500,12 @@ export function CreativeWorkspace({
             title={brief.title}
           />
         </div>
+
+        <AiDesignerConceptPanel
+          concept={workspace.assets.aiDesignerConcept}
+          renderPlan={workspace.assets.aiDesignerRenderPlan}
+          review={workspace.assets.aiDesignerReview}
+        />
 
         <CreativeDirectorPanel
           open={directorOpen}
@@ -506,16 +570,7 @@ export function CreativeWorkspace({
           notify("Design archived");
         }}
         onBackResearch={() => router.push(`/facility/reports?report=${mission.reportId}`)}
-        onImageStudio={() => {
-          saveImageStudioHandoff({
-            brief: prompts.imagePrompt,
-            sourceTitle: brief.title,
-            designId: brief.designId,
-            reportId: mission.reportId,
-            handoffAt: new Date().toISOString(),
-          });
-          router.push("/agents/image");
-        }}
+        onImageStudio={sendToImageStudio}
         onCeo={() => router.push("/agents/ceo")}
       />
 
@@ -711,6 +766,7 @@ function DesignCanvas({
 function ProductionToolbar({
   loading,
   onGenerateSvg,
+  onGenerateAiConcept,
   onGenerateMockup,
   onGenerateRender,
   onSendImageStudio,
@@ -720,6 +776,7 @@ function ProductionToolbar({
 }: {
   loading: string | null;
   onGenerateSvg: () => void;
+  onGenerateAiConcept: () => void;
   onGenerateMockup: () => void;
   onGenerateRender: () => void;
   onSendImageStudio: () => void;
@@ -729,6 +786,7 @@ function ProductionToolbar({
 }) {
   const generateTools = [
     { label: "Generate SVG", icon: Shapes, action: onGenerateSvg },
+    { label: "Generate AI Design Concept", icon: Sparkles, action: onGenerateAiConcept },
     { label: "Generate Mockup", icon: ImageIcon, action: onGenerateMockup },
     { label: "Generate AI Render", icon: Wand2, action: onGenerateRender },
     { label: "Upscale", icon: ZoomIn, action: () => {} },

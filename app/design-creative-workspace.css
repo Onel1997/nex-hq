@@ -1730,3 +1730,68 @@
     height: clamp(340px, 58vh, 65vh);
   }
 }
+
+/* AI Designer concept blueprint panel */
+.cw-ai-concept-span {
+  margin: 0 1.25rem 1rem;
+}
+
+.cw-ai-concept-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+}
+
+.cw-ai-concept-block h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(34, 211, 238, 0.85);
+}
+
+.cw-ai-concept-block-body {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: rgba(244, 241, 235, 0.88);
+}
+
+.cw-ai-concept-block-body ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.cw-ai-concept-block-body li {
+  margin-bottom: 0.25rem;
+}
+
+.cw-ai-concept-muted {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: rgba(244, 241, 235, 0.52);
+}
+
+.cw-ai-concept-prompt {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.cw-ai-concept-deliverables li {
+  display: grid;
+  gap: 0.15rem;
+  margin-bottom: 0.5rem;
+}
+
+.cw-ai-concept-review-score.is-ready {
+  color: #6ee7b7;
+}

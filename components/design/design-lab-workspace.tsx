@@ -20,7 +20,7 @@ import {
   readGenerationPayload,
   svgMarkupToDataUrl,
 } from "@/lib/design/svg-data-url";
-import { saveImageStudioHandoff } from "@/lib/image/image-handoff-store";
+import { saveImageStudioHandoff, buildImageStudioHandoff } from "@/lib/image/image-handoff-store";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -75,8 +75,8 @@ export function DesignLabWorkspace({
   const { brief } = mission;
   const router = useRouter();
   const prompts = useMemo(
-    () => getEffectivePrompts(brief, mission.promptOverrides),
-    [brief, mission.promptOverrides],
+    () => getEffectivePrompts(brief, mission.promptOverrides, mission.assets),
+    [brief, mission.promptOverrides, mission.assets],
   );
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -212,16 +212,18 @@ export function DesignLabWorkspace({
   );
 
   const handleSendToImageStudio = useCallback(() => {
-    saveImageStudioHandoff({
-      brief: prompts.imagePrompt,
-      sourceTitle: brief.title,
-      designId: brief.designId,
-      reportId: mission.reportId,
-      handoffAt: new Date().toISOString(),
-    });
+    saveImageStudioHandoff(
+      buildImageStudioHandoff({
+        brief: prompts.imagePrompt,
+        sourceTitle: brief.title,
+        designId: brief.designId,
+        reportId: mission.reportId,
+        assets: mission.assets,
+      }),
+    );
     onPatchMission((s) => setPipelineStage(s, "image"));
     router.push("/agents/image");
-  }, [brief, mission.reportId, prompts.imagePrompt, onPatchMission, router]);
+  }, [brief, mission.assets, mission.reportId, prompts.imagePrompt, onPatchMission, router]);
 
   const handleSaveDraft = useCallback(() => {
     onSaveDraft?.();

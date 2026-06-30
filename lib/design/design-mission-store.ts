@@ -1,6 +1,11 @@
 "use client";
 
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
+import type {
+  DesignConcept,
+  DesignConceptReview,
+  RenderPlan,
+} from "@/lib/design/ai-designer/types";
 import {
   computeDesignHealth,
   defaultProductionChecklist,
@@ -85,6 +90,10 @@ export interface DesignMissionAssets {
   commercialScore?: number;
   commercialIterations?: number;
   imageStudioBlueprint?: string;
+  /** AI Designer blueprint — premium creative concept for Image Studio. */
+  aiDesignerConcept?: DesignConcept;
+  aiDesignerRenderPlan?: RenderPlan;
+  aiDesignerReview?: DesignConceptReview;
 }
 
 export interface DesignPromptOverrides {
@@ -337,11 +346,20 @@ export function getDesignerPrompt(
 export function getEffectivePrompts(
   brief: DesignStudioBrief,
   overrides: DesignPromptOverrides,
+  assets: DesignMissionAssets = {},
 ) {
+  const aiConcept = assets.aiDesignerConcept;
+
   return {
     svgPrompt: overrides.svgPrompt ?? brief.svgPrompt,
-    mockupPrompt: overrides.mockupPrompt ?? brief.mockupPrompt,
-    imagePrompt: overrides.imagePrompt ?? brief.imagePrompt,
+    mockupPrompt:
+      aiConcept?.mockupPrompt.primary ??
+      overrides.mockupPrompt ??
+      brief.mockupPrompt,
+    imagePrompt:
+      aiConcept?.imagePrompt.primary ??
+      overrides.imagePrompt ??
+      brief.imagePrompt,
     designerPrompt: getDesignerPrompt(brief, overrides),
   };
 }

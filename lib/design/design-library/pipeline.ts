@@ -5,6 +5,10 @@ import { composeFromBrief, enrichArtworkSpec } from "@/lib/design/design-library
 import type { CompositionOverrides, LibraryArtworkSpec, LibraryEngineOptions } from "@/lib/design/design-library/types";
 import { serializeVectorSvg } from "@/lib/design/vector-engine/serialize";
 import {
+  decideBuyerCuriosityDirection,
+  evaluateBuyerCuriosityMatch,
+} from "@/lib/design/design-knowledge/buyer-curiosity";
+import {
   runCommercialDesignPipeline,
   runCommercialDesignReview,
   buildImageStudioBlueprint,
@@ -20,10 +24,17 @@ export function resolveArtworkSpec(
   brief: DesignStudioBrief,
   overrides?: CompositionOverrides,
 ): LibraryArtworkSpec {
-  if (overrides) {
-    return enrichArtworkSpec(composeFromBrief(brief, overrides));
-  }
-  return selectBestArtwork(brief);
+  const spec = overrides
+    ? enrichArtworkSpec(composeFromBrief(brief, overrides))
+    : selectBestArtwork(brief);
+
+  const curiosityDecision = decideBuyerCuriosityDirection(brief, spec.seed);
+  const curiosityMatch = evaluateBuyerCuriosityMatch(brief, spec);
+  console.log(
+    `[DESIGN LIBRARY] Buyer curiosity: ${curiosityDecision.pattern} · scrollStop=${curiosityMatch.scrollStopPotential} · aligned=${curiosityMatch.aligned}`,
+  );
+
+  return spec;
 }
 
 export function runDesignLibraryPipeline(

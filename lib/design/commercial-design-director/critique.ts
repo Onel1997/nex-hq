@@ -5,6 +5,7 @@ import type { StreetwearAssessment } from "@/lib/design/commercial-design-direct
 import type { TrendFitAssessment } from "@/lib/design/commercial-design-director/trend-fit";
 import type { CollectionFitAssessment } from "@/lib/design/commercial-design-director/collection-fit";
 import type { EmotionalAssessment } from "@/lib/design/commercial-design-director/emotion";
+import type { BuyerCuriosityAssessment } from "@/lib/design/design-knowledge/buyer-curiosity";
 
 export interface DesignCritique {
   approved: boolean;
@@ -56,6 +57,7 @@ export function buildDesignCritique(input: {
   collectionFit: CollectionFitAssessment;
   emotion: EmotionalAssessment;
   weakestDimensions: CommercialScoreDimension[];
+  buyerCuriosity?: BuyerCuriosityAssessment;
 }): DesignCritique {
   const {
     commercialScore,
@@ -66,6 +68,7 @@ export function buildDesignCritique(input: {
     collectionFit,
     emotion,
     weakestDimensions,
+    buyerCuriosity,
   } = input;
 
   const strengths: string[] = [];
@@ -83,6 +86,15 @@ export function buildDesignCritique(input: {
   }
   if (psychology.wouldStopScrolling) {
     strengths.push("would stop scrolling in a premium streetwear feed");
+  }
+  if (buyerCuriosity && buyerCuriosity.scrollStopPotential >= 75) {
+    strengths.push("visual hook creates scroll-stop tension in feed");
+  }
+  if (buyerCuriosity && buyerCuriosity.dimensions.identity >= 75) {
+    strengths.push("identity pull — feels like 'I need this hoodie', not 'nice graphic'");
+  }
+  if (buyerCuriosity && buyerCuriosity.rewards.includes("premium restraint")) {
+    strengths.push("premium restraint without clutter");
   }
   if (streetwear.belongsOnOversizedTee) {
     strengths.push("belongs on an oversized tee at garment scale");
@@ -103,6 +115,15 @@ export function buildDesignCritique(input: {
   }
 
   if (!psychology.wouldStopScrolling) weaknesses.push("would not stop scrolling");
+  if (buyerCuriosity && buyerCuriosity.penalties.some((p) => p.includes("safe layout"))) {
+    weaknesses.push("safe symmetric layout — no scroll-stop hook");
+  }
+  if (buyerCuriosity && buyerCuriosity.penalties.some((p) => p.includes("competing"))) {
+    weaknesses.push("multiple competing heroes dilute focal curiosity");
+  }
+  if (buyerCuriosity && buyerCuriosity.penalties.some((p) => p.includes("generic"))) {
+    weaknesses.push("generic editorial layout — not unforgettable");
+  }
   if (!psychology.wouldWear) weaknesses.push("I would not confidently wear this");
   if (!brandDna.feelsLikeMilaene) weaknesses.push("does not feel like Milaene");
   if (streetwear.logoMarkRisk) weaknesses.push("reads too much like a logo mark, not a fashion graphic");
@@ -118,6 +139,11 @@ export function buildDesignCritique(input: {
   );
   directorNotes.push(`Commercial score ${commercialScore.overall}/100 (gate: 90)`);
   directorNotes.push(`Buyer psychology ${psychology.overall}/100 — wear: ${psychology.wouldWear ? "yes" : "no"}`);
+  if (buyerCuriosity) {
+    directorNotes.push(
+      `Buyer curiosity ${buyerCuriosity.overall}/100 — scrollStop: ${buyerCuriosity.scrollStopPotential} · desire: ${buyerCuriosity.desireSignal}`,
+    );
+  }
   directorNotes.push(`Brand DNA ${brandDna.score}/100 — Milaene: ${brandDna.feelsLikeMilaene ? "yes" : "no"}`);
 
   const approved = commercialScore.overall >= 90 && commercialScore.wouldBuy;

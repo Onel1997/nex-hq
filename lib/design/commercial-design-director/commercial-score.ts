@@ -2,6 +2,7 @@ import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { LibraryArtworkSpec } from "@/lib/design/design-library/types";
 import { scoreArtworkSpec } from "@/lib/design/design-library/quality/score";
 import { analyzePremiumSvg } from "@/lib/design/design-library/templates/premium/quality-gate";
+import { evaluateBuyerCuriosity } from "@/lib/design/design-knowledge/buyer-curiosity";
 import { evaluateWearabilityCompositionMatch } from "@/lib/design/design-knowledge/wearability";
 import { evaluateCommercialTypography } from "@/lib/design/commercial-design-director/typography";
 
@@ -93,6 +94,11 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
   const wearMatch = evaluateWearabilityCompositionMatch(spec);
   const placement = spec.wearabilityDirection?.placement;
   const typographyAssessment = evaluateCommercialTypography(spec);
+  const curiosity = evaluateBuyerCuriosity(brief, spec);
+  const curiosityBoost = curiosity.overall >= 72 ? 6 : curiosity.overall >= 65 ? 4 : 0;
+  const scrollBoost =
+    curiosity.scrollStopPotential >= 75 ? 8 : curiosity.scrollStopPotential >= 68 ? 5 : 0;
+  const desireBoost = curiosity.wouldBuySignal >= 72 ? 5 : 0;
   const oversizedPlacement =
     placement?.id === "oversized-back" ||
     placement?.id === "oversized-front" ||
@@ -109,10 +115,12 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
   );
 
   const originality = clamp(
-    libraryScore.originality * 0.65 +
+    libraryScore.originality * 0.55 +
       (spec.template.id.includes("editorial") || spec.template.id.includes("oversized") ? 10 : 0) -
       (BLUEPRINT_TEMPLATES.has(spec.template.id) ? 18 : 0) +
-      (typographyAssessment.conceptHits.length >= 3 ? 8 : 0),
+      (typographyAssessment.conceptHits.length >= 3 ? 8 : 0) +
+      curiosity.dimensions.memorability * 0.12 +
+      (curiosity.hookHits.includes("unexpected-overlap") ? 4 : 0),
   );
 
   const streetwearAppeal = clamp(
@@ -177,25 +185,31 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
   );
 
   const emotionalImpact = clamp(
-    libraryScore.emotionalTranslation * 0.6 +
+    libraryScore.emotionalTranslation * 0.5 +
       (brief.visualConcept.length > 40 ? 6 : 0) +
-      (brief.designDescription.length > 60 ? 4 : 0),
+      (brief.designDescription.length > 60 ? 4 : 0) +
+      curiosity.dimensions.curiosity * 0.18 +
+      curiosity.dimensions.mystery * 0.1 +
+      desireBoost,
   );
 
   const shareability = clamp(
-    commercialPotential * 0.3 +
-      emotionalImpact * 0.25 +
-      typographyQuality * 0.2 +
-      fashionAppeal * 0.15 +
-      typographyAssessment.scrollStopBoost * 0.12 +
-      (brief.title.split(/\s+/).length >= 2 ? 6 : 0),
+    commercialPotential * 0.25 +
+      emotionalImpact * 0.2 +
+      typographyQuality * 0.18 +
+      fashionAppeal * 0.12 +
+      typographyAssessment.scrollStopBoost * 0.1 +
+      curiosity.dimensions.shareability * 0.15 +
+      scrollBoost,
   );
 
   const premiumFeeling = clamp(
-    luxury * 0.38 +
-      typographyQuality * 0.24 +
-      compositionQuality * 0.2 +
+    luxury * 0.32 +
+      typographyQuality * 0.22 +
+      compositionQuality * 0.18 +
       typographyAssessment.luxuryBoost * 0.08 +
+      curiosity.dimensions.premiumSimplicity * 0.12 +
+      curiosity.dimensions.luxuryRestraint * 0.08 +
       (brief.materialEffects.toLowerCase().includes("luxury") ||
       brief.materialEffects.toLowerCase().includes("vintage")
         ? 8
@@ -217,13 +231,14 @@ export function scoreCommercialDesign(input: CommercialScoreInput): CommercialSc
       printQuality * 0.05 +
       emotionalImpact * 0.07 +
       shareability * 0.05 +
-      premiumFeeling * 0.04,
+      premiumFeeling * 0.04 +
+      curiosityBoost,
   );
 
   const wouldBuy =
     overall >= COMMERCIAL_APPROVAL_THRESHOLD &&
-    wearability >= 82 &&
-    premiumFeeling >= 78 &&
+    (wearability >= 80 || curiosity.wouldWearSignal >= 74) &&
+    (premiumFeeling >= 76 || curiosity.wouldBuySignal >= 74) &&
     !(svg && countSvgTexts(svg) <= 2 && typeLayers <= 1);
 
   return {

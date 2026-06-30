@@ -1,6 +1,7 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { LibraryArtworkSpec } from "@/lib/design/design-library/types";
 import type { CommercialScoreBreakdown } from "@/lib/design/commercial-design-director/commercial-score";
+import { evaluateBuyerCuriosity } from "@/lib/design/design-knowledge/buyer-curiosity";
 import { evaluateWearabilityCompositionMatch } from "@/lib/design/design-knowledge/wearability";
 
 export const BUYER_PSYCHOLOGY_DIMENSIONS = [
@@ -47,15 +48,17 @@ export function evaluateBuyerPsychology(
   const notes: string[] = [];
   const titleWords = brief.title.split(/\s+/).filter(Boolean).length;
   const typeLayers = spec.typography.filter((t) => t.layer === "typography").length;
+  const curiosityProfile = evaluateBuyerCuriosity(brief, spec);
 
   const curiosity = clamp(
-    (titleWords >= 2 ? 12 : 4) +
-      commercialScore.originality * 0.35 +
+    curiosityProfile.dimensions.curiosity * 0.45 +
+      (titleWords >= 2 ? 10 : 4) +
+      commercialScore.originality * 0.2 +
       (brief.visualConcept.toLowerCase().includes("between") ||
       brief.visualConcept.toLowerCase().includes("only")
-        ? 10
+        ? 8
         : 0) +
-      (typeLayers >= 3 ? 8 : 0),
+      (typeLayers >= 3 ? 6 : 0),
   );
 
   const emotion = clamp(
@@ -65,9 +68,10 @@ export function evaluateBuyerPsychology(
   );
 
   const identity = clamp(
-    commercialScore.collectionConsistency * 0.4 +
-      commercialScore.streetwearAppeal * 0.35 +
-      (brief.visualElements.length >= 3 ? 8 : 0),
+    curiosityProfile.dimensions.identity * 0.4 +
+      commercialScore.collectionConsistency * 0.25 +
+      commercialScore.streetwearAppeal * 0.2 +
+      (brief.visualElements.length >= 3 ? 6 : 0),
   );
 
   const exclusivity = clamp(
@@ -106,10 +110,11 @@ export function evaluateBuyerPsychology(
   );
 
   const socialMediaPotential = clamp(
-    commercialScore.shareability * 0.5 +
-      curiosity * 0.25 +
-      emotion * 0.15 +
-      (titleWords >= 2 && titleWords <= 4 ? 8 : 0),
+    curiosityProfile.dimensions.shareability * 0.35 +
+      commercialScore.shareability * 0.3 +
+      curiosity * 0.2 +
+      emotion * 0.1 +
+      (titleWords >= 2 && titleWords <= 4 ? 6 : 0),
   );
 
   const conversationValue = clamp(
@@ -132,16 +137,34 @@ export function evaluateBuyerPsychology(
       conversationValue * 0.1,
   );
 
-  const wouldWear =
-    wearability >= 78 &&
-    (wearabilityMatch?.weeklyWearable ?? wearability >= 80) &&
-    identity >= 72 &&
-    luxury >= 70;
+  const isStatementRole =
+    brief.role.toLowerCase().includes("hero") || brief.role.toLowerCase().includes("statement");
+
+  const wouldWear = isStatementRole
+    ? curiosityProfile.dimensions.identity >= 68 &&
+      commercialScore.wearability >= 72 &&
+      (curiosityProfile.wouldWearSignal >= 66 ||
+        curiosityProfile.desireSignal >= 68 ||
+        curiosityProfile.dimensions.premiumSimplicity >= 65)
+    : (curiosityProfile.wouldWearSignal >= 72 || commercialScore.wearability >= 80) &&
+      (wearabilityMatch?.weeklyWearable ?? commercialScore.wearability >= 80) &&
+      (identity >= 70 || curiosityProfile.dimensions.identity >= 72) &&
+      (luxury >= 68 || curiosityProfile.dimensions.luxuryRestraint >= 70);
   const wouldStopScrolling =
-    socialMediaPotential >= 78 && curiosity >= 72 && commercialScore.typographyQuality >= 75;
+    curiosityProfile.scrollStopPotential >= 72 ||
+    (socialMediaPotential >= 75 &&
+      curiosity >= 70 &&
+      curiosityProfile.dimensions.visualHook >= 72 &&
+      commercialScore.typographyQuality >= 72);
 
   if (!wouldWear) notes.push("wearability or identity signal is too weak for daily rotation");
   if (!wouldStopScrolling) notes.push("visual hook may not stop scrolling in feed");
+  if (curiosityProfile.penalties.length > 0) {
+    notes.push(`curiosity penalties: ${curiosityProfile.penalties.slice(0, 2).join("; ")}`);
+  }
+  if (curiosityProfile.rewards.length > 0) {
+    notes.push(`curiosity rewards: ${curiosityProfile.rewards.slice(0, 2).join("; ")}`);
+  }
   if (luxury < 72) notes.push("luxury perception below premium streetwear bar");
   if (emotion < 70) notes.push("emotional pull is underdeveloped");
 

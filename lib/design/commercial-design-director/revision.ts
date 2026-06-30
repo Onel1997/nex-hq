@@ -16,6 +16,11 @@ import {
   heroTypographyRevisionOverrides,
   evaluateHeroTypographyMatch,
 } from "@/lib/design/design-knowledge/hero-typography";
+import {
+  curiosityRevisionOverrides,
+  decideBuyerCuriosityDirection,
+  evaluateBuyerCuriosityMatch,
+} from "@/lib/design/design-knowledge/buyer-curiosity";
 
 export const MAX_COMMERCIAL_REVISION_ITERATIONS = 5;
 
@@ -162,14 +167,42 @@ export function buildRevisionTasks(
   }
 
   if (!critique.wouldStopScrolling) {
+    const curiosityDecision = spec
+      ? decideBuyerCuriosityDirection(spec.brief, spec.seed + iteration)
+      : null;
+    const curiosityOverrides = curiosityDecision
+      ? curiosityRevisionOverrides(curiosityDecision)
+      : {};
     push(
       "design-studio",
       "high",
       "shareability",
       "would not stop scrolling",
-      "Strengthen visual hook — oversized type, asymmetric crop, or frame-breaking composition",
-      resolveRevisionOverrides(spec, iteration, 3),
+      "Strengthen visual hook — cropped hero word, partial typography, unexpected overlap, one dominant focal point",
+      {
+        ...resolveRevisionOverrides(spec, iteration, 3),
+        ...curiosityOverrides,
+      },
     );
+  }
+
+  if (spec) {
+    const curiosityMatch = evaluateBuyerCuriosityMatch(spec.brief, spec);
+    if (!curiosityMatch.aligned || curiosityMatch.scrollStopPotential < 72) {
+      const decision = decideBuyerCuriosityDirection(spec.brief, spec.seed + iteration + 10);
+      push(
+        "design-studio",
+        "high",
+        "buyer-psychology",
+        curiosityMatch.mismatches[0] ?? "buyer curiosity below scroll-stop bar",
+        `Apply ${decision.pattern} curiosity pattern — premium tension, mystery gap, unforgettable focal`,
+        {
+          ...curiosityRevisionOverrides(decision),
+          forceRich: true,
+          variantIndex: iteration + 70,
+        },
+      );
+    }
   }
 
   if (score.streetwearAppeal < 78) {
@@ -340,6 +373,10 @@ export function applyRevisionTasks(
   }
   if (tasks.some((t) => t.dimension === "wearability")) {
     visualConceptAdditions.push("garment-scale wearability with premium restraint and outfit compatibility");
+  }
+  if (tasks.some((t) => t.dimension === "buyer-psychology" || t.dimension === "shareability")) {
+    visualConceptAdditions.push("scroll-stop visual hook with cropped hero typography and premium tension");
+    visualConceptAdditions.push("one unforgettable focal point with mystery gap and emotional curiosity");
   }
 
   const visualConcept =
