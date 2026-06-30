@@ -1,14 +1,37 @@
 "use client";
 
-import { DesignLabCollapse } from "@/components/design/design-lab-workspace";
 import type {
   DesignConcept,
   DesignConceptReview,
   RenderPlan,
 } from "@/lib/design/ai-designer/types";
 import { cn } from "@/lib/utils";
-import { Copy, Send } from "lucide-react";
-import type { ReactNode } from "react";
+import {
+  ChevronDown,
+  Copy,
+  Loader2,
+  PanelRightClose,
+  PanelRightOpen,
+  Send,
+  Sparkles,
+} from "lucide-react";
+import { useCallback, useState, type ReactNode } from "react";
+
+const SECTIONS_STORAGE_KEY = "nexhq-design-inspector-sections";
+
+const DEFAULT_SECTION_OPEN: Record<string, boolean> = {
+  "creative-direction": true,
+  "design-story": false,
+  "fashion-language": false,
+  typography: false,
+  symbols: false,
+  ornaments: false,
+  "commercial-intention": false,
+  "image-prompt": true,
+  "mockup-prompt": false,
+  "render-deliverables": false,
+  "blueprint-review": true,
+};
 
 interface AiDesignerConceptPanelProps {
   concept?: DesignConcept;
@@ -16,19 +39,73 @@ interface AiDesignerConceptPanelProps {
   review?: DesignConceptReview;
   onSendToImageStudio?: () => void;
   onCopyImagePrompt?: () => void;
+  onGenerateConcept?: () => void;
+  actionLoading?: string | null;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-function ConceptBlock({ title, children }: { title: string; children: ReactNode }) {
+function loadSectionState(): Record<string, boolean> {
+  if (typeof window === "undefined") return DEFAULT_SECTION_OPEN;
+  try {
+    const raw = localStorage.getItem(SECTIONS_STORAGE_KEY);
+    if (!raw) return DEFAULT_SECTION_OPEN;
+    return { ...DEFAULT_SECTION_OPEN, ...(JSON.parse(raw) as Record<string, boolean>) };
+  } catch {
+    return DEFAULT_SECTION_OPEN;
+  }
+}
+
+function InspectorSection({
+  id,
+  title,
+  meta,
+  open,
+  onToggle,
+  children,
+}: {
+  id: string;
+  title: string;
+  meta?: string;
+  open: boolean;
+  onToggle: (id: string) => void;
+  children: ReactNode;
+}) {
   return (
-    <div className="cw-ai-concept-block">
-      <h4>{title}</h4>
-      <div className="cw-ai-concept-block-body">{children}</div>
+    <div className={cn("cw-inspector-card", open && "is-open")}>
+      <button
+        type="button"
+        className="cw-inspector-card-header"
+        onClick={() => onToggle(id)}
+        aria-expanded={open}
+      >
+        <span className="cw-inspector-card-heading">
+          <span className="cw-inspector-card-title">{title}</span>
+          {meta ? <span className="cw-inspector-card-meta">{meta}</span> : null}
+        </span>
+        <ChevronDown className={cn("cw-inspector-chevron", open && "is-open")} />
+      </button>
+      {open ? <div className="cw-inspector-card-body">{children}</div> : null}
     </div>
   );
 }
 
-function PromptBlock({ text }: { text: string }) {
-  return <pre className="cw-ai-concept-prompt">{text}</pre>;
+function InspectorCopy({ text }: { text: string }) {
+  return <p className="cw-inspector-copy">{text}</p>;
+}
+
+function InspectorList({ items }: { items: string[] }) {
+  return (
+    <ul className="cw-inspector-list">
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+function InspectorPrompt({ text }: { text: string }) {
+  return <pre className="cw-inspector-prompt">{text}</pre>;
 }
 
 export function AiDesignerConceptPanel({
@@ -37,150 +114,242 @@ export function AiDesignerConceptPanel({
   review,
   onSendToImageStudio,
   onCopyImagePrompt,
+  onGenerateConcept,
+  actionLoading,
+  collapsed = false,
+  onToggleCollapse,
 }: AiDesignerConceptPanelProps) {
-  if (!concept) return null;
+  const [sections, setSections] = useState<Record<string, boolean>>(loadSectionState);
 
-  const readyForImageStudio = review?.readyForImageStudio === true;
-  const reviewMeta = review
-    ? `Review ${review.score}/100 · Image Studio ${review.readyForImageStudio ? "ready" : "pending"}`
-    : undefined;
+  const toggleSection = useCallback((id: string) => {
+    setSections((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      if (typeof window !== "undefined") {
+        localStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const isOpen = (id: string) => sections[id] ?? DEFAULT_SECTION_OPEN[id] ?? false;
+
+  if (collapsed) {
+    return (
+      <aside className="cw-inspector cw-inspector-collapsed" aria-label="AI Designer inspector">
+        <button
+          type="button"
+          className="cw-inspector-expand"
+          onClick={onToggleCollapse}
+          aria-label="Open AI Designer inspector"
+        >
+          <PanelRightOpen className="size-4" />
+          <span>Concept</span>
+        </button>
+      </aside>
+    );
+  }
 
   return (
-    <section className="cw-ai-concept-span" aria-label="AI Designer concept">
-      <DesignLabCollapse
-        title="AI Design Concept"
-        meta={reviewMeta ?? concept.collection}
-        defaultOpen
-      >
-        {readyForImageStudio ? (
-          <div className="cw-ai-concept-handoff">
-            <p className="cw-ai-concept-handoff-status">
-              AI Design Concept ready for Image Studio
-            </p>
-            <div className="cw-ai-concept-handoff-actions">
-              <button
-                type="button"
-                className="cw-toolbar-btn cw-btn-primary"
-                onClick={onSendToImageStudio}
-              >
-                <Send className="size-3.5" />
-                <span>Send AI Concept to Image Studio</span>
-              </button>
-              <button
-                type="button"
-                className="cw-toolbar-btn cw-btn-secondary"
-                onClick={onCopyImagePrompt}
-              >
-                <Copy className="size-3.5" />
-                <span>Copy Image Prompt</span>
-              </button>
+    <aside className="cw-inspector" aria-label="AI Designer inspector">
+      <header className="cw-inspector-header">
+        <div>
+          <p className="cw-inspector-eyebrow">Inspector</p>
+          <h2 className="cw-inspector-title">AI Designer</h2>
+        </div>
+        <button
+          type="button"
+          className="cw-inspector-collapse"
+          onClick={onToggleCollapse}
+          aria-label="Collapse inspector"
+        >
+          <PanelRightClose className="size-4" />
+        </button>
+      </header>
+
+      {!concept ? (
+        <div className="cw-inspector-empty">
+          <Sparkles className="cw-inspector-empty-icon" />
+          <p className="cw-inspector-empty-title">AI Designer</p>
+          <p className="cw-inspector-empty-copy">
+            Generate a premium fashion concept to begin.
+          </p>
+          <button
+            type="button"
+            className="cw-toolbar-btn cw-btn-primary"
+            disabled={actionLoading === "Generate AI Design Concept"}
+            onClick={onGenerateConcept}
+          >
+            {actionLoading === "Generate AI Design Concept" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            <span>Generate AI Design Concept</span>
+          </button>
+        </div>
+      ) : (
+        <div className="cw-inspector-scroll">
+          {review?.readyForImageStudio ? (
+            <div className="cw-inspector-handoff">
+              <p>Ready for Image Studio</p>
+              <div className="cw-inspector-handoff-actions">
+                <button
+                  type="button"
+                  className="cw-toolbar-btn cw-btn-primary"
+                  onClick={onSendToImageStudio}
+                >
+                  <Send className="size-3.5" />
+                  <span>Send to Image Studio</span>
+                </button>
+                <button
+                  type="button"
+                  className="cw-toolbar-btn cw-btn-secondary"
+                  onClick={onCopyImagePrompt}
+                >
+                  <Copy className="size-3.5" />
+                  <span>Copy Prompt</span>
+                </button>
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        <div className="cw-ai-concept-grid">
-          <ConceptBlock title="Creative Direction">
-            <p>{concept.creativeDirection.summary}</p>
-            <p className="cw-ai-concept-muted">
-              {concept.creativeDirection.mood} · {concept.creativeDirection.emotion} ·{" "}
-              {concept.creativeDirection.fashionSystem}
+          <InspectorSection
+            id="creative-direction"
+            title="Creative Direction"
+            meta={concept.creativeDirection.mood}
+            open={isOpen("creative-direction")}
+            onToggle={toggleSection}
+          >
+            <InspectorCopy text={concept.creativeDirection.summary} />
+            <p className="cw-inspector-muted">
+              {concept.creativeDirection.emotion} · {concept.creativeDirection.fashionSystem}
             </p>
-          </ConceptBlock>
+          </InspectorSection>
 
-          <ConceptBlock title="Design Story">
-            <p>{concept.designStory}</p>
-          </ConceptBlock>
+          <InspectorSection
+            id="design-story"
+            title="Design Story"
+            open={isOpen("design-story")}
+            onToggle={toggleSection}
+          >
+            <InspectorCopy text={concept.designStory} />
+          </InspectorSection>
 
-          <ConceptBlock title="Fashion Language">
-            <ul>
-              {concept.fashionLanguage.principles.slice(0, 4).map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-            <p className="cw-ai-concept-muted">{concept.fashionLanguage.garmentScale}</p>
-          </ConceptBlock>
+          <InspectorSection
+            id="fashion-language"
+            title="Fashion Language"
+            meta={concept.fashionLanguage.garmentScale}
+            open={isOpen("fashion-language")}
+            onToggle={toggleSection}
+          >
+            <InspectorList items={concept.fashionLanguage.principles.slice(0, 4)} />
+          </InspectorSection>
 
-          <ConceptBlock title="Typography Language">
-            <p>{concept.typographyLanguage.headlineTreatment}</p>
-            <p className="cw-ai-concept-muted">
-              {concept.typographyLanguage.direction} · {concept.typographyLanguage.compositionShare}
-            </p>
-            <ul>
-              {concept.typographyLanguage.behaviors.map((b) => (
-                <li key={b}>{b}</li>
-              ))}
-            </ul>
-          </ConceptBlock>
+          <InspectorSection
+            id="typography"
+            title="Typography"
+            meta={concept.typographyLanguage.direction}
+            open={isOpen("typography")}
+            onToggle={toggleSection}
+          >
+            <InspectorCopy text={concept.typographyLanguage.headlineTreatment} />
+            <p className="cw-inspector-muted">{concept.typographyLanguage.compositionShare}</p>
+            <InspectorList items={concept.typographyLanguage.behaviors} />
+          </InspectorSection>
 
-          <ConceptBlock title="Symbol Language">
-            <p>{concept.symbolLanguage.system}</p>
-            <p>{concept.symbolLanguage.primarySymbols.join(" · ")}</p>
-            <p className="cw-ai-concept-muted">{concept.symbolLanguage.restraint}</p>
-          </ConceptBlock>
+          <InspectorSection
+            id="symbols"
+            title="Symbols"
+            open={isOpen("symbols")}
+            onToggle={toggleSection}
+          >
+            <InspectorCopy text={concept.symbolLanguage.system} />
+            <p className="cw-inspector-muted">{concept.symbolLanguage.primarySymbols.join(" · ")}</p>
+          </InspectorSection>
 
-          <ConceptBlock title="Ornament Language">
-            <p>{concept.ornamentLanguage.system}</p>
-            <p className="cw-ai-concept-muted">
-              {concept.ornamentLanguage.density} · {concept.ornamentLanguage.restraint}
-            </p>
-          </ConceptBlock>
+          <InspectorSection
+            id="ornaments"
+            title="Ornaments"
+            meta={concept.ornamentLanguage.density}
+            open={isOpen("ornaments")}
+            onToggle={toggleSection}
+          >
+            <InspectorCopy text={concept.ornamentLanguage.system} />
+          </InspectorSection>
 
-          <ConceptBlock title="Commercial Intention">
-            <p>{concept.commercialIntention.buyerHook}</p>
-            <p className="cw-ai-concept-muted">
-              {concept.commercialIntention.role} · {concept.commercialIntention.priceBand}
-            </p>
-            <ul>
-              {concept.commercialIntention.wouldBuySignals.map((s) => (
-                <li key={s}>{s}</li>
-              ))}
-            </ul>
-          </ConceptBlock>
+          <InspectorSection
+            id="commercial-intention"
+            title="Commercial Intention"
+            meta={concept.commercialIntention.priceBand}
+            open={isOpen("commercial-intention")}
+            onToggle={toggleSection}
+          >
+            <InspectorCopy text={concept.commercialIntention.buyerHook} />
+            <InspectorList items={concept.commercialIntention.wouldBuySignals} />
+          </InspectorSection>
 
-          <ConceptBlock title="Image Prompt">
-            <PromptBlock text={concept.imagePrompt.primary} />
-          </ConceptBlock>
+          <InspectorSection
+            id="image-prompt"
+            title="Image Prompt"
+            open={isOpen("image-prompt")}
+            onToggle={toggleSection}
+          >
+            <InspectorPrompt text={concept.imagePrompt.primary} />
+          </InspectorSection>
 
-          <ConceptBlock title="Mockup Prompt">
-            <PromptBlock text={concept.mockupPrompt.primary} />
-          </ConceptBlock>
+          <InspectorSection
+            id="mockup-prompt"
+            title="Mockup Prompt"
+            open={isOpen("mockup-prompt")}
+            onToggle={toggleSection}
+          >
+            <InspectorPrompt text={concept.mockupPrompt.primary} />
+          </InspectorSection>
 
           {renderPlan ? (
-            <ConceptBlock title="Render Deliverables">
-              <ul className="cw-ai-concept-deliverables">
+            <InspectorSection
+              id="render-deliverables"
+              title="Render Deliverables"
+              meta={`${renderPlan.deliverables.length} assets`}
+              open={isOpen("render-deliverables")}
+              onToggle={toggleSection}
+            >
+              <ul className="cw-inspector-deliverables">
                 {renderPlan.deliverables.map((d) => (
                   <li key={d.kind}>
                     <strong>{d.kind}</strong>
                     <span>{d.aspectRatio}</span>
-                    <span className="cw-ai-concept-muted">{d.notes}</span>
+                    <span className="cw-inspector-muted">{d.notes}</span>
                   </li>
                 ))}
               </ul>
-            </ConceptBlock>
+            </InspectorSection>
           ) : null}
 
           {review ? (
-            <ConceptBlock title="Blueprint Review">
+            <InspectorSection
+              id="blueprint-review"
+              title="Blueprint Review"
+              meta={`${review.score}/100`}
+              open={isOpen("blueprint-review")}
+              onToggle={toggleSection}
+            >
               <p
                 className={cn(
-                  "cw-ai-concept-review-score",
+                  "cw-inspector-review-score",
                   review.readyForImageStudio && "is-ready",
                 )}
               >
-                Score {review.score}/100 · readyForImageStudio:{" "}
-                {review.readyForImageStudio ? "yes" : "no"}
+                {review.readyForImageStudio ? "Image Studio ready" : "Review in progress"} ·{" "}
+                {review.score}/100
               </p>
               {review.strengths.length > 0 ? (
-                <ul>
-                  {review.strengths.map((s) => (
-                    <li key={s}>{s}</li>
-                  ))}
-                </ul>
+                <InspectorList items={review.strengths} />
               ) : null}
-            </ConceptBlock>
+            </InspectorSection>
           ) : null}
         </div>
-      </DesignLabCollapse>
-    </section>
+      )}
+    </aside>
   );
 }

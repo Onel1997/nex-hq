@@ -209,10 +209,19 @@ export function CreativeWorkspace({
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [directorOpen, setDirectorOpen] = useState(false);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
     setError(null);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1100px)");
+    const syncInspector = () => setInspectorOpen(!mq.matches);
+    syncInspector();
+    mq.addEventListener("change", syncInspector);
+    return () => mq.removeEventListener("change", syncInspector);
   }, []);
 
   useEffect(() => {
@@ -521,9 +530,13 @@ export function CreativeWorkspace({
           colorway={brief.color}
           dnaScore={brief.dnaScore}
           printReadyScore={brief.printReadinessScore}
+          commercialScore={brief.commercialScore ?? canvasAssets.commercialScore}
           commercialStatus={getCommercialStatusLabel(canvasAssets, workspace.approvalStatus)}
           versionLabel={iteration.label}
+          lastUpdated={iteration.timestamp ?? mission.savedAt ?? mission.handoffAt}
         />
+
+        <AiPipelinePreview steps={pipelineSteps} />
 
         <div className="cw-toolbar-sticky">
         <ProductionToolbar
@@ -576,33 +589,39 @@ export function CreativeWorkspace({
         />
         </div>
 
-        <AiPipelinePreview steps={pipelineSteps} />
+        <div className={cn("cw-studio-stage", !inspectorOpen && "is-inspector-collapsed")}>
+          <div className="cw-studio-split">
+            <div className="cw-workspace-core">
+              <DesignCanvas
+                tab={canvasTab}
+                onTabChange={setCanvasTab}
+                zoom={zoom}
+                onZoomChange={setZoom}
+                assets={canvasAssets}
+                title={brief.title}
+                onGenerateConcept={() => void runAiDesignerConcept()}
+                actionLoading={actionLoading}
+              />
+            </div>
 
-        <div className="cw-workspace-core">
-          <DesignCanvas
-            tab={canvasTab}
-            onTabChange={setCanvasTab}
-            zoom={zoom}
-            onZoomChange={setZoom}
-            assets={canvasAssets}
-            title={brief.title}
-            onGenerateConcept={() => void runAiDesignerConcept()}
-            actionLoading={actionLoading}
-          />
+            <AiDesignerConceptPanel
+              concept={canvasAssets.aiDesignerConcept}
+              renderPlan={canvasAssets.aiDesignerRenderPlan}
+              review={canvasAssets.aiDesignerReview}
+              onSendToImageStudio={sendToImageStudio}
+              onCopyImagePrompt={() => {
+                const prompt =
+                  canvasAssets.aiDesignerConcept?.imagePrompt.primary ?? prompts.imagePrompt;
+                void navigator.clipboard.writeText(prompt);
+                notify("Image prompt copied");
+              }}
+              onGenerateConcept={() => void runAiDesignerConcept()}
+              actionLoading={actionLoading}
+              collapsed={!inspectorOpen}
+              onToggleCollapse={() => setInspectorOpen((value) => !value)}
+            />
+          </div>
         </div>
-
-        <AiDesignerConceptPanel
-          concept={canvasAssets.aiDesignerConcept}
-          renderPlan={canvasAssets.aiDesignerRenderPlan}
-          review={canvasAssets.aiDesignerReview}
-          onSendToImageStudio={sendToImageStudio}
-          onCopyImagePrompt={() => {
-            const prompt =
-              canvasAssets.aiDesignerConcept?.imagePrompt.primary ?? prompts.imagePrompt;
-            void navigator.clipboard.writeText(prompt);
-            notify("Image prompt copied");
-          }}
-        />
 
         <CreativeDirectorPanel
           open={directorOpen}
@@ -719,6 +738,20 @@ export function CreativeWorkspaceEmpty() {
   );
 }
 
+function formatMissionDate(iso?: string): string {
+  if (!iso) return "—";
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return "—";
+  }
+}
+
 function MissionHeader({
   missionName,
   collectionName,
@@ -727,8 +760,10 @@ function MissionHeader({
   colorway,
   dnaScore,
   printReadyScore,
+  commercialScore,
   commercialStatus,
   versionLabel,
+  lastUpdated,
 }: {
   missionName: string;
   collectionName?: string;
@@ -737,17 +772,16 @@ function MissionHeader({
   colorway: string;
   dnaScore?: number;
   printReadyScore: number;
+  commercialScore?: number;
   commercialStatus: string;
   versionLabel: string;
+  lastUpdated?: string;
 }) {
   return (
     <header className="cw-mission-header" aria-label="Design mission">
-      <div className="cw-mission-header-lead">
-        {collectionName ? (
-          <p className="cw-mission-header-collection">{collectionName}</p>
-        ) : null}
-        <span className="cw-mission-header-version">{versionLabel}</span>
-      </div>
+      {collectionName ? (
+        <p className="cw-mission-header-collection">{collectionName}</p>
+      ) : null}
       <h1 className="cw-mission-header-title">{missionName}</h1>
       <div className="cw-mission-header-specs">
         <MissionSpec label="Garment" value={garment} />
@@ -760,6 +794,11 @@ function MissionHeader({
           <MissionMetric label="DNA" value={`${dnaScore}%`} />
         ) : null}
         <MissionMetric label="Print Ready" value={`${printReadyScore}%`} />
+        {commercialScore !== undefined ? (
+          <MissionMetric label="Commercial Score" value={`${commercialScore}%`} />
+        ) : null}
+        <MissionMetric label="Version" value={versionLabel} />
+        <MissionMetric label="Last Updated" value={formatMissionDate(lastUpdated)} />
       </div>
     </header>
   );
@@ -797,15 +836,17 @@ function AiPipelinePreview({
   steps: Array<{ id: string; label: string; status: PipelineStepStatus }>;
 }) {
   return (
-    <nav className="cw-ai-pipeline" aria-label="AI creative pipeline">
+    <nav className="cw-ai-pipeline cw-ai-pipeline-timeline" aria-label="AI creative pipeline">
       <ol className="cw-ai-pipeline-track">
         {steps.map((step, index) => (
-          <li key={step.id} className="cw-ai-pipeline-item">
+          <li key={step.id} className="cw-ai-pipeline-segment">
             <span className={cn("cw-ai-pipeline-node", `is-${step.status}`)}>
               {step.label}
             </span>
             {index < steps.length - 1 ? (
-              <ChevronRight className="cw-ai-pipeline-sep" aria-hidden />
+              <span className="cw-ai-pipeline-connector" aria-hidden>
+                ↓
+              </span>
             ) : null}
           </li>
         ))}
@@ -954,6 +995,7 @@ function DesignCanvas({
       <div className={cn("cw-canvas-stage", anyAsset ? "has-assets" : "is-studio-empty")}>
         <div className="cw-canvas-luxury-bg" aria-hidden />
         <div className="cw-canvas-ambient" aria-hidden />
+        <div className="cw-canvas-spotlight" aria-hidden />
         <div className="cw-canvas-vignette" aria-hidden />
         {!anyAsset ? <div className="cw-canvas-glass-overlay" aria-hidden /> : null}
         <div
