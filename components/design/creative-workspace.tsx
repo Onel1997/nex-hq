@@ -1016,6 +1016,15 @@ function DesignCanvas({
         <div className="cw-canvas-ambient" aria-hidden />
         <div className="cw-canvas-spotlight" aria-hidden />
         <div className="cw-canvas-vignette" aria-hidden />
+        <div className="cw-canvas-depth" aria-hidden />
+        <div className="cw-canvas-rulers" aria-hidden>
+          <span className="cw-canvas-ruler cw-canvas-ruler-top" />
+          <span className="cw-canvas-ruler cw-canvas-ruler-left" />
+        </div>
+        <div className="cw-canvas-guides" aria-hidden>
+          <span className="cw-canvas-guide cw-canvas-guide-v" />
+          <span className="cw-canvas-guide cw-canvas-guide-h" />
+        </div>
         {!anyAsset ? <div className="cw-canvas-glass-overlay" aria-hidden /> : null}
         <div
           className="cw-canvas-viewport"
@@ -1514,7 +1523,7 @@ function CreativeDirectorPanel({
         />
       </button>
 
-      {open ? (
+      <div className={cn("cw-director-section-body-wrap", open && "is-open")} aria-hidden={!open}>
         <div className="cw-director-section-body">
           <div className="cw-director-suggestion-grid">
             {DIRECTOR_SUGGESTIONS.map((s) => (
@@ -1561,7 +1570,7 @@ function CreativeDirectorPanel({
             </button>
           </form>
         </div>
-      ) : null}
+      </div>
     </section>
   );
 }

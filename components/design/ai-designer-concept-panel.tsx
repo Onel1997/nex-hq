@@ -7,14 +7,26 @@ import type {
 } from "@/lib/design/ai-designer/types";
 import { cn } from "@/lib/utils";
 import {
+  BookOpen,
   ChevronDown,
+  ClipboardCheck,
+  Compass,
   Copy,
+  Frame,
+  Gem,
+  Image as ImageIcon,
+  Layers,
   Loader2,
+  Package,
   PanelRightClose,
   PanelRightOpen,
   Send,
+  Shapes,
   Sparkles,
+  TrendingUp,
+  Type,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useCallback, useState, type ReactNode } from "react";
 
 const SECTIONS_STORAGE_KEY = "nexhq-design-inspector-sections";
@@ -56,10 +68,25 @@ function loadSectionState(): Record<string, boolean> {
   }
 }
 
+const SECTION_ICONS: Record<string, LucideIcon> = {
+  "creative-direction": Compass,
+  "design-story": BookOpen,
+  "fashion-language": Layers,
+  typography: Type,
+  symbols: Shapes,
+  ornaments: Gem,
+  "commercial-intention": TrendingUp,
+  "image-prompt": ImageIcon,
+  "mockup-prompt": Frame,
+  "render-deliverables": Package,
+  "blueprint-review": ClipboardCheck,
+};
+
 function InspectorSection({
   id,
   title,
   meta,
+  icon: Icon,
   open,
   onToggle,
   children,
@@ -67,10 +94,13 @@ function InspectorSection({
   id: string;
   title: string;
   meta?: string;
+  icon?: LucideIcon;
   open: boolean;
   onToggle: (id: string) => void;
   children: ReactNode;
 }) {
+  const SectionIcon = Icon ?? SECTION_ICONS[id];
+
   return (
     <div className={cn("cw-inspector-card", open && "is-open")}>
       <button
@@ -79,13 +109,22 @@ function InspectorSection({
         onClick={() => onToggle(id)}
         aria-expanded={open}
       >
-        <span className="cw-inspector-card-heading">
-          <span className="cw-inspector-card-title">{title}</span>
-          {meta ? <span className="cw-inspector-card-meta">{meta}</span> : null}
+        <span className="cw-inspector-card-leading">
+          {SectionIcon ? (
+            <span className="cw-inspector-card-icon-wrap" aria-hidden>
+              <SectionIcon className="cw-inspector-card-icon" />
+            </span>
+          ) : null}
+          <span className="cw-inspector-card-heading">
+            <span className="cw-inspector-card-title">{title}</span>
+            {meta ? <span className="cw-inspector-card-meta">{meta}</span> : null}
+          </span>
         </span>
         <ChevronDown className={cn("cw-inspector-chevron", open && "is-open")} />
       </button>
-      {open ? <div className="cw-inspector-card-body">{children}</div> : null}
+      <div className="cw-inspector-card-body-wrap" aria-hidden={!open}>
+        <div className="cw-inspector-card-body">{children}</div>
+      </div>
     </div>
   );
 }
