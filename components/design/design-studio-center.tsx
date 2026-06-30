@@ -100,14 +100,14 @@ export function DesignStudioCenter() {
               <Home className="size-3.5" />
               Facility
             </Link>
-            <ChevronRight className="size-3.5 opacity-40" />
+            <ChevronRight className="size-3.5 design-studio-crumb-sep" aria-hidden />
             <span className="design-studio-crumb design-studio-crumb-current">
               <Palette className="size-3.5" />
               Creative Director
             </span>
             {mission ? (
               <>
-                <ChevronRight className="size-3.5 opacity-40" />
+                <ChevronRight className="size-3.5 design-studio-crumb-sep" aria-hidden />
                 <span className="design-studio-crumb design-studio-crumb-design">
                   {mission.brief.title}
                 </span>

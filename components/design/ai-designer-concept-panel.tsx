@@ -255,10 +255,11 @@ export function AiDesignerConceptPanel({
           <InspectorSection
             id="creative-direction"
             title="Creative Direction"
-            meta={concept.creativeDirection.mood}
+            meta="Mood & direction"
             open={isOpen("creative-direction")}
             onToggle={toggleSection}
           >
+            <p className="cw-inspector-muted">{concept.creativeDirection.mood}</p>
             <InspectorCopy text={concept.creativeDirection.summary} />
             <p className="cw-inspector-muted">
               {concept.creativeDirection.emotion} · {concept.creativeDirection.fashionSystem}
@@ -277,20 +278,22 @@ export function AiDesignerConceptPanel({
           <InspectorSection
             id="fashion-language"
             title="Fashion Language"
-            meta={concept.fashionLanguage.garmentScale}
+            meta="Garment scale"
             open={isOpen("fashion-language")}
             onToggle={toggleSection}
           >
+            <p className="cw-inspector-muted">{concept.fashionLanguage.garmentScale}</p>
             <InspectorList items={concept.fashionLanguage.principles.slice(0, 4)} />
           </InspectorSection>
 
           <InspectorSection
             id="typography"
             title="Typography"
-            meta={concept.typographyLanguage.direction}
+            meta="Type direction"
             open={isOpen("typography")}
             onToggle={toggleSection}
           >
+            <p className="cw-inspector-muted">{concept.typographyLanguage.direction}</p>
             <InspectorCopy text={concept.typographyLanguage.headlineTreatment} />
             <p className="cw-inspector-muted">{concept.typographyLanguage.compositionShare}</p>
             <InspectorList items={concept.typographyLanguage.behaviors} />
@@ -309,20 +312,22 @@ export function AiDesignerConceptPanel({
           <InspectorSection
             id="ornaments"
             title="Ornaments"
-            meta={concept.ornamentLanguage.density}
+            meta="Density"
             open={isOpen("ornaments")}
             onToggle={toggleSection}
           >
+            <p className="cw-inspector-muted">{concept.ornamentLanguage.density}</p>
             <InspectorCopy text={concept.ornamentLanguage.system} />
           </InspectorSection>
 
           <InspectorSection
             id="commercial-intention"
             title="Commercial Intention"
-            meta={concept.commercialIntention.priceBand}
+            meta="Price band"
             open={isOpen("commercial-intention")}
             onToggle={toggleSection}
           >
+            <p className="cw-inspector-muted">{concept.commercialIntention.priceBand}</p>
             <InspectorCopy text={concept.commercialIntention.buyerHook} />
             <InspectorList items={concept.commercialIntention.wouldBuySignals} />
           </InspectorSection>
@@ -369,7 +374,7 @@ export function AiDesignerConceptPanel({
             <InspectorSection
               id="blueprint-review"
               title="Blueprint Review"
-              meta={`${review.score}/100`}
+              meta="Quality score"
               open={isOpen("blueprint-review")}
               onToggle={toggleSection}
             >

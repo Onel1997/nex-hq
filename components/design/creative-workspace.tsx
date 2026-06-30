@@ -675,7 +675,7 @@ export function CreativeWorkspace({
         <div className="cw-commerce-span">
           <DesignLabCollapse
             title="Commerce Intelligence"
-            meta="Supporting context"
+            meta="Catalog & opportunities"
             defaultOpen={false}
           >
             {renderCommerceSection()}
@@ -1393,23 +1393,39 @@ function DesignHealthPanel({ health }: { health: PerDesignWorkspace["health"] })
 }
 
 function RadialScore({ label, value }: { label: string; value: number }) {
-  const r = 12;
+  const size = 36;
+  const stroke = 2.5;
+  const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const offset = c - (value / 100) * c;
+  const center = size / 2;
   return (
     <div className="cw-radial" title={`${label}: ${value}`}>
-      <svg viewBox="0 0 32 32" className="cw-radial-svg cw-radial-animated" aria-hidden>
-        <circle cx="16" cy="16" r={r} className="cw-radial-track" />
-        <circle
-          cx="16"
-          cy="16"
-          r={r}
-          className="cw-radial-fill"
-          strokeDasharray={c}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <span className="cw-radial-value">{value}</span>
+      <div className="cw-radial-ring">
+        <svg
+          viewBox={`0 0 ${size} ${size}`}
+          className="cw-radial-svg cw-radial-animated"
+          aria-hidden
+        >
+          <circle
+            cx={center}
+            cy={center}
+            r={r}
+            className="cw-radial-track"
+            strokeWidth={stroke}
+          />
+          <circle
+            cx={center}
+            cy={center}
+            r={r}
+            className="cw-radial-fill"
+            strokeWidth={stroke}
+            strokeDasharray={c}
+            strokeDashoffset={offset}
+          />
+        </svg>
+        <span className="cw-radial-value">{value}</span>
+      </div>
       <span className="cw-radial-label">{label}</span>
     </div>
   );
