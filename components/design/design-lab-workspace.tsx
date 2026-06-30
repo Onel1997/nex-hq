@@ -20,6 +20,8 @@ import {
   readGenerationPayload,
   svgMarkupToDataUrl,
 } from "@/lib/design/svg-data-url";
+import { buildDesignMockupPayload } from "@/lib/design/mockup-request";
+import { buildDesignRenderPayload } from "@/lib/design/render-request";
 import { saveImageStudioHandoff, buildImageStudioHandoff } from "@/lib/image/image-handoff-store";
 import { cn } from "@/lib/utils";
 import {
@@ -172,10 +174,41 @@ export function DesignLabWorkspace({
       );
 
       try {
-        const res = await fetch("/api/image/run", {
+        const isMockup = assetKey === "mockupUrl";
+        const isRender = assetKey === "renderUrl";
+        const requestBody = isMockup
+          ? buildDesignMockupPayload({
+              brief,
+              collectionName: mission.collectionName,
+              assets: mission.assets,
+              mockupPrompt: prompt,
+            })
+          : isRender
+            ? buildDesignRenderPayload({
+                brief,
+                collectionName: mission.collectionName,
+                assets: mission.assets,
+                imagePrompt: prompt,
+              })
+            : { brief: prompt };
+
+        const endpoint = isMockup
+          ? "/api/design/generate-mockup"
+          : isRender
+            ? "/api/design/generate-render"
+            : "/api/image/run";
+
+        if (isMockup) {
+          console.log("[DESIGN STUDIO] mockup request payload", requestBody);
+        }
+        if (isRender) {
+          console.log("[DESIGN STUDIO] render request payload", requestBody);
+        }
+
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brief: prompt }),
+          body: JSON.stringify(requestBody),
         });
         const payload = await readGenerationPayload(res);
         if (!res.ok) {
@@ -208,7 +241,7 @@ export function DesignLabWorkspace({
         setActionLoading(null);
       }
     },
-    [onPatchMission, resetProductionStatus],
+    [brief, mission.assets, mission.collectionName, onPatchMission, resetProductionStatus],
   );
 
   const handleSendToImageStudio = useCallback(() => {

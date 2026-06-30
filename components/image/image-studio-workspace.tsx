@@ -16,6 +16,7 @@ import {
 } from "@/lib/image/image-handoff-store";
 import {
   ASSET_ESTIMATED_SECONDS,
+  ASSET_PRIORITY_LABELS,
   assetVersionLabel,
   buildHandoffChecks,
   deriveFashionProductionStep,
@@ -286,26 +287,10 @@ export function ImageStudioWorkspace() {
 
       {/* Mission header */}
       <header className="is-hero-mission">
-        <div className="is-hero-mission-top">
+        <div className="is-hero-mission-primary">
           <h1 className="is-hero-title">{missionName}</h1>
-          {blueprint ? (
-            <div className="is-blueprint-status">
-              <span className="is-blueprint-status-line">Creative Blueprint Imported</span>
-              <span className="is-blueprint-status-sub">Ready for Premium Asset Production</span>
-            </div>
-          ) : null}
+          <p className="is-hero-subtitle">Ready for Premium Asset Production</p>
         </div>
-        {blueprint ? (
-          <div className="is-hero-subline">
-            <span>{blueprint.collection}</span>
-            <span className="is-hero-subline-sep">·</span>
-            <span>{blueprint.classification}</span>
-            <span className="is-hero-subline-sep">·</span>
-            <span>{blueprint.colorway}</span>
-            <span className="is-hero-subline-sep">·</span>
-            <span>Version {blueprint.version}</span>
-          </div>
-        ) : null}
         <div className="is-hero-meta-row">
           <HeroMeta label="Collection" value={collection} />
           <HeroMeta label="Garment" value={garment} />
@@ -477,17 +462,19 @@ export function ImageStudioWorkspace() {
                       </div>
                     </>
                   ) : (
-                    <div className="is-handoff-empty is-handoff-empty--centered">
-                      <div className="is-empty-illustration-mark" aria-hidden>
-                        <Palette className="size-12" />
+                    <div className="is-empty-state">
+                      <div className="is-empty-state-glass">
+                        <div className="is-empty-illustration-mark" aria-hidden>
+                          <Palette className="size-14" />
+                        </div>
+                        <h2 className="is-empty-headline">Waiting for Creative Blueprint</h2>
+                        <p className="is-handoff-empty-text">
+                          Import a finished design from Design Studio to begin premium asset production.
+                        </p>
+                        <Link href="/agents/design" className="is-btn is-btn--primary is-btn--cta">
+                          Import from Design Studio
+                        </Link>
                       </div>
-                      <h2 className="is-empty-headline">Waiting for Creative Blueprint</h2>
-                      <p className="is-handoff-empty-text">
-                        Import a finished design from Design Studio to begin premium asset production.
-                      </p>
-                      <Link href="/agents/design" className="is-btn is-btn--primary">
-                        Import from Design Studio
-                      </Link>
                     </div>
                   )}
                 </div>
@@ -781,7 +768,12 @@ function MissionAssetCard({
             </span>
             <span className="is-asset-card-version">{version}</span>
           </span>
-          <span className="is-asset-card-eta">{estimate}</span>
+          <span className="is-asset-card-footer">
+            <span className="is-asset-card-eta">{estimate}</span>
+            <span className={cn("is-priority-badge", `is-priority-badge--${slot.priority}`)}>
+              {ASSET_PRIORITY_LABELS[slot.priority]}
+            </span>
+          </span>
         </span>
       </button>
       {canGenerate ? (

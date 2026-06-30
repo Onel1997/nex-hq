@@ -38,6 +38,8 @@ import {
   readGenerationPayload,
   svgMarkupToDataUrl,
 } from "@/lib/design/svg-data-url";
+import { buildDesignMockupPayload } from "@/lib/design/mockup-request";
+import { buildDesignRenderPayload } from "@/lib/design/render-request";
 import { saveImageStudioHandoff, buildImageStudioHandoff } from "@/lib/image/image-handoff-store";
 import { cn } from "@/lib/utils";
 import {
@@ -91,8 +93,29 @@ function resolveGarmentType(product: string): GarmentType {
 type CanvasTab = "svg" | "mockup" | "render" | "split";
 type ZoomLevel = 0.25 | 0.5 | 0.75 | 1 | 1.5 | "fit";
 
-function resolveCanvasTab(): CanvasTab {
+function resolveCanvasTab(assets: DesignMissionAssets): CanvasTab {
+  if (assets.renderUrl) return "render";
+  if (assets.mockupUrl) return "mockup";
+  if (assets.svgUrl) return "svg";
   return "svg";
+}
+
+function canvasTabForAssetKey(
+  assetKey: "svgUrl" | "mockupUrl" | "renderUrl",
+): CanvasTab {
+  if (assetKey === "renderUrl") return "render";
+  if (assetKey === "mockupUrl") return "mockup";
+  return "svg";
+}
+
+function isCanvasLayerGenerating(
+  layer: "svg" | "mockup" | "render",
+  loading: string | null,
+): boolean {
+  if (!loading) return false;
+  if (layer === "svg") return loading === "Generate SVG";
+  if (layer === "mockup") return loading === "Generate Mockup";
+  return loading === "Generate AI Render";
 }
 
 function hasCanvasAsset(assets: PerDesignWorkspace["assets"]): boolean {
@@ -234,7 +257,7 @@ export function CreativeWorkspace({
   }, []);
 
   useEffect(() => {
-    setCanvasTab(resolveCanvasTab());
+    setCanvasTab(resolveCanvasTab(canvasAssets));
   }, [brief.designId, mission.reportId]);
 
   const pipelineSteps = useMemo(
@@ -266,6 +289,7 @@ export function CreativeWorkspace({
     setActionLoading(label);
     setToast(null);
     setError(null);
+    setCanvasTab("svg");
     onPatchMission((s) =>
       updateWorkspace(s, s.brief.designId, (w) => ({
         ...w,
@@ -389,6 +413,7 @@ export function CreativeWorkspace({
       setActionLoading(label);
       setToast(null);
       setError(null);
+      setCanvasTab(canvasTabForAssetKey(assetKey));
       onPatchMission((s) =>
         updateWorkspace(s, s.brief.designId, (w) => ({
           ...w,
@@ -401,10 +426,41 @@ export function CreativeWorkspace({
       );
 
       try {
-        const res = await fetch("/api/image/run", {
+        const isMockup = assetKey === "mockupUrl";
+        const isRender = assetKey === "renderUrl";
+        const requestBody = isMockup
+          ? buildDesignMockupPayload({
+              brief,
+              collectionName: mission.collectionName,
+              assets: canvasAssets,
+              mockupPrompt: prompt,
+            })
+          : isRender
+            ? buildDesignRenderPayload({
+                brief,
+                collectionName: mission.collectionName,
+                assets: canvasAssets,
+                imagePrompt: prompt,
+              })
+            : { brief: prompt };
+
+        const endpoint = isMockup
+          ? "/api/design/generate-mockup"
+          : isRender
+            ? "/api/design/generate-render"
+            : "/api/image/run";
+
+        if (isMockup) {
+          console.log("[DESIGN STUDIO] mockup request payload", requestBody);
+        }
+        if (isRender) {
+          console.log("[DESIGN STUDIO] render request payload", requestBody);
+        }
+
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ brief: prompt }),
+          body: JSON.stringify(requestBody),
         });
         const payload = await readGenerationPayload(res);
         if (!res.ok) {
@@ -424,6 +480,9 @@ export function CreativeWorkspace({
           next = appendVersionEntry(next, versionLabel, versionType);
           return next;
         });
+        if (imageUrl) {
+          setCanvasTab(canvasTabForAssetKey(assetKey));
+        }
         notify(`${label} complete`);
       } catch (err) {
         const productionId =
@@ -434,7 +493,7 @@ export function CreativeWorkspace({
         setActionLoading(null);
       }
     },
-    [notify, onPatchMission, resetProductionStatus],
+    [brief, canvasAssets, mission.collectionName, notify, onPatchMission, resetProductionStatus],
   );
 
   const sendDirectorMessage = useCallback(
@@ -786,17 +845,13 @@ function MissionHeader({
   lastUpdated?: string;
 }) {
   const narrativeText = narrative?.trim();
-  const displayNarrative =
-    narrativeText && narrativeText.length > 180
-      ? `${narrativeText.slice(0, 177)}…`
-      : narrativeText;
 
   return (
     <header className="cw-mission-header" aria-label="Design mission">
       <div className="cw-mission-header-primary">
         <h1 className="cw-mission-header-title">{missionName}</h1>
-        {displayNarrative ? (
-          <p className="cw-mission-header-narrative">{displayNarrative}</p>
+        {narrativeText ? (
+          <p className="cw-mission-header-narrative">{narrativeText}</p>
         ) : null}
       </div>
       <div className="cw-mission-header-metrics">
@@ -940,6 +995,17 @@ function DesignCanvas({
           ? assets.mockupUrl
           : assets.renderUrl;
 
+    const generating = isCanvasLayerGenerating(kind, actionLoading ?? null);
+
+    if (generating) {
+      return (
+        <CanvasLayerGenerating
+          layer={kind}
+          garmentType={garmentType}
+        />
+      );
+    }
+
     if (!url) {
       return (
         <CanvasStudioEmpty
@@ -961,7 +1027,12 @@ function DesignCanvas({
     return (
       <div className="cw-canvas-product-shot">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt={`${title} ${kind}`} className="cw-canvas-product-img" />
+        <img
+          key={url}
+          src={url}
+          alt={`${title} ${kind}`}
+          className="cw-canvas-product-img"
+        />
       </div>
     );
   };
@@ -1047,6 +1118,28 @@ function DesignCanvas({
         </div>
       </div>
     </section>
+  );
+}
+
+function CanvasLayerGenerating({
+  layer,
+  garmentType,
+}: {
+  layer: "svg" | "mockup" | "render";
+  garmentType: GarmentType;
+}) {
+  const layerLabel =
+    layer === "svg" ? "SVG draft" : layer === "mockup" ? "product mockup" : "AI artwork";
+
+  return (
+    <div className="cw-canvas-layer-generating" aria-live="polite" aria-busy="true">
+      <PremiumGarmentCanvas garmentType={garmentType} empty subtle />
+      <div className="cw-canvas-layer-generating-card">
+        <Loader2 className="cw-canvas-layer-generating-icon animate-spin" aria-hidden />
+        <p className="cw-canvas-layer-generating-title">Generating {layerLabel}…</p>
+        <p className="cw-canvas-layer-generating-copy">Rendering premium studio output</p>
+      </div>
+    </div>
   );
 }
 

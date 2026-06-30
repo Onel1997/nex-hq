@@ -7,6 +7,11 @@ import type {
   RenderPlan,
 } from "@/lib/design/ai-designer/types";
 import {
+  estimateMissionStorageBytes,
+  isQuotaExceededError,
+  sanitizeMissionForStorage,
+} from "@/lib/design/design-mission-storage";
+import {
   computeDesignHealth,
   defaultProductionChecklist,
   syncProductionChecklist,
@@ -327,7 +332,49 @@ function loadMission(): DesignMissionState | null {
 
 export function saveDesignMission(state: DesignMissionState): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(migrateMission(state)));
+
+  const migrated = migrateMission(state);
+  const attempts: Array<{ aggressive: boolean }> = [
+    { aggressive: false },
+    { aggressive: true },
+  ];
+
+  for (let index = 0; index < attempts.length; index += 1) {
+    const { aggressive } = attempts[index];
+    try {
+      const sanitized = sanitizeMissionForStorage(migrated, { aggressive });
+      const payload = JSON.stringify(sanitized);
+      localStorage.setItem(STORAGE_KEY, payload);
+
+      if (aggressive) {
+        console.warn(
+          "[MISSION STORE] localStorage quota exceeded; persisted lightweight mission only",
+          {
+            bytes: payload.length,
+          },
+        );
+      } else if (process.env.NODE_ENV !== "production") {
+        console.info("[MISSION STORE] persisted design mission", {
+          bytes: payload.length,
+        });
+      }
+      return;
+    } catch (error) {
+      const canRetry = isQuotaExceededError(error) && index < attempts.length - 1;
+      if (!canRetry) {
+        console.warn(
+          "[MISSION STORE] localStorage quota exceeded; persisted lightweight mission only",
+          {
+            error: error instanceof Error ? error.message : String(error),
+            estimatedBytes: estimateMissionStorageBytes(
+              sanitizeMissionForStorage(migrated, { aggressive: true }),
+            ),
+          },
+        );
+        return;
+      }
+    }
+  }
 }
 
 export function clearDesignMission(): void {

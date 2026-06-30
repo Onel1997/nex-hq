@@ -66,27 +66,36 @@ export const DELIVERABLE_GROUPS = [
   { label: "Website Assets", count: 1 },
 ] as const;
 
+export type AssetSlotPriority = "hero" | "core" | "support";
+
 export interface MissionAssetSlot {
   id: string;
   label: string;
   icon: LucideIcon;
   assetTypes: string[];
   commercial: boolean;
+  priority: AssetSlotPriority;
 }
 
+export const ASSET_PRIORITY_LABELS: Record<AssetSlotPriority, string> = {
+  hero: "Hero",
+  core: "Core",
+  support: "Support",
+};
+
 export const MISSION_ASSET_SLOTS: MissionAssetSlot[] = [
-  { id: "hero", label: "Hero Image", icon: Sparkles, assetTypes: ["hero_image"], commercial: true },
-  { id: "mockup", label: "Product Mockup", icon: Package, assetTypes: ["ecommerce_image", "studio_shot"], commercial: true },
-  { id: "flatlay", label: "Flat Lay", icon: LayoutGrid, assetTypes: ["detail_shot"], commercial: false },
-  { id: "lifestyle", label: "Lifestyle", icon: Camera, assetTypes: ["editorial_streetwear"], commercial: true },
-  { id: "editorial", label: "Editorial", icon: BookOpen, assetTypes: ["editorial_luxury"], commercial: true },
-  { id: "campaign", label: "Campaign Hero", icon: Clapperboard, assetTypes: ["collection_cover", "launch_banner"], commercial: true },
-  { id: "instagram", label: "Instagram Feed", icon: Square, assetTypes: ["instagram_post"], commercial: true },
-  { id: "story", label: "Instagram Story", icon: Monitor, assetTypes: ["story_slide"], commercial: false },
-  { id: "pinterest", label: "Pinterest", icon: Layers, assetTypes: ["carousel_image"], commercial: false },
-  { id: "tiktok", label: "TikTok Cover", icon: Image, assetTypes: ["tiktok_cover"], commercial: true },
-  { id: "lookbook", label: "Lookbook", icon: BookOpen, assetTypes: ["lookbook_outfit"], commercial: true },
-  { id: "banner", label: "Website Banner", icon: Globe, assetTypes: ["launch_banner"], commercial: true },
+  { id: "hero", label: "Hero Image", icon: Sparkles, assetTypes: ["hero_image"], commercial: true, priority: "hero" },
+  { id: "mockup", label: "Product Mockup", icon: Package, assetTypes: ["ecommerce_image", "studio_shot"], commercial: true, priority: "core" },
+  { id: "flatlay", label: "Flat Lay", icon: LayoutGrid, assetTypes: ["detail_shot"], commercial: false, priority: "support" },
+  { id: "lifestyle", label: "Lifestyle", icon: Camera, assetTypes: ["editorial_streetwear"], commercial: true, priority: "core" },
+  { id: "editorial", label: "Editorial", icon: BookOpen, assetTypes: ["editorial_luxury"], commercial: true, priority: "core" },
+  { id: "campaign", label: "Campaign Hero", icon: Clapperboard, assetTypes: ["collection_cover", "launch_banner"], commercial: true, priority: "hero" },
+  { id: "instagram", label: "Instagram Feed", icon: Square, assetTypes: ["instagram_post"], commercial: true, priority: "core" },
+  { id: "story", label: "Instagram Story", icon: Monitor, assetTypes: ["story_slide"], commercial: false, priority: "support" },
+  { id: "pinterest", label: "Pinterest", icon: Layers, assetTypes: ["carousel_image"], commercial: false, priority: "support" },
+  { id: "tiktok", label: "TikTok Cover", icon: Image, assetTypes: ["tiktok_cover"], commercial: true, priority: "core" },
+  { id: "lookbook", label: "Lookbook", icon: BookOpen, assetTypes: ["lookbook_outfit"], commercial: true, priority: "core" },
+  { id: "banner", label: "Website Banner", icon: Globe, assetTypes: ["launch_banner"], commercial: true, priority: "core" },
 ];
 
 export const FASHION_PRODUCTION_PIPELINE = [

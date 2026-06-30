@@ -80,6 +80,8 @@ export function extractGeneratedImageUrl(payload: unknown): string {
   const url =
     data?.url ??
     data?.imageUrl ??
+    data?.mockupUrl ??
+    data?.renderUrl ??
     data?.result?.url ??
     data?.result?.imageUrl ??
     data?.result?.output ??
