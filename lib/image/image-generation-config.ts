@@ -97,18 +97,44 @@ export function resolveOpenAiOutputFormat(): OpenAiOutputFormat {
   return getActiveImageGenerationProfile().outputFormat;
 }
 
-export function buildOpenAiGenerationPayload(
-  prompt: string,
-  dimensions: string,
-): {
+export interface OpenAiImageGenerationPayload {
   model: OpenAiGenerationProfile["model"];
   prompt: string;
   n: 1;
   size: OpenAiImageSize;
   quality: OpenAiImageQuality;
   output_format: OpenAiOutputFormat;
-  generationMode: ImageGenerationMode;
-} {
+}
+
+const OPENAI_IMAGE_PAYLOAD_KEYS = new Set<keyof OpenAiImageGenerationPayload | "background">([
+  "model",
+  "prompt",
+  "size",
+  "quality",
+  "n",
+  "background",
+  "output_format",
+]);
+
+export function stripUnknownOpenAiImagePayloadFields(
+  payload: OpenAiImageGenerationPayload | Record<string, unknown>,
+): OpenAiImageGenerationPayload {
+  const source = payload as Record<string, unknown>;
+  const sanitized: Record<string, unknown> = {};
+
+  for (const key of OPENAI_IMAGE_PAYLOAD_KEYS) {
+    if (key in source && source[key] !== undefined) {
+      sanitized[key] = source[key];
+    }
+  }
+
+  return sanitized as unknown as OpenAiImageGenerationPayload;
+}
+
+export function buildOpenAiGenerationPayload(
+  prompt: string,
+  dimensions: string,
+): OpenAiImageGenerationPayload {
   const profile = getActiveImageGenerationProfile();
 
   return {
@@ -118,6 +144,5 @@ export function buildOpenAiGenerationPayload(
     size: resolveOpenAiImageSize(dimensions),
     quality: profile.quality,
     output_format: profile.outputFormat,
-    generationMode: IMAGE_GENERATION.mode,
   };
 }

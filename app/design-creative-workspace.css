@@ -3387,3 +3387,196 @@
 .cw-inspector-review-score.is-ready {
   color: rgb(167 243 208 / 0.9);
 }
+
+/* ── Master Artwork (Design Studio V2) ── */
+
+.cw-master-artwork {
+  margin: 1rem 0 0;
+  padding: 1.1rem 1.15rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.03) 0%, transparent 55%),
+    rgb(12 14 18 / 0.72);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+
+.cw-master-artwork-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.cw-master-kicker {
+  margin: 0 0 0.25rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(148 163 184 / 0.65);
+}
+
+.cw-master-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: rgb(244 241 235 / 0.96);
+}
+
+.cw-master-subtitle {
+  margin: 0.35rem 0 0;
+  max-width: 52rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgb(148 163 184 / 0.78);
+}
+
+.cw-master-status-badge {
+  flex-shrink: 0;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  color: rgb(148 163 184 / 0.85);
+  background: rgb(255 255 255 / 0.03);
+}
+
+.cw-master-status-badge.is-draft {
+  color: rgb(251 191 36 / 0.95);
+  border-color: rgb(251 191 36 / 0.25);
+}
+
+.cw-master-status-badge.is-review {
+  color: rgb(147 197 253 / 0.95);
+  border-color: rgb(147 197 253 / 0.25);
+}
+
+.cw-master-status-badge.is-approved {
+  color: rgb(110 231 183 / 0.95);
+  border-color: rgb(110 231 183 / 0.25);
+  background: rgb(16 185 129 / 0.08);
+}
+
+.cw-master-artwork-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 1rem;
+}
+
+@media (max-width: 980px) {
+  .cw-master-artwork-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cw-master-preview {
+  min-height: 220px;
+  border-radius: 0.65rem;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  background:
+    radial-gradient(circle at 50% 35%, rgb(255 255 255 / 0.04), transparent 55%),
+    repeating-conic-gradient(from 45deg, rgb(255 255 255 / 0.02) 0% 25%, transparent 0% 50%) 50% / 16px 16px,
+    rgb(8 10 14 / 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.cw-master-preview--empty {
+  flex-direction: column;
+  text-align: center;
+  color: rgb(148 163 184 / 0.75);
+  font-size: 0.78rem;
+}
+
+.cw-master-preview-hint {
+  margin: 0.5rem 0 0;
+  max-width: 28rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: rgb(125 138 152 / 0.75);
+}
+
+.cw-master-preview--svg svg {
+  width: 100%;
+  max-height: 280px;
+  height: auto;
+}
+
+.cw-master-preview-img {
+  max-width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+}
+
+.cw-master-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.cw-master-meta-field {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.cw-master-meta-label {
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(125 138 152 / 0.65);
+}
+
+.cw-master-meta-value {
+  font-size: 0.74rem;
+  color: rgb(226 232 240 / 0.92);
+}
+
+.cw-master-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.cw-master-actions .cw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+}
+
+.cw-master-actions .cw-btn-accent {
+  background: linear-gradient(135deg, rgb(16 185 129 / 0.22), rgb(16 185 129 / 0.08));
+  border-color: rgb(16 185 129 / 0.35);
+  color: rgb(167 243 208 / 0.95);
+}
+
+.cw-master-approved-note,
+.cw-master-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.cw-master-approved-note {
+  color: rgb(167 243 208 / 0.88);
+}
+
+.cw-master-hint {
+  color: rgb(251 191 36 / 0.85);
+}
+
+.cw-master-actions .is-disabled-future {
+  opacity: 0.45;
+}

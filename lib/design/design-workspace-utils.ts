@@ -70,7 +70,10 @@ export function syncProductionChecklist(
     brief.productionMethod.toLowerCase().includes("spot");
 
   const map: Record<ProductionItem["id"], ProductionItem["status"]> = {
-    svg: assets.svgUrl ? "complete" : "pending",
+    svg:
+      assets.svgUrl || assets.masterArtwork?.status === "approved"
+        ? "complete"
+        : "pending",
     mockup: assets.mockupUrl ? "complete" : "pending",
     aiRender: assets.renderUrl ? "complete" : "pending",
     print: printReady ? "complete" : "pending",

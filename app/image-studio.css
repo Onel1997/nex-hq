@@ -446,9 +446,56 @@ body:has(.image-studio-shell) {
   background: linear-gradient(135deg, rgb(74 222 154 / 0.06) 0%, transparent 50%);
 }
 
-.is-progress-ring { flex-shrink: 0; }
-.is-progress-ring--active circle:last-child {
+.is-progress-ring-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.is-progress-ring {
+  display: block;
+  flex-shrink: 0;
+}
+
+.is-progress-ring-wrap--active .is-progress-ring circle:last-of-type {
   filter: drop-shadow(0 0 4px var(--is-emerald-glow));
+}
+
+.is-progress-ring-wrap--complete .is-progress-ring circle:last-of-type {
+  filter: drop-shadow(0 0 4px var(--is-emerald-glow));
+}
+
+.is-progress-ring-wrap--failed .is-progress-ring circle:last-of-type {
+  filter: drop-shadow(0 0 4px rgb(248 113 113 / 0.35));
+}
+
+.is-progress-ring--indeterminate .is-progress-ring-arc {
+  animation: is-progress-spin 0.9s linear infinite;
+  transform-origin: center;
+}
+
+.is-progress-ring-icon {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 42%;
+  height: 42%;
+  pointer-events: none;
+}
+
+.is-progress-ring-icon--complete {
+  color: var(--is-emerald);
+}
+
+.is-progress-ring-icon--failed {
+  color: #f87171;
+}
+
+@keyframes is-progress-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .is-asset-card-icon {
@@ -530,10 +577,21 @@ body:has(.image-studio-shell) {
 }
 
 .is-asset-card-eta {
-  font-size: 0.5625rem;
-  font-family: var(--font-geist-mono, monospace);
-  color: rgb(125 138 152 / 0.45);
-  letter-spacing: 0.02em;
+  font-size: 0.62rem;
+  color: rgb(125 138 152 / 0.55);
+  font-variant-numeric: tabular-nums;
+}
+
+.is-asset-card-eta--live {
+  color: var(--is-gold);
+}
+
+.is-asset-card-ready-tag {
+  margin-left: 0.25rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(74 222 154 / 0.75);
 }
 
 .is-priority-badge {
@@ -1736,7 +1794,9 @@ body:has(.image-studio-shell) {
 }
 
 .is-production-dot--revision,
-.is-queue-status-dot--revision {
+.is-production-dot--failed,
+.is-queue-status-dot--revision,
+.is-queue-status-dot--failed {
   background: #f87171;
   box-shadow: 0 0 6px rgb(248 113 113 / 0.35);
 }
@@ -1752,7 +1812,8 @@ body:has(.image-studio-shell) {
 .is-asset-card-status--generating { color: var(--is-gold); }
 .is-asset-card-status--ready { color: var(--is-emerald); }
 .is-asset-card-status--approved { color: #93c5fd; }
-.is-asset-card-status--needs_revision { color: #fca5a5; }
+.is-asset-card-status--needs_revision,
+.is-asset-card-status--failed { color: #fca5a5; }
 
 .is-asset-generate {
   display: block;

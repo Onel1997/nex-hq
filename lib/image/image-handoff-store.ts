@@ -6,6 +6,7 @@ import type {
   RenderPlan,
 } from "@/lib/design/ai-designer/types";
 import type { DesignMissionAssets } from "@/lib/design/design-mission-store";
+import { buildMasterArtworkHandoffPayload } from "@/lib/design/master-artwork";
 import {
   slimConceptForStorage,
   slimRenderPlanForStorage,
@@ -42,6 +43,15 @@ export interface ImageStudioHandoff {
   renderPlan?: RenderPlan;
   concept?: DesignConcept;
   review?: DesignConceptReview;
+  /** Approved master artwork — Image Studio production source (never redesign). */
+  masterArtworkApproved?: boolean;
+  masterArtworkVersion?: string;
+  masterArtworkSvgUrl?: string;
+  masterArtworkSvgMarkup?: string;
+  masterArtworkPlacement?: string;
+  masterArtworkPrintMethod?: string;
+  masterArtworkResolution?: string;
+  masterArtworkCommercialScore?: number;
 }
 
 export interface HandoffSaveResult {
@@ -287,6 +297,7 @@ export function buildImageStudioHandoff(input: {
     renderPlan,
     concept,
     review,
+    ...buildMasterArtworkHandoffPayload(input.assets ?? {}),
   };
 
   return normalizeImageStudioHandoff(handoff) ?? handoff;
@@ -305,6 +316,7 @@ function compactForWindowName(handoff: ImageStudioHandoff): ImageStudioHandoff {
     commercialBlueprint: handoff.commercialBlueprint,
     commercialScore: handoff.commercialScore,
     commercialApproved: handoff.commercialApproved,
+    masterArtworkApproved: handoff.masterArtworkApproved,
   };
 }
 
@@ -315,6 +327,10 @@ function slimHandoffForStorage(handoff: ImageStudioHandoff): ImageStudioHandoff 
     ...handoff,
     concept,
     renderPlan,
+    masterArtworkSvgMarkup:
+      handoff.masterArtworkSvgMarkup && handoff.masterArtworkSvgMarkup.length <= 12_000
+        ? handoff.masterArtworkSvgMarkup
+        : undefined,
   };
   return normalizeImageStudioHandoff(slim) ?? slim;
 }

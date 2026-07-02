@@ -20,15 +20,17 @@ export type ProductionQueueStatus =
   | "generating"
   | "ready"
   | "approved"
-  | "needs_revision";
+  | "needs_revision"
+  | "failed";
 
 export const PRODUCTION_QUEUE_LABELS: Record<ProductionQueueStatus, string> = {
   waiting: "Waiting",
-  preparing: "Preparing Prompt",
+  preparing: "Preparing",
   generating: "Generating",
   ready: "Complete",
   approved: "Approved",
   needs_revision: "Needs Revision",
+  failed: "Failed",
 };
 
 /** Visual indicator class suffix for production queue status dots */
@@ -39,6 +41,7 @@ export const PRODUCTION_QUEUE_DOT: Record<ProductionQueueStatus, string> = {
   ready: "ready",
   approved: "approved",
   needs_revision: "revision",
+  failed: "failed",
 };
 
 export type MissionAssetStatus = ProductionQueueStatus;
@@ -115,6 +118,7 @@ export const HANDOFF_CHECKLIST = [
   { id: "blueprint", label: "AI Designer Blueprint Received", check: (h: HandoffChecks) => Boolean(h.hasBlueprint) },
   { id: "image-prompt", label: "Image Prompt Ready", check: (h: HandoffChecks) => Boolean(h.hasImagePrompt) },
   { id: "mockup-prompt", label: "Mockup Prompt Ready", check: (h: HandoffChecks) => Boolean(h.hasMockupPrompt) },
+  { id: "master-artwork", label: "Master Artwork Approved", check: (h: HandoffChecks) => Boolean(h.hasMasterArtwork) },
   { id: "assets", label: "12 Assets Planned", check: (h: HandoffChecks) => Boolean(h.hasMission) },
 ] as const;
 
@@ -123,6 +127,7 @@ export interface HandoffChecks {
   hasBlueprint: boolean;
   hasImagePrompt: boolean;
   hasMockupPrompt: boolean;
+  hasMasterArtwork: boolean;
 }
 
 export interface MissionContextInput {
@@ -146,12 +151,14 @@ export function buildHandoffChecks(input: {
   hasBlueprint: boolean;
   imagePrompt?: string;
   mockupPrompt?: string;
+  masterArtworkApproved?: boolean;
 }): HandoffChecks {
   return {
     hasMission: input.handoff,
     hasBlueprint: input.hasBlueprint,
     hasImagePrompt: Boolean(input.imagePrompt?.trim()),
     hasMockupPrompt: Boolean(input.mockupPrompt?.trim()),
+    hasMasterArtwork: Boolean(input.masterArtworkApproved),
   };
 }
 
@@ -261,30 +268,29 @@ export function mapAssetStatusToMission(
     case "generating":
       return "generating";
     case "completed":
-      return "ready";
     case "ready":
       return "ready";
     case "failed":
-      return "needs_revision";
+      return "failed";
     default:
       return "waiting";
   }
 }
 
-export function progressForMissionStatus(status: MissionAssetStatus): number {
+export function progressForMissionStatus(status: MissionAssetStatus): number | null {
   switch (status) {
     case "waiting":
       return 0;
     case "preparing":
-      return 15;
+      return 20;
     case "generating":
-      return 50;
+      return null;
     case "ready":
-      return 78;
     case "approved":
-      return 95;
+      return 100;
+    case "failed":
     case "needs_revision":
-      return 35;
+      return 0;
     default:
       return 0;
   }
@@ -353,6 +359,14 @@ export function deriveMissionStatus(
   }
   if (asset.id === options?.generatingAssetId || asset.status === "generating") {
     return "generating";
+  }
+  if (asset.imageUrl || asset.status === "completed" || asset.status === "ready") {
+    if (options?.reviewState === "approved") return "approved";
+    if (options?.reviewState === "needs_revision") return "needs_revision";
+    return "ready";
+  }
+  if (asset.status === "failed") {
+    return "failed";
   }
   return mapAssetStatusToMission(asset.status, options?.reviewState ?? null);
 }

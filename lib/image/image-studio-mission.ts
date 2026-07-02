@@ -114,7 +114,6 @@ export function resolveCommercialStatus(blueprint: ImportedCreativeBlueprint | n
 }
 
 export function resolveGenerationStatus(input: {
-  isLoading: boolean;
   hasResults: boolean;
   hasBlueprint: boolean;
   pipelineActive?: boolean;
@@ -122,7 +121,7 @@ export function resolveGenerationStatus(input: {
   preparingAssetId?: string | null;
   generatingAssetId?: string | null;
 }): string {
-  if (input.generatingAssetId || input.pipelineActive || input.isLoading) return "In Production";
+  if (input.generatingAssetId || input.pipelineActive) return "In Production";
   if (input.preparingAssetId) return "Preparing";
   if (input.allAssetsComplete) return "Production Complete";
   if (input.hasResults) return "Assets Staged";

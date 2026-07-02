@@ -191,6 +191,19 @@ export function sanitizeAssetsForStorage(
     next.aiDesignerReview = assets.aiDesignerReview;
   }
 
+  if (!aggressive && assets.masterArtwork) {
+    next.masterArtwork = {
+      ...assets.masterArtwork,
+      approvedSvgMarkup: assets.masterArtwork.approvedSvgMarkup
+        ? truncateString(assets.masterArtwork.approvedSvgMarkup)
+        : undefined,
+    };
+  }
+
+  if (!aggressive && assets.svgMarkup && !next.masterArtwork?.approvedSvgMarkup) {
+    next.svgMarkup = truncateString(assets.svgMarkup);
+  }
+
   return next;
 }
 

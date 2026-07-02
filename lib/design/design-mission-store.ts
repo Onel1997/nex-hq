@@ -11,6 +11,7 @@ import {
   isQuotaExceededError,
   sanitizeMissionForStorage,
 } from "@/lib/design/design-mission-storage";
+import type { MasterArtworkState } from "@/lib/design/master-artwork";
 import {
   computeDesignHealth,
   defaultProductionChecklist,
@@ -99,6 +100,8 @@ export interface DesignMissionAssets {
   aiDesignerConcept?: DesignConcept;
   aiDesignerRenderPlan?: RenderPlan;
   aiDesignerReview?: DesignConceptReview;
+  /** Canonical print artwork — Design Studio creative source of truth. */
+  masterArtwork?: MasterArtworkState;
 }
 
 export interface DesignPromptOverrides {

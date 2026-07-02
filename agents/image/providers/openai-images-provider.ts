@@ -1,7 +1,10 @@
 import { getOpenAIClient } from "@/lib/openai/client";
 import {
   buildOpenAiGenerationPayload,
+  getImageGenerationMode,
   getOpenAiImageModel,
+  stripUnknownOpenAiImagePayloadFields,
+  type OpenAiImageGenerationPayload,
   type OpenAiImageSize,
 } from "@/lib/image/image-generation-config";
 import type { Image } from "openai/resources/images";
@@ -20,7 +23,7 @@ export type GptImageSize = OpenAiImageSize;
 
 export function buildOpenAiImageRequest(
   request: ImageGenerationRequest,
-): ReturnType<typeof buildOpenAiGenerationPayload> {
+): OpenAiImageGenerationPayload {
   return buildOpenAiGenerationPayload(request.prompt, request.dimensions);
 }
 
@@ -48,10 +51,11 @@ export async function generateOpenAiImage(
   request: ImageGenerationRequest,
 ): Promise<ImageGenerationResult & { imageBytes?: Buffer }> {
   const openai = getOpenAIClient();
-  const payload = buildOpenAiImageRequest(request);
+  const payload = stripUnknownOpenAiImagePayloadFields(buildOpenAiImageRequest(request));
 
+  console.info("[OpenAI Images] final payload keys:", Object.keys(payload));
   console.info("[OpenAI Images] Request payload", {
-    generationMode: payload.generationMode,
+    generationMode: getImageGenerationMode(),
     model: payload.model,
     size: payload.size,
     quality: payload.quality,
@@ -85,7 +89,7 @@ export async function generateOpenAiImage(
     if (quotaError) {
       const details = extractOpenAiErrorDetails(error, payload.model);
       console.error("[OpenAI Images] Quota exceeded", {
-        generationMode: payload.generationMode,
+        generationMode: getImageGenerationMode(),
         model: details.model,
         requestId: details.requestId,
         responseBody: details.responseBody,

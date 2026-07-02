@@ -6,13 +6,13 @@ import {
   buildOpenAiGenerationPayload,
   getOpenAiImageModel,
   IMAGE_GENERATION,
+  stripUnknownOpenAiImagePayloadFields,
 } from "@/lib/image/image-generation-config";
 import { generateOpenAiImage } from "./providers/openai-images-provider";
 
 function assertPayload() {
-  const payload = buildOpenAiGenerationPayload(
-    "Test prompt for verification",
-    "1920x1080",
+  const payload = stripUnknownOpenAiImagePayloadFields(
+    buildOpenAiGenerationPayload("Test prompt for verification", "1920x1080"),
   );
 
   const issues: string[] = [];
@@ -20,11 +20,14 @@ function assertPayload() {
   if ("response_format" in payload) {
     issues.push("payload must not include response_format");
   }
+  if ("generationMode" in payload) {
+    issues.push("payload must not include generationMode");
+  }
+  if ("mode" in payload) {
+    issues.push("payload must not include mode");
+  }
   if (payload.model !== getOpenAiImageModel()) {
     issues.push(`expected model ${getOpenAiImageModel()}, got ${payload.model}`);
-  }
-  if (payload.generationMode !== IMAGE_GENERATION.mode) {
-    issues.push(`expected mode ${IMAGE_GENERATION.mode}, got ${payload.generationMode}`);
   }
   if (IMAGE_GENERATION.mode === "production" && payload.size !== "1536x1024") {
     issues.push(`expected landscape size 1536x1024 in production, got ${payload.size}`);

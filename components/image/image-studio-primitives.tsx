@@ -3,8 +3,10 @@
 import {
   FASHION_PRODUCTION_PIPELINE,
   type FashionProductionStepId,
+  type MissionAssetStatus,
 } from "@/lib/image/image-studio-assets";
 import { cn } from "@/lib/utils";
+import { Check, X } from "lucide-react";
 
 interface CanvasPlaceholderProps {
   hasBlueprint?: boolean;
@@ -236,44 +238,83 @@ export function FashionProductionPipeline({
 }
 
 interface ProgressRingProps {
-  progress: number;
+  status: MissionAssetStatus;
+  progress?: number | null;
   size?: number;
   active?: boolean;
 }
 
-export function ProgressRing({ progress, size = 32, active }: ProgressRingProps) {
+export function ProgressRing({ status, progress = 0, size = 32, active }: ProgressRingProps) {
   const stroke = 2;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (progress / 100) * circumference;
+  const cx = size / 2;
+  const cy = size / 2;
+  const isIndeterminate = status === "generating" && progress == null;
+  const pct = progress ?? 0;
+  const offset = circumference - (pct / 100) * circumference;
+  const showArc = status !== "waiting";
+  const isComplete = status === "ready" || status === "approved";
+  const isFailed = status === "failed" || status === "needs_revision";
+
+  const strokeColor = isFailed
+    ? "#f87171"
+    : isComplete
+      ? "var(--is-emerald)"
+      : active
+        ? "var(--is-emerald)"
+        : "rgba(125,138,152,0.35)";
 
   return (
-    <svg
-      width={size}
-      height={size}
-      className={cn("is-progress-ring", active && "is-progress-ring--active")}
+    <div
+      className={cn(
+        "is-progress-ring-wrap",
+        `is-progress-ring-wrap--${status}`,
+        active && "is-progress-ring-wrap--active",
+        isIndeterminate && "is-progress-ring-wrap--indeterminate",
+        isComplete && "is-progress-ring-wrap--complete",
+        isFailed && "is-progress-ring-wrap--failed",
+      )}
+      style={{ width: size, height: size }}
       aria-hidden
     >
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke="rgba(255,255,255,0.05)"
-        strokeWidth={stroke}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke={active ? "var(--is-emerald)" : "rgba(125,138,152,0.35)"}
-        strokeWidth={stroke}
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-    </svg>
+      <svg
+        width={size}
+        height={size}
+        className={cn("is-progress-ring", isIndeterminate && "is-progress-ring--indeterminate")}
+      >
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.05)"
+          strokeWidth={stroke}
+        />
+        {showArc ? (
+          <circle
+            cx={cx}
+            cy={cy}
+            r={radius}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth={stroke}
+            strokeDasharray={
+              isIndeterminate ? `${circumference * 0.28} ${circumference * 0.72}` : circumference
+            }
+            strokeDashoffset={isIndeterminate ? 0 : offset}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${cx} ${cy})`}
+            className={cn(isIndeterminate && "is-progress-ring-arc")}
+          />
+        ) : null}
+      </svg>
+      {isComplete ? (
+        <Check className="is-progress-ring-icon is-progress-ring-icon--complete" strokeWidth={2.5} />
+      ) : null}
+      {status === "failed" ? (
+        <X className="is-progress-ring-icon is-progress-ring-icon--failed" strokeWidth={2.5} />
+      ) : null}
+    </div>
   );
 }

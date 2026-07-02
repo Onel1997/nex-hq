@@ -23,7 +23,10 @@ import {
 } from "@/lib/image/image-handoff-store";
 import { HandoffDebugOverlay } from "@/components/image/handoff-debug-overlay";
 import {
-  ASSET_ESTIMATED_SECONDS,
+  formatAssetElapsedTime,
+  useAssetProgressTimers,
+} from "@/components/image/use-asset-progress-timers";
+import {
   ASSET_PRIORITY_LABELS,
   assetVersionLabel,
   buildHandoffChecks,
@@ -31,7 +34,6 @@ import {
   deriveFashionProductionStep,
   deriveMissionStatus,
   FASHION_PRODUCTION_PIPELINE,
-  formatEstimatedTime,
   HANDOFF_CHECKLIST,
   MISSION_ASSET_SLOTS,
   MISSION_STATUS_LABELS,
@@ -103,10 +105,10 @@ let cachedAppliedHandoff: ImageStudioHandoff | null = null;
 let cachedProductionProject: ImageRunResult | null = null;
 let productionPackagePromise: Promise<ImageRunResult | null> | null = null;
 
-let autoGenerateMissionKey: string | null = null;
-let autoGenerateInflight: Promise<void> | null = null;
+let handoffStagingMissionKey: string | null = null;
+let handoffStagingInflight: Promise<ImageRunResult | null> | null = null;
 
-function buildAutoGenerateMissionKey(handoff: ImageStudioHandoff): string {
+function buildHandoffMissionKey(handoff: ImageStudioHandoff): string {
   return handoff.designId ?? handoff.handoffAt ?? handoff.mission?.title ?? "mission";
 }
 
@@ -268,11 +270,18 @@ export function ImageStudioWorkspace() {
     return null;
   }, [generatingAssetId, missionSlotAssets, preparingAssetId]);
 
+  const assetTimers = useAssetProgressTimers(
+    productionAssets,
+    preparingAssetId,
+    generatingAssetId,
+  );
+
   const handoffChecks = buildHandoffChecks({
     handoff: hasHandoff,
     hasBlueprint,
     imagePrompt: handoff?.imagePromptPrimary ?? brief,
     mockupPrompt: handoff?.mockupPromptPrimary,
+    masterArtworkApproved: handoff?.masterArtworkApproved,
   });
 
   const missionName = blueprint?.designName ?? (hasHandoff ? handoff?.sourceTitle : null) ?? "Waiting for Creative Blueprint";
@@ -284,7 +293,6 @@ export function ImageStudioWorkspace() {
   const generationModeLabel = getImageGenerationModeLabel();
   const isDraftGenerationMode = IMAGE_GENERATION.mode === "draft";
   const generationStatus = resolveGenerationStatus({
-    isLoading,
     hasResults,
     hasBlueprint,
     pipelineActive,
@@ -602,26 +610,36 @@ export function ImageStudioWorkspace() {
       pipelineLockRef.current = false;
     }
 
-    console.info("[Image Studio] calling createProductionPackage", {
-      briefLength: briefForRun.length,
-    });
+    let project: ImageRunResult | null = cachedProductionProject;
 
-    let project: ImageRunResult | null = null;
-    packageLockRef.current = true;
-    try {
-      project = await createProductionPackage(briefForRun);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t("image.errors.unexpected");
-      console.error("[Image Studio] runImage early return: production package failed", {
-        abortReason: "missing production package",
-        error: message,
+    if (!project) {
+      console.info("[Image Studio] calling createProductionPackage", {
+        briefLength: briefForRun.length,
       });
-      setError(message);
-      releaseExecutionLocks("createProductionPackage-error");
-      return null;
-    } finally {
-      packageLockRef.current = false;
+
+      packageLockRef.current = true;
+      try {
+        project = await createProductionPackage(briefForRun);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : t("image.errors.unexpected");
+        console.error("[Image Studio] runImage early return: production package failed", {
+          abortReason: "missing production package",
+          error: message,
+        });
+        setError(message);
+        releaseExecutionLocks("createProductionPackage-error");
+        return null;
+      } finally {
+        packageLockRef.current = false;
+      }
+    } else {
+      console.info("[Image Studio] runImage using staged production package", {
+        reportId: project.reportId,
+        assetCount: project.productionAssets?.length ?? 0,
+      });
+      setResult(project);
+      setProductionAssets(project.productionAssets ?? []);
     }
 
     if (!project) {
@@ -696,6 +714,12 @@ export function ImageStudioWorkspace() {
     t,
   ]);
 
+  const generateAssetsButtonLabel = pipelineActive || generatingAssetId
+    ? "Generating…"
+    : isLoading
+      ? "Staging Assets…"
+      : "Generate Assets";
+
   const handleGenerateAssetsClick = useCallback(() => {
     console.info("[Image Studio] Generate Assets clicked", {
       briefLength: brief.trim().length,
@@ -725,10 +749,7 @@ export function ImageStudioWorkspace() {
     t,
   ]);
 
-  const runImageRef = useRef(runImage);
-  runImageRef.current = runImage;
-
-  const hydrateCachedProduction = useCallback(() => {
+  const hydrateCachedProductionPackage = useCallback(() => {
     if (!cachedProductionProject) return false;
     setResult(cachedProductionProject);
     setProductionAssets(cachedProductionProject.productionAssets ?? []);
@@ -754,7 +775,7 @@ export function ImageStudioWorkspace() {
         if (restoreCachedHandoff()) {
           console.info("[Image Studio] handoff restored from cache", { attempt: attemptLabel });
         }
-        hydrateCachedProduction();
+        hydrateCachedProductionPackage();
         return;
       }
 
@@ -806,35 +827,44 @@ export function ImageStudioWorkspace() {
       cancelled = true;
       retryTimers.forEach((timer) => clearTimeout(timer));
     };
-  }, [hydrateCachedProduction]);
+  }, [hydrateCachedProductionPackage]);
 
   useEffect(() => {
     if (!handoffStateApplied || !handoff) return;
+    if (cachedProductionProject || productionAssets.length > 0) return;
 
     const missionBrief = resolveGenerationBrief(brief, handoff, blueprint);
     if (!missionBrief.trim()) {
-      console.info("[Image Studio] auto-generate skipped — missing prompt/brief", {
+      console.info("[Image Studio] handoff staging skipped — missing prompt/brief", {
         abortReason: "missing brief",
       });
       return;
     }
 
-    const missionKey = buildAutoGenerateMissionKey(handoff);
-    if (autoGenerateMissionKey === missionKey) {
-      if (autoGenerateInflight) void autoGenerateInflight;
+    const missionKey = buildHandoffMissionKey(handoff);
+    if (handoffStagingMissionKey === missionKey) {
+      if (handoffStagingInflight) void handoffStagingInflight;
       return;
     }
 
-    autoGenerateMissionKey = missionKey;
-    autoGenerateInflight = (async () => {
-      console.info("[Image Studio] auto-click generate assets after handoff");
-      await runImageRef.current();
-    })().finally(() => {
-      autoGenerateInflight = null;
+    handoffStagingMissionKey = missionKey;
+    console.info("[Image Studio] staging production package after handoff", {
+      missionKey,
+      briefLength: missionBrief.length,
+    });
+    handoffStagingInflight = createProductionPackage(missionBrief).finally(() => {
+      handoffStagingInflight = null;
     });
 
-    void autoGenerateInflight;
-  }, [handoffStateApplied, handoff, brief, blueprint]);
+    void handoffStagingInflight;
+  }, [
+    handoffStateApplied,
+    handoff,
+    brief,
+    blueprint,
+    createProductionPackage,
+    productionAssets.length,
+  ]);
 
   const generateSingleAsset = useCallback(
     async (asset: ImageStudioAsset) => {
@@ -900,7 +930,7 @@ export function ImageStudioWorkspace() {
             value={generationModeLabel}
             highlight={isDraftGenerationMode ? "gold" : "emerald"}
           />
-          <HeroMeta label="Generation Status" value={generationStatus} highlight={pipelineActive || hasResults || isLoading ? "emerald" : undefined} />
+          <HeroMeta label="Generation Status" value={generationStatus} highlight={pipelineActive || generatingAssetId ? "emerald" : hasResults ? "gold" : undefined} />
         </div>
       </header>
 
@@ -912,7 +942,7 @@ export function ImageStudioWorkspace() {
           disabled={isLoading || pipelineActive || !canStartGeneration}
         >
           <Sparkles className="size-4" />
-          {isLoading || pipelineActive ? "Generating…" : "Generate Assets"}
+          {generateAssetsButtonLabel}
         </button>
         <div className="is-toolbar-divider" aria-hidden />
         <div className="is-toolbar-secondary">
@@ -1007,6 +1037,8 @@ export function ImageStudioWorkspace() {
                 hasBlueprint={hasBlueprint}
                 generatingAssetId={generatingAssetId}
                 preparingAssetId={preparingAssetId}
+                elapsedMs={asset ? assetTimers[asset.id]?.elapsedMs : undefined}
+                elapsedRunning={asset ? assetTimers[asset.id]?.running : false}
                 reviewState={asset ? getReviewState(asset.id) : null}
                 onSelect={() => {
                   setSelectedSlotId(slot.id);
@@ -1023,19 +1055,9 @@ export function ImageStudioWorkspace() {
 
         <main className="is-canvas-column">
           <div className={cn("is-canvas", hasBlueprint && !hasResults && "is-canvas--staged")}>
-            {isLoading ? (
-              <div className="is-production-overlay">
-                <CanvasPlaceholder hasBlueprint garmentLabel={garment} />
-                <div className="is-production-overlay-content">
-                  <p className="is-production-phase">
-                    {FASHION_PRODUCTION_PIPELINE.find((s) => s.id === productionStep)?.label}
-                  </p>
-                  <FashionProductionPipeline activeStep={productionStep} />
-                </div>
-              </div>
-            ) : hasResults ? (
+            {hasResults ? (
               <div className="is-canvas-production">
-                {(pipelineActive || generatingAssetId) && (
+                {(pipelineActive || generatingAssetId || preparingAssetId) && (
                   <div className="is-production-overlay is-production-overlay--inline">
                     <div className="is-production-overlay-content">
                       <p className="is-production-phase">
@@ -1123,7 +1145,7 @@ export function ImageStudioWorkspace() {
                           disabled={isLoading || pipelineActive || !canStartGeneration}
                         >
                           <Sparkles className="size-4" />
-                          {isLoading || pipelineActive ? "Starting Production…" : "Generate Assets"}
+                          {generateAssetsButtonLabel}
                         </button>
                       </div>
                     </>
@@ -1210,7 +1232,11 @@ export function ImageStudioWorkspace() {
               <InspectorField label="Seed" value={selectedAsset?.id?.slice(0, 10) ?? "—"} mono />
               <InspectorField
                 label="Generation Time"
-                value={selectedAsset?.createdAt ? new Date(selectedAsset.createdAt).toLocaleTimeString() : formatEstimatedTime(ASSET_ESTIMATED_SECONDS[selectedSlot.id] ?? 35)}
+                value={
+                  selectedAsset
+                    ? formatAssetElapsedTime(assetTimers[selectedAsset.id]?.elapsedMs)
+                    : "—"
+                }
               />
             </InspectorCard>
 
@@ -1292,6 +1318,8 @@ export function ImageStudioWorkspace() {
           { label: "garment", value: handoffLoadDebug?.garment ?? blueprint?.garment ?? "—" },
           { label: "colorway", value: handoffLoadDebug?.colorway ?? blueprint?.colorway ?? "—" },
           { label: "brief length", value: String(handoffLoadDebug?.briefLength ?? brief.length) },
+          { label: "master artwork", value: handoff?.masterArtworkApproved ? "approved" : "—" },
+          { label: "master version", value: handoff?.masterArtworkVersion ?? "—" },
           ...(handoffLoadDebug?.rejectReason
             ? [{ label: "reason if rejected", value: handoffLoadDebug.rejectReason }]
             : []),
@@ -1414,6 +1442,8 @@ function MissionAssetCard({
   hasBlueprint,
   generatingAssetId,
   preparingAssetId,
+  elapsedMs,
+  elapsedRunning,
   reviewState,
   onSelect,
   onGenerate,
@@ -1425,6 +1455,8 @@ function MissionAssetCard({
   hasBlueprint: boolean;
   generatingAssetId?: string | null;
   preparingAssetId?: string | null;
+  elapsedMs?: number;
+  elapsedRunning?: boolean;
   reviewState?: "approved" | "needs_revision" | null;
   onSelect: () => void;
   onGenerate?: () => void;
@@ -1437,7 +1469,12 @@ function MissionAssetCard({
   });
   const progress = progressForMissionStatus(status);
   const version = asset ? assetVersionLabel(asset) : hasBlueprint ? "v1" : "—";
-  const estimate = formatEstimatedTime(ASSET_ESTIMATED_SECONDS[slot.id] ?? 35);
+  const timeLabel =
+    elapsedRunning || (elapsedMs !== undefined && elapsedMs > 0)
+      ? formatAssetElapsedTime(elapsedMs)
+      : status === "waiting"
+        ? "—"
+        : "";
   const canGenerate =
     Boolean(asset && !asset.imageUrl && !generatingAssetId && !preparingAssetId && asset.status !== "completed");
 
@@ -1453,7 +1490,7 @@ function MissionAssetCard({
           imageUrl={asset?.imageUrl}
           active={active}
         />
-        <ProgressRing progress={progress} size={30} active={active} />
+        <ProgressRing status={status} progress={progress} size={30} active={active} />
         <span className="is-asset-card-body">
           <span className="is-asset-card-top">
             <span className="is-asset-card-label">{slot.label}</span>
@@ -1463,11 +1500,14 @@ function MissionAssetCard({
             <span className={cn("is-asset-card-status", `is-asset-card-status--${status}`)}>
               <span className={cn("is-production-dot", `is-production-dot--${PRODUCTION_QUEUE_DOT[status]}`)} />
               {MISSION_STATUS_LABELS[status]}
+              {status === "ready" ? <span className="is-asset-card-ready-tag">Ready</span> : null}
             </span>
             <span className="is-asset-card-version">{version}</span>
           </span>
           <span className="is-asset-card-footer">
-            <span className="is-asset-card-eta">{estimate}</span>
+            <span className={cn("is-asset-card-eta", elapsedRunning && "is-asset-card-eta--live")}>
+              {timeLabel}
+            </span>
             <span className={cn("is-priority-badge", `is-priority-badge--${slot.priority}`)}>
               {ASSET_PRIORITY_LABELS[slot.priority]}
             </span>

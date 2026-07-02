@@ -2,6 +2,7 @@
 
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import { AiDesignerConceptPanel } from "@/components/design/ai-designer-concept-panel";
+import { MasterArtworkPanel } from "@/components/design/master-artwork-panel";
 import { DesignLabCollapse } from "@/components/design/design-lab-workspace";
 import type {
   CollectionTimelineStage,
@@ -38,6 +39,10 @@ import {
   readGenerationPayload,
   svgMarkupToDataUrl,
 } from "@/lib/design/svg-data-url";
+import {
+  approveMasterArtworkState,
+  buildMasterArtworkDraft,
+} from "@/lib/design/master-artwork";
 import { buildDesignMockupPayload } from "@/lib/design/mockup-request";
 import { buildDesignRenderPayload } from "@/lib/design/render-request";
 import { sendDesignHandoffToImageStudio, type HandoffSaveResult } from "@/lib/image/image-handoff-store";
@@ -286,8 +291,10 @@ export function CreativeWorkspace({
     [onPatchMission],
   );
 
-  const runSvgGeneration = useCallback(async () => {
-    const label = "Generate SVG";
+  const runSvgGeneration = useCallback(
+    async (options?: { loadingLabel?: string; successMessage?: string }) => {
+    const label = options?.loadingLabel ?? "Generate SVG";
+    const successMessage = options?.successMessage ?? "Generate SVG complete";
     setActionLoading(label);
     setToast(null);
     setError(null);
@@ -317,25 +324,79 @@ export function CreativeWorkspace({
       }
 
       const svgMarkup = extractGeneratedSvg(payload);
-
       const svgUrl = svgMarkupToDataUrl(svgMarkup);
+      const commercialReview = (
+        payload as {
+          commercialReview?: {
+            approved?: boolean;
+            iterations?: number;
+            score?: { overall?: number };
+            imageStudioBlueprint?: string;
+          };
+        }
+      ).commercialReview;
 
       onPatchMission((state) => {
-        let next = setPipelineStage(state, "design");
+        let next = setPipelineStage(state, commercialReview ? "commercial-review" : "design");
         next = setTimelineStage(next, "design");
-        next = updateMissionAssets(next, { svgUrl, svgMarkup });
-        next = appendVersionEntry(next, "SVG generated", "svg");
+        next = updateMissionAssets(next, {
+          svgUrl,
+          svgMarkup,
+          commercialApproved: commercialReview?.approved,
+          commercialScore: commercialReview?.score?.overall,
+          commercialIterations: commercialReview?.iterations,
+          imageStudioBlueprint: commercialReview?.imageStudioBlueprint,
+          masterArtwork: buildMasterArtworkDraft({
+            brief,
+            svgMarkup,
+            version: `V${iteration.version}`,
+            commercialReview,
+          }),
+        });
+        next = appendVersionEntry(
+          next,
+          options?.loadingLabel === "Generate Master Artwork"
+            ? "Master artwork generated"
+            : "SVG generated",
+          "svg",
+        );
         return next;
       });
       setCanvasTab("svg");
-      notify("Generate SVG complete");
+      notify(successMessage);
     } catch (err) {
       resetProductionStatus("svg");
       setError(err instanceof Error ? err.message : "Generate SVG failed");
     } finally {
       setActionLoading(null);
     }
-  }, [brief, notify, onPatchMission, resetProductionStatus]);
+  },
+    [brief, iteration.version, notify, onPatchMission, resetProductionStatus],
+  );
+
+  const runMasterArtworkGeneration = useCallback(
+    () =>
+      runSvgGeneration({
+        loadingLabel: "Generate Master Artwork",
+        successMessage: "Master artwork generated",
+      }),
+    [runSvgGeneration],
+  );
+
+  const approveMasterArtwork = useCallback(() => {
+    onPatchMission((state) => {
+      const workspace = getActiveWorkspace(state);
+      const patch = approveMasterArtworkState(workspace.assets, brief);
+      if (!patch.masterArtwork) {
+        return state;
+      }
+      let next = updateMissionAssets(state, patch);
+      next = appendVersionEntry(next, "Master artwork approved", "approved");
+      next = setPipelineStage(next, "approval");
+      return next;
+    });
+    notify("Master artwork approved — ready for Image Studio production");
+  }, [brief, notify, onPatchMission]);
 
   const runAiDesignerConcept = useCallback(async () => {
     const label = "Generate AI Design Concept";
@@ -715,6 +776,17 @@ export function CreativeWorkspace({
             />
           </div>
         </div>
+
+        <MasterArtworkPanel
+          brief={brief}
+          assets={canvasAssets}
+          versionLabel={iteration.label}
+          loading={actionLoading}
+          onGenerate={() => void runMasterArtworkGeneration()}
+          onRegenerate={() => void runMasterArtworkGeneration()}
+          onApprove={approveMasterArtwork}
+          onSendToImageStudio={sendToImageStudio}
+        />
 
         <CreativeDirectorPanel
           open={directorOpen}
