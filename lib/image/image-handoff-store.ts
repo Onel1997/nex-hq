@@ -45,12 +45,23 @@ export interface ImageStudioHandoff {
   review?: DesignConceptReview;
   /** Approved master artwork — Image Studio production source (never redesign). */
   masterArtworkApproved?: boolean;
+  masterArtworkSourceType?: "ai-designer-artwork" | "svg-draft" | "uploaded";
   masterArtworkVersion?: string;
+  masterArtworkArtworkUrl?: string;
+  masterArtworkTransparentPngUrl?: string;
+  masterArtworkProductionPngUrl?: string;
+  masterArtworkApprovedArtworkUrl?: string;
+  masterArtworkApprovedProductionFileUrl?: string;
   masterArtworkSvgUrl?: string;
   masterArtworkSvgMarkup?: string;
   masterArtworkPlacement?: string;
   masterArtworkPrintMethod?: string;
   masterArtworkResolution?: string;
+  masterArtworkDpi?: number;
+  masterArtworkGenerationMode?: "draft" | "production";
+  masterArtworkTransparentBackground?: boolean;
+  masterArtworkPrintReady?: boolean;
+  masterArtworkDesignDirection?: string;
   masterArtworkCommercialScore?: number;
 }
 
@@ -253,6 +264,25 @@ export function normalizeImageStudioHandoff(
     renderPlan: raw.renderPlan,
     concept,
     review: raw.review,
+    masterArtworkApproved: raw.masterArtworkApproved,
+    masterArtworkSourceType: raw.masterArtworkSourceType,
+    masterArtworkVersion: raw.masterArtworkVersion,
+    masterArtworkArtworkUrl: raw.masterArtworkArtworkUrl,
+    masterArtworkTransparentPngUrl: raw.masterArtworkTransparentPngUrl,
+    masterArtworkProductionPngUrl: raw.masterArtworkProductionPngUrl,
+    masterArtworkApprovedArtworkUrl: raw.masterArtworkApprovedArtworkUrl,
+    masterArtworkApprovedProductionFileUrl: raw.masterArtworkApprovedProductionFileUrl,
+    masterArtworkSvgUrl: raw.masterArtworkSvgUrl,
+    masterArtworkSvgMarkup: raw.masterArtworkSvgMarkup,
+    masterArtworkPlacement: raw.masterArtworkPlacement,
+    masterArtworkPrintMethod: raw.masterArtworkPrintMethod,
+    masterArtworkResolution: raw.masterArtworkResolution,
+    masterArtworkDpi: raw.masterArtworkDpi,
+    masterArtworkGenerationMode: raw.masterArtworkGenerationMode,
+    masterArtworkTransparentBackground: raw.masterArtworkTransparentBackground,
+    masterArtworkPrintReady: raw.masterArtworkPrintReady,
+    masterArtworkDesignDirection: raw.masterArtworkDesignDirection,
+    masterArtworkCommercialScore: raw.masterArtworkCommercialScore,
   };
 }
 
@@ -317,6 +347,12 @@ function compactForWindowName(handoff: ImageStudioHandoff): ImageStudioHandoff {
     commercialScore: handoff.commercialScore,
     commercialApproved: handoff.commercialApproved,
     masterArtworkApproved: handoff.masterArtworkApproved,
+    masterArtworkApprovedArtworkUrl: handoff.masterArtworkApprovedArtworkUrl,
+    masterArtworkApprovedProductionFileUrl: handoff.masterArtworkApprovedProductionFileUrl,
+    masterArtworkDesignDirection: handoff.masterArtworkDesignDirection,
+    masterArtworkResolution: handoff.masterArtworkResolution,
+    masterArtworkDpi: handoff.masterArtworkDpi,
+    masterArtworkPrintReady: handoff.masterArtworkPrintReady,
   };
 }
 
@@ -409,6 +445,7 @@ function rebuildImageStudioHandoffFromMission(
     renderPlan: assets.aiDesignerRenderPlan ?? input.renderPlan,
     concept,
     review: assets.aiDesignerReview ?? input.review,
+    ...buildMasterArtworkHandoffPayload(assets),
   };
 }
 

@@ -21,6 +21,10 @@ import {
   type HandoffSaveResult,
   type ImageStudioHandoff,
 } from "@/lib/image/image-handoff-store";
+import {
+  applyMasterArtworkToBrief,
+  enrichProductionAssetsWithMasterArtwork,
+} from "@/lib/image/master-artwork-production";
 import { HandoffDebugOverlay } from "@/components/image/handoff-debug-overlay";
 import {
   formatAssetElapsedTime,
@@ -120,7 +124,9 @@ function resolveGenerationBrief(
   blueprint: ImportedCreativeBlueprint | null,
 ): string {
   const trimmedBrief = brief.trim();
-  if (trimmedBrief.length >= 3) return trimmedBrief.slice(0, 4000);
+  if (trimmedBrief.length >= 3) {
+    return applyMasterArtworkToBrief(trimmedBrief.slice(0, 4000), handoff);
+  }
 
   if (!handoff && !blueprint) return "";
 
@@ -144,7 +150,9 @@ function resolveGenerationBrief(
 
   for (const candidate of candidates) {
     const text = typeof candidate === "string" ? candidate.trim() : "";
-    if (text.length >= 3) return text.slice(0, 4000);
+    if (text.length >= 3) {
+      return applyMasterArtworkToBrief(text.slice(0, 4000), handoff);
+    }
   }
 
   return "";
@@ -520,9 +528,14 @@ export function ImageStudioWorkspace() {
           }
 
           const project = data as ImageRunResult;
-          cachedProductionProject = project;
-          setResult(project);
-          setProductionAssets(project.productionAssets ?? []);
+          const enrichedAssets = enrichProductionAssetsWithMasterArtwork(
+            project.productionAssets ?? [],
+            handoff,
+          );
+          const enrichedProject = { ...project, productionAssets: enrichedAssets };
+          cachedProductionProject = enrichedProject;
+          setResult(enrichedProject);
+          setProductionAssets(enrichedAssets);
           console.info("[Image Studio] queue created", {
             reportId: project.reportId,
             assetCount: project.productionAssets?.length ?? 0,
@@ -542,7 +555,7 @@ export function ImageStudioWorkspace() {
 
       return productionPackagePromise;
     },
-    [t],
+    [handoff, t],
   );
 
   const releaseExecutionLocks = useCallback((reason: string) => {
@@ -1319,7 +1332,9 @@ export function ImageStudioWorkspace() {
           { label: "colorway", value: handoffLoadDebug?.colorway ?? blueprint?.colorway ?? "—" },
           { label: "brief length", value: String(handoffLoadDebug?.briefLength ?? brief.length) },
           { label: "master artwork", value: handoff?.masterArtworkApproved ? "approved" : "—" },
+          { label: "master source", value: handoff?.masterArtworkSourceType ?? "—" },
           { label: "master version", value: handoff?.masterArtworkVersion ?? "—" },
+          { label: "master dpi", value: handoff?.masterArtworkDpi != null ? String(handoff.masterArtworkDpi) : "—" },
           ...(handoffLoadDebug?.rejectReason
             ? [{ label: "reason if rejected", value: handoffLoadDebug.rejectReason }]
             : []),

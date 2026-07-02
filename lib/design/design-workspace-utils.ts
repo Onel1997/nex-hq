@@ -71,7 +71,9 @@ export function syncProductionChecklist(
 
   const map: Record<ProductionItem["id"], ProductionItem["status"]> = {
     svg:
-      assets.svgUrl || assets.masterArtwork?.status === "approved"
+      assets.masterArtwork?.artworkImageUrl ||
+      assets.masterArtwork?.status === "approved" ||
+      assets.svgUrl
         ? "complete"
         : "pending",
     mockup: assets.mockupUrl ? "complete" : "pending",

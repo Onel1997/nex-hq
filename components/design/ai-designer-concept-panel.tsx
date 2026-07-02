@@ -5,6 +5,7 @@ import type {
   DesignConceptReview,
   RenderPlan,
 } from "@/lib/design/ai-designer/types";
+import type { MasterArtworkViewModel } from "@/lib/design/master-artwork";
 import { cn } from "@/lib/utils";
 import {
   BookOpen,
@@ -32,6 +33,8 @@ import { useCallback, useState, type ReactNode } from "react";
 const SECTIONS_STORAGE_KEY = "nexhq-design-inspector-sections";
 
 const DEFAULT_SECTION_OPEN: Record<string, boolean> = {
+  "production-readiness": true,
+  "commercial-review": true,
   "creative-direction": true,
   "design-story": false,
   "fashion-language": false,
@@ -39,16 +42,18 @@ const DEFAULT_SECTION_OPEN: Record<string, boolean> = {
   symbols: false,
   ornaments: false,
   "commercial-intention": false,
-  "image-prompt": true,
+  "image-prompt": false,
   "mockup-prompt": false,
   "render-deliverables": false,
-  "blueprint-review": true,
+  "blueprint-review": false,
 };
 
 interface AiDesignerConceptPanelProps {
   concept?: DesignConcept;
   renderPlan?: RenderPlan;
   review?: DesignConceptReview;
+  masterArtworkView?: MasterArtworkViewModel;
+  hasSvgDraft?: boolean;
   onSendToImageStudio?: () => void;
   onCopyImagePrompt?: () => void;
   onGenerateConcept?: () => void;
@@ -80,6 +85,8 @@ const SECTION_ICONS: Record<string, LucideIcon> = {
   "mockup-prompt": Frame,
   "render-deliverables": Package,
   "blueprint-review": ClipboardCheck,
+  "production-readiness": Package,
+  "commercial-review": ClipboardCheck,
 };
 
 function InspectorSection({
@@ -151,6 +158,8 @@ export function AiDesignerConceptPanel({
   concept,
   renderPlan,
   review,
+  masterArtworkView,
+  hasSvgDraft,
   onSendToImageStudio,
   onCopyImagePrompt,
   onGenerateConcept,
@@ -193,7 +202,7 @@ export function AiDesignerConceptPanel({
       <header className="cw-inspector-header">
         <div>
           <p className="cw-inspector-eyebrow">Inspector</p>
-          <h2 className="cw-inspector-title">AI Designer</h2>
+          <h2 className="cw-inspector-title">AI Design Concept</h2>
         </div>
         <button
           type="button"
@@ -228,9 +237,58 @@ export function AiDesignerConceptPanel({
         </div>
       ) : (
         <div className="cw-inspector-scroll">
-          {review?.readyForImageStudio ? (
+          <InspectorSection
+            id="production-readiness"
+            title="Production Readiness"
+            meta={masterArtworkView?.isApproved ? "Approved" : "In progress"}
+            open={isOpen("production-readiness")}
+            onToggle={toggleSection}
+          >
+            <ul className="cw-inspector-checklist">
+              <li className={concept ? "is-done" : ""}>AI Design Concept generated</li>
+              <li className={masterArtworkView?.hasArtwork ? "is-done" : ""}>
+                Master Artwork generated
+              </li>
+              <li className={masterArtworkView?.isApproved ? "is-done" : ""}>
+                Master Artwork approved
+              </li>
+              <li className={masterArtworkView?.isApproved ? "is-done" : ""}>
+                Ready for Image Studio handoff
+              </li>
+            </ul>
+            {hasSvgDraft ? (
+              <p className="cw-inspector-muted">SVG Draft available — optional vector export only.</p>
+            ) : null}
+          </InspectorSection>
+
+          <InspectorSection
+            id="commercial-review"
+            title="Commercial Review"
+            meta={
+              masterArtworkView?.state.commercialScore != null
+                ? `${Math.round(masterArtworkView.state.commercialScore)}%`
+                : review?.score != null
+                  ? `${review.score}%`
+                  : "Pending"
+            }
+            open={isOpen("commercial-review")}
+            onToggle={toggleSection}
+          >
+            {masterArtworkView?.state.commercialScore != null ? (
+              <p className="cw-inspector-copy">
+                Master artwork commercial score: {Math.round(masterArtworkView.state.commercialScore)}%
+              </p>
+            ) : (
+              <p className="cw-inspector-copy">Commercial review runs after Master Artwork generation.</p>
+            )}
+            {masterArtworkView?.state.printReadiness ? (
+              <p className="cw-inspector-muted">Print readiness: {masterArtworkView.state.printReadiness}</p>
+            ) : null}
+          </InspectorSection>
+
+          {masterArtworkView?.isApproved ? (
             <div className="cw-inspector-handoff">
-              <p>Ready for Image Studio</p>
+              <p>Master artwork approved — ready for production</p>
               <div className="cw-inspector-handoff-actions">
                 <button
                   type="button"
@@ -249,6 +307,14 @@ export function AiDesignerConceptPanel({
                   <span>Copy Prompt</span>
                 </button>
               </div>
+            </div>
+          ) : masterArtworkView?.hasArtwork ? (
+            <div className="cw-inspector-handoff cw-inspector-handoff--pending">
+              <p>Approve Master Artwork before production.</p>
+            </div>
+          ) : review?.readyForImageStudio ? (
+            <div className="cw-inspector-handoff cw-inspector-handoff--pending">
+              <p>Generate and approve Master Artwork before Image Studio handoff.</p>
             </div>
           ) : null}
 

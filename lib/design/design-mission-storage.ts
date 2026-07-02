@@ -194,6 +194,12 @@ export function sanitizeAssetsForStorage(
   if (!aggressive && assets.masterArtwork) {
     next.masterArtwork = {
       ...assets.masterArtwork,
+      artworkImageUrl: sanitizeUrlField(assets.masterArtwork.artworkImageUrl),
+      transparentPngUrl: sanitizeUrlField(assets.masterArtwork.transparentPngUrl),
+      productionPngUrl: sanitizeUrlField(assets.masterArtwork.productionPngUrl),
+      previewUrl: sanitizeUrlField(assets.masterArtwork.previewUrl),
+      approvedArtworkUrl: sanitizeUrlField(assets.masterArtwork.approvedArtworkUrl),
+      approvedProductionFileUrl: sanitizeUrlField(assets.masterArtwork.approvedProductionFileUrl),
       approvedSvgMarkup: assets.masterArtwork.approvedSvgMarkup
         ? truncateString(assets.masterArtwork.approvedSvgMarkup)
         : undefined,

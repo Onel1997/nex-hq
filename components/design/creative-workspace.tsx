@@ -41,7 +41,9 @@ import {
 } from "@/lib/design/svg-data-url";
 import {
   approveMasterArtworkState,
-  buildMasterArtworkDraft,
+  buildAiDesignerMasterArtworkDraft,
+  buildSvgDraftMasterArtwork,
+  resolveMasterArtworkView,
 } from "@/lib/design/master-artwork";
 import { buildDesignMockupPayload } from "@/lib/design/mockup-request";
 import { buildDesignRenderPayload } from "@/lib/design/render-request";
@@ -73,6 +75,7 @@ import {
   Send,
   Shapes,
   Sparkles,
+  Stamp,
   Star,
   Wand2,
   X,
@@ -96,40 +99,59 @@ function resolveGarmentType(product: string): GarmentType {
   return /hoodie|sweat|pullover|zip/i.test(product) ? "hoodie" : "tee";
 }
 
-type CanvasTab = "svg" | "mockup" | "render" | "split";
+type CanvasTab = "concept" | "master" | "mockup" | "compare";
 type ZoomLevel = 0.25 | 0.5 | 0.75 | 1 | 1.5 | "fit";
 
+function resolveMasterArtworkPreviewUrl(assets: DesignMissionAssets): string | undefined {
+  const state = assets.masterArtwork;
+  return (
+    state?.previewUrl ??
+    state?.artworkImageUrl ??
+    state?.approvedArtworkUrl ??
+    state?.transparentPngUrl
+  );
+}
+
 function resolveCanvasTab(assets: DesignMissionAssets): CanvasTab {
-  if (assets.renderUrl) return "render";
+  if (resolveMasterArtworkPreviewUrl(assets)) return "master";
   if (assets.mockupUrl) return "mockup";
-  if (assets.svgUrl) return "svg";
-  return "svg";
+  if (assets.aiDesignerConcept) return "concept";
+  return "concept";
 }
 
 function canvasTabForAssetKey(
   assetKey: "svgUrl" | "mockupUrl" | "renderUrl",
 ): CanvasTab {
-  if (assetKey === "renderUrl") return "render";
   if (assetKey === "mockupUrl") return "mockup";
-  return "svg";
+  if (assetKey === "renderUrl") return "mockup";
+  return "master";
 }
 
 function isCanvasLayerGenerating(
-  layer: "svg" | "mockup" | "render",
+  layer: "master" | "mockup",
   loading: string | null,
 ): boolean {
   if (!loading) return false;
-  if (layer === "svg") return loading === "Generate SVG";
-  if (layer === "mockup") return loading === "Generate Mockup";
-  return loading === "Generate AI Render";
+  if (layer === "master") {
+    return loading === "Generate Master Artwork" || loading === "Generate AI Design Concept";
+  }
+  return loading === "Generate Mockup";
 }
 
 function hasCanvasAsset(assets: PerDesignWorkspace["assets"]): boolean {
-  return Boolean(assets.svgUrl || assets.mockupUrl || assets.renderUrl);
+  return Boolean(
+    assets.aiDesignerConcept ||
+      resolveMasterArtworkPreviewUrl(assets) ||
+      assets.mockupUrl,
+  );
 }
 
 function countCanvasAssets(assets: DesignMissionAssets): number {
-  return [assets.svgUrl, assets.mockupUrl, assets.renderUrl].filter(Boolean).length;
+  return [
+    assets.aiDesignerConcept,
+    resolveMasterArtworkPreviewUrl(assets),
+    assets.mockupUrl,
+  ].filter(Boolean).length;
 }
 
 function getCommercialStatusLabel(
@@ -158,19 +180,18 @@ const AI_PIPELINE_STEPS = [
 
 function derivePipelineStepStates(
   assets: DesignMissionAssets,
-  approvalStatus: ApprovalStatus,
+  _approvalStatus: ApprovalStatus,
   pipelineStage: PipelineStage,
 ): Array<{ id: string; label: string; status: PipelineStepStatus }> {
   const hasConcept = Boolean(assets.aiDesignerConcept);
-  const hasImage = Boolean(assets.mockupUrl || assets.renderUrl);
-  const hasCommercial =
-    Boolean(assets.commercialApproved) || approvalStatus === "approved";
+  const hasMasterArtwork = Boolean(resolveMasterArtworkPreviewUrl(assets));
+  const masterApproved = resolveMasterArtworkView(assets).isApproved;
   const inProduction = pipelineStage === "shopify" || pipelineStage === "launch";
 
   let currentIndex = 3;
   if (!hasConcept) currentIndex = 3;
-  else if (!hasImage) currentIndex = 4;
-  else if (!hasCommercial) currentIndex = 5;
+  else if (!hasMasterArtwork) currentIndex = 3;
+  else if (!masterApproved) currentIndex = 5;
   else if (!inProduction) currentIndex = 6;
   else currentIndex = 7;
 
@@ -239,7 +260,7 @@ export function CreativeWorkspace({
     [brief, iteration.promptOverrides, iteration.assets],
   );
 
-  const [canvasTab, setCanvasTab] = useState<CanvasTab>("svg");
+  const [canvasTab, setCanvasTab] = useState<CanvasTab>("concept");
   const [zoom, setZoom] = useState<ZoomLevel>("fit");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -298,7 +319,7 @@ export function CreativeWorkspace({
     setActionLoading(label);
     setToast(null);
     setError(null);
-    setCanvasTab("svg");
+    setCanvasTab("concept");
     onPatchMission((s) =>
       updateWorkspace(s, s.brief.designId, (w) => ({
         ...w,
@@ -346,7 +367,7 @@ export function CreativeWorkspace({
           commercialScore: commercialReview?.score?.overall,
           commercialIterations: commercialReview?.iterations,
           imageStudioBlueprint: commercialReview?.imageStudioBlueprint,
-          masterArtwork: buildMasterArtworkDraft({
+          masterArtwork: buildSvgDraftMasterArtwork({
             brief,
             svgMarkup,
             version: `V${iteration.version}`,
@@ -362,7 +383,7 @@ export function CreativeWorkspace({
         );
         return next;
       });
-      setCanvasTab("svg");
+      setCanvasTab("concept");
       notify(successMessage);
     } catch (err) {
       resetProductionStatus("svg");
@@ -374,14 +395,101 @@ export function CreativeWorkspace({
     [brief, iteration.version, notify, onPatchMission, resetProductionStatus],
   );
 
-  const runMasterArtworkGeneration = useCallback(
-    () =>
-      runSvgGeneration({
-        loadingLabel: "Generate Master Artwork",
-        successMessage: "Master artwork generated",
-      }),
-    [runSvgGeneration],
-  );
+  const runMasterArtworkGeneration = useCallback(async () => {
+    const label = "Generate Master Artwork";
+    const concept = canvasAssets.aiDesignerConcept;
+    if (!concept) {
+      setError("Generate an AI Design Concept first — Master Artwork uses the selected design direction.");
+      return;
+    }
+
+    setActionLoading(label);
+    setToast(null);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/design/generate-master-artwork", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brief,
+          concept,
+          selectedConceptId: concept.designId,
+          designDirection: concept.creativeDirection.summary,
+        }),
+      });
+      const payload = await readGenerationPayload(res);
+      if (!res.ok) {
+        const err =
+          payload && typeof payload === "object" && "error" in payload
+            ? String((payload as { error?: unknown }).error ?? "")
+            : "";
+        throw new Error(err || "Master artwork generation failed");
+      }
+
+      const data = payload as {
+        artworkImageUrl?: string;
+        transparentPngUrl?: string;
+        productionPngUrl?: string;
+        previewUrl?: string;
+        selectedConceptId?: string;
+        designDirection?: string;
+        generationMode?: "draft" | "production";
+        dpi?: number;
+        resolution?: string;
+        transparentBackground?: boolean;
+        printReady?: boolean;
+        commercialReview?: {
+          approved?: boolean;
+          iterations?: number;
+          score?: { overall?: number };
+          imageStudioBlueprint?: string;
+        };
+      };
+
+      const artworkImageUrl = data.artworkImageUrl ?? data.previewUrl;
+      if (!artworkImageUrl) {
+        throw new Error("Master artwork generation returned no image");
+      }
+
+      const commercialReview = data.commercialReview;
+
+      onPatchMission((state) => {
+        let next = setPipelineStage(state, commercialReview ? "commercial-review" : "design");
+        next = setTimelineStage(next, "design");
+        next = updateMissionAssets(next, {
+          commercialApproved: commercialReview?.approved,
+          commercialScore: commercialReview?.score?.overall,
+          commercialIterations: commercialReview?.iterations,
+          imageStudioBlueprint: commercialReview?.imageStudioBlueprint,
+          masterArtwork: buildAiDesignerMasterArtworkDraft({
+            brief,
+            version: `V${iteration.version}`,
+            artworkImageUrl,
+            transparentPngUrl: data.transparentPngUrl ?? artworkImageUrl,
+            productionPngUrl: data.productionPngUrl ?? artworkImageUrl,
+            previewUrl: data.previewUrl ?? artworkImageUrl,
+            selectedConceptId: data.selectedConceptId ?? concept.designId,
+            designDirection: data.designDirection ?? concept.creativeDirection.summary,
+            generationMode: data.generationMode ?? "draft",
+            dpi: data.dpi ?? 150,
+            resolution: data.resolution ?? "1024 × 1024 px",
+            transparentBackground: data.transparentBackground ?? true,
+            printReady: data.printReady ?? false,
+            commercialReview,
+          }),
+        });
+        next = appendVersionEntry(next, "Master artwork generated", "design");
+        return next;
+      });
+      setCanvasTab("master");
+      notify("Master artwork generated");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generate Master Artwork failed");
+    } finally {
+      setActionLoading(null);
+    }
+  }, [brief, canvasAssets.aiDesignerConcept, iteration.version, notify, onPatchMission]);
 
   const approveMasterArtwork = useCallback(() => {
     onPatchMission((state) => {
@@ -442,7 +550,8 @@ export function CreativeWorkspace({
         next = appendVersionEntry(next, "AI Design Concept generated", "design");
         return next;
       });
-      notify("AI Design Concept ready for Image Studio");
+      setCanvasTab("concept");
+      notify("AI Design Concept ready — generate Master Artwork next");
     } catch (err) {
       setError(err instanceof Error ? err.message : "AI Designer failed");
     } finally {
@@ -450,7 +559,17 @@ export function CreativeWorkspace({
     }
   }, [brief, notify, onPatchMission]);
 
+  const masterArtworkView = useMemo(
+    () => resolveMasterArtworkView(canvasAssets, iteration.label),
+    [canvasAssets, iteration.label],
+  );
+
   const sendToImageStudio = useCallback(() => {
+    if (!masterArtworkView.isApproved) {
+      setError("Approve Master Artwork before production.");
+      setToast(null);
+      return;
+    }
     const saveResult = sendDesignHandoffToImageStudio({
       title: brief.title,
       collection: mission.collectionName ?? "",
@@ -482,6 +601,7 @@ export function CreativeWorkspace({
     iteration.version,
     router,
     canvasAssets,
+    masterArtworkView.isApproved,
   ]);
 
   const runGeneration = useCallback(
@@ -694,8 +814,14 @@ export function CreativeWorkspace({
         <div className="cw-toolbar-sticky">
         <ProductionToolbar
           loading={actionLoading}
-          onGenerateSvg={() => void runSvgGeneration()}
+          hasAiConcept={Boolean(canvasAssets.aiDesignerConcept)}
+          hasMasterArtwork={masterArtworkView.hasArtwork}
+          masterArtworkApproved={masterArtworkView.isApproved}
           onGenerateAiConcept={() => void runAiDesignerConcept()}
+          onGenerateMasterArtwork={() => void runMasterArtworkGeneration()}
+          onApproveArtwork={approveMasterArtwork}
+          onSendImageStudio={sendToImageStudio}
+          onGenerateSvg={() => void runSvgGeneration()}
           onGenerateMockup={() =>
             void runGeneration(
               prompts.mockupPrompt,
@@ -718,7 +844,6 @@ export function CreativeWorkspace({
               "images",
             )
           }
-          onSendImageStudio={sendToImageStudio}
           onExportSvg={() => {
             if (canvasAssets.svgUrl) {
               const a = document.createElement("a");
@@ -731,9 +856,12 @@ export function CreativeWorkspace({
             }
           }}
           onExportPng={() => {
-            const url = canvasAssets.mockupUrl ?? canvasAssets.renderUrl;
+            const url =
+              masterArtworkView.previewImageUrl ??
+              canvasAssets.mockupUrl ??
+              canvasAssets.renderUrl;
             if (url) window.open(url, "_blank");
-            else notify("Generate a mockup or render first");
+            else notify("Generate master artwork or a mockup first");
           }}
           onSaveDraft={() => {
             onSaveDraft?.();
@@ -741,6 +869,17 @@ export function CreativeWorkspace({
           }}
         />
         </div>
+
+        <MasterArtworkPanel
+          brief={brief}
+          assets={canvasAssets}
+          versionLabel={iteration.label}
+          loading={actionLoading}
+          onGenerate={() => void runMasterArtworkGeneration()}
+          onRegenerate={() => void runMasterArtworkGeneration()}
+          onApprove={approveMasterArtwork}
+          onSendToImageStudio={sendToImageStudio}
+        />
 
         <div className={cn("cw-studio-stage", !inspectorOpen && "is-inspector-collapsed")}>
           <div className="cw-studio-split">
@@ -754,6 +893,7 @@ export function CreativeWorkspace({
                 title={brief.title}
                 garmentType={resolveGarmentType(brief.product)}
                 onGenerateConcept={() => void runAiDesignerConcept()}
+                onGenerateMasterArtwork={() => void runMasterArtworkGeneration()}
                 actionLoading={actionLoading}
               />
             </div>
@@ -762,6 +902,8 @@ export function CreativeWorkspace({
               concept={canvasAssets.aiDesignerConcept}
               renderPlan={canvasAssets.aiDesignerRenderPlan}
               review={canvasAssets.aiDesignerReview}
+              masterArtworkView={masterArtworkView}
+              hasSvgDraft={Boolean(canvasAssets.svgUrl || canvasAssets.svgMarkup)}
               onSendToImageStudio={sendToImageStudio}
               onCopyImagePrompt={() => {
                 const prompt =
@@ -776,17 +918,6 @@ export function CreativeWorkspace({
             />
           </div>
         </div>
-
-        <MasterArtworkPanel
-          brief={brief}
-          assets={canvasAssets}
-          versionLabel={iteration.label}
-          loading={actionLoading}
-          onGenerate={() => void runMasterArtworkGeneration()}
-          onRegenerate={() => void runMasterArtworkGeneration()}
-          onApprove={approveMasterArtwork}
-          onSendToImageStudio={sendToImageStudio}
-        />
 
         <CreativeDirectorPanel
           open={directorOpen}
@@ -838,6 +969,7 @@ export function CreativeWorkspace({
       ) : null}
 
       <QuickApprovalPanel
+        masterArtworkApproved={masterArtworkView.isApproved}
         onApprove={() => {
           onPatchMission((s) => setApprovalStatus(s, "approved"));
           notify("Design approved");
@@ -905,10 +1037,12 @@ export function CreativeWorkspaceEmpty() {
         <PremiumGarmentCanvas garmentType="tee" empty />
         <div className="cw-canvas-glass-overlay" aria-hidden />
         <div className="cw-canvas-studio-card">
-          <h2 className="cw-canvas-studio-card-title">Create your next premium collection.</h2>
-          <p className="cw-canvas-studio-card-caption">Your next collection begins here.</p>
+          <h2 className="cw-canvas-studio-card-title">Create your next premium apparel design.</h2>
+          <p className="cw-canvas-studio-card-caption">
+            Start with an AI Design Concept, then generate a print-ready Master Artwork.
+          </p>
           <p className="cw-canvas-studio-card-sub">
-            Open a collection brief from Reports Center to enter the Creative Director workspace.
+            Open a collection brief from Reports Center to enter the AI Fashion Designer workspace.
           </p>
           <Link href="/facility/reports" className="cw-toolbar-btn cw-btn-primary">
             Browse Reports
@@ -916,10 +1050,10 @@ export function CreativeWorkspaceEmpty() {
         </div>
       </div>
       <div>
-        <p className="cw-eyebrow">Creative Director Workspace</p>
+        <p className="cw-eyebrow">AI Fashion Designer</p>
         <h1>Design Studio</h1>
         <p className="cw-empty-copy">
-          A calm editorial space for concept direction, canvas artwork, and campaign visuals.
+          A premium apparel design workspace — AI concepts, master artwork, and production handoff.
         </p>
       </div>
     </section>
@@ -1077,6 +1211,7 @@ function DesignCanvas({
   title,
   garmentType,
   onGenerateConcept,
+  onGenerateMasterArtwork,
   actionLoading,
 }: {
   tab: CanvasTab;
@@ -1087,57 +1222,71 @@ function DesignCanvas({
   title: string;
   garmentType: GarmentType;
   onGenerateConcept?: () => void;
+  onGenerateMasterArtwork?: () => void;
   actionLoading?: string | null;
 }) {
+  const concept = assets.aiDesignerConcept;
+  const masterArtworkUrl = resolveMasterArtworkPreviewUrl(assets);
   const assetCount = countCanvasAssets(assets);
   const tabs: Array<{ id: CanvasTab; label: string; available: boolean }> = [
-    { id: "svg", label: "Canvas", available: true },
-    { id: "mockup", label: "Mockup", available: true },
-    { id: "render", label: "AI Artwork", available: true },
+    { id: "concept", label: "Concept", available: true },
+    { id: "master", label: "Master Artwork", available: true },
+    { id: "mockup", label: "Mockup Preview", available: true },
     {
-      id: "split",
+      id: "compare",
       label: "Compare",
-      available: assetCount >= 2,
+      available: assetCount >= 2 && Boolean(masterArtworkUrl && assets.mockupUrl),
     },
   ];
 
   const zoomOptions: ZoomLevel[] = [0.25, 0.5, 0.75, 1, 1.5, "fit"];
   const anyAsset = hasCanvasAsset(assets);
+  const scale = zoom === "fit" ? 1 : zoom;
 
-  const renderLayer = (kind: "svg" | "mockup" | "render") => {
-    const url =
-      kind === "svg"
-        ? assets.svgUrl
-        : kind === "mockup"
-          ? assets.mockupUrl
-          : assets.renderUrl;
-
-    const generating = isCanvasLayerGenerating(kind, actionLoading ?? null);
-
-    if (generating) {
-      return (
-        <CanvasLayerGenerating
-          layer={kind}
-          garmentType={garmentType}
-        />
-      );
+  const renderMasterLayer = () => {
+    if (isCanvasLayerGenerating("master", actionLoading ?? null)) {
+      return <CanvasLayerGenerating layer="master" garmentType={garmentType} />;
     }
 
-    if (!url) {
+    if (!masterArtworkUrl) {
       return (
         <CanvasStudioEmpty
-          layer={kind}
+          variant="master"
           garmentType={garmentType}
-          hasAnyAsset={anyAsset}
+          hasConcept={Boolean(concept)}
           onGenerateConcept={onGenerateConcept}
+          onGenerateMasterArtwork={onGenerateMasterArtwork}
           loading={actionLoading ?? null}
         />
       );
     }
 
-    if (kind === "svg") {
+    return (
+      <div className="cw-canvas-product-shot cw-canvas-master-shot">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          key={masterArtworkUrl}
+          src={masterArtworkUrl}
+          alt={`${title} master artwork`}
+          className="cw-canvas-product-img cw-canvas-master-img"
+        />
+      </div>
+    );
+  };
+
+  const renderMockupLayer = () => {
+    if (isCanvasLayerGenerating("mockup", actionLoading ?? null)) {
+      return <CanvasLayerGenerating layer="mockup" garmentType={garmentType} />;
+    }
+
+    if (!assets.mockupUrl) {
       return (
-        <PremiumGarmentCanvas garmentType={garmentType} artworkUrl={url} title={title} />
+        <CanvasStudioEmpty
+          variant="mockup"
+          garmentType={garmentType}
+          hasConcept={Boolean(concept)}
+          loading={actionLoading ?? null}
+        />
       );
     }
 
@@ -1145,16 +1294,46 @@ function DesignCanvas({
       <div className="cw-canvas-product-shot">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          key={url}
-          src={url}
-          alt={`${title} ${kind}`}
+          key={assets.mockupUrl}
+          src={assets.mockupUrl}
+          alt={`${title} mockup`}
           className="cw-canvas-product-img"
         />
       </div>
     );
   };
 
-  const scale = zoom === "fit" ? 1 : zoom;
+  const renderConceptLayer = () => {
+    if (isCanvasLayerGenerating("master", actionLoading ?? null)) {
+      return <CanvasLayerGenerating layer="concept" garmentType={garmentType} />;
+    }
+
+    if (!concept) {
+      return (
+        <CanvasStudioEmpty
+          variant="concept"
+          garmentType={garmentType}
+          onGenerateConcept={onGenerateConcept}
+          onGenerateMasterArtwork={onGenerateMasterArtwork}
+          loading={actionLoading ?? null}
+        />
+      );
+    }
+
+    return (
+      <div className="cw-canvas-concept-card">
+        <p className="cw-canvas-concept-kicker">AI Design Concept</p>
+        <h3 className="cw-canvas-concept-title">{concept.title}</h3>
+        <p className="cw-canvas-concept-summary">{concept.creativeDirection.summary}</p>
+        <p className="cw-canvas-concept-story">{concept.designStory}</p>
+        <div className="cw-canvas-concept-meta">
+          <span>{concept.product}</span>
+          <span>{concept.color}</span>
+          <span>{concept.printArea}</span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <section className="cw-canvas-section">
@@ -1205,14 +1384,6 @@ function DesignCanvas({
         <div className="cw-canvas-spotlight" aria-hidden />
         <div className="cw-canvas-vignette" aria-hidden />
         <div className="cw-canvas-depth" aria-hidden />
-        <div className="cw-canvas-rulers" aria-hidden>
-          <span className="cw-canvas-ruler cw-canvas-ruler-top" />
-          <span className="cw-canvas-ruler cw-canvas-ruler-left" />
-        </div>
-        <div className="cw-canvas-guides" aria-hidden>
-          <span className="cw-canvas-guide cw-canvas-guide-v" />
-          <span className="cw-canvas-guide cw-canvas-guide-h" />
-        </div>
         {!anyAsset ? <div className="cw-canvas-glass-overlay" aria-hidden /> : null}
         <div
           className="cw-canvas-viewport"
@@ -1220,17 +1391,17 @@ function DesignCanvas({
             transform: zoom === "fit" ? undefined : `scale(${scale})`,
           }}
         >
-          {tab === "split" ? (
+          {tab === "compare" ? (
             <div className="cw-canvas-split">
-              <div>{renderLayer("svg")}</div>
-              <div>{renderLayer("mockup")}</div>
+              <div>{renderMasterLayer()}</div>
+              <div>{renderMockupLayer()}</div>
             </div>
-          ) : tab === "svg" ? (
-            renderLayer("svg")
-          ) : tab === "mockup" ? (
-            renderLayer("mockup")
+          ) : tab === "concept" ? (
+            renderConceptLayer()
+          ) : tab === "master" ? (
+            renderMasterLayer()
           ) : (
-            renderLayer("render")
+            renderMockupLayer()
           )}
         </div>
       </div>
@@ -1242,11 +1413,15 @@ function CanvasLayerGenerating({
   layer,
   garmentType,
 }: {
-  layer: "svg" | "mockup" | "render";
+  layer: "concept" | "master" | "mockup";
   garmentType: GarmentType;
 }) {
   const layerLabel =
-    layer === "svg" ? "SVG draft" : layer === "mockup" ? "product mockup" : "AI artwork";
+    layer === "concept"
+      ? "AI design concept"
+      : layer === "master"
+        ? "master artwork"
+        : "mockup preview";
 
   return (
     <div className="cw-canvas-layer-generating" aria-live="polite" aria-busy="true">
@@ -1254,32 +1429,36 @@ function CanvasLayerGenerating({
       <div className="cw-canvas-layer-generating-card">
         <Loader2 className="cw-canvas-layer-generating-icon animate-spin" aria-hidden />
         <p className="cw-canvas-layer-generating-title">Generating {layerLabel}…</p>
-        <p className="cw-canvas-layer-generating-copy">Rendering premium studio output</p>
+        <p className="cw-canvas-layer-generating-copy">Crafting premium apparel design</p>
       </div>
     </div>
   );
 }
 
 function CanvasStudioEmpty({
-  layer,
+  variant,
   garmentType,
-  hasAnyAsset,
+  hasConcept,
   onGenerateConcept,
+  onGenerateMasterArtwork,
   loading,
 }: {
-  layer: "svg" | "mockup" | "render";
+  variant: "concept" | "master" | "mockup";
   garmentType: GarmentType;
-  hasAnyAsset: boolean;
+  hasConcept?: boolean;
   onGenerateConcept?: () => void;
+  onGenerateMasterArtwork?: () => void;
   loading: string | null;
 }) {
-  if (!hasAnyAsset && layer === "svg") {
+  if (variant === "concept") {
     return (
       <div className="cw-canvas-studio-empty">
         <PremiumGarmentCanvas garmentType={garmentType} empty />
         <div className="cw-canvas-studio-card">
-          <h3 className="cw-canvas-studio-card-title">Create your next premium collection.</h3>
-          <p className="cw-canvas-studio-card-caption">Your next collection begins here.</p>
+          <h3 className="cw-canvas-studio-card-title">Create your next premium apparel design.</h3>
+          <p className="cw-canvas-studio-card-caption">
+            Start with an AI Design Concept, then generate a print-ready Master Artwork.
+          </p>
           <div className="cw-canvas-studio-empty-actions">
             <button
               type="button"
@@ -1294,22 +1473,59 @@ function CanvasStudioEmpty({
               )}
               <span>Generate AI Design Concept</span>
             </button>
+            <button
+              type="button"
+              className="cw-toolbar-btn cw-btn-secondary"
+              disabled={loading === "Generate Master Artwork"}
+              onClick={onGenerateMasterArtwork}
+            >
+              {loading === "Generate Master Artwork" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              <span>Generate Master Artwork</span>
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  const layerCopy: Record<typeof layer, string> = {
-    svg: "No canvas artwork yet. Generate an SVG draft or begin with an AI Design Concept.",
-    mockup: "No mockup generated yet.",
-    render: "No AI artwork generated yet.",
-  };
+  if (variant === "master") {
+    return (
+      <div className="cw-canvas-layer-empty">
+        <PremiumGarmentCanvas garmentType={garmentType} empty subtle />
+        <p className="cw-canvas-layer-empty-copy">
+          {hasConcept
+            ? "No master artwork yet. Generate print-ready apparel artwork from your AI Design Concept."
+            : "Generate an AI Design Concept first, then create Master Artwork."}
+        </p>
+        {hasConcept ? (
+          <button
+            type="button"
+            className="cw-toolbar-btn cw-btn-primary"
+            disabled={loading === "Generate Master Artwork"}
+            onClick={onGenerateMasterArtwork}
+          >
+            {loading === "Generate Master Artwork" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            <span>Generate Master Artwork</span>
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="cw-canvas-layer-empty">
       <PremiumGarmentCanvas garmentType={garmentType} empty subtle />
-      <p className="cw-canvas-layer-empty-copy">{layerCopy[layer]}</p>
+      <p className="cw-canvas-layer-empty-copy">
+        No mockup preview yet. Use Advanced → Generate Mockup after master artwork is approved.
+      </p>
     </div>
   );
 }
@@ -1395,64 +1611,62 @@ function ToolbarDropdown({
 
 function ProductionToolbar({
   loading,
-  onGenerateSvg,
+  hasAiConcept,
+  hasMasterArtwork,
+  masterArtworkApproved,
   onGenerateAiConcept,
+  onGenerateMasterArtwork,
+  onApproveArtwork,
+  onSendImageStudio,
+  onGenerateSvg,
   onGenerateMockup,
   onGenerateRender,
-  onSendImageStudio,
   onExportSvg,
   onExportPng,
   onSaveDraft,
 }: {
   loading: string | null;
-  onGenerateSvg: () => void;
+  hasAiConcept: boolean;
+  hasMasterArtwork: boolean;
+  masterArtworkApproved: boolean;
   onGenerateAiConcept: () => void;
+  onGenerateMasterArtwork: () => void;
+  onApproveArtwork: () => void;
+  onSendImageStudio: () => void;
+  onGenerateSvg: () => void;
   onGenerateMockup: () => void;
   onGenerateRender: () => void;
-  onSendImageStudio: () => void;
   onExportSvg: () => void;
   onExportPng: () => void;
   onSaveDraft: () => void;
 }) {
-  const createItems = [
-    {
-      label: "AI Design Concept",
-      actionKey: "Generate AI Design Concept",
-      icon: Sparkles,
-      action: onGenerateAiConcept,
-      variant: "primary" as const,
-    },
+  const advancedItems = [
     {
       label: "SVG Draft",
       actionKey: "Generate SVG",
       icon: Shapes,
       action: onGenerateSvg,
     },
-  ];
-
-  const imageItems = [
+    {
+      label: "Generate Mockup",
+      actionKey: "Generate Mockup",
+      icon: ImageIcon,
+      action: onGenerateMockup,
+    },
     {
       label: "Generate AI Render",
       actionKey: "Generate AI Render",
       icon: Wand2,
       action: onGenerateRender,
     },
-    {
-      label: "Image Studio",
-      actionKey: "Send to Image Studio",
-      icon: Send,
-      action: onSendImageStudio,
-    },
   ];
 
   const exportItems = [
     { label: "PNG", actionKey: "Export PNG", icon: Download, action: onExportPng },
-    { label: "PDF", actionKey: "Export PDF", icon: Download, action: onExportPng },
-    { label: "SVG", actionKey: "Export SVG", icon: Download, action: onExportSvg },
+    { label: "SVG Draft", actionKey: "Export SVG", icon: Download, action: onExportSvg },
   ];
 
   const productionItems = [
-    { label: "Shopify", actionKey: "Shopify", icon: Send, action: () => {} },
     {
       label: "Save Draft",
       actionKey: "Save Draft",
@@ -1470,32 +1684,62 @@ function ProductionToolbar({
   ];
 
   return (
-    <div className="cw-toolbar cw-toolbar-menus cw-toolbar-unified cw-toolbar-pro">
-      <ToolbarDropdown
-        label="Create Design"
-        icon={Sparkles}
-        items={createItems}
-        loading={loading}
-      />
-      <ToolbarDropdown
-        label="Generate Image"
-        icon={Wand2}
-        items={imageItems}
-        loading={loading}
-      />
+    <div className="cw-toolbar cw-toolbar-menus cw-toolbar-unified cw-toolbar-pro cw-workflow-toolbar">
+      <button
+        type="button"
+        className="cw-toolbar-pro-action cw-workflow-primary"
+        disabled={loading === "Generate AI Design Concept"}
+        onClick={onGenerateAiConcept}
+      >
+        {loading === "Generate AI Design Concept" ? (
+          <Loader2 className="cw-toolbar-pro-icon animate-spin" />
+        ) : (
+          <Sparkles className="cw-toolbar-pro-icon" />
+        )}
+        <span className="cw-toolbar-pro-label">Generate AI Design Concept</span>
+      </button>
+      <button
+        type="button"
+        className="cw-toolbar-pro-action cw-workflow-primary"
+        disabled={loading === "Generate Master Artwork" || !hasAiConcept}
+        onClick={onGenerateMasterArtwork}
+      >
+        {loading === "Generate Master Artwork" ? (
+          <Loader2 className="cw-toolbar-pro-icon animate-spin" />
+        ) : (
+          <Sparkles className="cw-toolbar-pro-icon" />
+        )}
+        <span className="cw-toolbar-pro-label">Generate Master Artwork</span>
+      </button>
       <button
         type="button"
         className="cw-toolbar-pro-action"
-        disabled={loading === "Generate Mockup"}
-        onClick={onGenerateMockup}
+        disabled={loading != null || !hasMasterArtwork || masterArtworkApproved}
+        onClick={onApproveArtwork}
       >
-        {loading === "Generate Mockup" ? (
-          <Loader2 className="cw-toolbar-pro-icon animate-spin" />
-        ) : (
-          <ImageIcon className="cw-toolbar-pro-icon" />
-        )}
-        <span className="cw-toolbar-pro-label">Generate Mockup</span>
+        <Stamp className="cw-toolbar-pro-icon" />
+        <span className="cw-toolbar-pro-label">Approve Artwork</span>
       </button>
+      <button
+        type="button"
+        className="cw-toolbar-pro-action cw-workflow-handoff"
+        disabled={loading != null || !masterArtworkApproved}
+        title={
+          masterArtworkApproved
+            ? "Send approved master artwork to Image Studio"
+            : "Approve Master Artwork before production"
+        }
+        onClick={onSendImageStudio}
+      >
+        <Send className="cw-toolbar-pro-icon" />
+        <span className="cw-toolbar-pro-label">Send to Image Studio</span>
+      </button>
+      <ToolbarDropdown
+        label="Advanced"
+        icon={Wand2}
+        items={advancedItems}
+        loading={loading}
+      />
       <ToolbarDropdown
         label="Export"
         icon={Download}
@@ -1802,6 +2046,7 @@ function CreativeDirectorPanel({
 }
 
 function QuickApprovalPanel({
+  masterArtworkApproved,
   onApprove,
   onRevision,
   onArchive,
@@ -1809,6 +2054,7 @@ function QuickApprovalPanel({
   onImageStudio,
   onCeo,
 }: {
+  masterArtworkApproved: boolean;
   onApprove: () => void;
   onRevision: () => void;
   onArchive: () => void;
@@ -1830,7 +2076,17 @@ function QuickApprovalPanel({
       <button type="button" className="cw-approval-btn cw-btn-secondary" onClick={onBackResearch}>
         Send Back to Research
       </button>
-      <button type="button" className="cw-approval-btn cw-btn-secondary" onClick={onImageStudio}>
+      <button
+        type="button"
+        className="cw-approval-btn cw-btn-secondary"
+        onClick={onImageStudio}
+        disabled={!masterArtworkApproved}
+        title={
+          masterArtworkApproved
+            ? "Send approved master artwork to Image Studio"
+            : "Approve Master Artwork before production"
+        }
+      >
         Send to Image Studio
       </button>
       <button type="button" className="cw-approval-btn cw-btn-secondary" onClick={onCeo}>

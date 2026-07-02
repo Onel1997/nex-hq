@@ -4,6 +4,7 @@ import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { DesignMissionAssets } from "@/lib/design/design-mission-store";
 import {
   downloadPngFromSvg,
+  downloadPngFromUrl,
   downloadSvgAsset,
   resolveMasterArtworkStatusLabel,
   resolveMasterArtworkView,
@@ -47,9 +48,22 @@ function ArtworkPreview({ view }: { view: MasterArtworkViewModel }) {
       <div className="cw-master-preview cw-master-preview--empty">
         <p>Master artwork not generated yet.</p>
         <p className="cw-master-preview-hint">
-          Design Studio creates the print artwork here. Image Studio will use the approved version for
-          all production assets — never redesign it.
+          Generate an AI Design Concept first, then create premium apparel artwork here. Image Studio
+          will use the approved version for all production assets — never redesign it.
         </p>
+      </div>
+    );
+  }
+
+  if (view.previewImageUrl) {
+    return (
+      <div className="cw-master-preview">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={view.previewImageUrl}
+          alt="Master artwork preview"
+          className="cw-master-preview-img"
+        />
       </div>
     );
   }
@@ -89,13 +103,23 @@ export function MasterArtworkPanel({
     () => resolveMasterArtworkView(assets, versionLabel),
     [assets, versionLabel],
   );
-  const isGenerating = loading === "Generate Master Artwork" || loading === "Generate SVG";
+  const isGenerating = loading === "Generate Master Artwork";
+  const exportImageUrl =
+    view.state.approvedArtworkUrl ??
+    view.state.approvedProductionFileUrl ??
+    view.previewImageUrl;
   const exportMarkup =
     view.state.approvedSvgMarkup ?? view.previewSvgMarkup ?? assets.svgMarkup;
+  const hasAiConcept = Boolean(assets.aiDesignerConcept);
 
   const handleDownloadPng = async () => {
-    if (!exportMarkup) return;
-    await downloadPngFromSvg(exportMarkup, `${brief.designId}-master-artwork`);
+    if (exportImageUrl) {
+      await downloadPngFromUrl(exportImageUrl, `${brief.designId}-master-artwork`);
+      return;
+    }
+    if (exportMarkup) {
+      await downloadPngFromSvg(exportMarkup, `${brief.designId}-master-artwork`);
+    }
   };
 
   const handleDownloadSvg = async () => {
@@ -104,7 +128,10 @@ export function MasterArtworkPanel({
   };
 
   return (
-    <section className="cw-master-artwork" aria-labelledby="cw-master-artwork-title">
+    <section
+      className="cw-master-artwork cw-master-artwork--featured"
+      aria-labelledby="cw-master-artwork-title"
+    >
       <header className="cw-master-artwork-header">
         <div>
           <p className="cw-master-kicker">Production · Creative Source of Truth</p>
@@ -112,8 +139,8 @@ export function MasterArtworkPanel({
             Master Artwork
           </h2>
           <p className="cw-master-subtitle">
-            The actual print artwork — typography, graphics, symbols, and composition. Image Studio
-            derives production from this asset only.
+            Premium AI-generated apparel artwork — typography, graphics, symbols, and composition.
+            Image Studio derives production from this asset only.
           </p>
         </div>
         <span
@@ -133,8 +160,17 @@ export function MasterArtworkPanel({
 
         <div className="cw-master-artwork-side">
           <div className="cw-master-meta-grid">
+            <MetaField label="Source" value={view.sourceLabel} />
             <MetaField label="Status" value={resolveMasterArtworkStatusLabel(view.state.status)} />
             <MetaField label="Version" value={view.state.version || versionLabel} />
+            <MetaField
+              label="Print Ready"
+              value={
+                view.state.printReady
+                  ? "Yes"
+                  : view.state.printReadiness ?? "—"
+              }
+            />
             <MetaField
               label="Commercial Score"
               value={
@@ -149,10 +185,31 @@ export function MasterArtworkPanel({
               label="Print Readiness"
               value={view.state.printReadiness ?? "—"}
             />
-            <MetaField label="Artwork Resolution" value={view.state.resolutionLabel ?? "—"} />
             <MetaField
-              label="Transparency"
-              value={view.state.transparency ? "Transparent-ready" : "Opaque background"}
+              label="Resolution"
+              value={view.state.resolution ?? view.state.resolutionLabel ?? "—"}
+            />
+            <MetaField
+              label="DPI Target"
+              value={view.state.dpi != null ? `${view.state.dpi} DPI` : "—"}
+            />
+            <MetaField
+              label="Transparent Background"
+              value={
+                view.state.transparentBackground ?? view.state.transparency
+                  ? "Yes"
+                  : "No"
+              }
+            />
+            <MetaField
+              label="Generation Mode"
+              value={
+                view.state.generationMode
+                  ? view.state.generationMode === "production"
+                    ? "Production"
+                    : "Draft"
+                  : "—"
+              }
             />
             <MetaField label="Placement" value={view.state.placement ?? brief.placement ?? "—"} />
             <MetaField
@@ -161,12 +218,22 @@ export function MasterArtworkPanel({
             />
           </div>
 
+          {view.hasSvgDraft && view.state.sourceType !== "svg-draft" ? (
+            <p className="cw-master-hint">SVG Draft available — optional vector export, not the main artwork.</p>
+          ) : null}
+
+          {!hasAiConcept ? (
+            <p className="cw-master-hint">
+              Generate an AI Design Concept before creating Master Artwork.
+            </p>
+          ) : null}
+
           <div className="cw-master-actions">
             <button
               type="button"
               className="cw-btn cw-btn-primary"
               onClick={onGenerate}
-              disabled={Boolean(loading)}
+              disabled={Boolean(loading) || !hasAiConcept}
             >
               {isGenerating ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -197,35 +264,32 @@ export function MasterArtworkPanel({
               type="button"
               className="cw-btn cw-btn-secondary"
               onClick={() => void handleDownloadPng()}
-              disabled={!exportMarkup}
+              disabled={!exportImageUrl && !exportMarkup}
             >
               <Download className="size-4" />
               Download PNG
             </button>
-            <button
-              type="button"
-              className="cw-btn cw-btn-secondary"
-              onClick={() => void handleDownloadSvg()}
-              disabled={!exportMarkup}
-              title="Vector export — PDF export coming soon"
-            >
-              <Download className="size-4" />
-              Download SVG
-            </button>
-            <button
-              type="button"
-              className="cw-btn cw-btn-secondary is-disabled-future"
-              disabled
-              title="PDF export — coming soon"
-            >
-              <Download className="size-4" />
-              Download PDF
-            </button>
+            {exportMarkup ? (
+              <button
+                type="button"
+                className="cw-btn cw-btn-secondary"
+                onClick={() => void handleDownloadSvg()}
+                title="Optional vector export"
+              >
+                <Download className="size-4" />
+                Download SVG Draft
+              </button>
+            ) : null}
             <button
               type="button"
               className="cw-btn cw-btn-accent"
               onClick={onSendToImageStudio}
               disabled={Boolean(loading) || !view.canSendToImageStudio}
+              title={
+                view.canSendToImageStudio
+                  ? "Send approved master artwork to Image Studio"
+                  : "Approve Master Artwork before production"
+              }
             >
               <Send className="size-4" />
               Send to Image Studio
@@ -239,9 +303,8 @@ export function MasterArtworkPanel({
               lifestyle, campaign, social, and Shopify production.
             </p>
           ) : view.hasArtwork ? (
-            <p className="cw-master-hint">
-              Approve the master artwork before production handoff to guarantee Image Studio never
-              redesigns the creative.
+            <p className="cw-master-hint cw-master-hint--warning">
+              Approve Master Artwork before production.
             </p>
           ) : null}
         </div>
