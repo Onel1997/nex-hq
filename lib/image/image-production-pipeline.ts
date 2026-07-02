@@ -1,6 +1,14 @@
 import type { ImageStudioAsset } from "@/agents/image/types";
-import { OPENAI_IMAGE_MODEL } from "@/agents/image/providers/openai-images-provider";
-import { queuedAssetsForPipeline, resolveMissionSlotAssets } from "@/lib/image/image-studio-assets";
+import {
+  ImageOpenAiQuotaExceededError,
+  OPENAI_QUOTA_ERROR_CODE,
+  OPENAI_QUOTA_USER_MESSAGE,
+} from "@/agents/image/generation-errors";
+import { getOpenAiImageModel } from "@/lib/image/image-generation-config";
+import {
+  MISSION_ASSET_SLOTS,
+  resolveMissionSlotAssets,
+} from "@/lib/image/image-studio-assets";
 
 export interface ImageProductionProject {
   reportId: string;
@@ -17,8 +25,15 @@ export interface ProductionPipelineCallbacks {
   onError: (message: string) => void;
 }
 
+type MissionQueueEntry = {
+  slot: (typeof MISSION_ASSET_SLOTS)[number];
+  asset: ImageStudioAsset;
+};
+
 let queueRunning = false;
 let pipelineRunning = false;
+let pipelineQueueAssets: ImageStudioAsset[] | null = null;
+let currentAssetIndex = 0;
 
 export function isProductionQueueRunning(): boolean {
   return queueRunning;
@@ -28,14 +43,39 @@ export function isProductionPipelineRunning(): boolean {
   return pipelineRunning;
 }
 
+function releasePipelineLocks(reason: string): void {
+  if (queueRunning || pipelineRunning) {
+    console.info("[Image Studio] releasePipelineLocks", {
+      reason,
+      queueRunning,
+      pipelineRunning,
+      currentAssetIndex,
+    });
+  }
+  queueRunning = false;
+  pipelineRunning = false;
+  pipelineQueueAssets = null;
+  currentAssetIndex = 0;
+}
+
+function isAssetPending(asset: ImageStudioAsset): boolean {
+  return !asset.imageUrl && asset.status !== "completed";
+}
+
+function getPendingMissionQueue(assets: ImageStudioAsset[]): MissionQueueEntry[] {
+  return resolveMissionSlotAssets(assets).filter(({ asset }) => isAssetPending(asset));
+}
+
 function countAssetsByState(assets: ImageStudioAsset[]): {
   pendingAssets: number;
   completedAssets: number;
 } {
   const slotted = resolveMissionSlotAssets(assets).map(({ asset }) => asset);
   return {
-    pendingAssets: slotted.filter((asset) => !asset.imageUrl && asset.status !== "completed").length,
-    completedAssets: slotted.filter((asset) => Boolean(asset.imageUrl) || asset.status === "completed").length,
+    pendingAssets: slotted.filter((asset) => isAssetPending(asset)).length,
+    completedAssets: slotted.filter(
+      (asset) => Boolean(asset.imageUrl) || asset.status === "completed",
+    ).length,
   };
 }
 
@@ -48,6 +88,7 @@ function logPipelineState(
   console.info(`[Image Studio] ${stage}`, {
     queueRunning,
     pipelineRunning,
+    currentAssetIndex,
     pendingAssets,
     completedAssets,
     ...extra,
@@ -76,7 +117,7 @@ export function generatePrompt(asset: ImageStudioAsset): {
   const prompt = asset.prompt?.openai?.trim() ?? "";
   logAssetStage("generatePrompt", asset, {
     promptLength: prompt.length,
-    model: OPENAI_IMAGE_MODEL,
+    model: getOpenAiImageModel(),
     nextStatus: prompt.length >= 3 ? "generating" : "failed",
   });
   return { prompt, promptLength: prompt.length, variant: "openai" };
@@ -132,7 +173,7 @@ export async function executeGeneration(
 
   logAssetStage("executeGeneration", asset, {
     promptLength,
-    model: OPENAI_IMAGE_MODEL,
+    model: getOpenAiImageModel(),
     nextStatus: "generating",
     apiRequestStart: new Date().toISOString(),
   });
@@ -156,6 +197,9 @@ export async function executeGeneration(
     const data = (await res.json()) as {
       asset?: ImageStudioAsset;
       error?: string;
+      code?: string;
+      requestId?: string;
+      model?: string;
     };
     const durationMs = Math.round(performance.now() - startedAt);
 
@@ -167,9 +211,33 @@ export async function executeGeneration(
       durationMs,
       apiError: res.ok ? undefined : data.error,
       hasImageUrl: Boolean(data.asset?.imageUrl),
+      code: data.code,
+      requestId: data.requestId,
     });
 
     if (!res.ok) {
+      if (res.status === 429 || data.code === OPENAI_QUOTA_ERROR_CODE) {
+        console.error("[Image Studio] executeGeneration OpenAI quota exceeded", {
+          assetId: generating.id,
+          assetType: generating.assetType,
+          model: data.model ?? getOpenAiImageModel(),
+          httpStatus: res.status,
+          requestId: data.requestId,
+          responseBody: data,
+          apiError: data.error,
+          durationMs,
+        });
+        callbacks.onError(OPENAI_QUOTA_USER_MESSAGE);
+        updateAssetStatus(generating, "pending", callbacks, {
+          message: OPENAI_QUOTA_USER_MESSAGE,
+        });
+        throw new ImageOpenAiQuotaExceededError(OPENAI_QUOTA_USER_MESSAGE, {
+          model: data.model ?? getOpenAiImageModel(),
+          requestId: data.requestId,
+          responseBody: data,
+        });
+      }
+
       throw new Error(data.error ?? `Generation failed (${res.status})`);
     }
 
@@ -188,6 +256,10 @@ export async function executeGeneration(
       durationMs,
     );
   } catch (error) {
+    if (error instanceof ImageOpenAiQuotaExceededError) {
+      throw error;
+    }
+
     const durationMs = Math.round(performance.now() - startedAt);
     const message = error instanceof Error ? error.message : "Generation failed";
     console.error("[Image Studio] executeGeneration API error", {
@@ -212,11 +284,28 @@ export function finishAsset(
     ...result,
     status: result.status ?? "completed",
   };
+
+  const pendingAfterFinish = pipelineQueueAssets
+    ? getPendingMissionQueue(
+        pipelineQueueAssets.map((item) =>
+          item.id === completed.id ? completed : item,
+        ),
+      )
+    : [];
+  const nextEntry = pendingAfterFinish[0];
+
   logAssetStage("finishAsset", asset, {
     nextStatus: completed.status,
     generationDurationMs: durationMs,
     hasImageUrl: Boolean(completed.imageUrl),
+    nextAssetSelected: nextEntry?.asset.id ?? null,
+    nextSlotId: nextEntry?.slot.id ?? null,
+    remainingPending: pendingAfterFinish.length,
+    currentAssetIndex,
+    queueRunning,
+    pipelineRunning,
   });
+
   callbacks.onAssetUpdated(completed);
   return completed;
 }
@@ -232,6 +321,7 @@ export async function startNextAsset(
     assetType: asset.assetType,
     slotId,
     currentStatus: asset.status,
+    currentAssetIndex,
     nextStatus: "preparing",
     queueRunning,
     pipelineRunning,
@@ -239,6 +329,113 @@ export async function startNextAsset(
 
   prepareAsset(asset, slotId, callbacks);
   return executeGeneration(asset, project, callbacks);
+}
+
+async function drainMissionQueue(
+  project: ImageProductionProject,
+  initialAssets: ImageStudioAsset[],
+  callbacks: ProductionPipelineCallbacks,
+): Promise<number> {
+  let workingAssets = [...initialAssets];
+  let workingProject: ImageProductionProject = {
+    ...project,
+    productionAssets: workingAssets,
+  };
+  let processed = 0;
+
+  pipelineQueueAssets = workingAssets;
+
+  const initialPending = getPendingMissionQueue(workingAssets);
+  logPipelineState(
+    "queue.start",
+    {
+      queuedAssetsCount: initialPending.length,
+      queuedAssetIds: initialPending.map(({ asset }) => asset.id),
+      reportId: project.reportId,
+      reportRecordId: project.reportRecordId,
+    },
+    workingAssets,
+  );
+
+  while (true) {
+    const pending = getPendingMissionQueue(workingAssets);
+    if (pending.length === 0) {
+      logPipelineState(
+        "queue.completed",
+        {
+          processed,
+          currentAssetIndex,
+        },
+        workingAssets,
+      );
+      break;
+    }
+
+    const { slot, asset: queuedAsset } = pending[0]!;
+    const asset =
+      workingAssets.find((item) => item.id === queuedAsset.id) ?? queuedAsset;
+    const nextAfterCurrent = pending[1]?.asset.id ?? null;
+
+    currentAssetIndex = processed;
+    logPipelineState(
+      "queue.next",
+      {
+        currentIndex: currentAssetIndex,
+        totalPending: pending.length,
+        currentAssetId: asset.id,
+        slotId: slot.id,
+        nextAssetSelected: nextAfterCurrent,
+      },
+      workingAssets,
+    );
+
+    let updated: ImageStudioAsset | null = null;
+    try {
+      updated = await startNextAsset(
+        slot.id,
+        asset,
+        workingProject,
+        callbacks,
+      );
+    } catch (error) {
+      if (error instanceof ImageOpenAiQuotaExceededError) {
+        console.warn("[Image Studio] queue paused — OpenAI quota exceeded", {
+          currentAssetId: asset.id,
+          currentAssetIndex,
+          model: error.model ?? getOpenAiImageModel(),
+          requestId: error.requestId,
+          responseBody: error.responseBody,
+        });
+        break;
+      }
+      throw error;
+    }
+    processed += 1;
+
+    if (updated) {
+      workingAssets = workingAssets.map((item) =>
+        item.id === updated.id ? updated : item,
+      );
+      workingProject = {
+        ...workingProject,
+        productionAssets: workingAssets,
+      };
+      pipelineQueueAssets = workingAssets;
+    }
+
+    console.info("[Image Studio] queue.next finished", {
+      currentAssetId: asset.id,
+      processed,
+      currentAssetIndex,
+      updatedStatus: updated?.status ?? "null",
+      remainingPending: getPendingMissionQueue(workingAssets).length,
+      nextAssetSelected: getPendingMissionQueue(workingAssets)[0]?.asset.id ?? null,
+      queueRunning,
+      pipelineRunning,
+    });
+  }
+
+  return processed;
 }
 
 export async function runProductionPipeline(
@@ -250,15 +447,26 @@ export async function runProductionPipeline(
     invoked: true,
     queueRunning,
     pipelineRunning,
+    currentAssetIndex,
     hasProject: Boolean(project.reportId && project.reportRecordId),
     totalAssets: assets.length,
   });
 
-  if (queueRunning) {
-    console.warn("[Image Studio] runProductionPipeline() abort", {
-      abortReason: "queueRunning already true",
+  if (queueRunning && !pipelineRunning) {
+    console.warn("[Image Studio] runProductionPipeline() recovering stale queue lock", {
       queueRunning,
       pipelineRunning,
+      currentAssetIndex,
+    });
+    releasePipelineLocks("stale-queue-lock-recovery");
+  }
+
+  if (queueRunning || pipelineRunning) {
+    console.warn("[Image Studio] runProductionPipeline() abort", {
+      abortReason: "pipeline already marked running",
+      queueRunning,
+      pipelineRunning,
+      currentAssetIndex,
     });
     return false;
   }
@@ -272,22 +480,8 @@ export async function runProductionPipeline(
     return false;
   }
 
-  const queue = resolveMissionSlotAssets(assets).filter(
-    ({ asset }) => !asset.imageUrl && asset.status !== "completed",
-  );
-
-  logPipelineState(
-    "queue.start()",
-    {
-      queuedAssetsCount: queue.length,
-      queuedAssetIds: queue.map(({ asset }) => asset.id),
-      reportId: project.reportId,
-      reportRecordId: project.reportRecordId,
-    },
-    assets,
-  );
-
-  if (queue.length === 0) {
+  const initialPending = getPendingMissionQueue(assets);
+  if (initialPending.length === 0) {
     console.warn("[Image Studio] runProductionPipeline() abort", {
       abortReason: "queuedAssets.length === 0",
       totalAssets: assets.length,
@@ -301,42 +495,9 @@ export async function runProductionPipeline(
   callbacks.onPipelineActive(true);
 
   let processed = 0;
-  let currentIndex = 0;
 
   try {
-    for (const { slot, asset } of queue) {
-      currentIndex = processed;
-      const activeAsset = asset.id;
-
-      logPipelineState(
-        "queue.next()",
-        {
-          currentIndex,
-          total: queue.length,
-          currentAssetId: asset.id,
-          activeAsset,
-          slotId: slot.id,
-        },
-        assets,
-      );
-
-      const updated = await startNextAsset(slot.id, asset, project, callbacks);
-      processed += 1;
-
-      if (updated) {
-        assets = assets.map((item) => (item.id === updated.id ? updated : item));
-      }
-
-      if (!updated || updated.status === "failed") {
-        console.warn("[Image Studio] queue.next() asset failed — continuing", {
-          assetId: asset.id,
-          status: updated?.status ?? "null",
-          currentIndex,
-        });
-        continue;
-      }
-    }
-
+    processed = await drainMissionQueue(project, assets, callbacks);
     logPipelineState("runProductionPipeline() complete", { processed }, assets);
     return processed > 0;
   } catch (error) {
@@ -344,20 +505,20 @@ export async function runProductionPipeline(
     console.error("[Image Studio] runProductionPipeline() abort", {
       abortReason: message,
       processed,
-      currentIndex,
+      currentAssetIndex,
+      queueRunning,
+      pipelineRunning,
     });
     callbacks.onError(message);
     return false;
   } finally {
-    queueRunning = false;
-    pipelineRunning = false;
+    releasePipelineLocks("runProductionPipeline-finally");
     callbacks.onPipelineActive(false);
-    logPipelineState("runProductionPipeline() finished", { processed, currentIndex }, assets);
+    logPipelineState("runProductionPipeline() finished", { processed, currentAssetIndex }, assets);
   }
 }
 
 /** Reset module queue lock — for tests only. */
 export function resetProductionPipelineLock(): void {
-  queueRunning = false;
-  pipelineRunning = false;
+  releasePipelineLocks("resetProductionPipelineLock");
 }

@@ -1,7 +1,11 @@
 "use client";
 
-import type { ImageStudioAsset } from "@/agents/image/types";
-import type { ImageMoodboardSection, ImagePalette } from "@/agents/image/types";
+import {
+  getImageGenerationModeLabel,
+  getOpenAiImageModel,
+  IMAGE_GENERATION,
+} from "@/lib/image/image-generation-config";
+import type { ImageStudioAsset, ImageMoodboardSection, ImagePalette } from "@/agents/image/types";
 import { ProductionGallery } from "@/components/image/production-gallery";
 import {
   AssetPreviewPlaceholder,
@@ -41,6 +45,7 @@ import {
   resolveCommercialStatus,
   resolveGenerationStatus,
   resolveImportedBlueprint,
+  type ImportedCreativeBlueprint,
 } from "@/lib/image/image-studio-mission";
 import {
   executeGeneration,
@@ -107,6 +112,42 @@ function buildAutoGenerateMissionKey(handoff: ImageStudioHandoff): string {
 
 const HANDOFF_RETRY_DELAYS_MS = [50, 250, 1000] as const;
 
+function resolveGenerationBrief(
+  brief: string,
+  handoff: ImageStudioHandoff | null,
+  blueprint: ImportedCreativeBlueprint | null,
+): string {
+  const trimmedBrief = brief.trim();
+  if (trimmedBrief.length >= 3) return trimmedBrief.slice(0, 4000);
+
+  if (!handoff && !blueprint) return "";
+
+  const candidates = [
+    handoff?.brief,
+    handoff?.imagePromptPrimary,
+    handoff?.mockupPromptPrimary,
+    handoff?.concept?.imagePrompt?.primary,
+    handoff?.concept?.imagePrompt?.campaign,
+    handoff?.concept?.mockupPrompt?.primary,
+    handoff?.commercialBlueprint,
+    handoff?.concept?.creativeDirection?.summary,
+    handoff?.concept?.designStory,
+    handoff?.renderPlan?.handoffNotes?.[0],
+    blueprint?.imagePrompt,
+    blueprint?.mockupPrompt,
+    handoff?.mission?.title
+      ? `${handoff.mission.title} — ${handoff.mission.collection} — ${handoff.mission.garment} in ${handoff.mission.colorway}`
+      : "",
+  ];
+
+  for (const candidate of candidates) {
+    const text = typeof candidate === "string" ? candidate.trim() : "";
+    if (text.length >= 3) return text.slice(0, 4000);
+  }
+
+  return "";
+}
+
 function InspectorCard({
   title,
   open,
@@ -135,6 +176,21 @@ export function ImageStudioWorkspace() {
   const [brief, setBrief] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validationDebug, setValidationDebug] = useState<{
+    schemaName?: string;
+    validationIssues?: Array<{
+      field: string;
+      path: string;
+      expected: string;
+      received: unknown;
+      receivedLabel?: string;
+      message: string;
+    }>;
+    missingFields?: string[];
+    receivedKeys?: string[];
+    parsedPreview?: unknown;
+    detailedError?: string;
+  } | null>(null);
   const [result, setResult] = useState<ImageRunResult | null>(null);
   const [productionAssets, setProductionAssets] = useState<ImageStudioAsset[]>([]);
   const [selectedSlotId, setSelectedSlotId] = useState(MISSION_ASSET_SLOTS[0].id);
@@ -155,6 +211,7 @@ export function ImageStudioWorkspace() {
   const [preparingAssetId, setPreparingAssetId] = useState<string | null>(null);
   const [pipelineActive, setPipelineActive] = useState(false);
   const pipelineLockRef = useRef(false);
+  const packageLockRef = useRef(false);
   const [handoffLoadDebug, setHandoffLoadDebug] = useState<HandoffLoadDebug | null>(null);
   const [handoffSendDebug] = useState<HandoffSaveResult | null>(() =>
     typeof window === "undefined" ? null : loadHandoffSendDebug(),
@@ -185,6 +242,13 @@ export function ImageStudioWorkspace() {
     () => resolveImportedBlueprint(handoff, result?.projectName),
     [handoff, result?.projectName],
   );
+
+  const effectiveBrief = useMemo(
+    () => resolveGenerationBrief(brief, handoff, blueprint),
+    [brief, handoff, blueprint],
+  );
+
+  const canStartGeneration = effectiveBrief.trim().length >= 3;
 
   const hasBlueprint = Boolean(blueprint?.imported || brief.trim());
   const hasResults = productionAssets.length > 0;
@@ -217,6 +281,8 @@ export function ImageStudioWorkspace() {
   const colorway = blueprint?.colorway ?? selectedAsset?.color ?? "—";
   const version = blueprint?.version ?? (hasResults ? "V1" : "—");
   const commercialStatus = resolveCommercialStatus(blueprint);
+  const generationModeLabel = getImageGenerationModeLabel();
+  const isDraftGenerationMode = IMAGE_GENERATION.mode === "draft";
   const generationStatus = resolveGenerationStatus({
     isLoading,
     hasResults,
@@ -313,6 +379,9 @@ export function ImageStudioWorkspace() {
         console.warn("[Image Studio] runProductionPipeline wrapper abort", {
           abortReason: "pipelineLockRef.current is true",
         });
+        setError(
+          "Production pipeline is already running. Wait for the current run to finish.",
+        );
         return false;
       }
 
@@ -384,6 +453,7 @@ export function ImageStudioWorkspace() {
       productionPackagePromise = (async () => {
         setIsLoading(true);
         setError(null);
+        setValidationDebug(null);
 
         try {
           console.info("[Image Studio] creating production package", { briefLength: text.length });
@@ -394,7 +464,51 @@ export function ImageStudioWorkspace() {
           });
           const data = await res.json();
           if (!res.ok) {
-            throw new Error(data.error ?? t("image.errors.unexpected"));
+            if (
+              data.validationIssues ||
+              data.missingFields ||
+              data.parsedPreview ||
+              data.schemaName
+            ) {
+              const debug = {
+                schemaName: data.schemaName as string | undefined,
+                validationIssues: data.validationIssues as
+                  | NonNullable<typeof validationDebug>["validationIssues"]
+                  | undefined,
+                missingFields: data.missingFields as string[] | undefined,
+                receivedKeys: data.receivedKeys as string[] | undefined,
+                parsedPreview: data.parsedPreview,
+                detailedError: data.detailedError as string | undefined,
+              };
+              setValidationDebug(debug);
+
+              console.error("[Image Studio] schema validation failed", {
+                schemaName: debug.schemaName,
+                issueCount: debug.validationIssues?.length ?? 0,
+              });
+              if (debug.parsedPreview) {
+                console.error(
+                  "[Image Studio] validated payload:",
+                  JSON.stringify(debug.parsedPreview, null, 2),
+                );
+              }
+              for (const issue of debug.validationIssues ?? []) {
+                console.error(
+                  [
+                    `❌ ${issue.path}`,
+                    `   Field: ${issue.field}`,
+                    `   Expected: ${issue.expected}`,
+                    `   Received: ${issue.receivedLabel ?? JSON.stringify(issue.received)}`,
+                    `   Path: ${issue.path}`,
+                    `   Message: ${issue.message}`,
+                  ].join("\n"),
+                );
+              }
+              if (debug.detailedError) {
+                console.error("[Image Studio] detailed error:\n", debug.detailedError);
+              }
+            }
+            throw new Error(data.error ?? data.detailedError ?? t("image.errors.unexpected"));
           }
 
           const project = data as ImageRunResult;
@@ -423,13 +537,193 @@ export function ImageStudioWorkspace() {
     [t],
   );
 
-  const runImage = useCallback(async () => {
-    const project = await createProductionPackage(brief);
-    if (project && !pipelineLockRef.current) {
-      await runProductionPipeline(project, project.productionAssets ?? []);
+  const releaseExecutionLocks = useCallback((reason: string) => {
+    if (pipelineLockRef.current || packageLockRef.current) {
+      console.warn("[Image Studio] releasing stuck execution locks", {
+        reason,
+        pipelineLockRef: pipelineLockRef.current,
+        packageLockRef: packageLockRef.current,
+      });
     }
+    pipelineLockRef.current = false;
+    packageLockRef.current = false;
+  }, []);
+
+  const runImage = useCallback(async (): Promise<ImageRunResult | null> => {
+    console.info("[Image Studio] runImage entered", {
+      briefLength: brief.trim().length,
+      effectiveBriefLength: effectiveBrief.trim().length,
+      hasHandoff: Boolean(handoff),
+      hasBlueprint: Boolean(blueprint),
+      pipelineLockRef: pipelineLockRef.current,
+      packageLockRef: packageLockRef.current,
+      cachedProject: Boolean(cachedProductionProject),
+      isLoading,
+      pipelineActive,
+    });
+
+    const briefForRun = resolveGenerationBrief(brief, handoff, blueprint);
+    if (!briefForRun.trim()) {
+      console.warn("[Image Studio] runImage early return: missing brief", {
+        abortReason: "missing brief",
+      });
+      setError(
+        "Cannot start production: no brief, prompt, or handoff content is available.",
+      );
+      return null;
+    }
+
+    if (!handoff && !blueprint && !brief.trim()) {
+      console.warn("[Image Studio] runImage early return: missing handoff", {
+        abortReason: "missing handoff",
+      });
+      setError("Cannot start production: creative handoff was not imported.");
+      return null;
+    }
+
+    if (briefForRun !== brief.trim()) {
+      console.info("[Image Studio] runImage rebuilt brief from handoff sources", {
+        briefLength: briefForRun.length,
+      });
+      setBrief(briefForRun);
+    }
+
+    if (packageLockRef.current && !productionPackagePromise) {
+      console.warn("[Image Studio] runImage resetting stuck packageLockRef", {
+        abortReason: "packageLockRef.current is true",
+      });
+      packageLockRef.current = false;
+    }
+
+    if (pipelineLockRef.current) {
+      console.warn("[Image Studio] runImage resetting stuck pipelineLockRef before package", {
+        abortReason: "pipelineLockRef.current is true",
+      });
+      pipelineLockRef.current = false;
+    }
+
+    console.info("[Image Studio] calling createProductionPackage", {
+      briefLength: briefForRun.length,
+    });
+
+    let project: ImageRunResult | null = null;
+    packageLockRef.current = true;
+    try {
+      project = await createProductionPackage(briefForRun);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : t("image.errors.unexpected");
+      console.error("[Image Studio] runImage early return: production package failed", {
+        abortReason: "missing production package",
+        error: message,
+      });
+      setError(message);
+      releaseExecutionLocks("createProductionPackage-error");
+      return null;
+    } finally {
+      packageLockRef.current = false;
+    }
+
+    if (!project) {
+      console.warn("[Image Studio] runImage early return: missing production package", {
+        abortReason: "missing production package",
+      });
+      setError((current) =>
+        current ??
+        "Production package could not be created. Check the error details above.",
+      );
+      releaseExecutionLocks("missing-production-package");
+      return null;
+    }
+
+    const assets = project.productionAssets ?? [];
+    if (assets.length === 0) {
+      console.warn("[Image Studio] runImage early return: empty assets", {
+        abortReason: "empty assets",
+        reportId: project.reportId,
+      });
+      setError("Production package has no assets to generate.");
+      return project;
+    }
+
+    const pendingAssets = queuedAssetsForPipeline(assets);
+    if (pendingAssets.length === 0) {
+      console.info("[Image Studio] runImage: no pending assets in queue", {
+        reportId: project.reportId,
+        assetCount: assets.length,
+      });
+      setError(
+        "All mission assets are already generated or completed. Select an asset to regenerate.",
+      );
+      return project;
+    }
+
+    if (pipelineLockRef.current) {
+      console.warn("[Image Studio] runImage resetting stuck pipelineLockRef before pipeline", {
+        abortReason: "pipelineLockRef.current is true",
+      });
+      pipelineLockRef.current = false;
+    }
+
+    console.info("[Image Studio] calling runProductionPipeline", {
+      reportId: project.reportId,
+      pendingCount: pendingAssets.length,
+    });
+
+    const started = await runProductionPipeline(project, assets);
+    if (!started) {
+      console.warn("[Image Studio] runImage early return: invalid project pipeline start", {
+        abortReason: "invalid project",
+        pipelineLockRef: pipelineLockRef.current,
+      });
+      setError((current) =>
+        current ?? "Production pipeline could not start. Try Generate Assets again.",
+      );
+      releaseExecutionLocks("pipeline-not-started");
+    }
+
     return project;
-  }, [brief, createProductionPackage, runProductionPipeline]);
+  }, [
+    brief,
+    blueprint,
+    createProductionPackage,
+    effectiveBrief,
+    handoff,
+    isLoading,
+    pipelineActive,
+    releaseExecutionLocks,
+    runProductionPipeline,
+    t,
+  ]);
+
+  const handleGenerateAssetsClick = useCallback(() => {
+    console.info("[Image Studio] Generate Assets clicked", {
+      briefLength: brief.trim().length,
+      effectiveBriefLength: effectiveBrief.trim().length,
+      canStartGeneration,
+      isLoading,
+      pipelineActive,
+      pipelineLockRef: pipelineLockRef.current,
+      packageLockRef: packageLockRef.current,
+    });
+    console.info("[Image Studio] calling runImage");
+    void runImage().catch((err) => {
+      const message =
+        err instanceof Error ? err.message : t("image.errors.unexpected");
+      console.error("[Image Studio] runImage unhandled error", { error: message });
+      setError(message);
+      releaseExecutionLocks("runImage-unhandled-error");
+    });
+  }, [
+    brief,
+    canStartGeneration,
+    effectiveBrief,
+    isLoading,
+    pipelineActive,
+    releaseExecutionLocks,
+    runImage,
+    t,
+  ]);
 
   const runImageRef = useRef(runImage);
   runImageRef.current = runImage;
@@ -515,7 +809,15 @@ export function ImageStudioWorkspace() {
   }, [hydrateCachedProduction]);
 
   useEffect(() => {
-    if (!handoffStateApplied || !handoff || !brief.trim()) return;
+    if (!handoffStateApplied || !handoff) return;
+
+    const missionBrief = resolveGenerationBrief(brief, handoff, blueprint);
+    if (!missionBrief.trim()) {
+      console.info("[Image Studio] auto-generate skipped — missing prompt/brief", {
+        abortReason: "missing brief",
+      });
+      return;
+    }
 
     const missionKey = buildAutoGenerateMissionKey(handoff);
     if (autoGenerateMissionKey === missionKey) {
@@ -532,7 +834,7 @@ export function ImageStudioWorkspace() {
     });
 
     void autoGenerateInflight;
-  }, [handoffStateApplied, handoff, brief]);
+  }, [handoffStateApplied, handoff, brief, blueprint]);
 
   const generateSingleAsset = useCallback(
     async (asset: ImageStudioAsset) => {
@@ -593,6 +895,11 @@ export function ImageStudioWorkspace() {
           <HeroMeta label="Colorway" value={colorway} />
           <HeroMeta label="Version" value={version} />
           <HeroMeta label="Commercial Status" value={commercialStatus} highlight="gold" />
+          <HeroMeta
+            label="Generation Mode"
+            value={generationModeLabel}
+            highlight={isDraftGenerationMode ? "gold" : "emerald"}
+          />
           <HeroMeta label="Generation Status" value={generationStatus} highlight={pipelineActive || hasResults || isLoading ? "emerald" : undefined} />
         </div>
       </header>
@@ -601,8 +908,8 @@ export function ImageStudioWorkspace() {
         <button
           type="button"
           className="is-toolbar-primary"
-          onClick={() => void runImage()}
-          disabled={isLoading || pipelineActive || !brief.trim()}
+          onClick={handleGenerateAssetsClick}
+          disabled={isLoading || pipelineActive || !canStartGeneration}
         >
           <Sparkles className="size-4" />
           {isLoading || pipelineActive ? "Generating…" : "Generate Assets"}
@@ -627,7 +934,59 @@ export function ImageStudioWorkspace() {
         </div>
       </div>
 
-      {error ? <div className="is-error-banner">{error}</div> : null}
+      {error ? (
+        <div className="is-error-banner">
+          <p className="is-error-banner__summary">{error.split("\n\n")[0]}</p>
+          {validationDebug ? (
+            <div className="is-error-banner__debug">
+              {validationDebug.schemaName ? (
+                <p className="is-error-banner__schema">
+                  Schema: <code>{validationDebug.schemaName}</code>
+                </p>
+              ) : null}
+              {validationDebug.missingFields?.length ? (
+                <p className="is-error-banner__missing">
+                  Missing fields: {validationDebug.missingFields.join(", ")}
+                </p>
+              ) : null}
+              {validationDebug.validationIssues?.length ? (
+                <ul className="is-error-banner__issues">
+                  {validationDebug.validationIssues.map((issue) => (
+                    <li key={`${issue.path}-${issue.message}`}>
+                      <span className="is-error-banner__issue-path">❌ {issue.path}</span>
+                      <dl className="is-error-banner__issue-detail">
+                        <div>
+                          <dt>Field</dt>
+                          <dd>{issue.field}</dd>
+                        </div>
+                        <div>
+                          <dt>Expected</dt>
+                          <dd>{issue.expected}</dd>
+                        </div>
+                        <div>
+                          <dt>Received</dt>
+                          <dd>
+                            {issue.receivedLabel ??
+                              (issue.received === undefined
+                                ? "undefined"
+                                : issue.received === null
+                                  ? "null"
+                                  : JSON.stringify(issue.received))}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Path</dt>
+                          <dd>{issue.path}</dd>
+                        </div>
+                      </dl>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="is-body">
         <aside className="is-sidebar">
@@ -760,8 +1119,8 @@ export function ImageStudioWorkspace() {
                         <button
                           type="button"
                           className="is-btn is-btn--primary"
-                          onClick={() => void runImage()}
-                          disabled={isLoading || pipelineActive || !brief.trim()}
+                          onClick={handleGenerateAssetsClick}
+                          disabled={isLoading || pipelineActive || !canStartGeneration}
                         >
                           <Sparkles className="size-4" />
                           {isLoading || pipelineActive ? "Starting Production…" : "Generate Assets"}
@@ -844,8 +1203,9 @@ export function ImageStudioWorkspace() {
             >
               <div className="is-model-badge">
                 <span className="is-model-badge-provider">OpenAI Images</span>
-                <span className="is-model-badge-model">gpt-image-1</span>
+                <span className="is-model-badge-model">{getOpenAiImageModel()}</span>
               </div>
+              <InspectorField label="Generation Mode" value={generationModeLabel} />
               <InspectorField label="Resolution" value={selectedAsset?.dimensions ?? "1024 × 1024"} />
               <InspectorField label="Seed" value={selectedAsset?.id?.slice(0, 10) ?? "—"} mono />
               <InspectorField
