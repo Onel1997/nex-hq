@@ -7,7 +7,7 @@ export const MASTER_ARTWORK_THINKING_STEPS = [
   "Analyzing trends…",
   "Creating typography…",
   "Balancing composition…",
-  "Checking luxury positioning…",
+  "Evaluating commercial appeal…",
   "Preparing print-ready artwork…",
 ] as const;
 

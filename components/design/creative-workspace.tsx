@@ -546,17 +546,13 @@ export function CreativeWorkspace({
           ),
         }),
       );
-      notify("Direction selected — perfecting master artwork");
+      notify("Creative direction selected — ready for master artwork");
 
       window.setTimeout(() => {
         setDirectionTransitioning(false);
-      }, 900);
-
-      window.setTimeout(() => {
-        void runMasterArtworkGeneration();
-      }, 600);
+      }, 1200);
     },
-    [canvasAssets.designDirections, notify, onPatchMission, runMasterArtworkGeneration],
+    [canvasAssets.designDirections, notify, onPatchMission],
   );
 
   const regenerateDirection = useCallback(
@@ -1078,7 +1074,7 @@ export function CreativeWorkspace({
           onGenerateConcept={() => void runAiDesignerConcept()}
         />
 
-        <div className="cs-workspace">
+        <div className={cn("cs-workspace", directionTransitioning && "is-transitioning")}>
           <CreativeDirectionsSidebar
             directions={canvasAssets.designDirections}
             iterations={workspace.iterations}
@@ -1092,6 +1088,7 @@ export function CreativeWorkspace({
             onSelectVersion={(id) => onPatchMission((s) => restoreIteration(s, id))}
           />
 
+          <div className="cs-workspace-center">
           {showDirectionsStage ? (
             <CreativeDirectionsStage
               directions={canvasAssets.designDirections}
@@ -1134,13 +1131,14 @@ export function CreativeWorkspace({
               selectedDirection={selectedDirection}
               otherDirections={canvasAssets.designDirections ?? []}
               isTransitioning={directionTransitioning}
+              chatLoading={chatLoading}
               onGenerate={() => void runMasterArtworkGeneration()}
               onRegenerate={() => void runMasterArtworkGeneration()}
               onVariation={createVariation}
               onApprove={approveMasterArtwork}
               onSendToImageStudio={sendToImageStudio}
               onEvolve={evolveDirection}
-              onBlend={blendDirection}
+              onRevision={sendDirectorMessage}
             />
           ) : (
             <MasterArtworkCanvas
@@ -1151,13 +1149,17 @@ export function CreativeWorkspace({
               hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
               canGenerate={canGenerateMaster}
               selectedDirection={selectedDirection}
+              chatLoading={chatLoading}
               onGenerate={() => void runMasterArtworkGeneration()}
               onRegenerate={() => void runMasterArtworkGeneration()}
               onVariation={createVariation}
               onApprove={approveMasterArtwork}
               onSendToImageStudio={sendToImageStudio}
+              onRevision={sendDirectorMessage}
             />
           )}
+
+          </div>
 
           <StudioInspector
             brief={brief}
@@ -1171,12 +1173,7 @@ export function CreativeWorkspace({
             collectionName={mission.collectionName}
             versionHistory={mission.versionHistory}
             activeIteration={iteration}
-            messages={workspace.chat}
-            chatInput={chatInput}
-            chatLoading={chatLoading}
-            onChatInputChange={setChatInput}
-            onSendChat={() => void sendDirectorMessage(chatInput)}
-            onRevision={sendDirectorMessage}
+            selectedDirection={selectedDirection}
             advancedTools={advancedTools}
           />
         </div>
@@ -1272,7 +1269,7 @@ export function CreativeWorkspaceEmpty() {
         <p className="cw-eyebrow">AI Fashion Creative Director</p>
         <h1>Design Studio</h1>
         <p className="cw-empty-copy">
-          An elite AI fashion agency — creative directions, commercial review, and immutable master artwork for production.
+          An AI fashion design studio — creative directions, commercial review, and approved master artwork for production.
         </p>
       </div>
     </section>
@@ -1946,7 +1943,7 @@ function ProductionToolbar({
         }
         title={
           hasDesignDirections && !hasSelectedDirection
-            ? "Select a winning design direction first"
+            ? "Select a design direction first"
             : undefined
         }
         onClick={onGenerateMasterArtwork}
@@ -2359,8 +2356,8 @@ function PremiumGarmentCanvas({
               <stop offset="100%" stopColor="#000000" stopOpacity="0.12" />
             </linearGradient>
             <radialGradient id={`${uid}-glow`} cx="50%" cy="35%" r="55%">
-              <stop offset="0%" stopColor="#d9b46b" stopOpacity="0.06" />
-              <stop offset="100%" stopColor="#d9b46b" stopOpacity="0" />
+              <stop offset="0%" stopColor="#52c2c2" stopOpacity="0.06" />
+              <stop offset="100%" stopColor="#52c2c2" stopOpacity="0" />
             </radialGradient>
           </defs>
           <ellipse cx="200" cy="260" rx="130" ry="160" fill={`url(#${uid}-glow)`} />
@@ -2408,8 +2405,8 @@ function PremiumGarmentCanvas({
               <stop offset="100%" stopColor="#000000" stopOpacity="0.1" />
             </linearGradient>
             <radialGradient id={`${uid}-glow`} cx="50%" cy="38%" r="50%">
-              <stop offset="0%" stopColor="#d9b46b" stopOpacity="0.07" />
-              <stop offset="100%" stopColor="#d9b46b" stopOpacity="0" />
+              <stop offset="0%" stopColor="#52c2c2" stopOpacity="0.07" />
+              <stop offset="100%" stopColor="#52c2c2" stopOpacity="0" />
             </radialGradient>
           </defs>
           <ellipse cx="200" cy="250" rx="120" ry="150" fill={`url(#${uid}-glow)`} />

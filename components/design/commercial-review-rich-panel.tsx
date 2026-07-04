@@ -36,7 +36,7 @@ function buildDimensions(
     );
 
   return [
-    { key: "luxury", label: "Luxury", value: health.luxury },
+    { key: "luxury", label: "Luxury Positioning", value: health.luxury },
     { key: "originality", label: "Originality", value: health.originality },
     { key: "printQuality", label: "Print Quality", value: health.printQuality },
     { key: "brandFit", label: "Brand Fit", value: health.brandConsistency },
@@ -76,7 +76,7 @@ export function CommercialReviewRichPanel({
         <p className="cw-v2-kicker">Commercial Director</p>
         <h2 className="cw-v2-section-title">Commercial Review</h2>
         <p className="cw-v2-section-subtitle">
-          Multi-dimensional scoring across luxury positioning, production readiness, and conversion potential.
+          Multi-dimensional scoring across premium appeal, production readiness, and conversion potential.
         </p>
       </header>
 

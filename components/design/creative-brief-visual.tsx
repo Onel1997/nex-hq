@@ -110,7 +110,7 @@ export function CreativeBriefVisual({
         </div>
 
         <div className="cw-v2-brief-block">
-          <h3><Sparkles className="size-3.5" /> Luxury Inspiration</h3>
+          <h3><Sparkles className="size-3.5" /> Style Signals</h3>
           <p>{concept.creativeDirection.visualIntent}</p>
           <p className="cw-v2-brief-muted">{concept.fashionLanguage.luxurySignals.slice(0, 3).join(" · ")}</p>
         </div>

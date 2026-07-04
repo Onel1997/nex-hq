@@ -25,7 +25,7 @@ function buildMeters(
     );
 
   return [
-    { key: "luxury", label: "Luxury", value: health.luxury },
+    { key: "luxury", label: "Luxury Positioning", value: health.luxury },
     { key: "commercial", label: "Commercial", value: health.commercialPotential },
     { key: "originality", label: "Originality", value: health.originality },
     { key: "print", label: "Print", value: health.printQuality },
@@ -83,6 +83,7 @@ interface CommercialReviewMetersProps {
   masterArtworkView?: MasterArtworkViewModel;
   commercialScore?: number;
   className?: string;
+  compact?: boolean;
 }
 
 export function CommercialReviewMeters({
@@ -91,13 +92,19 @@ export function CommercialReviewMeters({
   masterArtworkView,
   commercialScore,
   className,
+  compact = false,
 }: CommercialReviewMetersProps) {
   const masterScore =
     masterArtworkView?.state.commercialScore ?? commercialScore ?? undefined;
-  const meters = buildMeters(health, concept, masterScore);
+  const allMeters = buildMeters(health, concept, masterScore);
+  const meters = compact
+    ? allMeters.filter((meter) =>
+        ["overall", "luxury", "commercial", "print"].includes(meter.key),
+      )
+    : allMeters;
 
   return (
-    <div className={cn("cs-meters-grid", className)}>
+    <div className={cn("cs-meters-grid", compact && "cs-meters-grid--compact", className)}>
       {meters.map((meter, index) => (
         <ScoreMeter
           key={meter.key}

@@ -5,11 +5,12 @@ import { ChevronRight, Loader2, Sparkles } from "lucide-react";
 
 const WORKFLOW_STEPS = [
   "Research",
-  "Directions",
-  "Select",
-  "Artwork",
+  "Design Directions",
+  "Select Winner",
+  "Master Artwork",
+  "Commercial Review",
   "Approve",
-  "Production",
+  "Image Studio",
 ] as const;
 
 interface StudioChromeProps {
@@ -103,7 +104,7 @@ export function deriveWorkflowStep(
   hasArtwork: boolean,
   isApproved: boolean,
 ): number {
-  if (isApproved) return 5;
+  if (isApproved) return 6;
   if (hasArtwork) return 4;
   if (hasSelectedDirection) return 3;
   if (hasDirections) return 2;

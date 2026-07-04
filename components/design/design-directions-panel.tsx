@@ -72,7 +72,7 @@ export function DesignDirectionsPanel({
       {!hasConcept ? (
         <p className="cw-v2-empty-hint">Generate an AI Design Concept first — directions build on the creative briefing.</p>
       ) : !hasDirections ? (
-        <p className="cw-v2-empty-hint">Press Generate to explore luxury, typography, streetwear, graphic, and vintage directions.</p>
+        <p className="cw-v2-empty-hint">Press Generate to explore minimal, typography-led, streetwear, graphic, and vintage directions.</p>
       ) : (
         <>
           {selected ? (
@@ -82,7 +82,7 @@ export function DesignDirectionsPanel({
             </p>
           ) : (
             <p className="cw-v2-directions-selected-note cw-v2-directions-selected-note--pending">
-              Select one winning direction to continue to Master Artwork.
+              Select one direction to continue to Master Artwork.
             </p>
           )}
           <div className="cw-v2-directions-grid">

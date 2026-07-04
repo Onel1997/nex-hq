@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 const DIRECTOR_SUGGESTIONS: Array<{ label: string; prompt: string }> = [
-  { label: "Improve luxury feeling", prompt: "Make typography more premium and increase the luxury feeling" },
+  { label: "Improve premium feel", prompt: "Make typography more premium and increase the overall polish" },
   { label: "Reduce typography", prompt: "Reduce visual weight and simplify typography" },
   { label: "Increase emotional impact", prompt: "Increase emotional impact and editorial presence" },
   { label: "More editorial", prompt: "Make the composition more editorial and refined" },
@@ -36,7 +36,7 @@ function buildDirectorInsights(
     return [
       {
         title: "Why this design works",
-        body: "Generate an AI Design Concept to receive senior creative director feedback on luxury positioning and commercial potential.",
+        body: "Generate an AI Design Concept to receive senior creative director feedback on brand positioning and commercial potential.",
       },
     ];
   }
@@ -47,7 +47,7 @@ function buildDirectorInsights(
       body: `${concept.creativeDirection.summary} The ${concept.heroFocus.dominantElement} anchors scroll-stop appeal while ${concept.negativeSpaceProfile.profile} negative space preserves wearability.`,
     },
     {
-      title: "Luxury positioning",
+      title: "Premium positioning",
       body: `${concept.fashionLanguage.luxurySignals.join(", ")}. Price band: ${concept.commercialIntention.priceBand}.`,
     },
     {
@@ -133,7 +133,7 @@ export function CreativeDirectorRichPanel({
         aria-expanded={open}
       >
         <div className="cw-v2-director-toggle-head">
-          <Sparkles className="size-4 text-[#d9b46b]" />
+          <Sparkles className="size-4 text-[#52c2c2]" />
           <div>
             <h2>Creative Director</h2>
             <p>Senior creative reasoning · revisions · version ideas</p>

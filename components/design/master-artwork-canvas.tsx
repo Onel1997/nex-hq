@@ -15,6 +15,16 @@ import { Download, RefreshCw, Send, Shuffle, Sparkles, Stamp, Trophy } from "luc
 import { useMemo } from "react";
 import { MasterArtworkThinking } from "@/components/design/master-artwork-thinking";
 
+function DirectionPreviewMini({ colors }: { colors: string[] }) {
+  return (
+    <div className="cs-canvas-direction-ref-preview" aria-hidden>
+      {colors.slice(0, 4).map((color, index) => (
+        <span key={`${color}-${index}`} style={{ background: color }} />
+      ))}
+    </div>
+  );
+}
+
 interface MasterArtworkCanvasProps {
   brief: DesignStudioBrief;
   assets: DesignMissionAssets;
@@ -25,6 +35,7 @@ interface MasterArtworkCanvasProps {
   selectedDirection?: DesignDirection;
   otherDirections?: DesignDirection[];
   isTransitioning?: boolean;
+  chatLoading?: boolean;
   onGenerate: () => void;
   onRegenerate: () => void;
   onVariation: () => void;
@@ -32,6 +43,7 @@ interface MasterArtworkCanvasProps {
   onSendToImageStudio: () => void;
   onEvolve?: (action: EvolutionAction) => void;
   onBlend?: (secondaryId: string) => void;
+  onRevision?: (prompt: string) => void;
 }
 
 export function MasterArtworkCanvas({
@@ -44,13 +56,14 @@ export function MasterArtworkCanvas({
   selectedDirection,
   otherDirections = [],
   isTransitioning,
+  chatLoading,
   onGenerate,
   onRegenerate,
   onVariation,
   onApprove,
   onSendToImageStudio,
   onEvolve,
-  onBlend,
+  onRevision,
 }: MasterArtworkCanvasProps) {
   const view = useMemo(
     () => resolveMasterArtworkView(assets, versionLabel),
@@ -87,17 +100,13 @@ export function MasterArtworkCanvas({
 
   return (
     <main
-      className={cn("cs-canvas", isTransitioning && "is-transitioning")}
+      className={cn("cs-canvas cs-canvas-hero", isTransitioning && "is-transitioning")}
       aria-label="Master artwork stage"
     >
       {selectedDirection ? (
-        <div className={cn("cs-canvas-source", isTransitioning && "is-animating")}>
-          <Trophy className="size-3.5 text-[#d9b46b]" />
-          <div>
-            <span>Creative Source V1</span>
-            <strong>{selectedDirection.title}</strong>
-          </div>
-          <p>{selectedDirection.philosophy}</p>
+        <div className={cn("cs-canvas-source cs-canvas-source--compact", isTransitioning && "is-animating")}>
+          <Trophy className="size-3 text-[#52c2c2]" />
+          <strong>{selectedDirection.title}</strong>
         </div>
       ) : null}
 
@@ -129,24 +138,31 @@ export function MasterArtworkCanvas({
               ) : null}
             </div>
           ) : (
-            <div className="cs-canvas-empty">
-              <Sparkles className="size-10 text-[#d9b46b]/80" />
+            <div className="cs-canvas-empty cs-canvas-empty--direction">
               {selectedDirection ? (
                 <>
-                  <p className="cs-canvas-direction-title">{selectedDirection.title}</p>
-                  <p className="cs-canvas-direction-mood">
-                    {selectedDirection.mood} · {selectedDirection.typography} ·{" "}
-                    {selectedDirection.printStyle}
+                  <div className="cs-canvas-direction-ref">
+                    <DirectionPreviewMini colors={selectedDirection.thumbnailColors} />
+                    <div>
+                      <p className="cs-canvas-direction-ref-kicker">Selected Creative Direction</p>
+                      <p className="cs-canvas-direction-title">{selectedDirection.title}</p>
+                      <p className="cs-canvas-direction-mood">{selectedDirection.philosophy}</p>
+                    </div>
+                  </div>
+                  <p className="cs-canvas-unlock-copy">
+                    Your selected direction is locked in. Generate master artwork to enter production review.
                   </p>
-                  <p className="cs-canvas-direction-story">{selectedDirection.designStory}</p>
                 </>
               ) : (
-                <p>Select a direction, then generate master artwork.</p>
+                <>
+                  <Sparkles className="size-10 text-[#52c2c2]/80" />
+                  <p>Select a direction, then generate master artwork.</p>
+                </>
               )}
               {hasConcept && canGenerate ? (
-                <button type="button" className="cs-btn cs-btn-primary" onClick={onGenerate}>
+                <button type="button" className="cs-btn cs-btn-primary cs-btn-generate-master" onClick={onGenerate}>
                   <Sparkles className="size-4" />
-                  Perfect the Winner
+                  Generate Master Artwork
                 </button>
               ) : null}
             </div>
@@ -162,69 +178,73 @@ export function MasterArtworkCanvas({
         </span>
       </div>
 
-      <div className="cs-canvas-toolbar">
-        <button
-          type="button"
-          className="cs-btn cs-btn-primary"
-          onClick={onApprove}
-          disabled={Boolean(loading) || !view.canApprove}
-        >
-          <Stamp className="size-4" />
-          Approve
-        </button>
-        <button
-          type="button"
-          className="cs-btn"
-          onClick={onRegenerate}
-          disabled={Boolean(loading) || !view.hasArtwork}
-        >
-          <RefreshCw className="size-4" />
-          Regenerate
-        </button>
-        <button
-          type="button"
-          className="cs-btn"
-          onClick={onVariation}
-          disabled={Boolean(loading) || !view.hasArtwork}
-        >
-          <Shuffle className="size-4" />
-          Variation
-        </button>
-        <button
-          type="button"
-          className="cs-btn"
-          onClick={() => void handleDownloadPng()}
-          disabled={!exportImageUrl && !exportMarkup}
-        >
-          <Download className="size-4" />
-          Download PNG
-        </button>
-        <button
-          type="button"
-          className="cs-btn"
-          onClick={() => void handleDownloadPrint()}
-          disabled={!printFileUrl}
-        >
-          <Download className="size-4" />
-          Download Print File
-        </button>
-        <button
-          type="button"
-          className="cs-btn cs-btn-accent"
-          onClick={onSendToImageStudio}
-          disabled={Boolean(loading) || !view.canSendToImageStudio}
-        >
-          <Send className="size-4" />
-          Send to Image Studio
-        </button>
+      <div className="cs-canvas-toolbar cs-canvas-toolbar--slim">
+        <div className="cs-canvas-toolbar-primary">
+          <button
+            type="button"
+            className="cs-btn cs-btn-approve cs-btn-compact"
+            onClick={onApprove}
+            disabled={Boolean(loading) || !view.canApprove}
+          >
+            <Stamp className="size-3.5" />
+            Approve
+          </button>
+          <button
+            type="button"
+            className="cs-btn cs-btn-compact"
+            onClick={onRegenerate}
+            disabled={Boolean(loading) || !view.hasArtwork}
+          >
+            <RefreshCw className="size-3.5" />
+            Regenerate
+          </button>
+          <button
+            type="button"
+            className="cs-btn cs-btn-compact"
+            onClick={onVariation}
+            disabled={Boolean(loading) || !view.hasArtwork}
+          >
+            <Shuffle className="size-3.5" />
+            Variation
+          </button>
+        </div>
+        <div className="cs-canvas-toolbar-secondary">
+          <button
+            type="button"
+            className="cs-btn cs-btn-compact cs-btn-ghost"
+            onClick={() => void handleDownloadPng()}
+            disabled={!exportImageUrl && !exportMarkup}
+          >
+            <Download className="size-3.5" />
+            PNG
+          </button>
+          <button
+            type="button"
+            className="cs-btn cs-btn-compact cs-btn-ghost"
+            onClick={() => void handleDownloadPrint()}
+            disabled={!printFileUrl}
+          >
+            <Download className="size-3.5" />
+            Print
+          </button>
+          <button
+            type="button"
+            className="cs-btn cs-btn-accent cs-btn-compact"
+            onClick={onSendToImageStudio}
+            disabled={Boolean(loading) || !view.canSendToImageStudio}
+          >
+            <Send className="size-3.5" />
+            Production
+          </button>
+        </div>
       </div>
 
-      {selectedDirection && onEvolve && onBlend ? (
+      {selectedDirection && onEvolve && onRevision ? (
         <DesignEvolutionPanel
           direction={selectedDirection}
-          otherDirections={otherDirections}
           onEvolve={onEvolve}
-          onBlend={onBlend}
+          onRevision={onRevision}
+          revisionLoading={chatLoading}
           disabled={Boolean(loading)}
         />
       ) : null}

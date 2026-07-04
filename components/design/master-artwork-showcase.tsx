@@ -124,10 +124,10 @@ export function MasterArtworkShowcase({
           </div>
         ) : (
           <div className="cw-v2-master-showcase-empty">
-            <Sparkles className="size-8 text-[#d9b46b]" />
-            <h3>Premium Master Artwork</h3>
+            <Sparkles className="size-8 text-[#52c2c2]/80" />
+            <h3>Master Artwork</h3>
             <p>
-              Select a winning design direction, then generate a single transparent print-ready artwork.
+              Select a design direction, then generate a single transparent print-ready artwork.
             </p>
           </div>
         )}

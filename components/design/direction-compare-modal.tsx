@@ -99,7 +99,7 @@ export function DirectionCompareModal({
 
         <footer className="cs-compare-footer">
           <div className="cs-compare-overall">
-            <Trophy className="size-5 text-[#d9b46b]" />
+            <Trophy className="size-5 text-[#52c2c2]" />
             <div>
               <span>Overall Winner</span>
               <strong>{winner?.title}</strong>

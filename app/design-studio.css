@@ -106,7 +106,9 @@ body:has(.design-studio-shell) {
   min-height: min-content;
   background: #0b0e13;
   color: #f4f1eb;
-  --design-accent: #63e3e3;
+  --design-accent: #52c2c2;
+  --design-accent-bright: #6ed4d4;
+  --design-accent-glow: rgb(82 194 194 / 0.28);
 }
 
 /* ── Top bar — sticky within scrollable center ── */
@@ -138,7 +140,7 @@ body:has(.design-studio-shell) {
   font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
   font-size: 0.88rem;
   font-weight: 500;
-  color: #d9b46b;
+  color: var(--design-accent);
   text-transform: none;
 }
 

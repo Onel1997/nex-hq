@@ -2,59 +2,65 @@
 
 import type { DesignDirection, EvolutionAction } from "@/lib/design/design-directions";
 import { cn } from "@/lib/utils";
-import { GitBranch, Sparkles, Wand2 } from "lucide-react";
+import { Loader2, MessageSquare, Sparkles, Wand2 } from "lucide-react";
+import { useState } from "react";
 
 interface DesignEvolutionPanelProps {
   direction: DesignDirection;
-  otherDirections: DesignDirection[];
   onEvolve: (action: EvolutionAction) => void;
-  onBlend: (secondaryId: string) => void;
+  onRevision: (prompt: string) => void;
+  revisionLoading?: boolean;
   disabled?: boolean;
 }
 
-const EVOLUTION_ACTIONS: Array<{ action: EvolutionAction; label: string }> = [
-  { action: "more-luxury", label: "Explore More Luxury" },
-  { action: "reduce-typography", label: "Reduce Typography" },
-  { action: "increase-emotion", label: "Increase Emotion" },
-  { action: "more-premium", label: "More Premium" },
-  { action: "more-editorial", label: "More Editorial" },
-  { action: "more-graphic", label: "More Graphic" },
-  { action: "more-minimal", label: "More Minimal" },
-  { action: "more-vintage", label: "More Vintage" },
-  { action: "version-2", label: "Create Version 2" },
-  { action: "version-3", label: "Create Version 3" },
-  { action: "alt-composition", label: "Generate Alternative Composition" },
+const COLLABORATION_CHIPS: Array<{ label: string; action?: EvolutionAction; prompt?: string }> = [
+  { label: "Create Version 2", action: "version-2" },
+  { label: "More Premium", action: "more-luxury" },
+  { label: "More Minimal", action: "more-minimal" },
+  { label: "Increase Emotion", action: "increase-emotion" },
+  { label: "Reduce Typography", action: "reduce-typography" },
+  { label: "Improve Balance", action: "alt-composition" },
+  { label: "Increase Fashion Value", action: "more-premium" },
 ];
 
 export function DesignEvolutionPanel({
   direction,
-  otherDirections,
   onEvolve,
-  onBlend,
+  onRevision,
+  revisionLoading,
   disabled,
 }: DesignEvolutionPanelProps) {
-  const blendCandidates = otherDirections.filter(
-    (d) => !d.archived && d.id !== direction.id,
-  );
+  const [feedback, setFeedback] = useState("");
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmed = feedback.trim();
+    if (!trimmed || revisionLoading) return;
+    onRevision(trimmed);
+    setFeedback("");
+  };
 
   return (
-    <section className="cs-evolution-panel" aria-label="Design evolution">
-      <header className="cs-evolution-head">
-        <Wand2 className="size-4 text-[#d9b46b]" />
+    <section className="cs-collaboration" aria-label="Creative collaboration">
+      <header className="cs-collaboration-head">
+        <Wand2 className="size-3.5 text-[#52c2c2]" />
         <div>
-          <h3>Design Evolution</h3>
-          <p>Refine {direction.title} — Creative Source V1</p>
+          <h3>Creative Collaboration</h3>
+          <p>Refine with your Art Director · {direction.title}</p>
         </div>
       </header>
 
-      <div className="cs-evolution-actions">
-        {EVOLUTION_ACTIONS.map(({ action, label }) => (
+      <div className="cs-collaboration-chips">
+        {COLLABORATION_CHIPS.map(({ label, action, prompt }) => (
           <button
-            key={action}
+            key={label}
             type="button"
-            className="cs-evolution-chip"
-            disabled={disabled}
-            onClick={() => onEvolve(action)}
+            className="cs-collaboration-chip"
+            disabled={disabled || revisionLoading}
+            onClick={() => {
+              if (action) onEvolve(action);
+              else if (prompt) onRevision(prompt);
+            }}
           >
             <Sparkles className="size-3" />
             {label}
@@ -62,27 +68,21 @@ export function DesignEvolutionPanel({
         ))}
       </div>
 
-      {blendCandidates.length > 0 ? (
-        <div className="cs-evolution-blend">
-          <header>
-            <GitBranch className="size-3.5" />
-            <span>Blend With</span>
-          </header>
-          <div className="cs-evolution-blend-actions">
-            {blendCandidates.slice(0, 4).map((candidate) => (
-              <button
-                key={candidate.id}
-                type="button"
-                className={cn("cs-evolution-chip", "cs-evolution-chip--blend")}
-                disabled={disabled}
-                onClick={() => onBlend(candidate.id)}
-              >
-                Blend With {candidate.title}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <form className="cs-collaboration-input" onSubmit={handleSubmit}>
+        <input
+          value={feedback}
+          onChange={(event) => setFeedback(event.target.value)}
+          placeholder="Custom feedback for the Art Director…"
+          disabled={disabled || revisionLoading}
+        />
+        <button type="submit" disabled={disabled || revisionLoading || !feedback.trim()}>
+          {revisionLoading ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <MessageSquare className="size-3.5" />
+          )}
+        </button>
+      </form>
     </section>
   );
 }
