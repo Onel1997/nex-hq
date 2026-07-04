@@ -92,8 +92,11 @@ export function CreativeDirectionsSidebar({
                         <span className="cs-badge cs-badge-winner">
                           <Trophy className="size-3" /> Winner
                         </span>
+                      ) : direction.compareSelected ? (
+                        <span className="cs-badge cs-badge-compare">Compare</span>
                       ) : null}
                     </div>
+                    <p className="cs-direction-philosophy-mini">{direction.philosophy}</p>
                     <div className="cs-direction-scores">
                       <span>{direction.scores.luxury}% lux</span>
                       <span>{direction.scores.commercial}% com</span>

@@ -1,6 +1,7 @@
 "use client";
 
-import type { DesignDirection } from "@/lib/design/design-directions";
+import { DesignEvolutionPanel } from "@/components/design/design-evolution-panel";
+import type { DesignDirection, EvolutionAction } from "@/lib/design/design-directions";
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { DesignMissionAssets } from "@/lib/design/design-mission-store";
 import {
@@ -10,7 +11,7 @@ import {
   resolveMasterArtworkView,
 } from "@/lib/design/master-artwork";
 import { cn } from "@/lib/utils";
-import { Download, RefreshCw, Send, Shuffle, Sparkles, Stamp } from "lucide-react";
+import { Download, RefreshCw, Send, Shuffle, Sparkles, Stamp, Trophy } from "lucide-react";
 import { useMemo } from "react";
 import { MasterArtworkThinking } from "@/components/design/master-artwork-thinking";
 
@@ -22,11 +23,15 @@ interface MasterArtworkCanvasProps {
   hasConcept: boolean;
   canGenerate: boolean;
   selectedDirection?: DesignDirection;
+  otherDirections?: DesignDirection[];
+  isTransitioning?: boolean;
   onGenerate: () => void;
   onRegenerate: () => void;
   onVariation: () => void;
   onApprove: () => void;
   onSendToImageStudio: () => void;
+  onEvolve?: (action: EvolutionAction) => void;
+  onBlend?: (secondaryId: string) => void;
 }
 
 export function MasterArtworkCanvas({
@@ -37,11 +42,15 @@ export function MasterArtworkCanvas({
   hasConcept,
   canGenerate,
   selectedDirection,
+  otherDirections = [],
+  isTransitioning,
   onGenerate,
   onRegenerate,
   onVariation,
   onApprove,
   onSendToImageStudio,
+  onEvolve,
+  onBlend,
 }: MasterArtworkCanvasProps) {
   const view = useMemo(
     () => resolveMasterArtworkView(assets, versionLabel),
@@ -77,15 +86,35 @@ export function MasterArtworkCanvas({
   };
 
   return (
-    <main className="cs-canvas" aria-label="Master artwork stage">
+    <main
+      className={cn("cs-canvas", isTransitioning && "is-transitioning")}
+      aria-label="Master artwork stage"
+    >
+      {selectedDirection ? (
+        <div className={cn("cs-canvas-source", isTransitioning && "is-animating")}>
+          <Trophy className="size-3.5 text-[#d9b46b]" />
+          <div>
+            <span>Creative Source V1</span>
+            <strong>{selectedDirection.title}</strong>
+          </div>
+          <p>{selectedDirection.philosophy}</p>
+        </div>
+      ) : null}
+
       <div className="cs-canvas-stage">
         <div className="cs-canvas-spotlight" aria-hidden />
         <div className="cs-canvas-vignette" aria-hidden />
-        <div className="cs-canvas-artboard">
+        <div
+          className={cn(
+            "cs-canvas-artboard",
+            isTransitioning && "is-receiving",
+            view.hasArtwork && "has-artwork",
+          )}
+        >
           {isGenerating ? (
             <MasterArtworkThinking active variant="canvas" />
           ) : view.hasArtwork ? (
-            <div className="cs-canvas-preview">
+            <div className={cn("cs-canvas-preview", isTransitioning && "is-revealing")}>
               {view.previewImageUrl ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={view.previewImageUrl} alt="Master artwork" className="cs-canvas-img" />
@@ -106,8 +135,10 @@ export function MasterArtworkCanvas({
                 <>
                   <p className="cs-canvas-direction-title">{selectedDirection.title}</p>
                   <p className="cs-canvas-direction-mood">
-                    {selectedDirection.mood} · {selectedDirection.typography} · {selectedDirection.printStyle}
+                    {selectedDirection.mood} · {selectedDirection.typography} ·{" "}
+                    {selectedDirection.printStyle}
                   </p>
+                  <p className="cs-canvas-direction-story">{selectedDirection.designStory}</p>
                 </>
               ) : (
                 <p>Select a direction, then generate master artwork.</p>
@@ -115,7 +146,7 @@ export function MasterArtworkCanvas({
               {hasConcept && canGenerate ? (
                 <button type="button" className="cs-btn cs-btn-primary" onClick={onGenerate}>
                   <Sparkles className="size-4" />
-                  Generate Master Artwork
+                  Perfect the Winner
                 </button>
               ) : null}
             </div>
@@ -187,6 +218,16 @@ export function MasterArtworkCanvas({
           Send to Image Studio
         </button>
       </div>
+
+      {selectedDirection && onEvolve && onBlend ? (
+        <DesignEvolutionPanel
+          direction={selectedDirection}
+          otherDirections={otherDirections}
+          onEvolve={onEvolve}
+          onBlend={onBlend}
+          disabled={Boolean(loading)}
+        />
+      ) : null}
     </main>
   );
 }

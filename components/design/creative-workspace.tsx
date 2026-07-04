@@ -2,16 +2,26 @@
 
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import { CreativeDirectionsSidebar } from "@/components/design/creative-directions-sidebar";
+import { CreativeDirectionsStage } from "@/components/design/creative-directions-stage";
+import { DirectionCompareModal } from "@/components/design/direction-compare-modal";
 import { DesignLabCollapse } from "@/components/design/design-lab-workspace";
 import { MasterArtworkCanvas } from "@/components/design/master-artwork-canvas";
 import { StudioChrome, deriveWorkflowStep } from "@/components/design/studio-chrome";
 import { StudioInspector } from "@/components/design/studio-inspector";
 import {
   archiveDesignDirection,
+  blendDesignDirections,
+  buildDirectionBrief,
+  clearDirectionCompare,
   duplicateDesignDirection,
+  evolveDesignDirection,
   generateDesignDirections,
+  regenerateDesignDirection,
+  resolveCompareDirections,
   resolveSelectedDirection,
   selectDesignDirection,
+  toggleDirectionCompare,
+  type EvolutionAction,
 } from "@/lib/design/design-directions";
 import type {
   CollectionTimelineStage,
@@ -265,11 +275,23 @@ export function CreativeWorkspace({
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [handoffSendDebug, setHandoffSendDebug] = useState<HandoffSaveResult | null>(null);
+  const [directionCompareMode, setDirectionCompareMode] = useState(false);
+  const [directionCompareOpen, setDirectionCompareOpen] = useState(false);
+  const [directionTransitioning, setDirectionTransitioning] = useState(false);
+  const [regeneratingDirectionId, setRegeneratingDirectionId] = useState<string | null>(null);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
     setError(null);
   }, []);
+
+  useEffect(() => {
+    console.log("[NexHQ Load] design workspace render");
+  }, []);
+
+  useEffect(() => {
+    console.log("[NexHQ Load] design workspace ready");
+  }, [brief.designId, mission.reportId]);
 
   useEffect(() => {
     setCanvasTab(resolveCanvasTab(canvasAssets));
@@ -387,6 +409,9 @@ export function CreativeWorkspace({
 
     try {
       const selectedDirection = resolveSelectedDirection(canvasAssets.designDirections);
+      const directionBrief = selectedDirection
+        ? buildDirectionBrief(selectedDirection)
+        : undefined;
       const res = await fetch("/api/design/generate-master-artwork", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -395,6 +420,7 @@ export function CreativeWorkspace({
           concept,
           selectedConceptId: concept.designId,
           designDirection:
+            directionBrief ??
             selectedDirection?.designStory ??
             selectedDirection?.title ??
             concept.creativeDirection.summary,
@@ -509,14 +535,102 @@ export function CreativeWorkspace({
       const directions = canvasAssets.designDirections;
       if (!directions?.length) return;
 
+      setDirectionCompareMode(false);
+      setDirectionCompareOpen(false);
+      setDirectionTransitioning(true);
+
       onPatchMission((state) =>
         updateMissionAssets(state, {
-          designDirections: selectDesignDirection(directions, directionId),
+          designDirections: clearDirectionCompare(
+            selectDesignDirection(directions, directionId),
+          ),
         }),
       );
-      notify("Direction selected");
+      notify("Direction selected — perfecting master artwork");
+
+      window.setTimeout(() => {
+        setDirectionTransitioning(false);
+      }, 900);
+
+      window.setTimeout(() => {
+        void runMasterArtworkGeneration();
+      }, 600);
     },
-    [canvasAssets.designDirections, notify, onPatchMission],
+    [canvasAssets.designDirections, notify, onPatchMission, runMasterArtworkGeneration],
+  );
+
+  const regenerateDirection = useCallback(
+    async (directionId: string) => {
+      const concept = canvasAssets.aiDesignerConcept;
+      const directions = canvasAssets.designDirections;
+      if (!concept || !directions?.length) return;
+
+      setRegeneratingDirectionId(directionId);
+      setActionLoading("Regenerate Direction");
+      setError(null);
+
+      try {
+        const refreshed = await regenerateDesignDirection(brief, concept, directions, directionId);
+        onPatchMission((state) =>
+          updateMissionAssets(state, { designDirections: refreshed }),
+        );
+        notify("Direction regenerated with fresh team insights");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Direction regeneration failed");
+      } finally {
+        setRegeneratingDirectionId(null);
+        setActionLoading(null);
+      }
+    },
+    [brief, canvasAssets.aiDesignerConcept, canvasAssets.designDirections, notify, onPatchMission],
+  );
+
+  const toggleCompareDirection = useCallback(
+    (directionId: string) => {
+      const directions = canvasAssets.designDirections;
+      if (!directions?.length) return;
+
+      onPatchMission((state) =>
+        updateMissionAssets(state, {
+          designDirections: toggleDirectionCompare(directions, directionId),
+        }),
+      );
+    },
+    [canvasAssets.designDirections, onPatchMission],
+  );
+
+  const evolveDirection = useCallback(
+    (action: EvolutionAction) => {
+      const directions = canvasAssets.designDirections;
+      const selected = resolveSelectedDirection(directions);
+      if (!directions?.length || !selected) return;
+
+      onPatchMission((state) =>
+        updateMissionAssets(state, {
+          designDirections: evolveDesignDirection(directions, selected.id, action),
+        }),
+      );
+      notify(`Evolved: ${action.replace(/-/g, " ")}`);
+      void runMasterArtworkGeneration();
+    },
+    [canvasAssets.designDirections, notify, onPatchMission, runMasterArtworkGeneration],
+  );
+
+  const blendDirection = useCallback(
+    (secondaryId: string) => {
+      const directions = canvasAssets.designDirections;
+      const selected = resolveSelectedDirection(directions);
+      if (!directions?.length || !selected) return;
+
+      onPatchMission((state) =>
+        updateMissionAssets(state, {
+          designDirections: blendDesignDirections(directions, selected.id, secondaryId),
+        }),
+      );
+      notify("Directions blended — generating hybrid artwork");
+      void runMasterArtworkGeneration();
+    },
+    [canvasAssets.designDirections, notify, onPatchMission, runMasterArtworkGeneration],
   );
 
   const archiveDirection = useCallback(
@@ -861,6 +975,12 @@ export function CreativeWorkspace({
     Boolean(canvasAssets.aiDesignerConcept) &&
     (!hasDirections || Boolean(selectedDirection));
 
+  const compareDirections = resolveCompareDirections(canvasAssets.designDirections);
+  const showDirectionsStage =
+    Boolean(canvasAssets.aiDesignerConcept) &&
+    (!selectedDirection || directionCompareMode || !hasDirections);
+  const showMasterCanvas = !showDirectionsStage;
+
   const advancedTools = (
     <>
       <div className="cs-advanced-actions">
@@ -972,20 +1092,72 @@ export function CreativeWorkspace({
             onSelectVersion={(id) => onPatchMission((s) => restoreIteration(s, id))}
           />
 
-          <MasterArtworkCanvas
-            brief={brief}
-            assets={canvasAssets}
-            versionLabel={iteration.label}
-            loading={actionLoading}
-            hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
-            canGenerate={canGenerateMaster}
-            selectedDirection={selectedDirection}
-            onGenerate={() => void runMasterArtworkGeneration()}
-            onRegenerate={() => void runMasterArtworkGeneration()}
-            onVariation={createVariation}
-            onApprove={approveMasterArtwork}
-            onSendToImageStudio={sendToImageStudio}
-          />
+          {showDirectionsStage ? (
+            <CreativeDirectionsStage
+              directions={canvasAssets.designDirections}
+              loading={
+                actionLoading === "Generate Design Directions" ||
+                Boolean(regeneratingDirectionId)
+              }
+              hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+              compareMode={directionCompareMode}
+              onGenerate={() => void runDesignDirectionsGeneration()}
+              onSelect={selectDirection}
+              onRegenerate={(id) => void regenerateDirection(id)}
+              onDuplicate={duplicateDirection}
+              onToggleCompare={toggleCompareDirection}
+              onOpenCompare={() => setDirectionCompareOpen(true)}
+              onToggleCompareMode={() => {
+                setDirectionCompareMode((prev) => {
+                  if (prev) {
+                    onPatchMission((state) => {
+                      const dirs = getMissionCanvasAssets(state).designDirections;
+                      if (!dirs?.length) return state;
+                      return updateMissionAssets(state, {
+                        designDirections: clearDirectionCompare(dirs),
+                      });
+                    });
+                    setDirectionCompareOpen(false);
+                  }
+                  return !prev;
+                });
+              }}
+            />
+          ) : showMasterCanvas ? (
+            <MasterArtworkCanvas
+              brief={brief}
+              assets={canvasAssets}
+              versionLabel={iteration.label}
+              loading={actionLoading}
+              hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+              canGenerate={canGenerateMaster}
+              selectedDirection={selectedDirection}
+              otherDirections={canvasAssets.designDirections ?? []}
+              isTransitioning={directionTransitioning}
+              onGenerate={() => void runMasterArtworkGeneration()}
+              onRegenerate={() => void runMasterArtworkGeneration()}
+              onVariation={createVariation}
+              onApprove={approveMasterArtwork}
+              onSendToImageStudio={sendToImageStudio}
+              onEvolve={evolveDirection}
+              onBlend={blendDirection}
+            />
+          ) : (
+            <MasterArtworkCanvas
+              brief={brief}
+              assets={canvasAssets}
+              versionLabel={iteration.label}
+              loading={actionLoading}
+              hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+              canGenerate={canGenerateMaster}
+              selectedDirection={selectedDirection}
+              onGenerate={() => void runMasterArtworkGeneration()}
+              onRegenerate={() => void runMasterArtworkGeneration()}
+              onVariation={createVariation}
+              onApprove={approveMasterArtwork}
+              onSendToImageStudio={sendToImageStudio}
+            />
+          )}
 
           <StudioInspector
             brief={brief}
@@ -1035,6 +1207,17 @@ export function CreativeWorkspace({
           onUseRight={() => {
             onPatchMission((s) => restoreIteration(s, compareIterations.right!.id));
             onPatchMission(clearCompareMode);
+          }}
+        />
+      ) : null}
+
+      {directionCompareOpen && compareDirections.length >= 2 ? (
+        <DirectionCompareModal
+          directions={compareDirections}
+          onClose={() => setDirectionCompareOpen(false)}
+          onSelectWinner={(id) => {
+            setDirectionCompareOpen(false);
+            selectDirection(id);
           }}
         />
       ) : null}

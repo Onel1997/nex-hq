@@ -129,7 +129,9 @@ export function DesignStudioCenter() {
         </header>
 
         <div className="design-studio-body design-studio-body-workspace">
-          {hydrated && mission ? (
+          {!hydrated ? (
+            <DesignMissionEmptyState />
+          ) : mission ? (
             <DesignMissionPanel
               mission={mission}
               onSelectBrief={selectBrief}
@@ -137,9 +139,9 @@ export function DesignStudioCenter() {
               onPatchMission={patchMission}
               renderCommerceSection={renderCommerceSection}
             />
-          ) : hydrated ? (
+          ) : (
             <DesignMissionEmptyState />
-          ) : null}
+          )}
         </div>
       </div>
     </WorkspaceShell>
