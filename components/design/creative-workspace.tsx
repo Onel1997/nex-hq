@@ -1,9 +1,18 @@
 "use client";
 
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
-import { AiDesignerConceptPanel } from "@/components/design/ai-designer-concept-panel";
-import { MasterArtworkPanel } from "@/components/design/master-artwork-panel";
+import { CreativeDirectionsSidebar } from "@/components/design/creative-directions-sidebar";
 import { DesignLabCollapse } from "@/components/design/design-lab-workspace";
+import { MasterArtworkCanvas } from "@/components/design/master-artwork-canvas";
+import { StudioChrome, deriveWorkflowStep } from "@/components/design/studio-chrome";
+import { StudioInspector } from "@/components/design/studio-inspector";
+import {
+  archiveDesignDirection,
+  duplicateDesignDirection,
+  generateDesignDirections,
+  resolveSelectedDirection,
+  selectDesignDirection,
+} from "@/lib/design/design-directions";
 import type {
   CollectionTimelineStage,
   DesignIteration,
@@ -55,7 +64,6 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   Circle,
   Columns2,
   Copy,
@@ -66,7 +74,6 @@ import {
   ImageIcon,
   Loader2,
   Maximize2,
-  MessageSquare,
   Minus,
   MoreHorizontal,
   Plus,
@@ -222,16 +229,6 @@ const TIMELINE: Array<{ id: CollectionTimelineStage; label: string }> = [
   { id: "launch", label: "Launch" },
 ];
 
-const DIRECTOR_SUGGESTIONS: Array<{ label: string; prompt: string }> = [
-  { label: "Improve luxury feeling", prompt: "Make typography more premium and increase the luxury feeling" },
-  { label: "Reduce typography", prompt: "Reduce visual weight and simplify typography" },
-  { label: "Increase emotional impact", prompt: "Increase emotional impact and editorial presence" },
-  { label: "More editorial", prompt: "Make the composition more editorial and refined" },
-  { label: "Create Version 2", prompt: "Create a refined Version 2 with elevated restraint" },
-  { label: "Generate alternate composition", prompt: "Generate an alternate composition with fresh layout" },
-  { label: "Improve print efficiency", prompt: "Improve print efficiency and production clarity" },
-];
-
 interface CreativeWorkspaceProps {
   mission: DesignMissionState;
   onSelectBrief?: (designId: string) => void;
@@ -267,8 +264,6 @@ export function CreativeWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
-  const [directorOpen, setDirectorOpen] = useState(false);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
   const [handoffSendDebug, setHandoffSendDebug] = useState<HandoffSaveResult | null>(null);
 
   const notify = useCallback((msg: string) => {
@@ -277,26 +272,9 @@ export function CreativeWorkspace({
   }, []);
 
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1100px)");
-    const syncInspector = () => setInspectorOpen(!mq.matches);
-    syncInspector();
-    mq.addEventListener("change", syncInspector);
-    return () => mq.removeEventListener("change", syncInspector);
-  }, []);
-
-  useEffect(() => {
     setCanvasTab(resolveCanvasTab(canvasAssets));
-  }, [brief.designId, mission.reportId]);
+  }, [brief.designId, mission.reportId, canvasAssets]);
 
-  const pipelineSteps = useMemo(
-    () =>
-      derivePipelineStepStates(
-        canvasAssets,
-        workspace.approvalStatus,
-        mission.pipelineStage,
-      ),
-    [canvasAssets, workspace.approvalStatus, mission.pipelineStage],
-  );
 
   const resetProductionStatus = useCallback(
     (itemId: "svg" | "mockup" | "aiRender") => {
@@ -408,6 +386,7 @@ export function CreativeWorkspace({
     setError(null);
 
     try {
+      const selectedDirection = resolveSelectedDirection(canvasAssets.designDirections);
       const res = await fetch("/api/design/generate-master-artwork", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -415,7 +394,10 @@ export function CreativeWorkspace({
           brief,
           concept,
           selectedConceptId: concept.designId,
-          designDirection: concept.creativeDirection.summary,
+          designDirection:
+            selectedDirection?.designStory ??
+            selectedDirection?.title ??
+            concept.creativeDirection.summary,
         }),
       });
       const payload = await readGenerationPayload(res);
@@ -470,7 +452,11 @@ export function CreativeWorkspace({
             productionPngUrl: data.productionPngUrl ?? artworkImageUrl,
             previewUrl: data.previewUrl ?? artworkImageUrl,
             selectedConceptId: data.selectedConceptId ?? concept.designId,
-            designDirection: data.designDirection ?? concept.creativeDirection.summary,
+            designDirection:
+              data.designDirection ??
+              selectedDirection?.designStory ??
+              selectedDirection?.title ??
+              concept.creativeDirection.summary,
             generationMode: data.generationMode ?? "draft",
             dpi: data.dpi ?? 150,
             resolution: data.resolution ?? "1024 × 1024 px",
@@ -489,7 +475,84 @@ export function CreativeWorkspace({
     } finally {
       setActionLoading(null);
     }
-  }, [brief, canvasAssets.aiDesignerConcept, iteration.version, notify, onPatchMission]);
+  }, [brief, canvasAssets.aiDesignerConcept, canvasAssets.designDirections, iteration.version, notify, onPatchMission]);
+
+  const runDesignDirectionsGeneration = useCallback(async () => {
+    const label = "Generate Design Directions";
+    const concept = canvasAssets.aiDesignerConcept;
+    if (!concept) {
+      setError("Generate an AI Design Concept first — directions build on the creative briefing.");
+      return;
+    }
+
+    setActionLoading(label);
+    setToast(null);
+    setError(null);
+
+    try {
+      const directions = await generateDesignDirections(brief, concept);
+      onPatchMission((state) =>
+        updateMissionAssets(state, {
+          designDirections: directions,
+        }),
+      );
+      notify(`${directions.length} design directions ready — commercial review complete`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Design directions failed");
+    } finally {
+      setActionLoading(null);
+    }
+  }, [brief, canvasAssets.aiDesignerConcept, notify, onPatchMission]);
+
+  const selectDirection = useCallback(
+    (directionId: string) => {
+      const directions = canvasAssets.designDirections;
+      if (!directions?.length) return;
+
+      onPatchMission((state) =>
+        updateMissionAssets(state, {
+          designDirections: selectDesignDirection(directions, directionId),
+        }),
+      );
+      notify("Direction selected");
+    },
+    [canvasAssets.designDirections, notify, onPatchMission],
+  );
+
+  const archiveDirection = useCallback(
+    (directionId: string) => {
+      const directions = canvasAssets.designDirections;
+      if (!directions?.length) return;
+
+      onPatchMission((state) =>
+        updateMissionAssets(state, {
+          designDirections: archiveDesignDirection(directions, directionId),
+        }),
+      );
+      notify("Direction archived");
+    },
+    [canvasAssets.designDirections, notify, onPatchMission],
+  );
+
+  const duplicateDirection = useCallback(
+    (directionId: string) => {
+      const directions = canvasAssets.designDirections;
+      if (!directions?.length) return;
+
+      onPatchMission((state) =>
+        updateMissionAssets(state, {
+          designDirections: duplicateDesignDirection(directions, directionId),
+        }),
+      );
+      notify("Direction duplicated");
+    },
+    [canvasAssets.designDirections, notify, onPatchMission],
+  );
+
+  const createVariation = useCallback(() => {
+    onPatchMission((state) => createNewIteration(state, brief, "Variation"));
+    notify("New variation created");
+  }, [brief, notify, onPatchMission]);
 
   const approveMasterArtwork = useCallback(() => {
     onPatchMission((state) => {
@@ -544,6 +607,7 @@ export function CreativeWorkspace({
           aiDesignerConcept: concept,
           aiDesignerRenderPlan: data.renderPlan,
           aiDesignerReview: data.review,
+          designDirections: undefined,
         });
         next = updatePromptOverride(next, "imagePrompt", concept.imagePrompt.primary);
         next = updatePromptOverride(next, "mockupPrompt", concept.mockupPrompt.primary);
@@ -551,7 +615,7 @@ export function CreativeWorkspace({
         return next;
       });
       setCanvasTab("concept");
-      notify("AI Design Concept ready — generate Master Artwork next");
+      notify("AI Design Concept ready — generate design directions next");
     } catch (err) {
       setError(err instanceof Error ? err.message : "AI Designer failed");
     } finally {
@@ -784,56 +848,30 @@ export function CreativeWorkspace({
       }
     : null;
 
-  return (
-    <div className="cw-root">
-      <CollectionNavigator
-        collectionName={mission.collectionName}
-        designs={mission.allBriefs ?? [brief]}
-        activeId={brief.designId}
-        onSelect={onSelectBrief}
-      />
+  const selectedDirection = resolveSelectedDirection(canvasAssets.designDirections);
+  const hasDirections = Boolean(canvasAssets.designDirections?.length);
+  const workflowStep = deriveWorkflowStep(
+    Boolean(canvasAssets.aiDesignerConcept),
+    hasDirections,
+    Boolean(selectedDirection),
+    masterArtworkView.hasArtwork,
+    masterArtworkView.isApproved,
+  );
+  const canGenerateMaster =
+    Boolean(canvasAssets.aiDesignerConcept) &&
+    (!hasDirections || Boolean(selectedDirection));
 
-      <div className="cw-main">
-        <MissionHeader
-          missionName={brief.title}
-          collectionName={mission.collectionName}
-          narrative={
-            canvasAssets.aiDesignerConcept?.designStory ??
-            brief.visualConcept
-          }
-          dnaScore={brief.dnaScore}
-          printReadyScore={brief.printReadinessScore}
-          commercialScore={brief.commercialScore ?? canvasAssets.commercialScore}
-          commercialStatus={getCommercialStatusLabel(canvasAssets, workspace.approvalStatus)}
-          versionLabel={iteration.label}
-          lastUpdated={iteration.timestamp ?? mission.savedAt ?? mission.handoffAt}
-        />
-
-        <AiPipelinePreview steps={pipelineSteps} />
-
-        <div className="cw-toolbar-sticky">
-        <ProductionToolbar
-          loading={actionLoading}
-          hasAiConcept={Boolean(canvasAssets.aiDesignerConcept)}
-          hasMasterArtwork={masterArtworkView.hasArtwork}
-          masterArtworkApproved={masterArtworkView.isApproved}
-          onGenerateAiConcept={() => void runAiDesignerConcept()}
-          onGenerateMasterArtwork={() => void runMasterArtworkGeneration()}
-          onApproveArtwork={approveMasterArtwork}
-          onSendImageStudio={sendToImageStudio}
-          onGenerateSvg={() => void runSvgGeneration()}
-          onGenerateMockup={() =>
-            void runGeneration(
-              prompts.mockupPrompt,
-              "Generate Mockup",
-              "mockupUrl",
-              "Mockup generated",
-              "mockup",
-              "mockup",
-              "images",
-            )
-          }
-          onGenerateRender={() =>
+  const advancedTools = (
+    <>
+      <div className="cs-advanced-actions">
+        <button type="button" className="cs-btn cs-btn-compact" disabled={Boolean(actionLoading)} onClick={() => void runSvgGeneration()}>
+          SVG Draft
+        </button>
+        <button
+          type="button"
+          className="cs-btn cs-btn-compact"
+          disabled={Boolean(actionLoading)}
+          onClick={() =>
             void runGeneration(
               prompts.imagePrompt,
               "Generate AI Render",
@@ -844,7 +882,31 @@ export function CreativeWorkspace({
               "images",
             )
           }
-          onExportSvg={() => {
+        >
+          AI Render
+        </button>
+        <button
+          type="button"
+          className="cs-btn cs-btn-compact"
+          disabled={Boolean(actionLoading)}
+          onClick={() =>
+            void runGeneration(
+              prompts.mockupPrompt,
+              "Generate Mockup",
+              "mockupUrl",
+              "Mockup generated",
+              "mockup",
+              "mockup",
+              "images",
+            )
+          }
+        >
+          Mockup
+        </button>
+        <button
+          type="button"
+          className="cs-btn cs-btn-compact"
+          onClick={() => {
             if (canvasAssets.svgUrl) {
               const a = document.createElement("a");
               a.href = canvasAssets.svgUrl;
@@ -855,137 +917,111 @@ export function CreativeWorkspace({
               notify("SVG prompt copied");
             }
           }}
-          onExportPng={() => {
-            const url =
-              masterArtworkView.previewImageUrl ??
-              canvasAssets.mockupUrl ??
-              canvasAssets.renderUrl;
-            if (url) window.open(url, "_blank");
-            else notify("Generate master artwork or a mockup first");
-          }}
-          onSaveDraft={() => {
-            onSaveDraft?.();
-            notify("Draft saved");
-          }}
-        />
-        </div>
-
-        <MasterArtworkPanel
-          brief={brief}
-          assets={canvasAssets}
-          versionLabel={iteration.label}
-          loading={actionLoading}
-          onGenerate={() => void runMasterArtworkGeneration()}
-          onRegenerate={() => void runMasterArtworkGeneration()}
-          onApprove={approveMasterArtwork}
-          onSendToImageStudio={sendToImageStudio}
-        />
-
-        <div className={cn("cw-studio-stage", !inspectorOpen && "is-inspector-collapsed")}>
-          <div className="cw-studio-split">
-            <div className="cw-workspace-core">
-              <DesignCanvas
-                tab={canvasTab}
-                onTabChange={setCanvasTab}
-                zoom={zoom}
-                onZoomChange={setZoom}
-                assets={canvasAssets}
-                title={brief.title}
-                garmentType={resolveGarmentType(brief.product)}
-                onGenerateConcept={() => void runAiDesignerConcept()}
-                onGenerateMasterArtwork={() => void runMasterArtworkGeneration()}
-                actionLoading={actionLoading}
-              />
-            </div>
-
-            <AiDesignerConceptPanel
-              concept={canvasAssets.aiDesignerConcept}
-              renderPlan={canvasAssets.aiDesignerRenderPlan}
-              review={canvasAssets.aiDesignerReview}
-              masterArtworkView={masterArtworkView}
-              hasSvgDraft={Boolean(canvasAssets.svgUrl || canvasAssets.svgMarkup)}
-              onSendToImageStudio={sendToImageStudio}
-              onCopyImagePrompt={() => {
-                const prompt =
-                  canvasAssets.aiDesignerConcept?.imagePrompt.primary ?? prompts.imagePrompt;
-                void navigator.clipboard.writeText(prompt);
-                notify("Image prompt copied");
-              }}
-              onGenerateConcept={() => void runAiDesignerConcept()}
-              actionLoading={actionLoading}
-              collapsed={!inspectorOpen}
-              onToggleCollapse={() => setInspectorOpen((value) => !value)}
-            />
-          </div>
-        </div>
-
-        <CreativeDirectorPanel
-          open={directorOpen}
-          onToggleOpen={() => setDirectorOpen((value) => !value)}
-          messages={workspace.chat}
-          input={chatInput}
-          loading={chatLoading}
-          onInputChange={setChatInput}
-          onSend={() => void sendDirectorMessage(chatInput)}
-          onSuggestion={sendDirectorMessage}
-        />
-
-        {toast ? <p className="cw-toast">{toast}</p> : null}
-        {error ? <p className="cw-error">{error}</p> : null}
-
-        <div className="cw-supporting-stack">
-          <IterationsStrip
-            iterations={workspace.iterations}
-            activeId={workspace.activeIterationId}
-            onPreview={(id) => onPatchMission((s) => restoreIteration(s, id))}
-            onRestore={(id) => onPatchMission((s) => restoreIteration(s, id))}
-            onDuplicate={(id) => onPatchMission((s) => duplicateIteration(s, id))}
-            onCompare={(id) => {
-              const other =
-                workspace.iterations.find((i) => i.id !== id)?.id ?? id;
-              onPatchMission((s) => setCompareMode(s, id, other));
-            }}
-            onFavorite={(id) => onPatchMission((s) => toggleIterationFavorite(s, id))}
+        >
+          Export SVG
+        </button>
+        <button type="button" className="cs-btn cs-btn-compact" onClick={() => onSaveDraft?.()}>
+          Save Draft
+        </button>
+      </div>
+      <div className={cn("cw-studio-stage cw-studio-stage--advanced")}>
+        <div className="cw-workspace-core">
+          <DesignCanvas
+            tab={canvasTab}
+            onTabChange={setCanvasTab}
+            zoom={zoom}
+            onZoomChange={setZoom}
+            assets={canvasAssets}
+            title={brief.title}
+            garmentType={resolveGarmentType(brief.product)}
+            onGenerateConcept={() => void runAiDesignerConcept()}
+            onGenerateMasterArtwork={() => void runMasterArtworkGeneration()}
+            actionLoading={actionLoading}
           />
-          <ProductionStatusPanel items={workspace.production} />
-          <DesignHealthPanel health={workspace.health} />
         </div>
       </div>
+    </>
+  );
 
-      <div className="cw-timeline-span">
-        <CollectionTimeline current={mission.timelineStage} />
+  return (
+    <div className="cw-root cw-studio-app">
+      <div className="cw-main">
+        <StudioChrome
+          title={brief.title}
+          collectionName={mission.collectionName}
+          activeStep={workflowStep}
+          loading={actionLoading}
+          hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+          designs={mission.allBriefs ?? [brief]}
+          activeDesignId={brief.designId}
+          onSelectDesign={onSelectBrief}
+          onGenerateConcept={() => void runAiDesignerConcept()}
+        />
+
+        <div className="cs-workspace">
+          <CreativeDirectionsSidebar
+            directions={canvasAssets.designDirections}
+            iterations={workspace.iterations}
+            activeIterationId={workspace.activeIterationId}
+            loading={actionLoading === "Generate Design Directions"}
+            hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+            onGenerateDirections={() => void runDesignDirectionsGeneration()}
+            onSelectDirection={selectDirection}
+            onArchiveDirection={archiveDirection}
+            onDuplicateDirection={duplicateDirection}
+            onSelectVersion={(id) => onPatchMission((s) => restoreIteration(s, id))}
+          />
+
+          <MasterArtworkCanvas
+            brief={brief}
+            assets={canvasAssets}
+            versionLabel={iteration.label}
+            loading={actionLoading}
+            hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+            canGenerate={canGenerateMaster}
+            selectedDirection={selectedDirection}
+            onGenerate={() => void runMasterArtworkGeneration()}
+            onRegenerate={() => void runMasterArtworkGeneration()}
+            onVariation={createVariation}
+            onApprove={approveMasterArtwork}
+            onSendToImageStudio={sendToImageStudio}
+          />
+
+          <StudioInspector
+            brief={brief}
+            concept={canvasAssets.aiDesignerConcept}
+            review={canvasAssets.aiDesignerReview}
+            renderPlan={canvasAssets.aiDesignerRenderPlan}
+            assets={canvasAssets}
+            health={workspace.health}
+            masterArtworkView={masterArtworkView}
+            commercialScore={brief.commercialScore ?? canvasAssets.commercialScore}
+            collectionName={mission.collectionName}
+            versionHistory={mission.versionHistory}
+            activeIteration={iteration}
+            messages={workspace.chat}
+            chatInput={chatInput}
+            chatLoading={chatLoading}
+            onChatInputChange={setChatInput}
+            onSendChat={() => void sendDirectorMessage(chatInput)}
+            onRevision={sendDirectorMessage}
+            advancedTools={advancedTools}
+          />
+        </div>
+
+        <div className="cs-toast-stack">
+          {toast ? <p className="cw-toast">{toast}</p> : null}
+          {error ? <p className="cw-error">{error}</p> : null}
+        </div>
       </div>
 
       {renderCommerceSection ? (
-        <div className="cw-commerce-span">
-          <DesignLabCollapse
-            title="Commerce Intelligence"
-            meta="Catalog & opportunities"
-            defaultOpen={false}
-          >
+        <div className="cw-commerce-span" hidden>
+          <DesignLabCollapse title="Commerce Intelligence" meta="Hidden" defaultOpen={false}>
             {renderCommerceSection()}
           </DesignLabCollapse>
         </div>
       ) : null}
-
-      <QuickApprovalPanel
-        masterArtworkApproved={masterArtworkView.isApproved}
-        onApprove={() => {
-          onPatchMission((s) => setApprovalStatus(s, "approved"));
-          notify("Design approved");
-        }}
-        onRevision={() => {
-          onPatchMission((s) => setApprovalStatus(s, "revision"));
-          notify("Marked for revision");
-        }}
-        onArchive={() => {
-          onPatchMission((s) => setApprovalStatus(s, "archived"));
-          notify("Design archived");
-        }}
-        onBackResearch={() => router.push(`/facility/reports?report=${mission.reportId}`)}
-        onImageStudio={sendToImageStudio}
-        onCeo={() => router.push("/agents/ceo")}
-      />
 
       {compareIterations?.left && compareIterations.right ? (
         <ComparisonModal
@@ -1037,12 +1073,12 @@ export function CreativeWorkspaceEmpty() {
         <PremiumGarmentCanvas garmentType="tee" empty />
         <div className="cw-canvas-glass-overlay" aria-hidden />
         <div className="cw-canvas-studio-card">
-          <h2 className="cw-canvas-studio-card-title">Create your next premium apparel design.</h2>
+          <h2 className="cw-canvas-studio-card-title">Enter the AI Fashion Creative Lab.</h2>
           <p className="cw-canvas-studio-card-caption">
-            Start with an AI Design Concept, then generate a print-ready Master Artwork.
+            Research flows into Creative Director, AI Designer, design directions, and a single approved Master Artwork.
           </p>
           <p className="cw-canvas-studio-card-sub">
-            Open a collection brief from Reports Center to enter the AI Fashion Designer workspace.
+            Open a collection brief from Reports Center — Image Studio handles production only.
           </p>
           <Link href="/facility/reports" className="cw-toolbar-btn cw-btn-primary">
             Browse Reports
@@ -1050,10 +1086,10 @@ export function CreativeWorkspaceEmpty() {
         </div>
       </div>
       <div>
-        <p className="cw-eyebrow">AI Fashion Designer</p>
+        <p className="cw-eyebrow">AI Fashion Creative Director</p>
         <h1>Design Studio</h1>
         <p className="cw-empty-copy">
-          A premium apparel design workspace — AI concepts, master artwork, and production handoff.
+          An elite AI fashion agency — creative directions, commercial review, and immutable master artwork for production.
         </p>
       </div>
     </section>
@@ -1612,9 +1648,12 @@ function ToolbarDropdown({
 function ProductionToolbar({
   loading,
   hasAiConcept,
+  hasDesignDirections,
+  hasSelectedDirection,
   hasMasterArtwork,
   masterArtworkApproved,
   onGenerateAiConcept,
+  onGenerateDesignDirections,
   onGenerateMasterArtwork,
   onApproveArtwork,
   onSendImageStudio,
@@ -1627,9 +1666,12 @@ function ProductionToolbar({
 }: {
   loading: string | null;
   hasAiConcept: boolean;
+  hasDesignDirections: boolean;
+  hasSelectedDirection: boolean;
   hasMasterArtwork: boolean;
   masterArtworkApproved: boolean;
   onGenerateAiConcept: () => void;
+  onGenerateDesignDirections: () => void;
   onGenerateMasterArtwork: () => void;
   onApproveArtwork: () => void;
   onSendImageStudio: () => void;
@@ -1701,7 +1743,29 @@ function ProductionToolbar({
       <button
         type="button"
         className="cw-toolbar-pro-action cw-workflow-primary"
-        disabled={loading === "Generate Master Artwork" || !hasAiConcept}
+        disabled={loading === "Generate Design Directions" || !hasAiConcept}
+        onClick={onGenerateDesignDirections}
+      >
+        {loading === "Generate Design Directions" ? (
+          <Loader2 className="cw-toolbar-pro-icon animate-spin" />
+        ) : (
+          <Sparkles className="cw-toolbar-pro-icon" />
+        )}
+        <span className="cw-toolbar-pro-label">Generate Design Directions</span>
+      </button>
+      <button
+        type="button"
+        className="cw-toolbar-pro-action cw-workflow-primary"
+        disabled={
+          loading === "Generate Master Artwork" ||
+          !hasAiConcept ||
+          (hasDesignDirections && !hasSelectedDirection)
+        }
+        title={
+          hasDesignDirections && !hasSelectedDirection
+            ? "Select a winning design direction first"
+            : undefined
+        }
         onClick={onGenerateMasterArtwork}
       >
         {loading === "Generate Master Artwork" ? (
@@ -1945,102 +2009,6 @@ function CollectionTimeline({ current }: { current: CollectionTimelineStage }) {
           </li>
         ))}
       </ol>
-    </section>
-  );
-}
-
-function CreativeDirectorPanel({
-  open,
-  onToggleOpen,
-  messages,
-  input,
-  loading,
-  onInputChange,
-  onSend,
-  onSuggestion,
-}: {
-  open: boolean;
-  onToggleOpen: () => void;
-  messages: PerDesignWorkspace["chat"];
-  input: string;
-  loading: boolean;
-  onInputChange: (v: string) => void;
-  onSend: () => void;
-  onSuggestion: (s: string) => void;
-}) {
-  return (
-    <section className="cw-director-section" aria-label="Creative Director AI">
-      <button
-        type="button"
-        className="cw-director-section-toggle"
-        onClick={onToggleOpen}
-        aria-expanded={open}
-        aria-label={open ? "Collapse Creative Director AI" : "Expand Creative Director AI"}
-      >
-        <div className="cw-director-section-heading">
-          <span className="cw-director-section-icon-wrap">
-            <Sparkles className="size-4" />
-          </span>
-          <div>
-            <h2>Creative Director AI</h2>
-            <p className="cw-director-section-subtitle">
-              Suggestions, revisions and version ideas
-            </p>
-          </div>
-        </div>
-        <ChevronRight
-          className={cn("size-4 cw-director-section-chevron", open && "is-open")}
-        />
-      </button>
-
-      <div className={cn("cw-director-section-body-wrap", open && "is-open")} aria-hidden={!open}>
-        <div className="cw-director-section-body">
-          <div className="cw-director-suggestion-grid">
-            {DIRECTOR_SUGGESTIONS.map((s) => (
-              <button
-                key={s.label}
-                type="button"
-                className="cw-director-chip"
-                onClick={() => onSuggestion(s.prompt)}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-
-          {messages.length > 0 || loading ? (
-            <div className="cw-director-thread">
-              {messages.map((m) => (
-                <div key={m.id} className={cn("cw-director-msg", m.role)}>
-                  {m.content}
-                </div>
-              ))}
-              {loading ? (
-                <div className="cw-director-msg assistant">
-                  <Loader2 className="size-4 animate-spin" />
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <form
-            className="cw-director-input"
-            onSubmit={(e) => {
-              e.preventDefault();
-              onSend();
-            }}
-          >
-            <input
-              value={input}
-              onChange={(e) => onInputChange(e.target.value)}
-              placeholder="Describe the direction you want…"
-            />
-            <button type="submit" className="cw-btn-primary" disabled={loading || !input.trim()}>
-              <MessageSquare className="size-4" />
-            </button>
-          </form>
-        </div>
-      </div>
     </section>
   );
 }

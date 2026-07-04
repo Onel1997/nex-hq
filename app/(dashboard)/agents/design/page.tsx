@@ -5,6 +5,7 @@ import { getDictionary } from "@/lib/i18n/get-dictionary";
 import "@/app/design-studio.css";
 import "@/app/design-lab.css";
 import "@/app/design-creative-workspace.css";
+import "@/app/design-creative-studio.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 

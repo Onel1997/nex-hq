@@ -11,6 +11,7 @@ import {
   isQuotaExceededError,
   sanitizeMissionForStorage,
 } from "@/lib/design/design-mission-storage";
+import type { DesignDirection } from "@/lib/design/design-directions";
 import type { MasterArtworkState } from "@/lib/design/master-artwork";
 import {
   computeDesignHealth,
@@ -102,6 +103,8 @@ export interface DesignMissionAssets {
   aiDesignerReview?: DesignConceptReview;
   /** Canonical print artwork — Design Studio creative source of truth. */
   masterArtwork?: MasterArtworkState;
+  /** Client-side creative direction variants scored via commercial review. */
+  designDirections?: DesignDirection[];
 }
 
 export interface DesignPromptOverrides {
