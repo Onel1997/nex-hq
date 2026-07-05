@@ -13,7 +13,7 @@ import {
   ChevronRight,
   Trophy,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface MasterArtworkLeftRailProps {
   direction: DesignDirection;
@@ -22,6 +22,7 @@ interface MasterArtworkLeftRailProps {
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
   onSelectVersion: (id: string) => void;
+  revealToken?: number;
 }
 
 function DirectionMiniPreview({ colors }: { colors: string[] }) {
@@ -62,10 +63,12 @@ function VersionCard({
   iteration,
   active,
   onSelect,
+  isEntering,
 }: {
   iteration: DesignIteration;
   active: boolean;
   onSelect: () => void;
+  isEntering?: boolean;
 }) {
   const view = resolveMasterArtworkView(iteration.assets, iteration.label);
   const thumb =
@@ -82,7 +85,12 @@ function VersionCard({
   return (
     <button
       type="button"
-      className={cn("ma-version-card", active && "is-active", approved && "is-approved")}
+      className={cn(
+        "ma-version-card",
+        active && "is-active",
+        approved && "is-approved",
+        isEntering && "is-entering",
+      )}
       onClick={onSelect}
     >
       <div className="ma-version-thumb">
@@ -101,8 +109,8 @@ function VersionCard({
         <time className="ma-version-time" dateTime={iteration.timestamp}>
           {formatVersionDate(iteration.timestamp)}
         </time>
-        <span className={cn("ma-version-status-badge", `is-${status.tone}`)}>
-          {status.label}
+        <span className={cn("ma-version-status-badge", `is-${status.tone}`, isEntering && "is-badge-enter")}>
+          {status.tone === "approved" ? "Approved" : status.tone === "review" ? "Review" : status.label}
         </span>
       </div>
     </button>
@@ -132,9 +140,18 @@ export function MasterArtworkLeftRail({
   collapsed = false,
   onCollapsedChange,
   onSelectVersion,
+  revealToken = 0,
 }: MasterArtworkLeftRailProps) {
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [versionsExpanded, setVersionsExpanded] = useState(true);
+  const [enteringId, setEnteringId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!revealToken) return;
+    setEnteringId(activeIterationId);
+    const timer = window.setTimeout(() => setEnteringId(null), 1400);
+    return () => window.clearTimeout(timer);
+  }, [revealToken, activeIterationId]);
 
   const activeIteration = iterations.find((i) => i.id === activeIterationId) ?? iterations[0];
   const activeView = activeIteration
@@ -177,31 +194,28 @@ export function MasterArtworkLeftRail({
       ) : (
         <>
           <section className="ma-left-section ma-left-section--direction">
-            <p className="ma-left-kicker">Selected Direction</p>
-
             <div className="ma-dir-card">
               <div className="ma-dir-card-row">
                 <DirectionMiniPreview colors={direction.thumbnailColors} />
                 <div className="ma-dir-card-head">
                   <h2 className="ma-dir-title">{direction.title}</h2>
-                  <div className="ma-dir-selected-badge">
+                  <div className="ma-dir-selected-badge" title="Selected direction">
                     <Trophy className="size-2.5" />
-                    Winner
                   </div>
                 </div>
               </div>
-              <dl className="ma-dir-stats ma-dir-stats--compact">
-                <div>
-                  <dt>Commercial</dt>
-                  <dd>{direction.scores.commercial}%</dd>
+              <dl className="ma-kpi-grid">
+                <div className="ma-kpi-card">
+                  <dt className="ma-kpi-label">Commercial</dt>
+                  <dd className="ma-kpi-value">{direction.scores.commercial}%</dd>
                 </div>
-                <div>
-                  <dt>Brand Fit</dt>
-                  <dd>{direction.scores.brandFit}%</dd>
+                <div className="ma-kpi-card">
+                  <dt className="ma-kpi-label">Brand Fit</dt>
+                  <dd className="ma-kpi-value">{direction.scores.brandFit}%</dd>
                 </div>
-                <div>
-                  <dt>Originality</dt>
-                  <dd>{direction.scores.originality}%</dd>
+                <div className="ma-kpi-card">
+                  <dt className="ma-kpi-label">Originality</dt>
+                  <dd className="ma-kpi-value">{direction.scores.originality}%</dd>
                 </div>
               </dl>
             </div>
@@ -241,7 +255,6 @@ export function MasterArtworkLeftRail({
                 <p className="ma-left-kicker">Versions</p>
                 <ChevronDown className={cn("ma-section-chevron", versionsExpanded && "is-open")} />
               </button>
-              <span className="ma-left-meta">V1–V5</span>
             </header>
             {versionsExpanded ? (
               <div className="ma-version-rail">
@@ -251,6 +264,7 @@ export function MasterArtworkLeftRail({
                       key={iteration.id}
                       iteration={iteration}
                       active={iteration.id === activeIterationId}
+                      isEntering={iteration.id === enteringId}
                       onSelect={() => onSelectVersion(iteration.id)}
                     />
                   ) : (
@@ -263,6 +277,7 @@ export function MasterArtworkLeftRail({
                 <VersionCard
                   iteration={activeIteration}
                   active
+                  isEntering={activeIteration.id === enteringId}
                   onSelect={() => onSelectVersion(activeIteration.id)}
                 />
               ) : null
@@ -270,20 +285,17 @@ export function MasterArtworkLeftRail({
           </section>
 
           <section className="ma-left-section ma-left-status">
-            <div className="ma-left-status-row">
-              <p className="ma-left-kicker">Status</p>
-              <span
-                className={cn(
-                  "ma-status-pill ma-status-pill--compact",
-                  activeView?.isApproved && "is-approved",
-                  activeView?.hasArtwork && !activeView?.isApproved && "is-review",
-                )}
-              >
-                {activeView
-                  ? resolveMasterArtworkStatusLabel(activeView.state.status)
-                  : "Awaiting"}
-              </span>
-            </div>
+            <span
+              className={cn(
+                "ma-status-pill ma-status-pill--compact ma-status-pill--solo",
+                activeView?.isApproved && "is-approved",
+                activeView?.hasArtwork && !activeView?.isApproved && "is-review",
+              )}
+            >
+              {activeView
+                ? resolveMasterArtworkStatusLabel(activeView.state.status)
+                : "Awaiting artwork"}
+            </span>
           </section>
         </>
       )}

@@ -297,6 +297,7 @@ export function CreativeWorkspace({
   const [activeDirectionId, setActiveDirectionId] = useState<string | null>(null);
   const [directionTransitioning, setDirectionTransitioning] = useState(false);
   const [regeneratingDirectionId, setRegeneratingDirectionId] = useState<string | null>(null);
+  const [masterRevealToken, setMasterRevealToken] = useState(0);
   const { mockMode } = useStudioMockMode();
   const {
     collapsed: directionPanelCollapsed,
@@ -515,6 +516,7 @@ export function CreativeWorkspace({
           return next;
         });
         setCanvasTab("master");
+        setMasterRevealToken((token) => token + 1);
         notify("Master artwork generated (mock preview)");
         return;
       }
@@ -557,6 +559,7 @@ export function CreativeWorkspace({
           return next;
         });
         setCanvasTab("master");
+        setMasterRevealToken((token) => token + 1);
         notify("Backend offline — mock master artwork loaded");
         return;
       }
@@ -621,6 +624,7 @@ export function CreativeWorkspace({
         return next;
       });
       setCanvasTab("master");
+      setMasterRevealToken((token) => token + 1);
       notify("Master artwork generated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generate Master Artwork failed");
@@ -1280,6 +1284,7 @@ export function CreativeWorkspace({
               collapsed={directionPanelCollapsed}
               onCollapsedChange={setDirectionPanelCollapsed}
               onSelectVersion={(id) => onPatchMission((s) => restoreIteration(s, id))}
+              revealToken={masterRevealToken}
             />
           ) : (
             <CreativeDirectionsSidebar
@@ -1298,7 +1303,12 @@ export function CreativeWorkspace({
             />
           )}
 
-          <div className="cs-workspace-center">
+          <div
+            className={cn(
+              "cs-workspace-center",
+              showMasterCanvas && selectedDirection && "cs-nexhq-scroll is-master-scroll",
+            )}
+          >
           {showDirectionsStage ? (
             <CreativeDirectionsStage
               directions={canvasAssets.designDirections}
@@ -1342,6 +1352,7 @@ export function CreativeWorkspace({
               selectedDirection={selectedDirection}
               isTransitioning={directionTransitioning}
               focusMode={isMasterFocusMode}
+              revealToken={masterRevealToken}
               onGenerate={() => void runMasterArtworkGeneration()}
               onRegenerate={() => void runMasterArtworkGeneration()}
               onApprove={approveMasterArtwork}
@@ -1399,6 +1410,7 @@ export function CreativeWorkspace({
               view={masterArtworkView}
               collapsed={inspectorCollapsed}
               onCollapsedChange={setInspectorCollapsed}
+              revealToken={masterRevealToken}
             />
           ) : (
             <StudioInspector

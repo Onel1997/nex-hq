@@ -35,6 +35,15 @@ interface MasterArtworkInspectorProps {
   view: MasterArtworkViewModel;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  revealToken?: number;
+}
+
+function buildScoreMilestones(target: number): number[] {
+  const clamped = Math.max(0, Math.min(100, Math.round(target)));
+  const start = Math.max(0, clamped - 22);
+  const midA = start + Math.round((clamped - start) * 0.35);
+  const midB = start + Math.round((clamped - start) * 0.68);
+  return Array.from(new Set([start, midA, midB, clamped])).sort((a, b) => a - b);
 }
 
 function ScoreRing({
@@ -42,11 +51,13 @@ function ScoreRing({
   value,
   delay = 0,
   accent,
+  animateSequence = false,
 }: {
   label: string;
   value: number;
   delay?: number;
   accent?: boolean;
+  animateSequence?: boolean;
 }) {
   const [animated, setAnimated] = useState(0);
   const radius = 14;
@@ -54,12 +65,37 @@ function ScoreRing({
   const offset = circumference - (animated / 100) * circumference;
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setAnimated(value), 60 + delay);
-    return () => window.clearTimeout(timer);
-  }, [value, delay]);
+    if (!animateSequence) {
+      const timer = window.setTimeout(() => setAnimated(value), 80 + delay);
+      return () => window.clearTimeout(timer);
+    }
+
+    const milestones = buildScoreMilestones(value);
+    let step = 0;
+    setAnimated(milestones[0] ?? 0);
+    let interval: number | undefined;
+
+    const startTimer = window.setTimeout(() => {
+      interval = window.setInterval(() => {
+        step += 1;
+        if (step < milestones.length) {
+          setAnimated(milestones[step] ?? value);
+        } else if (interval !== undefined) {
+          window.clearInterval(interval);
+        }
+      }, 340);
+    }, 120 + delay);
+
+    return () => {
+      window.clearTimeout(startTimer);
+      if (interval !== undefined) {
+        window.clearInterval(interval);
+      }
+    };
+  }, [value, delay, animateSequence]);
 
   return (
-    <div className={cn("ma-score-ring", accent && "is-accent")}>
+    <div className={cn("ma-score-ring", accent && "is-accent", animateSequence && "is-animating")}>
       <svg viewBox="0 0 36 36" aria-hidden>
         <circle className="ma-score-track" cx="18" cy="18" r={radius} />
         <circle
@@ -76,7 +112,13 @@ function ScoreRing({
   );
 }
 
-function CommercialReviewContent({ scores }: { scores: MasterArtworkCommercialScores }) {
+function CommercialReviewContent({
+  scores,
+  animateSequence,
+}: {
+  scores: MasterArtworkCommercialScores;
+  animateSequence?: boolean;
+}) {
   const meters = [
     { key: "luxury", label: "Premium Appeal", value: scores.luxury },
     { key: "originality", label: "Originality", value: scores.originality },
@@ -96,8 +138,9 @@ function CommercialReviewContent({ scores }: { scores: MasterArtworkCommercialSc
           key={meter.key}
           label={meter.label}
           value={meter.value}
-          delay={index * 30}
+          delay={index * 40}
           accent={"accent" in meter && meter.accent}
+          animateSequence={animateSequence && ("accent" in meter && meter.accent)}
         />
       ))}
     </div>
@@ -152,7 +195,19 @@ export function MasterArtworkInspector({
   view,
   collapsed = false,
   onCollapsedChange,
+  revealToken = 0,
 }: MasterArtworkInspectorProps) {
+  const [scoreAnimate, setScoreAnimate] = useState(false);
+
+  useEffect(() => {
+    if (!revealToken || !view.hasArtwork) {
+      setScoreAnimate(false);
+      return;
+    }
+    setScoreAnimate(false);
+    const timer = window.setTimeout(() => setScoreAnimate(true), 2300);
+    return () => window.clearTimeout(timer);
+  }, [revealToken, view.hasArtwork]);
   const scores = useMemo(
     () => buildMasterArtworkCommercialScores(health, direction, view, concept),
     [health, direction, view, concept],
@@ -217,11 +272,11 @@ export function MasterArtworkInspector({
       <div className="ma-inspector-scroll cs-nexhq-scroll">
         <CollapsibleInspectorSection
           id="ma-commercial-title"
-          title="Commercial Review"
+          title="Scores"
           icon={Briefcase}
           defaultOpen
         >
-          <CommercialReviewContent scores={scores} />
+          <CommercialReviewContent scores={scores} animateSequence={scoreAnimate} />
         </CollapsibleInspectorSection>
 
         <CollapsibleInspectorSection
@@ -321,12 +376,6 @@ export function MasterArtworkInspector({
           </button>
         </CollapsibleInspectorSection>
 
-        {!view.hasArtwork ? (
-          <div className="ma-inspector-hint">
-            <Sparkles className="size-4" />
-            <p>Generate artwork to unlock full production metadata and approval.</p>
-          </div>
-        ) : null}
       </div>
     </aside>
   );
