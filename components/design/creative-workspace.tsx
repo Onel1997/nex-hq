@@ -6,6 +6,9 @@ import { CreativeDirectionsStage } from "@/components/design/creative-directions
 import { DirectionCompareModal } from "@/components/design/direction-compare-modal";
 import { DesignLabCollapse } from "@/components/design/design-lab-workspace";
 import { MasterArtworkCanvas } from "@/components/design/master-artwork-canvas";
+import { MasterArtworkInspector } from "@/components/design/master-artwork-inspector";
+import { MasterArtworkLeftRail } from "@/components/design/master-artwork-left-rail";
+import { MasterArtworkStage } from "@/components/design/master-artwork-stage";
 import { StudioChrome, deriveWorkflowStep } from "@/components/design/studio-chrome";
 import { StudioInspector } from "@/components/design/studio-inspector";
 import {
@@ -68,6 +71,19 @@ import { buildDesignMockupPayload } from "@/lib/design/mockup-request";
 import { buildDesignRenderPayload } from "@/lib/design/render-request";
 import { sendDesignHandoffToImageStudio, type HandoffSaveResult } from "@/lib/image/image-handoff-store";
 import { HandoffDebugOverlay } from "@/components/image/handoff-debug-overlay";
+import { MockModeBadge } from "@/components/design/mock-mode-badge";
+import { useStudioMockMode } from "@/hooks/use-studio-mock-mode";
+import {
+  activateMockModeFromFailure,
+  getMockModeActive,
+  setMockModeActive,
+} from "@/lib/design/studio-mock-mode";
+import {
+  buildMockMasterArtworkState,
+  createMockAiDesignerConcept,
+  generateMockDesignDirections,
+  mockGenerationDelay,
+} from "@/lib/design/studio-mock-data";
 import { cn } from "@/lib/utils";
 import {
   Archive,
@@ -280,14 +296,43 @@ export function CreativeWorkspace({
   const [activeDirectionId, setActiveDirectionId] = useState<string | null>(null);
   const [directionTransitioning, setDirectionTransitioning] = useState(false);
   const [regeneratingDirectionId, setRegeneratingDirectionId] = useState<string | null>(null);
-
-  const handleActiveDirectionChange = useCallback((directionId: string) => {
-    setActiveDirectionId((current) => (current === directionId ? current : directionId));
-  }, []);
+  const { mockMode } = useStudioMockMode();
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
     setError(null);
+  }, []);
+
+  const applyAiDesignerConcept = useCallback(
+    (
+      concept: import("@/lib/design/ai-designer/types").DesignConcept,
+      renderPlan?: import("@/lib/design/ai-designer/types").RenderPlan,
+      review?: import("@/lib/design/ai-designer/types").DesignConceptReview,
+    ) => {
+      onPatchMission((state) => {
+        let next = updateMissionAssets(state, {
+          aiDesignerConcept: concept,
+          aiDesignerRenderPlan: renderPlan,
+          aiDesignerReview: review,
+          designDirections: undefined,
+        });
+        next = updatePromptOverride(next, "imagePrompt", concept.imagePrompt.primary);
+        next = updatePromptOverride(next, "mockupPrompt", concept.mockupPrompt.primary);
+        next = appendVersionEntry(next, "AI Design Concept generated", "design");
+        return next;
+      });
+      setCanvasTab("concept");
+      notify(
+        mockMode || getMockModeActive()
+          ? "AI Design Concept ready (mock) — generate design directions next"
+          : "AI Design Concept ready — generate design directions next",
+      );
+    },
+    [mockMode, notify, onPatchMission],
+  );
+
+  const handleActiveDirectionChange = useCallback((directionId: string) => {
+    setActiveDirectionId((current) => (current === directionId ? current : directionId));
   }, []);
 
   useEffect(() => {
@@ -417,6 +462,40 @@ export function CreativeWorkspace({
       const directionBrief = selectedDirection
         ? buildDirectionBrief(selectedDirection)
         : undefined;
+      const designDirection =
+        directionBrief ??
+        selectedDirection?.designStory ??
+        selectedDirection?.title ??
+        concept.creativeDirection.summary;
+
+      if (getMockModeActive()) {
+        await mockGenerationDelay();
+        const masterArtwork = buildMockMasterArtworkState({
+          brief,
+          version: `V${iteration.version}`,
+          directionTitle: selectedDirection?.title ?? brief.title,
+          directionColors: selectedDirection?.thumbnailColors ?? ["#1a1f2e", "#52c2c2", "#d9b46b"],
+          designDirection,
+          conceptId: concept.designId,
+        });
+
+        onPatchMission((state) => {
+          let next = setPipelineStage(state, "commercial-review");
+          next = setTimelineStage(next, "design");
+          next = updateMissionAssets(next, {
+            commercialApproved: false,
+            commercialScore: masterArtwork.commercialScore,
+            commercialIterations: 1,
+            masterArtwork,
+          });
+          next = appendVersionEntry(next, "Master artwork generated (mock)", "design");
+          return next;
+        });
+        setCanvasTab("master");
+        notify("Master artwork generated (mock preview)");
+        return;
+      }
+
       const res = await fetch("/api/design/generate-master-artwork", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -424,20 +503,36 @@ export function CreativeWorkspace({
           brief,
           concept,
           selectedConceptId: concept.designId,
-          designDirection:
-            directionBrief ??
-            selectedDirection?.designStory ??
-            selectedDirection?.title ??
-            concept.creativeDirection.summary,
+          designDirection,
         }),
       });
       const payload = await readGenerationPayload(res);
       if (!res.ok) {
-        const err =
-          payload && typeof payload === "object" && "error" in payload
-            ? String((payload as { error?: unknown }).error ?? "")
-            : "";
-        throw new Error(err || "Master artwork generation failed");
+        activateMockModeFromFailure(res.status, payload);
+        await mockGenerationDelay(1800);
+        const masterArtwork = buildMockMasterArtworkState({
+          brief,
+          version: `V${iteration.version}`,
+          directionTitle: selectedDirection?.title ?? brief.title,
+          directionColors: selectedDirection?.thumbnailColors ?? ["#1a1f2e", "#52c2c2", "#d9b46b"],
+          designDirection,
+          conceptId: concept.designId,
+        });
+
+        onPatchMission((state) => {
+          let next = setPipelineStage(state, "commercial-review");
+          next = setTimelineStage(next, "design");
+          next = updateMissionAssets(next, {
+            commercialScore: masterArtwork.commercialScore,
+            commercialIterations: 1,
+            masterArtwork,
+          });
+          next = appendVersionEntry(next, "Master artwork generated (mock fallback)", "design");
+          return next;
+        });
+        setCanvasTab("master");
+        notify("Backend offline — mock master artwork loaded");
+        return;
       }
 
       const data = payload as {
@@ -521,19 +616,26 @@ export function CreativeWorkspace({
     setError(null);
 
     try {
-      const directions = await generateDesignDirections(brief, concept);
+      const directions = await generateDesignDirections(brief, concept, mission.reportId);
       onPatchMission((state) =>
         updateMissionAssets(state, {
           designDirections: directions,
         }),
       );
       notify(`${directions.length} design directions ready — commercial review complete`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Design directions failed");
+    } catch {
+      const directions = generateMockDesignDirections(brief, concept);
+      setMockModeActive(true);
+      onPatchMission((state) =>
+        updateMissionAssets(state, {
+          designDirections: directions,
+        }),
+      );
+      notify(`${directions.length} design directions ready (mock)`);
     } finally {
       setActionLoading(null);
     }
-  }, [brief, canvasAssets.aiDesignerConcept, notify, onPatchMission]);
+  }, [brief, canvasAssets.aiDesignerConcept, mission.reportId, notify, onPatchMission]);
 
   const selectDirection = useCallback(
     (directionId: string) => {
@@ -571,7 +673,13 @@ export function CreativeWorkspace({
       setError(null);
 
       try {
-        const refreshed = await regenerateDesignDirection(brief, concept, directions, directionId);
+        const refreshed = await regenerateDesignDirection(
+          brief,
+          concept,
+          directions,
+          directionId,
+          mission.reportId,
+        );
         onPatchMission((state) =>
           updateMissionAssets(state, { designDirections: refreshed }),
         );
@@ -583,7 +691,7 @@ export function CreativeWorkspace({
         setActionLoading(null);
       }
     },
-    [brief, canvasAssets.aiDesignerConcept, canvasAssets.designDirections, notify, onPatchMission],
+    [brief, canvasAssets.aiDesignerConcept, canvasAssets.designDirections, mission.reportId, notify, onPatchMission],
   );
 
   const toggleCompareDirection = useCallback(
@@ -691,6 +799,13 @@ export function CreativeWorkspace({
     setError(null);
 
     try {
+      if (getMockModeActive()) {
+        await mockGenerationDelay(2000);
+        const mock = createMockAiDesignerConcept(brief);
+        applyAiDesignerConcept(mock.concept, mock.renderPlan, mock.review);
+        return;
+      }
+
       const res = await fetch("/api/design/ai-designer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -698,11 +813,10 @@ export function CreativeWorkspace({
       });
       const payload = await readGenerationPayload(res);
       if (!res.ok) {
-        const err =
-          payload && typeof payload === "object" && "error" in payload
-            ? String((payload as { error?: unknown }).error ?? "")
-            : "";
-        throw new Error(err || "AI Designer failed");
+        activateMockModeFromFailure(res.status, payload);
+        const mock = createMockAiDesignerConcept(brief);
+        applyAiDesignerConcept(mock.concept, mock.renderPlan, mock.review);
+        return;
       }
 
       const data = payload as {
@@ -712,36 +826,74 @@ export function CreativeWorkspace({
         review?: import("@/lib/design/ai-designer/types").DesignConceptReview;
       };
       if (!data.ok || !data.concept) {
-        throw new Error("AI Designer returned no concept");
+        const mock = createMockAiDesignerConcept(brief);
+        setMockModeActive(true);
+        applyAiDesignerConcept(mock.concept, mock.renderPlan, mock.review);
+        return;
       }
 
-      const concept = data.concept;
-
-      onPatchMission((state) => {
-        let next = updateMissionAssets(state, {
-          aiDesignerConcept: concept,
-          aiDesignerRenderPlan: data.renderPlan,
-          aiDesignerReview: data.review,
-          designDirections: undefined,
-        });
-        next = updatePromptOverride(next, "imagePrompt", concept.imagePrompt.primary);
-        next = updatePromptOverride(next, "mockupPrompt", concept.mockupPrompt.primary);
-        next = appendVersionEntry(next, "AI Design Concept generated", "design");
-        return next;
-      });
-      setCanvasTab("concept");
-      notify("AI Design Concept ready — generate design directions next");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "AI Designer failed");
+      applyAiDesignerConcept(data.concept, data.renderPlan, data.review);
+    } catch {
+      try {
+        const mock = createMockAiDesignerConcept(brief);
+        setMockModeActive(true);
+        applyAiDesignerConcept(mock.concept, mock.renderPlan, mock.review);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "AI Designer failed");
+      }
     } finally {
       setActionLoading(null);
     }
-  }, [brief, notify, onPatchMission]);
+  }, [applyAiDesignerConcept, brief]);
 
   const masterArtworkView = useMemo(
     () => resolveMasterArtworkView(canvasAssets, iteration.label),
     [canvasAssets, iteration.label],
   );
+
+  const refineDirection = useCallback(() => {
+    const directions = canvasAssets.designDirections;
+    if (!directions?.length) return;
+
+    onPatchMission((state) =>
+      updateMissionAssets(state, {
+        designDirections: directions.map((direction) => ({
+          ...direction,
+          selected: false,
+        })),
+      }),
+    );
+    notify("Return to Design Directions to refine your selection");
+  }, [canvasAssets.designDirections, notify, onPatchMission]);
+
+  const createMasterVersion = useCallback(
+    (targetVersion: 2 | 3) => {
+      const currentMax = Math.max(...workspace.iterations.map((i) => i.version), 1);
+      const iterationsNeeded = Math.max(0, targetVersion - currentMax);
+
+      onPatchMission((state) => {
+        let next = state;
+        for (let step = 0; step < iterationsNeeded; step += 1) {
+          next = createNewIteration(next, brief, `Version ${currentMax + step + 1}`);
+        }
+        if (iterationsNeeded === 0) {
+          next = createNewIteration(next, brief, `Version ${currentMax + 1}`);
+        }
+        return next;
+      });
+      notify(`Version ${targetVersion} workspace ready`);
+    },
+    [brief, notify, onPatchMission, workspace.iterations],
+  );
+
+  const sendToMarketingStudio = useCallback(() => {
+    if (!masterArtworkView.isApproved) {
+      setError("Approve Master Artwork before sending to Marketing Studio.");
+      setToast(null);
+      return;
+    }
+    router.push("/agents/marketing");
+  }, [masterArtworkView.isApproved, router]);
 
   const sendToImageStudio = useCallback(() => {
     if (!masterArtworkView.isApproved) {
@@ -1066,6 +1218,7 @@ export function CreativeWorkspace({
 
   return (
     <div className="cw-root cw-studio-app">
+      <MockModeBadge active={mockMode} className="cw-mock-badge-floating" />
       <div className="cw-main">
         <StudioChrome
           title={brief.title}
@@ -1079,21 +1232,30 @@ export function CreativeWorkspace({
           onGenerateConcept={() => void runAiDesignerConcept()}
         />
 
-        <div className={cn("cs-workspace", directionTransitioning && "is-transitioning")}>
-          <CreativeDirectionsSidebar
-            directions={canvasAssets.designDirections}
-            iterations={workspace.iterations}
-            activeIterationId={workspace.activeIterationId}
-            activeDirectionId={activeDirectionId}
-            loading={actionLoading === "Generate Design Directions"}
-            hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
-            onGenerateDirections={() => void runDesignDirectionsGeneration()}
-            onNavigateDirection={handleActiveDirectionChange}
-            onSelectDirection={selectDirection}
-            onArchiveDirection={archiveDirection}
-            onDuplicateDirection={duplicateDirection}
-            onSelectVersion={(id) => onPatchMission((s) => restoreIteration(s, id))}
-          />
+        <div className={cn("cs-workspace", directionTransitioning && "is-transitioning", showMasterCanvas && selectedDirection && "is-master-artwork")}>
+          {showMasterCanvas && selectedDirection ? (
+            <MasterArtworkLeftRail
+              direction={selectedDirection}
+              iterations={workspace.iterations}
+              activeIterationId={workspace.activeIterationId}
+              onSelectVersion={(id) => onPatchMission((s) => restoreIteration(s, id))}
+            />
+          ) : (
+            <CreativeDirectionsSidebar
+              directions={canvasAssets.designDirections}
+              iterations={workspace.iterations}
+              activeIterationId={workspace.activeIterationId}
+              activeDirectionId={activeDirectionId}
+              loading={actionLoading === "Generate Design Directions"}
+              hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+              onGenerateDirections={() => void runDesignDirectionsGeneration()}
+              onNavigateDirection={handleActiveDirectionChange}
+              onSelectDirection={selectDirection}
+              onArchiveDirection={archiveDirection}
+              onDuplicateDirection={duplicateDirection}
+              onSelectVersion={(id) => onPatchMission((s) => restoreIteration(s, id))}
+            />
+          )}
 
           <div className="cs-workspace-center">
           {showDirectionsStage ? (
@@ -1128,6 +1290,23 @@ export function CreativeWorkspace({
                   return !prev;
                 });
               }}
+            />
+          ) : showMasterCanvas && selectedDirection ? (
+            <MasterArtworkStage
+              brief={brief}
+              assets={canvasAssets}
+              versionLabel={iteration.label}
+              loading={actionLoading}
+              canGenerate={canGenerateMaster}
+              selectedDirection={selectedDirection}
+              isTransitioning={directionTransitioning}
+              onGenerate={() => void runMasterArtworkGeneration()}
+              onRegenerate={() => void runMasterArtworkGeneration()}
+              onApprove={approveMasterArtwork}
+              onRefineDirection={refineDirection}
+              onCreateVersion={createMasterVersion}
+              onSendToMarketing={sendToMarketingStudio}
+              onSendToImageStudio={sendToImageStudio}
             />
           ) : showMasterCanvas ? (
             <MasterArtworkCanvas
@@ -1170,21 +1349,31 @@ export function CreativeWorkspace({
 
           </div>
 
-          <StudioInspector
-            brief={brief}
-            concept={canvasAssets.aiDesignerConcept}
-            review={canvasAssets.aiDesignerReview}
-            renderPlan={canvasAssets.aiDesignerRenderPlan}
-            assets={canvasAssets}
-            health={workspace.health}
-            masterArtworkView={masterArtworkView}
-            commercialScore={brief.commercialScore ?? canvasAssets.commercialScore}
-            collectionName={mission.collectionName}
-            versionHistory={mission.versionHistory}
-            activeIteration={iteration}
-            selectedDirection={selectedDirection}
-            advancedTools={advancedTools}
-          />
+          {showMasterCanvas && selectedDirection ? (
+            <MasterArtworkInspector
+              brief={brief}
+              concept={canvasAssets.aiDesignerConcept}
+              direction={selectedDirection}
+              health={workspace.health}
+              view={masterArtworkView}
+            />
+          ) : (
+            <StudioInspector
+              brief={brief}
+              concept={canvasAssets.aiDesignerConcept}
+              review={canvasAssets.aiDesignerReview}
+              renderPlan={canvasAssets.aiDesignerRenderPlan}
+              assets={canvasAssets}
+              health={workspace.health}
+              masterArtworkView={masterArtworkView}
+              commercialScore={brief.commercialScore ?? canvasAssets.commercialScore}
+              collectionName={mission.collectionName}
+              versionHistory={mission.versionHistory}
+              activeIteration={iteration}
+              selectedDirection={selectedDirection}
+              advancedTools={advancedTools}
+            />
+          )}
         </div>
 
         <div className="cs-toast-stack">
@@ -1253,7 +1442,13 @@ export function CreativeWorkspace({
   );
 }
 
-export function CreativeWorkspaceEmpty() {
+export function CreativeWorkspaceEmpty({
+  onStartDemo,
+  mockMode,
+}: {
+  onStartDemo?: () => void;
+  mockMode?: boolean;
+}) {
   return (
     <section className="cw-empty">
       <div className="cw-empty-canvas cw-canvas-studio-empty">
@@ -1267,11 +1462,20 @@ export function CreativeWorkspaceEmpty() {
             Research flows into Creative Director, AI Designer, design directions, and a single approved Master Artwork.
           </p>
           <p className="cw-canvas-studio-card-sub">
-            Open a collection brief from Reports Center — Image Studio handles production only.
+            {mockMode
+              ? "Backend is offline — start the demo flow to explore the full Design Studio locally."
+              : "Open a collection brief from Reports Center — Image Studio handles production only."}
           </p>
-          <Link href="/facility/reports" className="cw-toolbar-btn cw-btn-primary">
-            Browse Reports
-          </Link>
+          <div className="cw-empty-actions">
+            {onStartDemo ? (
+              <button type="button" className="cw-toolbar-btn cw-btn-primary" onClick={onStartDemo}>
+                Start Demo Flow
+              </button>
+            ) : null}
+            <Link href="/facility/reports" className="cw-toolbar-btn">
+              Browse Reports
+            </Link>
+          </div>
         </div>
       </div>
       <div>

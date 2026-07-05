@@ -4,11 +4,14 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
 export const MASTER_ARTWORK_THINKING_STEPS = [
-  "Analyzing trends…",
-  "Creating typography…",
+  "Analyzing selected direction…",
+  "Building typography system…",
   "Balancing composition…",
-  "Evaluating commercial appeal…",
-  "Preparing print-ready artwork…",
+  "Refining negative space…",
+  "Optimizing for print…",
+  "Checking commercial potential…",
+  "Preparing transparent artwork…",
+  "Final quality review…",
 ] as const;
 
 interface MasterArtworkThinkingProps {
@@ -37,7 +40,7 @@ export function MasterArtworkThinking({
       );
       setPulse(true);
       window.setTimeout(() => setPulse(false), 400);
-    }, 1600);
+    }, 1400);
 
     return () => window.clearInterval(stepTimer);
   }, [active]);

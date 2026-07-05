@@ -1,5 +1,14 @@
-import type { DesignStudioBrief, DesignStudioColor } from "@/agents/design/studio-brief";
+import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { DesignConcept } from "@/lib/design/ai-designer/types";
+import {
+  generateMockDesignDirections,
+  regenerateMockDesignDirection,
+} from "@/lib/design/studio-mock-data";
+import {
+  activateMockModeFromFailure,
+  getMockModeActive,
+  setMockModeActive,
+} from "@/lib/design/studio-mock-mode";
 
 export interface DesignDirectionScores {
   commercial: number;
@@ -54,289 +63,72 @@ export type EvolutionAction =
   | "version-3"
   | "alt-composition";
 
-interface DirectionArchetype {
-  title: string;
-  philosophy: string;
-  mood: string;
-  typography: string;
-  printStyle: string;
-  fashionKeywords: string[];
-  composition: string;
-  colorSystem: string;
-  targetAudience: string;
-  trendAlignment: string;
-  storyAngle: string;
+interface DirectionsApiContext {
+  reportId: string;
+  brief: DesignStudioBrief;
+  concept: DesignConcept;
 }
 
-const DIRECTION_ARCHETYPES: DirectionArchetype[] = [
-  {
-    title: "Luxury Minimal",
-    philosophy: "Quiet luxury through editorial restraint — every element earns its place.",
-    mood: "Quiet luxury",
-    typography: "Refined sans hierarchy",
-    printStyle: "DTG fine line",
-    fashionKeywords: ["quiet luxury", "editorial restraint", "premium basics"],
-    composition: "Centered focal with generous negative space",
-    colorSystem: "Monochrome base with single accent",
-    targetAudience: "Affluent minimalists, 28–45",
-    trendAlignment: "Quiet luxury / stealth wealth",
-    storyAngle: "A garment that whispers rather than shouts — precision tailoring meets graphic restraint.",
-  },
-  {
-    title: "Editorial Typography",
-    philosophy: "Type as hero — architectural letterforms become the collection's visual signature.",
-    mood: "Type-led editorial",
-    typography: "Architectural hero type",
-    printStyle: "Screen bold",
-    fashionKeywords: ["hero type", "editorial fashion", "statement lettering"],
-    composition: "Oversized headline with supporting micro-type",
-    colorSystem: "High-contrast black/white with accent pop",
-    targetAudience: "Culture-forward creatives, 22–35",
-    trendAlignment: "Typography-first street editorial",
-    storyAngle: "The word becomes the garment — bold typographic architecture commands attention on every scroll.",
-  },
-  {
-    title: "Graphic Narrative",
-    philosophy: "Visual storytelling through iconography — symbols carry the collection's mythology.",
-    mood: "Iconographic narrative",
-    typography: "Mixed hierarchy accents",
-    printStyle: "Spot color + DTG",
-    fashionKeywords: ["symbol system", "graphic identity", "visual hook"],
-    composition: "Layered symbol field with narrative flow",
-    colorSystem: "Multi-tone palette with symbolic color coding",
-    targetAudience: "Streetwear collectors, 18–30",
-    trendAlignment: "Graphic maximalism / culture drops",
-    storyAngle: "A visual language built from symbols — each mark tells part of a larger cultural story.",
-  },
-  {
-    title: "Vintage Heritage",
-    philosophy: "Heritage craft reimagined — timeless luxury signals with contemporary edge.",
-    mood: "Heritage luxe",
-    typography: "Serif accent + vintage script",
-    printStyle: "Vintage wash + embroidery",
-    fashionKeywords: ["heritage craft", "vintage luxury", "timeless appeal"],
-    composition: "Classic crest placement with ornamental framing",
-    colorSystem: "Washed earth tones with gold accents",
-    targetAudience: "Heritage enthusiasts, 30–50",
-    trendAlignment: "Heritage revival / craft luxury",
-    storyAngle: "Time-worn elegance meets modern street — heritage motifs recontextualized for today's collector.",
-  },
-  {
-    title: "Fashion Art",
-    philosophy: "Wearable art object — the garment becomes a canvas for avant-garde expression.",
-    mood: "Gallery-worthy",
-    typography: "Experimental display type",
-    printStyle: "All-over sublimation",
-    fashionKeywords: ["wearable art", "avant-garde", "gallery piece"],
-    composition: "Full-bleed artistic composition",
-    colorSystem: "Expressive multi-chromatic palette",
-    targetAudience: "Art-fashion crossover, 25–40",
-    trendAlignment: "Art-fashion collab / NFT culture",
-    storyAngle: "Not merchandise — a wearable art piece that belongs in a gallery as much as on the street.",
-  },
-];
-
-const TEAM_ROLES = [
-  { role: "Research Director", focus: "Trend Intelligence" },
-  { role: "Creative Director", focus: "Visual Story" },
-  { role: "Typography Director", focus: "Typography hierarchy" },
-  { role: "Fashion Designer", focus: "Garment composition" },
-  { role: "Commercial Director", focus: "Conversion analysis" },
-  { role: "Print Engineer", focus: "Production feasibility" },
-] as const;
-
-function hashSeed(input: string): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash << 5) - hash + input.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-function pickDirectionCount(brief: DesignStudioBrief, concept: DesignConcept): number {
-  const seed = hashSeed(`${brief.designId}:${concept.designId}`);
-  return 3 + (seed % 3);
-}
-
-function resolveColorHex(entry: DesignStudioColor | string, fallback: string): string {
-  if (typeof entry === "string") return entry;
-  return entry.hex ?? fallback;
-}
-
-function buildThumbnailColors(brief: DesignStudioBrief, index: number): string[] {
-  const palette =
-    brief.colorPalette.length > 0
-      ? brief.colorPalette.map((entry, i) =>
-          resolveColorHex(entry, ["#1a1f2e", "#141820", "#d9b46b"][i] ?? brief.color),
-        )
-      : [brief.color, "#1a1f2e", "#d9b46b"];
-  const rotated = [
-    ...palette.slice(index % palette.length),
-    ...palette.slice(0, index % palette.length),
-  ];
-  return rotated.slice(0, 3);
-}
-
-function buildDesignStory(archetype: DirectionArchetype, concept: DesignConcept): string {
-  const collection = concept.collection || concept.title;
-  return `${archetype.storyAngle} Built for ${collection} — ${concept.creativeDirection.visualIntent}.`;
-}
-
-function buildFashionLanguage(archetype: DirectionArchetype, concept: DesignConcept): string {
-  const principles = concept.fashionLanguage.principles.slice(0, 2).join(" · ");
-  return `${archetype.fashionKeywords.join(" · ")}${principles ? ` · ${principles}` : ""}`;
-}
-
-function buildTeamInsights(
-  archetype: DirectionArchetype,
-  concept: DesignConcept,
-  scores: DesignDirectionScores,
-  review?: {
-    psychology?: string;
-    brandDna?: string;
-    critique?: string;
-  },
-): TeamInsight[] {
-  const insights: Record<string, string> = {
-    "Research Director": `${archetype.trendAlignment} aligns with current market momentum — ${archetype.targetAudience} segment shows strong purchase intent.`,
-    "Creative Director": archetype.storyAngle,
-    "Typography Director": `${archetype.typography} — ${concept.typographyLanguage.hierarchy} with ${concept.typographyLanguage.compositionShare} composition share.`,
-    "Fashion Designer": `${archetype.composition} on ${concept.product}. ${concept.fashionLanguage.garmentScale} scale with ${concept.fashionLanguage.luxurySignals.slice(0, 2).join(" and ")} signals.`,
-    "Commercial Director":
-      review?.psychology ??
-      `Conversion potential at ${scores.conversionPotential}% — ${concept.commercialIntention.buyerHook}.`,
-    "Print Engineer": `${archetype.printStyle} production — complexity ${scores.printComplexity}%, manufacturing difficulty ${scores.manufacturingDifficulty}%.`,
-  };
-
-  if (review?.brandDna) {
-    insights["Commercial Director"] = `${review.brandDna} Brand fit: ${scores.brandFit}%.`;
-  }
-  if (review?.critique) {
-    insights["Creative Director"] = review.critique;
-  }
-
-  return TEAM_ROLES.map(({ role, focus }) => ({
-    role,
-    focus,
-    insight: insights[role] ?? `${focus} analysis complete.`,
-  }));
-}
-
-function mapCommercialScores(
-  score: Record<string, number> | undefined,
-  healthFallback: DesignDirectionScores,
-): DesignDirectionScores {
-  if (!score) return healthFallback;
-  return {
-    commercial: Math.round(score.overall ?? score.commercialPotential ?? healthFallback.commercial),
-    originality: Math.round(score.originality ?? healthFallback.originality),
-    printComplexity: Math.round(100 - (score.printQuality ?? 70)),
-    conversionPotential: Math.round(
-      score.commercialPotential ?? score.premiumFeeling ?? healthFallback.conversionPotential,
-    ),
-    luxury: Math.round(score.luxury ?? score.premiumFeeling ?? healthFallback.luxury),
-    manufacturingDifficulty: Math.round(
-      score.productionComplexity ?? healthFallback.manufacturingDifficulty,
-    ),
-    virality: Math.round(score.virality ?? score.socialAppeal ?? healthFallback.virality),
-    brandFit: Math.round(score.brandAlignment ?? score.brandDna ?? healthFallback.brandFit),
-    collectionFit: Math.round(score.collectionFit ?? healthFallback.collectionFit),
-  };
-}
-
-function fallbackScores(brief: DesignStudioBrief, index: number): DesignDirectionScores {
-  const base = brief.commercialScore ?? 72;
-  const dna = brief.dnaScore ?? 70;
-  const drift = (index - 2) * 4;
-  return {
-    commercial: Math.max(55, Math.min(98, base + drift)),
-    originality: Math.max(50, Math.min(96, dna + drift + 2)),
-    printComplexity: Math.max(18, Math.min(85, 48 + index * 7)),
-    conversionPotential: Math.max(52, Math.min(95, base - 3 + index * 5)),
-    luxury: Math.max(58, Math.min(97, dna + 4 + drift)),
-    manufacturingDifficulty: Math.max(20, Math.min(90, 35 + index * 8)),
-    virality: Math.max(45, Math.min(92, 60 + drift + index * 3)),
-    brandFit: Math.max(55, Math.min(95, dna + 2)),
-    collectionFit: Math.max(50, Math.min(94, base - 5 + index * 4)),
-  };
-}
-
-async function fetchCommercialReview(
-  brief: DesignStudioBrief,
-  variantIndex: number,
-): Promise<{
-  score?: Record<string, number>;
-  psychology?: string;
-  brandDna?: string;
-  critique?: string;
-} | null> {
+async function fetchDirectionsFromApi(
+  context: DirectionsApiContext,
+  options?: { mode?: "generate" | "regenerate"; variantIndex?: number; avoidTitles?: string[] },
+): Promise<DesignDirection[] | null> {
   try {
-    const res = await fetch("/api/design/commercial-review", {
+    const res = await fetch("/api/design/directions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ brief, variantIndex }),
+      body: JSON.stringify({
+        mode: options?.mode ?? "generate",
+        reportId: context.reportId,
+        brief: context.brief,
+        concept: context.concept,
+        avoidTitles: options?.avoidTitles,
+        variantIndex: options?.variantIndex,
+      }),
     });
-    if (!res.ok) return null;
+
     const data = (await res.json()) as {
-      score?: Record<string, number>;
-      psychology?: string;
-      brandDna?: string;
-      critique?: string;
+      ok?: boolean;
+      error?: string;
+      directions?: DesignDirection[];
+      direction?: DesignDirection;
     };
-    return data;
+
+    if (!res.ok || !data.ok) {
+      activateMockModeFromFailure(res.status, data);
+      return null;
+    }
+
+    if (options?.mode === "regenerate" && data.direction) {
+      return [data.direction];
+    }
+
+    return data.directions ?? [];
   } catch {
+    setMockModeActive(true);
     return null;
   }
-}
-
-async function buildDirection(
-  archetype: DirectionArchetype,
-  index: number,
-  brief: DesignStudioBrief,
-  concept: DesignConcept,
-): Promise<DesignDirection> {
-  let scores = fallbackScores(brief, index);
-  const review = await fetchCommercialReview(brief, index);
-  if (review?.score) {
-    scores = mapCommercialScores(review.score, scores);
-  }
-
-  return {
-    id: crypto.randomUUID(),
-    title: archetype.title,
-    philosophy: archetype.philosophy,
-    designStory: buildDesignStory(archetype, concept),
-    fashionLanguage: buildFashionLanguage(archetype, concept),
-    mood: archetype.mood,
-    typography: archetype.typography,
-    printStyle: archetype.printStyle,
-    colorSystem: archetype.colorSystem,
-    composition: archetype.composition,
-    targetAudience: archetype.targetAudience,
-    trendAlignment: archetype.trendAlignment,
-    thumbnailColors: buildThumbnailColors(brief, index),
-    variantIndex: index,
-    scores,
-    teamInsights: buildTeamInsights(archetype, concept, scores, review ?? undefined),
-    archived: false,
-    selected: false,
-    compareSelected: false,
-  };
 }
 
 export async function generateDesignDirections(
   brief: DesignStudioBrief,
   concept: DesignConcept,
+  reportId: string,
 ): Promise<DesignDirection[]> {
-  const count = pickDirectionCount(brief, concept);
-  const archetypes = DIRECTION_ARCHETYPES.slice(0, count);
+  if (getMockModeActive()) {
+    return generateMockDesignDirections(brief, concept);
+  }
 
-  const directions = await Promise.all(
-    archetypes.map((archetype, index) => buildDirection(archetype, index, brief, concept)),
+  const directions = await fetchDirectionsFromApi(
+    { reportId, brief, concept },
+    { mode: "generate", avoidTitles: [] },
   );
 
-  return directions.sort((a, b) => b.scores.commercial - a.scores.commercial);
+  if (directions?.length) {
+    return directions.sort((a, b) => b.scores.commercial - a.scores.commercial);
+  }
+
+  return generateMockDesignDirections(brief, concept);
 }
 
 export async function regenerateDesignDirection(
@@ -344,12 +136,29 @@ export async function regenerateDesignDirection(
   concept: DesignConcept,
   directions: DesignDirection[],
   directionId: string,
+  reportId: string,
 ): Promise<DesignDirection[]> {
   const source = directions.find((d) => d.id === directionId);
   if (!source) return directions;
 
-  const archetype = DIRECTION_ARCHETYPES[source.variantIndex] ?? DIRECTION_ARCHETYPES[0];
-  const refreshed = await buildDirection(archetype, source.variantIndex, brief, concept);
+  if (getMockModeActive()) {
+    const refreshed = regenerateMockDesignDirection(brief, concept, directions, directionId);
+    return directions.map((d) => (d.id === directionId ? refreshed : d));
+  }
+
+  const avoidTitles = directions.map((d) => d.title);
+  const apiResult = await fetchDirectionsFromApi(
+    { reportId, brief, concept },
+    {
+      mode: "regenerate",
+      variantIndex: source.variantIndex,
+      avoidTitles,
+    },
+  );
+
+  const refreshed =
+    apiResult?.[0] ??
+    regenerateMockDesignDirection(brief, concept, directions, directionId);
 
   return directions.map((d) =>
     d.id === directionId

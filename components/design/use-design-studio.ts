@@ -2,6 +2,12 @@
 
 import type { CommerceHistoryResponse } from "@/lib/commerce/history-api-types";
 import type { DesignStudioIntelligence } from "@/lib/design/studio-intelligence";
+import { buildMockDesignStudioData } from "@/lib/design/studio-mock-data";
+import {
+  activateMockModeFromFailure,
+  getMockModeActive,
+  setMockModeActive,
+} from "@/lib/design/studio-mock-mode";
 import type { ProductKnowledge } from "@/lib/shopify/types";
 import { useCallback, useEffect, useState } from "react";
 
@@ -33,41 +39,59 @@ export function useDesignStudio() {
     setLoading(true);
     setError(null);
 
+    if (getMockModeActive()) {
+      setData(buildMockDesignStudioData());
+      setLoading(false);
+      return;
+    }
+
     try {
-      const [studioResponse, historyResponse] = await Promise.all([
-        fetch("/api/design/studio"),
-        fetch("/api/commerce/history"),
-      ]);
-
+      const studioResponse = await fetch("/api/design/studio");
       const body = (await studioResponse.json()) as DesignStudioResponse;
-      const historyBody = (await historyResponse.json()) as CommerceHistoryResponse & {
-        error?: string;
-      };
 
-      if (!studioResponse.ok || !body.ok || !body.studio || !body.productKnowledge) {
-        throw new Error(body.error ?? "Failed to load Design Studio");
+      let studio = body.studio;
+      let productKnowledge = body.productKnowledge;
+      let businessMeta = body.businessMeta;
+      let commerceHistory: CommerceHistoryResponse | null = null;
+
+      if (!studioResponse.ok || !body.ok || !studio || !productKnowledge) {
+        activateMockModeFromFailure(studioResponse.status, body);
+        const mock = buildMockDesignStudioData();
+        setData(mock);
+        setError(null);
+        return;
       }
 
-      if (!historyResponse.ok) {
-        throw new Error(historyBody.error ?? "Failed to load commerce history");
+      try {
+        const historyResponse = await fetch("/api/commerce/history");
+        const historyBody = (await historyResponse.json()) as CommerceHistoryResponse & {
+          error?: string;
+        };
+        if (historyResponse.ok) {
+          commerceHistory =
+            historyBody.orders > 0 || historyBody.topProducts.length > 0
+              ? historyBody
+              : null;
+        }
+      } catch {
+        // Commerce history is optional — never block studio intelligence
       }
 
       setData({
-        studio: body.studio,
-        productKnowledge: body.productKnowledge,
-        commerceHistory:
-          historyBody.orders > 0 || historyBody.topProducts.length > 0
-            ? historyBody
-            : null,
-        businessMeta: body.businessMeta ?? {
+        studio,
+        productKnowledge,
+        commerceHistory,
+        businessMeta: businessMeta ?? {
           primarySupplier: "MarketPrint Print On Demand",
           businessModel: "Print On Demand",
           fulfillment: "Supplier Managed",
         },
       });
+      setMockModeActive(false);
     } catch (err) {
-      setData(null);
-      setError(err instanceof Error ? err.message : "Failed to load Design Studio");
+      setMockModeActive(true);
+      setData(buildMockDesignStudioData());
+      setError(null);
     } finally {
       setLoading(false);
     }

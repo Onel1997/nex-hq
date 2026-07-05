@@ -15,8 +15,14 @@ interface DesignMissionPanelProps {
   renderCommerceSection?: () => ReactNode;
 }
 
-export function DesignMissionEmptyState() {
-  return <CreativeWorkspaceEmpty />;
+export function DesignMissionEmptyState({
+  onStartDemo,
+  mockMode,
+}: {
+  onStartDemo?: () => void;
+  mockMode?: boolean;
+}) {
+  return <CreativeWorkspaceEmpty onStartDemo={onStartDemo} mockMode={mockMode} />;
 }
 
 export function DesignMissionPanel(props: DesignMissionPanelProps) {

@@ -5,7 +5,10 @@ import {
   DesignMissionPanel,
 } from "@/components/design/design-mission-panel";
 import { DesignStudioSidebar } from "@/components/design/design-studio-sidebar";
+import { MockModeBadge } from "@/components/design/mock-mode-badge";
 import { useDesignStudio } from "@/components/design/use-design-studio";
+import { useStudioMockMode } from "@/hooks/use-studio-mock-mode";
+import { buildMockDesignStudioData, buildMockDesignMission } from "@/lib/design/studio-mock-data";
 import { useDesignMission } from "@/lib/design/design-mission-store";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import type { DesignStudioIntelligence } from "@/lib/design/studio-intelligence";
@@ -44,10 +47,16 @@ const SUPPLIER_CAPABILITY_CHIPS = [
 
 export function DesignStudioCenter() {
   const { data, loading, error, refresh } = useDesignStudio();
-  const { mission, hydrated, selectBrief, markSaved, patchMission } = useDesignMission();
+  const { mission, hydrated, selectBrief, markSaved, patchMission, setMission } = useDesignMission();
+  const { mockMode, probing } = useStudioMockMode();
+  const sidebarStudio = data?.studio ?? (mockMode ? buildMockDesignStudioData().studio : undefined);
+
+  const startDemoMission = () => {
+    setMission(buildMockDesignMission());
+  };
 
   const renderCommerceSection = () => {
-    if (loading) {
+    if (loading && !mockMode) {
       return (
         <div className="design-studio-supporting-loading">
           <Loader2 className="size-6 animate-spin text-[#22d3ee]" />
@@ -56,7 +65,7 @@ export function DesignStudioCenter() {
       );
     }
 
-    if (error) {
+    if (error && !mockMode) {
       return (
         <div className="design-studio-supporting-error">
           <p>{error}</p>
@@ -67,18 +76,20 @@ export function DesignStudioCenter() {
       );
     }
 
-    if (!data) return null;
+    if (!data && !mockMode) return null;
+
+    const studioData = data ?? buildMockDesignStudioData();
 
     return (
       <>
         <div className="design-studio-row-1">
-          <ProductEcosystemColumn studio={data.studio} />
-          <CollectionOpportunitiesColumn studio={data.studio} />
-          <SupplierCapabilitiesColumn studio={data.studio} />
+          <ProductEcosystemColumn studio={studioData.studio} />
+          <CollectionOpportunitiesColumn studio={studioData.studio} />
+          <SupplierCapabilitiesColumn studio={studioData.studio} />
         </div>
-        <CommerceIntelligenceSection studio={data.studio} />
-        <DesignIntelligenceSection studio={data.studio} />
-        <ProductIntelligenceGrid studio={data.studio} />
+        <CommerceIntelligenceSection studio={studioData.studio} />
+        <DesignIntelligenceSection studio={studioData.studio} />
+        <ProductIntelligenceGrid studio={studioData.studio} />
       </>
     );
   };
@@ -90,7 +101,7 @@ export function DesignStudioCenter() {
       hideHeader
       collapsibleContext
       contextPanel={
-        data && !mission ? <DesignStudioSidebar studio={data.studio} /> : undefined
+        sidebarStudio && !mission ? <DesignStudioSidebar studio={sidebarStudio} /> : undefined
       }
     >
       <div className="design-studio design-studio-lab">
@@ -116,6 +127,7 @@ export function DesignStudioCenter() {
           </nav>
 
           <div className="design-studio-topbar-meta">
+            <MockModeBadge active={mockMode} probing={probing} />
             <button
               type="button"
               className="design-studio-refresh design-studio-refresh-subtle"
@@ -140,7 +152,7 @@ export function DesignStudioCenter() {
               renderCommerceSection={renderCommerceSection}
             />
           ) : (
-            <DesignMissionEmptyState />
+            <DesignMissionEmptyState onStartDemo={startDemoMission} mockMode={mockMode} />
           )}
         </div>
       </div>
