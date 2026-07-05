@@ -72,14 +72,14 @@ function ScoreRing({
 
 function CommercialReviewPanel({ scores }: { scores: MasterArtworkCommercialScores }) {
   const meters = [
-    { key: "luxury", label: "Luxury", value: scores.luxury },
+    { key: "luxury", label: "Premium Appeal", value: scores.luxury },
     { key: "originality", label: "Originality", value: scores.originality },
     { key: "print", label: "Print Quality", value: scores.printQuality },
     { key: "brand", label: "Brand Fit", value: scores.brandFit },
     { key: "trend", label: "Trend Potential", value: scores.trendPotential },
     { key: "virality", label: "Virality", value: scores.virality },
-    { key: "mfg", label: "Manufacturing", value: scores.manufacturingSimplicity },
-    { key: "conversion", label: "Conversion", value: scores.conversionPotential },
+    { key: "mfg", label: "Manufacturing Simplicity", value: scores.manufacturingSimplicity },
+    { key: "conversion", label: "Conversion Potential", value: scores.conversionPotential },
     { key: "overall", label: "Overall", value: scores.overall, accent: true },
   ] as const;
 
@@ -213,15 +213,15 @@ export function MasterArtworkInspector({
           </header>
           <div className="ma-feedback-stack">
             <FeedbackRow label="Why this works" text={feedback.whyItWorks} />
-            <FeedbackRow label="Improve" text={feedback.whatToImprove} />
-            <FeedbackRow label="Typography" text={feedback.typographyNote} />
+            <FeedbackRow label="Typography note" text={feedback.typographyNote} icon={Type} />
+            <FeedbackRow label="Composition note" text={feedback.compositionNote} icon={Layers} />
             <FeedbackRow
               label="Print risk"
               text={feedback.printRisk}
               icon={AlertTriangle}
             />
             <FeedbackRow label="Commercial opportunity" text={feedback.commercialOpportunity} />
-            <FeedbackRow label="Next version" text={feedback.suggestedNextVersion} />
+            <FeedbackRow label="Suggested next version" text={feedback.suggestedNextVersion} />
           </div>
         </section>
 

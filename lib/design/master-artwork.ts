@@ -302,7 +302,7 @@ export function resolveMasterArtworkStatusLabel(status: MasterArtworkStatus): st
     case "in_review":
       return "Commercial review";
     case "approved":
-      return "Approved";
+      return "Approved Master Artwork";
     default:
       return "—";
   }

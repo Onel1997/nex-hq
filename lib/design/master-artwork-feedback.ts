@@ -6,8 +6,8 @@ import type { MasterArtworkViewModel } from "@/lib/design/master-artwork";
 
 export interface MasterArtworkDirectorFeedback {
   whyItWorks: string;
-  whatToImprove: string;
   typographyNote: string;
+  compositionNote: string;
   printRisk: string;
   commercialOpportunity: string;
   suggestedNextVersion: string;
@@ -81,7 +81,7 @@ export function buildMasterArtworkDirectorFeedback(
 ): MasterArtworkDirectorFeedback {
   const commercial = direction?.teamInsights.find((i) => i.role.includes("Commercial"));
   const typography = direction?.teamInsights.find((i) => i.role.includes("Typography"));
-  const print = direction?.teamInsights.find((i) => i.role.includes("Print"));
+  const fashion = direction?.teamInsights.find((i) => i.role.includes("Fashion"));
 
   const hasArtwork = view?.hasArtwork ?? false;
   const printComplexity = direction?.scores.printComplexity ?? health?.manufacturingComplexity ?? 40;
@@ -94,17 +94,16 @@ export function buildMasterArtworkDirectorFeedback(
         )
       : `${direction?.title ?? "This direction"} offers a distinct creative territory — ${firstSentence(direction?.philosophy ?? brief.visualConcept, "ready to become print-ready artwork.")}`,
 
-    whatToImprove: hasArtwork
-      ? printComplexity > 65
-        ? "Simplify graphic density before final production lock."
-        : view?.isApproved
-          ? "Approved — no critical revisions flagged."
-          : "Tighten negative space balance and confirm print scale on garment."
-      : "Generate artwork to unlock production-specific refinement notes.",
-
     typographyNote: typography?.insight
       ? firstSentence(typography.insight, direction?.typography ?? concept?.typographyLanguage.direction ?? "—")
       : direction?.typography ?? concept?.typographyLanguage.direction ?? brief.typography,
+
+    compositionNote: hasArtwork
+      ? firstSentence(
+          fashion?.insight ?? direction?.composition ?? "",
+          `${direction?.composition ?? "Center-weighted composition"} with editorial negative space.`,
+        )
+      : direction?.composition ?? concept?.compositionLanguage.pattern ?? brief.geometry,
 
     printRisk:
       printComplexity > 70

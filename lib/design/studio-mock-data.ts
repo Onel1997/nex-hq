@@ -2,13 +2,14 @@ import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { DesignConcept } from "@/lib/design/ai-designer/types";
 import type { DesignDirection, DesignDirectionScores, TeamInsight } from "@/lib/design/design-directions";
 import { runAiDesigner } from "@/lib/design/ai-designer";
-import { buildDesignMissionFromHandoff } from "@/lib/design/design-mission-store";
+import { buildDesignMissionFromHandoff, updateMissionAssets } from "@/lib/design/design-mission-store";
 import type { DesignMissionState } from "@/lib/design/design-mission-store";
 import {
   buildAiDesignerMasterArtworkDraft,
   type MasterArtworkCommercialPayload,
 } from "@/lib/design/master-artwork";
 import { buildDesignStudioFromProductKnowledge } from "@/lib/design/studio-intelligence";
+import { getMockCommerceIntelligence } from "@/lib/design/mock-commerce-intelligence";
 import type { DesignStudioData } from "@/components/design/use-design-studio";
 import type { ProductKnowledge } from "@/lib/shopify/types";
 
@@ -289,12 +290,21 @@ export function createMockAiDesignerConcept(brief: DesignStudioBrief): {
 
 export function buildMockDesignMission(): DesignMissionState {
   const brief = createMockDesignStudioBrief();
-  return buildDesignMissionFromHandoff({
+  const mission = buildDesignMissionFromHandoff({
     reportId: MOCK_REPORT_ID,
     brainRecordId: "mock-brain-record",
     reportTitle: "Mock Research — Quiet Ascent Capsule",
     collectionName: "Quiet Ascent",
     brief,
+  });
+  const { concept, renderPlan, review } = createMockAiDesignerConcept(brief);
+  const directions = generateMockDesignDirections(brief, concept);
+
+  return updateMissionAssets(mission, {
+    aiDesignerConcept: concept,
+    aiDesignerRenderPlan: renderPlan,
+    aiDesignerReview: review,
+    designDirections: directions,
   });
 }
 
@@ -302,26 +312,68 @@ export function getMockReportId(): string {
   return MOCK_REPORT_ID;
 }
 
-function buildMockArtworkSvg(title: string, colors: string[]): string {
+function buildMockArtworkSvg(
+  title: string,
+  colors: string[],
+  options?: { printStyle?: string; placement?: string },
+): string {
   const [primary, secondary, accent] = colors;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+  const inkPrimary = primary ?? "#1a1f2e";
+  const inkSecondary = secondary ?? "#8a8278";
+  const inkAccent = accent ?? "#52c2c2";
+  const shortTitle = title.toUpperCase().slice(0, 14);
+  const printLabel = options?.printStyle?.includes("Embroidery")
+    ? "EMBROIDERY"
+    : options?.printStyle?.includes("DTG")
+      ? "DTG"
+      : "SCREEN";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1080" width="900" height="1080">
   <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="${secondary ?? primary}" stop-opacity="0.9"/>
-      <stop offset="100%" stop-color="${accent ?? primary}" stop-opacity="0.7"/>
+    <linearGradient id="inkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${inkSecondary}" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="${inkAccent}" stop-opacity="0.75"/>
     </linearGradient>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
-  <rect width="800" height="800" fill="none"/>
-  <path d="M120 380 Q400 180 680 380" fill="none" stroke="url(#g)" stroke-width="8" stroke-linecap="round"/>
-  <path d="M160 420 Q400 260 640 420" fill="none" stroke="${primary}" stroke-width="5" stroke-linecap="round" opacity="0.75"/>
-  <path d="M200 460 Q400 340 600 460" fill="none" stroke="${secondary ?? primary}" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
-  <circle cx="400" cy="320" r="18" fill="${accent ?? primary}" opacity="0.85"/>
-  <text x="400" y="560" text-anchor="middle" fill="${primary}" font-family="system-ui,sans-serif" font-size="22" font-weight="600" letter-spacing="6" opacity="0.65">${title.toUpperCase().slice(0, 18)}</text>
+  <!-- transparent artboard -->
+  <rect width="900" height="1080" fill="none"/>
+  <!-- print area bounds -->
+  <rect x="180" y="220" width="540" height="640" fill="none" stroke="${inkPrimary}" stroke-width="1.5" stroke-dasharray="10 8" opacity="0.22"/>
+  <text x="450" y="205" text-anchor="middle" fill="${inkPrimary}" font-family="system-ui,sans-serif" font-size="11" letter-spacing="4" opacity="0.35">PRINT AREA</text>
+  <!-- symbol system -->
+  <g opacity="0.88" filter="url(#softGlow)">
+    <circle cx="450" cy="420" r="52" fill="none" stroke="url(#inkGrad)" stroke-width="3"/>
+    <path d="M398 420 H502" stroke="${inkPrimary}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+    <path d="M450 368 V472" stroke="${inkPrimary}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+    <path d="M330 520 Q450 460 570 520" fill="none" stroke="url(#inkGrad)" stroke-width="5" stroke-linecap="round"/>
+    <path d="M350 560 Q450 510 550 560" fill="none" stroke="${inkPrimary}" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+    <path d="M370 600 Q450 560 530 600" fill="none" stroke="${inkSecondary}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+    <circle cx="450" cy="420" r="8" fill="${inkAccent}" opacity="0.9"/>
+  </g>
+  <!-- typography -->
+  <text x="450" y="700" text-anchor="middle" fill="${inkPrimary}" font-family="Georgia,serif" font-size="38" font-weight="600" letter-spacing="12" opacity="0.82">${shortTitle}</text>
+  <text x="450" y="738" text-anchor="middle" fill="${inkSecondary}" font-family="system-ui,sans-serif" font-size="13" letter-spacing="6" opacity="0.55">QUIET ASCENT</text>
+  <!-- micro marks -->
+  <g opacity="0.4">
+    <rect x="260" y="780" width="28" height="2" fill="${inkPrimary}"/>
+    <rect x="612" y="780" width="28" height="2" fill="${inkPrimary}"/>
+    <circle cx="450" cy="790" r="3" fill="${inkAccent}"/>
+  </g>
+  <!-- production metadata -->
+  <text x="450" y="860" text-anchor="middle" fill="${inkPrimary}" font-family="system-ui,sans-serif" font-size="10" letter-spacing="3" opacity="0.28">${printLabel} · ${options?.placement ?? "FRONT CHEST"}</text>
 </svg>`;
 }
 
-export function buildMockMasterArtworkDataUrl(title: string, colors: string[]): string {
-  const svg = buildMockArtworkSvg(title, colors);
+export function buildMockMasterArtworkDataUrl(
+  title: string,
+  colors: string[],
+  options?: { printStyle?: string; placement?: string },
+): string {
+  const svg = buildMockArtworkSvg(title, colors, options);
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
@@ -332,31 +384,42 @@ export function buildMockMasterArtworkState(input: {
   directionColors: string[];
   designDirection?: string;
   conceptId: string;
+  printStyle?: string;
+  placement?: string;
+  commercialScore?: number;
 }) {
-  const artworkUrl = buildMockMasterArtworkDataUrl(input.directionTitle, input.directionColors);
+  const artworkUrl = buildMockMasterArtworkDataUrl(input.directionTitle, input.directionColors, {
+    printStyle: input.printStyle,
+    placement: input.placement ?? input.brief.placement,
+  });
+  const printMethod = input.printStyle ?? input.brief.productionMethod;
   const commercialReview: MasterArtworkCommercialPayload = {
     approved: false,
     iterations: 1,
-    score: { overall: input.brief.commercialScore ?? 84 },
-    imageStudioBlueprint: `Mock blueprint for ${input.directionTitle}`,
+    score: { overall: input.commercialScore ?? input.brief.commercialScore ?? 84 },
+    imageStudioBlueprint: `Production blueprint for ${input.directionTitle}`,
   };
 
-  return buildAiDesignerMasterArtworkDraft({
-    brief: input.brief,
-    version: input.version,
-    artworkImageUrl: artworkUrl,
-    transparentPngUrl: artworkUrl,
-    productionPngUrl: artworkUrl,
-    previewUrl: artworkUrl,
-    selectedConceptId: input.conceptId,
-    designDirection: input.designDirection ?? input.directionTitle,
-    generationMode: "draft",
-    dpi: 300,
-    resolution: "4000 × 4000 px",
-    transparentBackground: true,
-    printReady: true,
-    commercialReview,
-  });
+  return {
+    ...buildAiDesignerMasterArtworkDraft({
+      brief: input.brief,
+      version: input.version,
+      artworkImageUrl: artworkUrl,
+      transparentPngUrl: artworkUrl,
+      productionPngUrl: artworkUrl,
+      previewUrl: artworkUrl,
+      selectedConceptId: input.conceptId,
+      designDirection: input.designDirection ?? input.directionTitle,
+      generationMode: "draft",
+      dpi: 300,
+      resolution: "4500 × 5400 px",
+      transparentBackground: true,
+      printReady: true,
+      commercialReview,
+    }),
+    printMethod,
+    placement: input.placement ?? input.brief.placement,
+  };
 }
 
 const MOCK_PRODUCT_KNOWLEDGE: ProductKnowledge = {
@@ -411,7 +474,12 @@ const MOCK_PRODUCT_KNOWLEDGE: ProductKnowledge = {
 };
 
 export function buildMockDesignStudioData(): DesignStudioData {
-  const studio = buildDesignStudioFromProductKnowledge(MOCK_PRODUCT_KNOWLEDGE);
+  const studio = buildDesignStudioFromProductKnowledge(
+    MOCK_PRODUCT_KNOWLEDGE,
+    undefined,
+    undefined,
+    getMockCommerceIntelligence(),
+  );
   return {
     studio,
     productKnowledge: MOCK_PRODUCT_KNOWLEDGE,

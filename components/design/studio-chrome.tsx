@@ -10,7 +10,7 @@ const WORKFLOW_STEPS = [
   "Master Artwork",
   "Commercial Review",
   "Approve",
-  "Image Studio",
+  "Marketing Studio",
 ] as const;
 
 interface StudioChromeProps {

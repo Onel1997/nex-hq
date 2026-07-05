@@ -4,11 +4,11 @@ import type {
   ProductPerformanceMetrics,
   ShopifyPerformanceIntelligence,
 } from "@/lib/shopify/performance";
-import {
-  isCommerceHistoryActive,
-  type CommerceIntelligence,
-  type CommerceProductRecord,
-} from "@/lib/shopify/commerce-intelligence";
+import { isCommerceHistoryActive } from "@/lib/shopify/commerce-shared";
+import type {
+  CommerceIntelligence,
+  CommerceProductRecord,
+} from "@/lib/shopify/commerce-intelligence-types";
 import type { HistoricalProductPerformance } from "@/lib/commerce/historical-intelligence-types";
 import { matchHistoricalProduct } from "@/lib/commerce/product-performance";
 

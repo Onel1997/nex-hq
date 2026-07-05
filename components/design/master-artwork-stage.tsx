@@ -12,6 +12,7 @@ import {
 import { MasterArtworkThinking } from "@/components/design/master-artwork-thinking";
 import { cn } from "@/lib/utils";
 import {
+  CheckCircle2,
   Download,
   Expand,
   Grid3x3,
@@ -45,29 +46,44 @@ interface MasterArtworkStageProps {
   onSendToImageStudio?: () => void;
 }
 
+function resolvePrintMethodLabel(
+  brief: DesignStudioBrief,
+  direction?: DesignDirection,
+  statePrintMethod?: string,
+): string {
+  if (statePrintMethod) return statePrintMethod;
+  if (direction?.printStyle) return direction.printStyle;
+  return brief.productionMethod;
+}
+
 function ArtworkMetadata({
   brief,
   view,
+  direction,
 }: {
   brief: DesignStudioBrief;
   view: ReturnType<typeof resolveMasterArtworkView>;
+  direction?: DesignDirection;
 }) {
   const { state } = view;
+  const printMethod = resolvePrintMethodLabel(brief, direction, state.printMethod);
   const items = [
-    { label: "Resolution", value: state.resolution ?? state.resolutionLabel ?? "—" },
-    { label: "DPI Target", value: state.dpi != null ? `${state.dpi} DPI` : "300 DPI" },
+    { label: "Resolution", value: state.resolution ?? state.resolutionLabel ?? "4500 × 5400 px" },
+    { label: "DPI", value: state.dpi != null ? `${state.dpi}` : "300" },
     {
-      label: "Transparent",
+      label: "Transparent background",
       value: state.transparentBackground ?? state.transparency ? "Yes" : "—",
     },
-    { label: "Print Area", value: brief.printArea },
+    { label: "Print method", value: printMethod },
     { label: "Placement", value: state.placement ?? brief.placement },
-    { label: "Mode", value: state.generationMode ?? "draft" },
     {
-      label: "Commercial",
+      label: "Commercial score",
       value: state.commercialScore != null ? `${Math.round(state.commercialScore)}%` : "—",
     },
-    { label: "Print Ready", value: state.printReadiness ?? (state.printReady ? "Yes" : "—") },
+    {
+      label: "Print readiness",
+      value: state.printReadiness ?? (state.printReady ? "Print ready" : "—"),
+    },
   ];
 
   return (
@@ -96,7 +112,6 @@ export function MasterArtworkStage({
   onRefineDirection,
   onCreateVersion,
   onSendToMarketing,
-  onSendToImageStudio,
 }: MasterArtworkStageProps) {
   const stageRef = useRef<HTMLElement>(null);
   const [zoom, setZoom] = useState<ZoomMode>("fit");
@@ -113,6 +128,10 @@ export function MasterArtworkStage({
     view.state.approvedArtworkUrl ??
     view.state.approvedProductionFileUrl ??
     view.previewImageUrl;
+  const printFileUrl =
+    view.state.approvedProductionFileUrl ??
+    view.state.productionPngUrl ??
+    exportImageUrl;
   const exportMarkup = view.state.approvedSvgMarkup ?? view.previewSvgMarkup ?? assets.svgMarkup;
 
   const handleDownloadPng = async () => {
@@ -122,6 +141,16 @@ export function MasterArtworkStage({
     }
     if (exportMarkup) {
       await downloadPngFromSvg(exportMarkup, `${brief.designId}-master-artwork`);
+    }
+  };
+
+  const handleDownloadPrintFile = async () => {
+    if (printFileUrl) {
+      await downloadPngFromUrl(printFileUrl, `${brief.designId}-print-production`);
+      return;
+    }
+    if (exportMarkup) {
+      await downloadPngFromSvg(exportMarkup, `${brief.designId}-print-production`);
     }
   };
 
@@ -146,6 +175,7 @@ export function MasterArtworkStage({
         "ma-stage",
         isTransitioning && "is-transitioning",
         fullscreen && "is-fullscreen",
+        view.isApproved && "is-approved",
       )}
       aria-label="Master artwork stage"
     >
@@ -157,6 +187,12 @@ export function MasterArtworkStage({
             <p className="ma-stage-direction">
               From <strong>{selectedDirection.title}</strong> · {versionLabel}
             </p>
+          ) : null}
+          {view.isApproved ? (
+            <span className="ma-approved-banner">
+              <CheckCircle2 className="size-3.5" />
+              Approved Master Artwork
+            </span>
           ) : null}
         </div>
 
@@ -228,6 +264,7 @@ export function MasterArtworkStage({
             "ma-artboard",
             checkerboard && "has-checker",
             view.hasArtwork && "has-artwork",
+            view.isApproved && "is-approved",
             isGenerating && "is-generating",
           )}
           style={zoom !== "fit" ? { transform: `scale(${zoomScale})` } : undefined}
@@ -253,9 +290,9 @@ export function MasterArtworkStage({
             <div className="ma-empty-state">
               <div className="ma-empty-glow" aria-hidden />
               <Sparkles className="ma-empty-icon" />
-              <h2>Ready to create the Master Artwork</h2>
+              <h2>Ready to create Master Artwork</h2>
               <p>
-                The selected direction will be transformed into a print-ready apparel design.
+                Transform the selected direction into a print-ready apparel design.
               </p>
               <div className="ma-empty-actions">
                 {canGenerate ? (
@@ -290,7 +327,9 @@ export function MasterArtworkStage({
         </span>
       </div>
 
-      {view.hasArtwork ? <ArtworkMetadata brief={brief} view={view} /> : null}
+      {view.hasArtwork ? (
+        <ArtworkMetadata brief={brief} view={view} direction={selectedDirection} />
+      ) : null}
 
       <footer className="ma-stage-actions">
         <div className="ma-actions-primary">
@@ -360,6 +399,15 @@ export function MasterArtworkStage({
           </button>
           <button
             type="button"
+            className="cs-btn cs-btn-compact"
+            onClick={() => void handleDownloadPrintFile()}
+            disabled={!printFileUrl && !exportMarkup}
+          >
+            <Download className="size-3.5" />
+            Download Print File
+          </button>
+          <button
+            type="button"
             className="cs-btn cs-btn-accent cs-btn-compact"
             onClick={onSendToMarketing}
             disabled={Boolean(loading) || !view.isApproved}
@@ -367,17 +415,6 @@ export function MasterArtworkStage({
             <Send className="size-3.5" />
             Send to Marketing Studio
           </button>
-          {onSendToImageStudio ? (
-            <button
-              type="button"
-              className="cs-btn cs-btn-compact cs-btn-ghost"
-              onClick={onSendToImageStudio}
-              disabled={Boolean(loading) || !view.isApproved}
-            >
-              <Send className="size-3.5" />
-              Image Studio
-            </button>
-          ) : null}
         </div>
       </footer>
     </main>

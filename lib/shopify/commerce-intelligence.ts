@@ -13,7 +13,18 @@ import {
   HISTORICAL_READ_ALL_ORDERS_WARNING,
   type CommerceHistoryResolution,
 } from "@/lib/shopify/commerce-shared";
-import type { ShopifyKnowledge, ShopifyKnowledgeProduct } from "@/lib/shopify/types";
+import type { ShopifyKnowledge } from "@/lib/shopify/types";
+import type {
+  CommerceCategoryRecord,
+  CommerceCollectionRecord,
+  CommerceIntelligence,
+  CommerceIntelligenceDebug,
+  CommerceIntelligenceSummary,
+  CommerceOrderRollup,
+  CommerceProductRecord,
+  CommerceSeasonalityRecord,
+  InternalProductAggregate,
+} from "@/lib/shopify/commerce-intelligence-types";
 
 export type { CommerceHistoricalStatus } from "@/lib/shopify/commerce-shared";
 export {
@@ -22,6 +33,18 @@ export {
   HISTORICAL_READ_ALL_ORDERS_WARNING,
   isCommerceHistoryActive,
 } from "@/lib/shopify/commerce-shared";
+export type {
+  CommerceCategoryRecord,
+  CommerceCollectionRecord,
+  CommerceIntelligence,
+  CommerceIntelligenceDebug,
+  CommerceIntelligenceSummary,
+  CommerceOrderRollup,
+  CommerceProductRecord,
+  CommerceSeasonalityRecord,
+  InternalProductAggregate,
+} from "@/lib/shopify/commerce-intelligence-types";
+export { mergeHistoricalProducts } from "@/lib/shopify/commerce-merge";
 
 const RECENT_WINDOW_DAYS = 30;
 const PRIOR_WINDOW_DAYS = 30;
@@ -41,75 +64,6 @@ const MONTH_LABELS = [
   "Dec",
 ] as const;
 
-export interface CommerceProductRecord {
-  productId: string;
-  title: string;
-  productType: string;
-  collections: string[];
-  revenue: number;
-  unitsSold: number;
-  orderCount: number;
-  firstSaleDate: string | null;
-  lastSaleDate: string | null;
-  unitsRank: number;
-  revenueRank: number;
-  commerceScore: number;
-  repeatPurchase: boolean;
-  inActiveCatalog: boolean;
-  currency: string;
-}
-
-export interface CommerceCategoryRecord {
-  category: string;
-  unitsSold: number;
-  revenue: number;
-  productCount: number;
-  rank: number;
-}
-
-export interface CommerceCollectionRecord {
-  title: string;
-  unitsSold: number;
-  revenue: number;
-  productCount: number;
-  rank: number;
-}
-
-export interface CommerceSeasonalityRecord {
-  month: number;
-  monthLabel: string;
-  unitsSold: number;
-  revenue: number;
-  orderCount: number;
-}
-
-export interface CommerceIntelligenceSummary {
-  totalRevenue: number;
-  totalUnits: number;
-  totalOrders: number;
-  averageOrderValue: number;
-  currency: string;
-  firstOrderDate: string | null;
-  lastOrderDate: string | null;
-  productsWithSales: number;
-  repeatPurchaseProductCount: number;
-  historicalProductCount: number;
-}
-
-export interface CommerceIntelligenceDebug {
-  ordersCount: number;
-  lineItemsCount: number;
-  totalRevenue: number;
-  firstOrderDate: string | null;
-  lastOrderDate: string | null;
-  tokenScopes: string[];
-  appAccessScopes: string[];
-  hasReadOrders: boolean;
-  hasReadAllOrders: boolean;
-  ordersCountFromApi: number | null;
-  rawOrdersResponse?: unknown;
-}
-
 function normalizeCommerceDebug(
   partial?: CommerceHistoryResolution["debug"],
 ): CommerceIntelligenceDebug | undefined {
@@ -127,59 +81,6 @@ function normalizeCommerceDebug(
     ordersCountFromApi: partial.ordersCountFromApi ?? null,
     rawOrdersResponse: partial.rawOrdersResponse,
   };
-}
-
-export interface CommerceIntelligence {
-  summary: CommerceIntelligenceSummary;
-  products: CommerceProductRecord[];
-  byProductId: Record<string, CommerceProductRecord>;
-  topProducts: CommerceProductRecord[];
-  topRevenue: CommerceProductRecord[];
-  topUnits: CommerceProductRecord[];
-  topCollections: CommerceCollectionRecord[];
-  topCategories: CommerceCategoryRecord[];
-  seasonality: CommerceSeasonalityRecord[];
-  heroProducts: CommerceProductRecord[];
-  repeatPurchaseProducts: CommerceProductRecord[];
-  allTimeBestseller: CommerceProductRecord | null;
-  highestRevenueProduct: CommerceProductRecord | null;
-  mostSoldCategory: CommerceCategoryRecord | null;
-  strongestCollection: CommerceCollectionRecord | null;
-  /** Temporary debug output for Shopify orders integration. */
-  debug?: CommerceIntelligenceDebug;
-  /** Load-time error surfaced in the Commerce Intelligence panel. */
-  loadError?: string | null;
-  /** Non-fatal warnings (e.g. missing read_all_orders scope). */
-  warnings?: string[];
-  /** Historical commerce mode — catalog-only when Shopify history unavailable. */
-  historical?: CommerceHistoricalStatus;
-  /** Parsed Shopify export intelligence when CSV import is active. */
-  import?: HistoricalIntelligence | null;
-}
-
-export interface CommerceOrderRollup {
-  productAggregates: Map<string, InternalProductAggregate>;
-  orderCount: number;
-  totalRevenue: number;
-  totalUnits: number;
-  currency: string;
-  firstOrderDate: string | null;
-  lastOrderDate: string | null;
-  monthlyOrders: Map<number, { units: number; revenue: number; orders: number }>;
-}
-
-interface InternalProductAggregate {
-  productId: string;
-  title: string;
-  productType: string;
-  collections: Set<string>;
-  revenue: number;
-  unitsSold: number;
-  orderIds: Set<string>;
-  firstSaleDate: string | null;
-  lastSaleDate: string | null;
-  recentUnits: number;
-  priorUnits: number;
 }
 
 interface OrdersPageData {
@@ -904,34 +805,6 @@ export async function loadCommerceIntelligenceSafe(
   }
 }
 
-export function mergeHistoricalProducts(
-  knowledge: ShopifyKnowledge,
-  commerce: CommerceIntelligence,
-): ShopifyKnowledgeProduct[] {
-  const merged = new Map(knowledge.products.map((p) => [p.id, p]));
-
-  for (const record of commerce.products) {
-    if (merged.has(record.productId)) continue;
-    merged.set(record.productId, {
-      id: record.productId,
-      title: record.title,
-      handle: record.productId.split("/").pop() ?? record.productId,
-      status: "ARCHIVED",
-      productType: record.productType,
-      price: "0",
-      currency: record.currency,
-      inventory: 0,
-      collections: record.collections,
-      tags: ["historical-sales"],
-      colors: [],
-      sizes: [],
-      materials: [],
-    });
-  }
-
-  return [...merged.values()];
-}
-
 export function getCommerceAggregateForProduct(
   rollup: CommerceOrderRollup,
   productId: string,
@@ -939,4 +812,3 @@ export function getCommerceAggregateForProduct(
   return rollup.productAggregates.get(productId);
 }
 
-export type { InternalProductAggregate };

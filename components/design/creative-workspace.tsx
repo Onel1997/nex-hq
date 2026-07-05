@@ -469,7 +469,7 @@ export function CreativeWorkspace({
         concept.creativeDirection.summary;
 
       if (getMockModeActive()) {
-        await mockGenerationDelay();
+        await mockGenerationDelay(11_200);
         const masterArtwork = buildMockMasterArtworkState({
           brief,
           version: `V${iteration.version}`,
@@ -477,6 +477,9 @@ export function CreativeWorkspace({
           directionColors: selectedDirection?.thumbnailColors ?? ["#1a1f2e", "#52c2c2", "#d9b46b"],
           designDirection,
           conceptId: concept.designId,
+          printStyle: selectedDirection?.printStyle,
+          placement: brief.printArea === "Back" ? "Back print" : "Front chest",
+          commercialScore: selectedDirection?.scores.commercial,
         });
 
         onPatchMission((state) => {
@@ -509,7 +512,7 @@ export function CreativeWorkspace({
       const payload = await readGenerationPayload(res);
       if (!res.ok) {
         activateMockModeFromFailure(res.status, payload);
-        await mockGenerationDelay(1800);
+        await mockGenerationDelay(11_200);
         const masterArtwork = buildMockMasterArtworkState({
           brief,
           version: `V${iteration.version}`,
@@ -517,6 +520,9 @@ export function CreativeWorkspace({
           directionColors: selectedDirection?.thumbnailColors ?? ["#1a1f2e", "#52c2c2", "#d9b46b"],
           designDirection,
           conceptId: concept.designId,
+          printStyle: selectedDirection?.printStyle,
+          placement: brief.printArea === "Back" ? "Back print" : "Front chest",
+          commercialScore: selectedDirection?.scores.commercial,
         });
 
         onPatchMission((state) => {
@@ -789,7 +795,7 @@ export function CreativeWorkspace({
       next = setPipelineStage(next, "approval");
       return next;
     });
-    notify("Master artwork approved — ready for Image Studio production");
+    notify("Master artwork approved — ready for Marketing Studio");
   }, [brief, notify, onPatchMission]);
 
   const runAiDesignerConcept = useCallback(async () => {
@@ -1306,7 +1312,6 @@ export function CreativeWorkspace({
               onRefineDirection={refineDirection}
               onCreateVersion={createMasterVersion}
               onSendToMarketing={sendToMarketingStudio}
-              onSendToImageStudio={sendToImageStudio}
             />
           ) : showMasterCanvas ? (
             <MasterArtworkCanvas

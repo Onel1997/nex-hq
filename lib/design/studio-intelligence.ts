@@ -8,11 +8,9 @@ import {
 } from "@/lib/design/product-intelligence";
 import { MARKETPRINT_PROFILE } from "@/lib/marketprint/marketprint-profile";
 import type { ShopifyPerformanceIntelligence } from "@/lib/shopify/performance";
-import {
-  isCommerceHistoryActive,
-  mergeHistoricalProducts,
-  type CommerceIntelligence,
-} from "@/lib/shopify/commerce-intelligence";
+import { isCommerceHistoryActive } from "@/lib/shopify/commerce-shared";
+import { mergeHistoricalProducts } from "@/lib/shopify/commerce-merge";
+import type { CommerceIntelligence } from "@/lib/shopify/commerce-intelligence-types";
 import {
   getCampaignProducts,
   getEmbroideryProducts,
@@ -151,7 +149,7 @@ export interface DesignExistingProductCard {
 }
 
 export type { CollectionOpportunityScore, DesignIntelligenceDashboard, ProductIntelligence };
-export type { CommerceIntelligence } from "@/lib/shopify/commerce-intelligence";
+export type { CommerceIntelligence } from "@/lib/shopify/commerce-intelligence-types";
 
 export interface DesignStudioIntelligence {
   productEcosystem: DesignProductBaseRow[];
