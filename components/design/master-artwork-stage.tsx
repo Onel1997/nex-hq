@@ -25,9 +25,9 @@ import {
   Stamp,
   Wand2,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type ZoomMode = "fit" | 0.5 | 0.75 | 1 | 1.25 | 1.5;
+type ZoomMode = "fit" | number;
 
 interface MasterArtworkStageProps {
   brief: DesignStudioBrief;
@@ -37,6 +37,7 @@ interface MasterArtworkStageProps {
   canGenerate: boolean;
   selectedDirection?: DesignDirection;
   isTransitioning?: boolean;
+  focusMode?: boolean;
   onGenerate: () => void;
   onRegenerate: () => void;
   onApprove: () => void;
@@ -44,58 +45,6 @@ interface MasterArtworkStageProps {
   onCreateVersion?: (version: 2 | 3) => void;
   onSendToMarketing?: () => void;
   onSendToImageStudio?: () => void;
-}
-
-function resolvePrintMethodLabel(
-  brief: DesignStudioBrief,
-  direction?: DesignDirection,
-  statePrintMethod?: string,
-): string {
-  if (statePrintMethod) return statePrintMethod;
-  if (direction?.printStyle) return direction.printStyle;
-  return brief.productionMethod;
-}
-
-function ArtworkMetadata({
-  brief,
-  view,
-  direction,
-}: {
-  brief: DesignStudioBrief;
-  view: ReturnType<typeof resolveMasterArtworkView>;
-  direction?: DesignDirection;
-}) {
-  const { state } = view;
-  const printMethod = resolvePrintMethodLabel(brief, direction, state.printMethod);
-  const items = [
-    { label: "Resolution", value: state.resolution ?? state.resolutionLabel ?? "4500 × 5400 px" },
-    { label: "DPI", value: state.dpi != null ? `${state.dpi}` : "300" },
-    {
-      label: "Transparent background",
-      value: state.transparentBackground ?? state.transparency ? "Yes" : "—",
-    },
-    { label: "Print method", value: printMethod },
-    { label: "Placement", value: state.placement ?? brief.placement },
-    {
-      label: "Commercial score",
-      value: state.commercialScore != null ? `${Math.round(state.commercialScore)}%` : "—",
-    },
-    {
-      label: "Print readiness",
-      value: state.printReadiness ?? (state.printReady ? "Print ready" : "—"),
-    },
-  ];
-
-  return (
-    <div className="ma-meta-bar" aria-label="Artwork metadata">
-      {items.map((item) => (
-        <div key={item.label} className="ma-meta-item">
-          <span className="ma-meta-label">{item.label}</span>
-          <span className="ma-meta-value">{item.value}</span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 export function MasterArtworkStage({
@@ -106,6 +55,7 @@ export function MasterArtworkStage({
   canGenerate,
   selectedDirection,
   isTransitioning,
+  focusMode = false,
   onGenerate,
   onRegenerate,
   onApprove,
@@ -114,7 +64,10 @@ export function MasterArtworkStage({
   onSendToMarketing,
 }: MasterArtworkStageProps) {
   const stageRef = useRef<HTMLElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const artboardRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<ZoomMode>("fit");
+  const [fitScale, setFitScale] = useState(1);
   const [checkerboard, setCheckerboard] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -166,7 +119,61 @@ export function MasterArtworkStage({
     }
   }, []);
 
-  const zoomScale = zoom === "fit" ? 1 : zoom;
+  const recomputeFit = useCallback(() => {
+    const hero = heroRef.current;
+    const artboard = artboardRef.current;
+    if (!hero || !artboard || !view.hasArtwork) {
+      setFitScale(1);
+      return;
+    }
+
+    const heroRect = hero.getBoundingClientRect();
+    const artboardRect = artboard.getBoundingClientRect();
+    if (artboardRect.width <= 0 || artboardRect.height <= 0) return;
+
+    const padding = focusMode ? 12 : 20;
+    const availableW = heroRect.width - padding * 2;
+    const availableH = heroRect.height - padding * 2;
+    const scaleW = availableW / artboardRect.width;
+    const scaleH = availableH / artboardRect.height;
+    const next = Math.min(scaleW, scaleH, focusMode ? 1.75 : 1.55);
+    setFitScale(Math.max(0.4, next));
+  }, [focusMode, view.hasArtwork]);
+
+  useEffect(() => {
+    recomputeFit();
+    const hero = heroRef.current;
+    if (!hero) return;
+
+    const observer = new ResizeObserver(() => recomputeFit());
+    observer.observe(hero);
+    return () => observer.disconnect();
+  }, [recomputeFit, view.hasArtwork, view.previewImageUrl, focusMode]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setFullscreen(Boolean(document.fullscreenElement));
+      window.requestAnimationFrame(recomputeFit);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, [recomputeFit]);
+
+  const zoomScale = zoom === "fit" ? fitScale : zoom;
+
+  const zoomOut = () => {
+    setZoom((current) => {
+      const base = current === "fit" ? fitScale : current;
+      return Math.max(0.35, Math.round((base - 0.1) * 100) / 100);
+    });
+  };
+
+  const zoomIn = () => {
+    setZoom((current) => {
+      const base = current === "fit" ? fitScale : current;
+      return Math.min(2, Math.round((base + 0.1) * 100) / 100);
+    });
+  };
 
   return (
     <main
@@ -175,6 +182,7 @@ export function MasterArtworkStage({
         "ma-stage",
         isTransitioning && "is-transitioning",
         fullscreen && "is-fullscreen",
+        focusMode && "is-focus-mode",
         view.isApproved && "is-approved",
       )}
       aria-label="Master artwork stage"
@@ -182,18 +190,18 @@ export function MasterArtworkStage({
       <header className="ma-stage-header">
         <div className="ma-stage-title-block">
           <p className="ma-stage-kicker">Master Artwork</p>
-          <h1 className="ma-stage-title">Print-Ready Design</h1>
           {selectedDirection ? (
-            <p className="ma-stage-direction">
-              From <strong>{selectedDirection.title}</strong> · {versionLabel}
-            </p>
+            <h1 className="ma-stage-artwork-title">{selectedDirection.title}</h1>
           ) : null}
-          {view.isApproved ? (
-            <span className="ma-approved-banner">
-              <CheckCircle2 className="size-3.5" />
-              Approved Master Artwork
-            </span>
-          ) : null}
+          <p className="ma-stage-direction-meta">
+            {versionLabel}
+            {view.isApproved ? (
+              <span className="ma-approved-banner ma-approved-banner--compact">
+                <CheckCircle2 className="size-3" />
+                Approved
+              </span>
+            ) : null}
+          </p>
         </div>
 
         <div className="ma-stage-zoom" role="group" aria-label="Zoom controls">
@@ -202,124 +210,119 @@ export function MasterArtworkStage({
             className={cn("ma-zoom-btn", zoom === "fit" && "is-active")}
             onClick={() => setZoom("fit")}
             title="Fit"
+            aria-label="Fit to canvas"
           >
             <Expand className="size-3.5" />
-            Fit
+            <span className="ma-zoom-label">Fit</span>
           </button>
           <button
             type="button"
             className={cn("ma-zoom-btn", zoom === 1 && "is-active")}
             onClick={() => setZoom(1)}
+            title="100%"
           >
             100%
           </button>
-          <button
-            type="button"
-            className="ma-zoom-btn"
-            onClick={() =>
-              setZoom((current) => {
-                if (current === "fit") return 0.75;
-                const next = Math.max(0.5, (current as number) - 0.25);
-                return next as ZoomMode;
-              })
-            }
-            title="Zoom out"
-          >
+          <span className="ma-zoom-divider" aria-hidden />
+          <button type="button" className="ma-zoom-btn" onClick={zoomOut} title="Zoom out" aria-label="Zoom out">
             <Minus className="size-3.5" />
           </button>
-          <button
-            type="button"
-            className="ma-zoom-btn"
-            onClick={() =>
-              setZoom((current) => {
-                if (current === "fit") return 1;
-                const next = Math.min(1.5, (current as number) + 0.25);
-                return next as ZoomMode;
-              })
-            }
-            title="Zoom in"
-          >
+          <button type="button" className="ma-zoom-btn" onClick={zoomIn} title="Zoom in" aria-label="Zoom in">
             <Plus className="size-3.5" />
           </button>
+          <span className="ma-zoom-divider" aria-hidden />
           <button
             type="button"
             className={cn("ma-zoom-btn", checkerboard && "is-active")}
             onClick={() => setCheckerboard((v) => !v)}
-            title="Toggle transparency grid"
+            title="Toggle grid"
+            aria-label="Toggle transparency grid"
           >
             <Grid3x3 className="size-3.5" />
           </button>
-          <button type="button" className="ma-zoom-btn" onClick={() => void toggleFullscreen()} title="Fullscreen">
+          <button
+            type="button"
+            className="ma-zoom-btn"
+            onClick={() => void toggleFullscreen()}
+            title="Fullscreen"
+            aria-label="Fullscreen"
+          >
             <Maximize2 className="size-3.5" />
           </button>
         </div>
       </header>
 
-      <div className="ma-stage-hero">
+      <div ref={heroRef} className="ma-stage-hero">
         <div className="ma-stage-spotlight" aria-hidden />
         <div className="ma-stage-vignette" aria-hidden />
 
         <div
-          className={cn(
-            "ma-artboard",
-            checkerboard && "has-checker",
-            view.hasArtwork && "has-artwork",
-            view.isApproved && "is-approved",
-            isGenerating && "is-generating",
-          )}
-          style={zoom !== "fit" ? { transform: `scale(${zoomScale})` } : undefined}
+          className="ma-artboard-wrap"
+          style={{
+            transform: `scale(${zoomScale})`,
+            transition: "transform 220ms ease-in-out",
+          }}
         >
-          {isGenerating ? (
-            <MasterArtworkThinking active variant="canvas" />
-          ) : view.hasArtwork ? (
-            <div className={cn("ma-artwork-preview", isTransitioning && "is-revealing")}>
-              {view.previewImageUrl ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={view.previewImageUrl} alt="Master artwork" className="ma-artwork-img" />
-              ) : view.previewSvgMarkup ? (
-                <div
-                  className="ma-artwork-svg"
-                  dangerouslySetInnerHTML={{ __html: view.previewSvgMarkup }}
-                />
-              ) : view.previewSvgUrl ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={view.previewSvgUrl} alt="Master artwork" className="ma-artwork-img" />
-              ) : null}
-            </div>
-          ) : (
-            <div className="ma-empty-state">
-              <div className="ma-empty-glow" aria-hidden />
-              <Sparkles className="ma-empty-icon" />
-              <h2>Ready to create Master Artwork</h2>
-              <p>
-                Transform the selected direction into a print-ready apparel design.
-              </p>
-              <div className="ma-empty-actions">
-                {canGenerate ? (
-                  <button
-                    type="button"
-                    className="cs-btn cs-btn-primary ma-btn-generate"
-                    onClick={onGenerate}
-                    disabled={Boolean(loading)}
-                  >
-                    <Sparkles className="size-4" />
-                    Generate Master Artwork
-                  </button>
-                ) : null}
-                {onRefineDirection ? (
-                  <button
-                    type="button"
-                    className="cs-btn cs-btn-ghost ma-btn-refine"
-                    onClick={onRefineDirection}
-                    disabled={Boolean(loading)}
-                  >
-                    <Wand2 className="size-4" />
-                    Refine Direction
-                  </button>
+          <div
+            ref={artboardRef}
+            className={cn(
+              "ma-artboard",
+              checkerboard && "has-checker",
+              view.hasArtwork && "has-artwork",
+              view.isApproved && "is-approved",
+              isGenerating && "is-generating",
+            )}
+          >
+            {isGenerating ? (
+              <MasterArtworkThinking active variant="canvas" />
+            ) : view.hasArtwork ? (
+              <div className={cn("ma-artwork-preview", isTransitioning && "is-revealing")}>
+                {view.previewImageUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={view.previewImageUrl} alt="Master artwork" className="ma-artwork-img" />
+                ) : view.previewSvgMarkup ? (
+                  <div
+                    className="ma-artwork-svg"
+                    dangerouslySetInnerHTML={{ __html: view.previewSvgMarkup }}
+                  />
+                ) : view.previewSvgUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={view.previewSvgUrl} alt="Master artwork" className="ma-artwork-img" />
                 ) : null}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="ma-empty-state">
+                <div className="ma-empty-glow" aria-hidden />
+                <Sparkles className="ma-empty-icon" />
+                <h2>Ready to create Master Artwork</h2>
+                <p>Transform the selected direction into a print-ready apparel design.</p>
+                <div className="ma-empty-actions">
+                  {canGenerate ? (
+                    <button
+                      type="button"
+                      className="cs-btn cs-btn-primary ma-btn-generate"
+                      onClick={onGenerate}
+                      disabled={Boolean(loading)}
+                    >
+                      <Sparkles className="size-4" />
+                      Generate Master Artwork
+                    </button>
+                  ) : null}
+                  {onRefineDirection ? (
+                    <button
+                      type="button"
+                      className="cs-btn cs-btn-ghost ma-btn-refine"
+                      onClick={onRefineDirection}
+                      disabled={Boolean(loading)}
+                    >
+                      <Wand2 className="size-4" />
+                      Refine Direction
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <span className={cn("ma-stage-status", view.isApproved && "is-approved")}>
@@ -327,16 +330,12 @@ export function MasterArtworkStage({
         </span>
       </div>
 
-      {view.hasArtwork ? (
-        <ArtworkMetadata brief={brief} view={view} direction={selectedDirection} />
-      ) : null}
-
       <footer className="ma-stage-actions">
         <div className="ma-actions-primary">
           {!view.hasArtwork ? (
             <button
               type="button"
-              className="cs-btn cs-btn-primary"
+              className="cs-btn cs-btn-primary ma-action-primary"
               onClick={onGenerate}
               disabled={Boolean(loading) || !canGenerate}
             >
@@ -344,53 +343,64 @@ export function MasterArtworkStage({
               Generate Master Artwork
             </button>
           ) : (
-            <>
-              <button
-                type="button"
-                className="cs-btn cs-btn-primary cs-btn-approve"
-                onClick={onApprove}
-                disabled={Boolean(loading) || !view.canApprove}
-              >
-                <Stamp className="size-4" />
-                Approve Artwork
-              </button>
-              <button
-                type="button"
-                className="cs-btn"
-                onClick={onRegenerate}
-                disabled={Boolean(loading)}
-              >
-                <RefreshCw className="size-4" />
-                Regenerate
-              </button>
-            </>
+            <button
+              type="button"
+              className="cs-btn cs-btn-primary ma-action-primary"
+              onClick={onRegenerate}
+              disabled={Boolean(loading)}
+            >
+              <RefreshCw className="size-4" />
+              Regenerate
+            </button>
           )}
         </div>
 
         <div className="ma-actions-secondary">
+          {view.hasArtwork ? (
+            <button
+              type="button"
+              className="cs-btn cs-btn-compact ma-action-secondary"
+              onClick={onApprove}
+              disabled={Boolean(loading) || !view.canApprove}
+            >
+              <Stamp className="size-3.5" />
+              Approve
+            </button>
+          ) : null}
+          {onRefineDirection ? (
+            <button
+              type="button"
+              className="cs-btn cs-btn-ghost cs-btn-compact ma-action-tertiary"
+              onClick={onRefineDirection}
+              disabled={Boolean(loading)}
+            >
+              <Wand2 className="size-3.5" />
+              Refine Direction
+            </button>
+          ) : null}
           {onCreateVersion ? (
             <>
               <button
                 type="button"
-                className="cs-btn cs-btn-compact"
+                className="cs-btn cs-btn-compact ma-action-tertiary"
                 onClick={() => onCreateVersion(2)}
                 disabled={Boolean(loading) || !view.hasArtwork}
               >
-                Create Version 2
+                Version 2
               </button>
               <button
                 type="button"
-                className="cs-btn cs-btn-compact"
+                className="cs-btn cs-btn-compact ma-action-tertiary"
                 onClick={() => onCreateVersion(3)}
                 disabled={Boolean(loading) || !view.hasArtwork}
               >
-                Create Version 3
+                Version 3
               </button>
             </>
           ) : null}
           <button
             type="button"
-            className="cs-btn cs-btn-compact"
+            className="cs-btn cs-btn-compact ma-action-secondary"
             onClick={() => void handleDownloadPng()}
             disabled={!exportImageUrl && !exportMarkup}
           >
@@ -399,21 +409,20 @@ export function MasterArtworkStage({
           </button>
           <button
             type="button"
-            className="cs-btn cs-btn-compact"
+            className="cs-btn cs-btn-compact ma-action-tertiary"
             onClick={() => void handleDownloadPrintFile()}
             disabled={!printFileUrl && !exportMarkup}
           >
-            <Download className="size-3.5" />
             Download Print File
           </button>
           <button
             type="button"
-            className="cs-btn cs-btn-accent cs-btn-compact"
+            className="cs-btn cs-btn-compact ma-action-secondary"
             onClick={onSendToMarketing}
             disabled={Boolean(loading) || !view.isApproved}
           >
             <Send className="size-3.5" />
-            Send to Marketing Studio
+            Marketing Studio
           </button>
         </div>
       </footer>

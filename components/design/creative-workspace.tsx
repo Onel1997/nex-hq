@@ -84,6 +84,7 @@ import {
   generateMockDesignDirections,
   mockGenerationDelay,
 } from "@/lib/design/studio-mock-data";
+import { usePersistedCollapse } from "@/hooks/use-persisted-collapse";
 import { cn } from "@/lib/utils";
 import {
   Archive,
@@ -297,6 +298,14 @@ export function CreativeWorkspace({
   const [directionTransitioning, setDirectionTransitioning] = useState(false);
   const [regeneratingDirectionId, setRegeneratingDirectionId] = useState<string | null>(null);
   const { mockMode } = useStudioMockMode();
+  const {
+    collapsed: directionPanelCollapsed,
+    setCollapsed: setDirectionPanelCollapsed,
+  } = usePersistedCollapse("nexhq-ma-direction-panel-collapsed", false);
+  const {
+    collapsed: inspectorCollapsed,
+    setCollapsed: setInspectorCollapsed,
+  } = usePersistedCollapse("nexhq-ma-inspector-collapsed", false);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
@@ -347,6 +356,17 @@ export function CreativeWorkspace({
     setCanvasTab(resolveCanvasTab(canvasAssets));
   }, [brief.designId, mission.reportId, canvasAssets]);
 
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1399px)");
+    const apply = () => {
+      if (media.matches) {
+        setInspectorCollapsed(true);
+      }
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [setInspectorCollapsed]);
 
   const resetProductionStatus = useCallback(
     (itemId: "svg" | "mockup" | "aiRender") => {
@@ -1139,6 +1159,8 @@ export function CreativeWorkspace({
     Boolean(canvasAssets.aiDesignerConcept) &&
     (!selectedDirection || directionCompareMode || !hasDirections);
   const showMasterCanvas = !showDirectionsStage;
+  const isMasterFocusMode =
+    showMasterCanvas && Boolean(selectedDirection) && directionPanelCollapsed && inspectorCollapsed;
 
   const advancedTools = (
     <>
@@ -1222,8 +1244,10 @@ export function CreativeWorkspace({
     </>
   );
 
+  const isMasterArtworkMode = showMasterCanvas && Boolean(selectedDirection);
+
   return (
-    <div className="cw-root cw-studio-app">
+    <div className={cn("cw-root cw-studio-app", isMasterArtworkMode && "is-master-artwork-mode")}>
       <MockModeBadge active={mockMode} className="cw-mock-badge-floating" />
       <div className="cw-main">
         <StudioChrome
@@ -1238,12 +1262,23 @@ export function CreativeWorkspace({
           onGenerateConcept={() => void runAiDesignerConcept()}
         />
 
-        <div className={cn("cs-workspace", directionTransitioning && "is-transitioning", showMasterCanvas && selectedDirection && "is-master-artwork")}>
+        <div
+          className={cn(
+            "cs-workspace",
+            directionTransitioning && "is-transitioning",
+            showMasterCanvas && selectedDirection && "is-master-artwork",
+            directionPanelCollapsed && "is-direction-collapsed",
+            inspectorCollapsed && "is-inspector-collapsed",
+            isMasterFocusMode && "is-focus-mode",
+          )}
+        >
           {showMasterCanvas && selectedDirection ? (
             <MasterArtworkLeftRail
               direction={selectedDirection}
               iterations={workspace.iterations}
               activeIterationId={workspace.activeIterationId}
+              collapsed={directionPanelCollapsed}
+              onCollapsedChange={setDirectionPanelCollapsed}
               onSelectVersion={(id) => onPatchMission((s) => restoreIteration(s, id))}
             />
           ) : (
@@ -1306,6 +1341,7 @@ export function CreativeWorkspace({
               canGenerate={canGenerateMaster}
               selectedDirection={selectedDirection}
               isTransitioning={directionTransitioning}
+              focusMode={isMasterFocusMode}
               onGenerate={() => void runMasterArtworkGeneration()}
               onRegenerate={() => void runMasterArtworkGeneration()}
               onApprove={approveMasterArtwork}
@@ -1361,6 +1397,8 @@ export function CreativeWorkspace({
               direction={selectedDirection}
               health={workspace.health}
               view={masterArtworkView}
+              collapsed={inspectorCollapsed}
+              onCollapsedChange={setInspectorCollapsed}
             />
           ) : (
             <StudioInspector
