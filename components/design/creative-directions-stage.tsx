@@ -6,9 +6,12 @@ import {
   TeamPresentationThinking,
 } from "@/components/design/directions-thinking";
 import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Archive,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Factory,
   GitCompare,
@@ -19,13 +22,15 @@ import {
   Trophy,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface CreativeDirectionsStageProps {
   directions?: DesignDirection[];
   loading?: boolean;
   hasConcept: boolean;
   compareMode: boolean;
+  activeDirectionId?: string | null;
+  onActiveDirectionChange?: (directionId: string) => void;
   onGenerate: () => void;
   onSelect: (directionId: string) => void;
   onRegenerate: (directionId: string) => void;
@@ -53,53 +58,138 @@ const ESTIMATED_ITEMS = [
 
 const REVEAL_STAGGER_MS = 720;
 
-function truncateStory(text: string, maxSentences = 2): string {
-  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
-  return sentences.slice(0, maxSentences).join(" ");
+const CAROUSEL_SLIDE_PX = 32;
+const CAROUSEL_TRANSITION = {
+  duration: 0.26,
+  ease: [0.22, 1, 0.36, 1] as const,
+};
+
+const STORY_COLLAPSE_CHARS = 200;
+
+const PREVIEW_PARTICLES = [
+  { left: "12%", top: "18%", delay: "0s", size: 2 },
+  { left: "78%", top: "24%", delay: "1.2s", size: 1.5 },
+  { left: "45%", top: "62%", delay: "0.6s", size: 2.5 },
+  { left: "88%", top: "71%", delay: "2.1s", size: 1.5 },
+  { left: "22%", top: "82%", delay: "1.8s", size: 2 },
+  { left: "62%", top: "14%", delay: "0.9s", size: 1.5 },
+  { left: "34%", top: "38%", delay: "2.4s", size: 2 },
+  { left: "91%", top: "44%", delay: "1.5s", size: 1.5 },
+] as const;
+
+function DirectionPreviewHero({ title }: { title: string }) {
+  return (
+    <div className="cs-pitch-hero" aria-label={`${title} artwork preview`}>
+      <div className="cs-pitch-hero-frame">
+        <div className="cs-pitch-hero-texture" aria-hidden />
+        <div className="cs-pitch-hero-checker" aria-hidden />
+        <div className="cs-pitch-hero-particles" aria-hidden>
+          {PREVIEW_PARTICLES.map((particle, index) => (
+            <span
+              key={index}
+              className="cs-pitch-hero-particle"
+              style={{
+                left: particle.left,
+                top: particle.top,
+                width: `${particle.size}px`,
+                height: `${particle.size}px`,
+                animationDelay: particle.delay,
+              }}
+            />
+          ))}
+        </div>
+        <div className="cs-pitch-hero-mount" aria-hidden />
+        <div className="cs-pitch-hero-glow" aria-hidden />
+        <div className="cs-pitch-hero-empty">
+          <span className="cs-pitch-hero-empty-kicker">Collection Concept</span>
+          <span className="cs-pitch-hero-empty-label">Awaiting Artwork</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PitchStory({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > STORY_COLLAPSE_CHARS;
+
+  return (
+    <section className="cs-pitch-story">
+      <div className={cn("cs-pitch-story-body", !expanded && isLong && "is-clamped")}>
+        <p>{text}</p>
+        {!expanded && isLong ? <div className="cs-pitch-story-fade" aria-hidden /> : null}
+        {isLong && !expanded ? (
+          <button
+            type="button"
+            className="cs-pitch-story-more cs-pitch-story-more--inline"
+            onClick={() => setExpanded(true)}
+          >
+            Read more
+          </button>
+        ) : null}
+      </div>
+      {isLong && expanded ? (
+        <button
+          type="button"
+          className="cs-pitch-story-more"
+          onClick={() => setExpanded(false)}
+        >
+          Show less
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+function buildFashionChips(direction: DesignDirection): string[] {
+  const sources = [
+    direction.mood,
+    direction.typography,
+    direction.composition,
+    direction.colorSystem,
+    direction.printStyle,
+    direction.fashionLanguage,
+    direction.trendAlignment,
+  ];
+
+  const chips: string[] = [];
+  const seen = new Set<string>();
+
+  for (const source of sources) {
+    if (!source) continue;
+    const parts = source
+      .split(/[,·—/|]+|\s+&\s+|\s+with\s+/i)
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    for (const part of parts) {
+      const words = part.split(/\s+/);
+      const chip =
+        words.length <= 3
+          ? part
+          : words
+              .filter((word) => word.length > 2)
+              .slice(0, 2)
+              .join(" ");
+
+      const normalized = chip.replace(/\s+/g, " ").trim();
+      const key = normalized.toLowerCase();
+      if (normalized.length >= 3 && normalized.length <= 28 && !seen.has(key)) {
+        seen.add(key);
+        chips.push(normalized);
+      }
+    }
+  }
+
+  return chips.slice(0, 10);
 }
 
 function productionReadiness(scores: DesignDirectionScores): number {
   return Math.max(0, Math.min(100, 100 - scores.printComplexity));
 }
 
-function buildFashionTags(direction: DesignDirection) {
-  return [
-    { label: "Typography", value: direction.typography },
-    { label: "Composition", value: direction.composition },
-    { label: "Mood", value: direction.mood },
-    { label: "Color", value: direction.colorSystem },
-    { label: "Print", value: direction.printStyle },
-    { label: "Silhouette", value: direction.fashionLanguage },
-    { label: "Editorial", value: direction.trendAlignment },
-  ];
-}
-
-function DirectionPreviewHero({
-  colors,
-  title,
-}: {
-  colors: string[];
-  title: string;
-}) {
-  return (
-    <div className="cs-pitch-hero" aria-hidden>
-      <div className="cs-pitch-hero-canvas">
-        <div className="cs-dir-preview-gradient">
-          {colors.map((color, index) => (
-            <span
-              key={`${color}-${index}`}
-              className="cs-dir-preview-swatch"
-              style={{ background: color, flex: index === 0 ? 2.4 : 1 }}
-            />
-          ))}
-        </div>
-        <div className="cs-pitch-hero-vignette" />
-        <div className="cs-pitch-hero-shine" />
-        <div className="cs-pitch-hero-type">{title.slice(0, 1)}</div>
-      </div>
-    </div>
-  );
-}
+const SCORE_RING_RADIUS = 16;
+const SCORE_RING_CIRCUMFERENCE = 2 * Math.PI * SCORE_RING_RADIUS;
 
 function PitchScore({
   icon: Icon,
@@ -112,10 +202,30 @@ function PitchScore({
   value: number;
   accent?: "commercial" | "brand" | "original" | "production" | "conversion";
 }) {
+  const clamped = Math.max(0, Math.min(100, value));
+  const offset = SCORE_RING_CIRCUMFERENCE - (clamped / 100) * SCORE_RING_CIRCUMFERENCE;
+
   return (
-    <div className={cn("cs-pitch-score", accent && `is-${accent}`)}>
-      <Icon className="size-3 cs-pitch-score-icon" aria-hidden />
-      <span className="cs-pitch-score-value">{value}</span>
+    <div
+      className={cn("cs-pitch-score", accent && `is-${accent}`)}
+      title={`${label}: ${clamped}`}
+      aria-label={`${label} ${clamped} out of 100`}
+    >
+      <div className="cs-pitch-score-ring" aria-hidden>
+        <svg viewBox="0 0 40 40" className="cs-pitch-score-ring-svg">
+          <circle className="cs-pitch-score-ring-track" cx="20" cy="20" r={SCORE_RING_RADIUS} />
+          <circle
+            className="cs-pitch-score-ring-fill"
+            cx="20"
+            cy="20"
+            r={SCORE_RING_RADIUS}
+            strokeDasharray={SCORE_RING_CIRCUMFERENCE}
+            strokeDashoffset={offset}
+          />
+        </svg>
+        <Icon className="size-2.5 cs-pitch-score-icon" />
+        <span className="cs-pitch-score-value">{clamped}</span>
+      </div>
       <span className="cs-pitch-score-label">{label}</span>
     </div>
   );
@@ -128,6 +238,7 @@ function DirectionPresentationCard({
   hasWinner,
   isEntering,
   revealIndex,
+  variant = "grid",
   onSelect,
   onRegenerate,
   onDuplicate,
@@ -140,6 +251,7 @@ function DirectionPresentationCard({
   hasWinner: boolean;
   isEntering?: boolean;
   revealIndex?: number;
+  variant?: "focus" | "grid";
   onSelect: (id: string) => void;
   onRegenerate: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -148,15 +260,16 @@ function DirectionPresentationCard({
 }) {
   const isSelecting = selectingId === direction.id;
   const isWinner = direction.selected || isSelecting;
-  const isFaded = hasWinner && !isWinner;
-  const fashionTags = buildFashionTags(direction);
-  const story = truncateStory(direction.designStory || direction.philosophy);
+  const isFaded = variant === "grid" && hasWinner && !isWinner;
+  const fashionChips = buildFashionChips(direction);
+  const story = direction.designStory || direction.philosophy;
 
   return (
     <article
       id={`pitch-card-${direction.id}`}
       className={cn(
         "cs-dir-presentation-card cs-pitch-card",
+        variant === "focus" && "cs-pitch-card--focus",
         isWinner && "is-winner",
         isSelecting && "is-expanding",
         isFaded && "is-faded",
@@ -170,7 +283,7 @@ function DirectionPresentationCard({
           : undefined
       }
     >
-      <DirectionPreviewHero colors={direction.thumbnailColors} title={direction.title} />
+      <DirectionPreviewHero title={direction.title} />
 
       <div className="cs-pitch-card-body">
         <header className="cs-pitch-card-head">
@@ -194,7 +307,7 @@ function DirectionPresentationCard({
           />
           <PitchScore
             icon={Target}
-            label="Brand Fit"
+            label="Brand"
             value={direction.scores.brandFit}
             accent="brand"
           />
@@ -218,24 +331,28 @@ function DirectionPresentationCard({
           />
         </div>
 
-        <section className="cs-pitch-story">
-          <h4>Design Story</h4>
-          <p title={direction.designStory || direction.philosophy}>{story}</p>
-        </section>
+        <PitchStory text={story} />
 
-        <details className="cs-pitch-tags-fold">
-          <summary>Fashion Language</summary>
-          <div className="cs-pitch-tags">
-            {fashionTags.map(({ label, value }) => (
-              <span key={label} className="cs-pitch-tag-chip" title={`${label}: ${value}`}>
-                {label}
-              </span>
-            ))}
-          </div>
-        </details>
+        <div className="cs-pitch-tags" aria-label="Fashion language">
+          {fashionChips.map((chip) => (
+            <span key={chip} className="cs-pitch-tag-chip">
+              {chip}
+            </span>
+          ))}
+        </div>
 
         <div className="cs-pitch-actions">
-          {!isWinner && !selectingId ? (
+          {isWinner ? (
+            <button
+              type="button"
+              className="cs-btn cs-pitch-select-btn is-selected"
+              disabled
+              aria-label="Selected direction"
+            >
+              <Check className="size-3.5" />
+              Selected Direction
+            </button>
+          ) : !selectingId ? (
             <button
               type="button"
               className="cs-btn cs-btn-primary cs-pitch-select-btn"
@@ -245,6 +362,7 @@ function DirectionPresentationCard({
               Select Direction
             </button>
           ) : null}
+
           <div className="cs-pitch-secondary-actions">
             <button
               type="button"
@@ -280,6 +398,152 @@ function DirectionPresentationCard({
         </div>
       </div>
     </article>
+  );
+}
+
+function PitchCarousel({
+  directions,
+  focusIndex,
+  onFocusChange,
+  compareMode,
+  selectingId,
+  hasWinner,
+  onSelect,
+  onRegenerate,
+  onDuplicate,
+  onToggleCompare,
+  regenerating,
+}: {
+  directions: DesignDirection[];
+  focusIndex: number;
+  onFocusChange: (index: number) => void;
+  compareMode: boolean;
+  selectingId: string | null;
+  hasWinner: boolean;
+  onSelect: (id: string) => void;
+  onRegenerate: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onToggleCompare: (id: string) => void;
+  regenerating?: boolean;
+}) {
+  const direction = directions[focusIndex];
+  const slideDirRef = useRef<1 | -1>(1);
+  const prevFocusRef = useRef(focusIndex);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    if (focusIndex === prevFocusRef.current) return;
+    slideDirRef.current = focusIndex > prevFocusRef.current ? 1 : -1;
+    prevFocusRef.current = focusIndex;
+    setIsTransitioning(false);
+  }, [focusIndex]);
+
+  useEffect(() => {
+    if (!isTransitioning) return;
+    const timer = window.setTimeout(() => setIsTransitioning(false), 400);
+    return () => window.clearTimeout(timer);
+  }, [isTransitioning, focusIndex]);
+
+  const navigate = useCallback(
+    (index: number) => {
+      if (!directions.length || index === focusIndex || isTransitioning) return;
+      slideDirRef.current = index > focusIndex ? 1 : -1;
+      setIsTransitioning(true);
+      onFocusChange(index);
+    },
+    [directions.length, focusIndex, isTransitioning, onFocusChange],
+  );
+
+  const goNext = useCallback(() => {
+    if (!directions.length) return;
+    const nextIndex = (focusIndex + 1) % directions.length;
+    navigate(nextIndex);
+  }, [directions.length, focusIndex, navigate]);
+
+  const goPrev = useCallback(() => {
+    if (!directions.length) return;
+    const prevIndex = (focusIndex - 1 + directions.length) % directions.length;
+    navigate(prevIndex);
+  }, [directions.length, focusIndex, navigate]);
+
+  if (!direction) return null;
+
+  const slideDir = slideDirRef.current;
+
+  return (
+    <div className="cs-pitch-carousel">
+      <div className="cs-pitch-carousel-rail">
+        <button
+          type="button"
+          className="cs-pitch-carousel-nav"
+          onClick={goPrev}
+          disabled={isTransitioning || directions.length <= 1}
+          aria-label="Previous direction"
+        >
+          <ChevronLeft className="size-5" />
+        </button>
+
+        <div className="cs-pitch-carousel-stage">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={direction.id}
+              className="cs-pitch-carousel-slide"
+              layout={false}
+              initial={{ opacity: 0, x: slideDir * CAROUSEL_SLIDE_PX }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: slideDir * -CAROUSEL_SLIDE_PX }}
+              transition={CAROUSEL_TRANSITION}
+              onAnimationComplete={(definition) => {
+                if (definition === "animate") setIsTransitioning(false);
+              }}
+            >
+              <DirectionPresentationCard
+                direction={direction}
+                variant="focus"
+                compareMode={compareMode}
+                selectingId={selectingId}
+                hasWinner={hasWinner}
+                onSelect={onSelect}
+                onRegenerate={onRegenerate}
+                onDuplicate={onDuplicate}
+                onToggleCompare={onToggleCompare}
+                regenerating={regenerating}
+              />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        <button
+          type="button"
+          className="cs-pitch-carousel-nav"
+          onClick={goNext}
+          disabled={isTransitioning || directions.length <= 1}
+          aria-label="Next direction"
+        >
+          <ChevronRight className="size-5" />
+        </button>
+      </div>
+
+      <div className="cs-pitch-carousel-footer">
+        <span className="cs-pitch-carousel-count">
+          Direction {focusIndex + 1} of {directions.length}
+        </span>
+        <div className="cs-pitch-carousel-dots" role="tablist" aria-label="Direction navigation">
+          {directions.map((item, index) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={index === focusIndex}
+              aria-label={`View ${item.title}`}
+              className={cn("cs-pitch-carousel-dot", index === focusIndex && "is-active")}
+              disabled={isTransitioning}
+              onClick={() => navigate(index)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -374,17 +638,21 @@ export function CreativeDirectionsStage({
   loading,
   hasConcept,
   compareMode,
+  activeDirectionId,
+  onActiveDirectionChange,
   onGenerate,
   onSelect,
   onRegenerate,
   onDuplicate,
   onToggleCompare,
-  onOpenCompare,
+  onOpenCompare: _onOpenCompare,
   onToggleCompareMode,
 }: CreativeDirectionsStageProps) {
   const hasDirections = Boolean(directions?.length);
-  const activeDirections = directions?.filter((d) => !d.archived) ?? [];
-  const compareCount = activeDirections.filter((d) => d.compareSelected).length;
+  const activeDirections = useMemo(
+    () => directions?.filter((direction) => !direction.archived) ?? [],
+    [directions],
+  );
   const selected = directions?.find((d) => d.selected);
 
   const [phase, setPhase] = useState<PresentationPhase>(() =>
@@ -395,9 +663,11 @@ export function CreativeDirectionsStage({
     hasDirections ? activeDirections.length : 0,
   );
   const [pitchReadyBanner, setPitchReadyBanner] = useState(false);
+  const [focusIndex, setFocusIndex] = useState(0);
   const thinkingStartRef = useRef<number | null>(null);
   const revealStartedRef = useRef(false);
   const galleryScrollRef = useRef<HTMLDivElement>(null);
+  const reportedDirectionIdRef = useRef<string | null>(null);
 
   const hasWinner = Boolean(selected || selectingId);
   const isCinematic =
@@ -471,6 +741,49 @@ export function CreativeDirectionsStage({
     [onSelect, selectingId, phase],
   );
 
+  useEffect(() => {
+    if (!selected) return;
+    const selectedIndex = activeDirections.findIndex((d) => d.id === selected.id);
+    if (selectedIndex < 0) return;
+    setFocusIndex(selectedIndex);
+    reportedDirectionIdRef.current = selected.id;
+    onActiveDirectionChange?.(selected.id);
+  }, [selected, activeDirections, onActiveDirectionChange]);
+
+  useEffect(() => {
+    if (focusIndex >= activeDirections.length) {
+      setFocusIndex(Math.max(0, activeDirections.length - 1));
+    }
+  }, [activeDirections.length, focusIndex]);
+
+  const handleFocusChange = useCallback((index: number) => {
+    const target = activeDirections[index];
+    if (!target) return;
+
+    const scrollTop = galleryScrollRef.current?.scrollTop ?? 0;
+    setFocusIndex(index);
+    reportedDirectionIdRef.current = target.id;
+    onActiveDirectionChange?.(target.id);
+    requestAnimationFrame(() => {
+      if (galleryScrollRef.current) {
+        galleryScrollRef.current.scrollTop = scrollTop;
+      }
+    });
+  }, [activeDirections, onActiveDirectionChange]);
+
+  useEffect(() => {
+    if (!activeDirectionId) return;
+    const index = activeDirections.findIndex((d) => d.id === activeDirectionId);
+    if (index < 0) return;
+
+    setFocusIndex((current) => {
+      if (current === index) return current;
+      const target = activeDirections[index];
+      reportedDirectionIdRef.current = target?.id ?? null;
+      return index;
+    });
+  }, [activeDirectionId, activeDirections]);
+
   if (!hasConcept) {
     return (
       <main className="cs-directions-stage cs-directions-presentation" aria-label="Design direction review">
@@ -508,27 +821,17 @@ export function CreativeDirectionsStage({
                 : "Review each direction and select the concept to develop into Master Artwork."}
             </p>
           </div>
-          <div className="cs-directions-stage-actions">
+          <div className="cs-directions-stage-actions cs-pitch-stage-toolbar">
             {phase === "gallery" && !selectingId ? (
-              <>
-                <button
-                  type="button"
-                  className={cn("cs-btn cs-btn-compact", compareMode && "cs-btn-accent")}
-                  onClick={onToggleCompareMode}
-                >
-                  <GitCompare className="size-3.5" />
-                  {compareMode ? "Exit Compare" : "Compare"}
-                </button>
-                {compareMode && compareCount >= 2 ? (
-                  <button
-                    type="button"
-                    className="cs-btn cs-btn-primary cs-btn-compact"
-                    onClick={onOpenCompare}
-                  >
-                    View Comparison ({compareCount})
-                  </button>
-                ) : null}
-              </>
+              <button
+                type="button"
+                className={cn("cs-pitch-toolbar-btn", compareMode && "is-active")}
+                onClick={onToggleCompareMode}
+                aria-pressed={compareMode}
+              >
+                <GitCompare className="size-3.5" />
+                <span>{compareMode ? "Exit Compare" : "Compare"}</span>
+              </button>
             ) : null}
           </div>
           </header>
@@ -574,35 +877,54 @@ export function CreativeDirectionsStage({
 
         {showGallery || phase === "reveal" ? (
           <>
-            <div
-              className={cn(
-                "cs-dir-grid cs-dir-grid--presentation cs-pitch-gallery",
-                phase === "reveal" && "is-revealing",
-              )}
-            >
-              {activeDirections.map((direction, index) => {
-                const isVisible =
-                  phase === "gallery" || (phase === "reveal" && index < revealedCount);
-                if (!isVisible) return null;
+            {phase === "gallery" && !compareMode ? (
+              <PitchCarousel
+                directions={activeDirections}
+                focusIndex={focusIndex}
+                onFocusChange={handleFocusChange}
+                compareMode={false}
+                selectingId={selectingId}
+                hasWinner={hasWinner}
+                onSelect={handleSelect}
+                onRegenerate={onRegenerate}
+                onDuplicate={onDuplicate}
+                onToggleCompare={onToggleCompare}
+                regenerating={loading}
+              />
+            ) : (
+              <div
+                className={cn(
+                  "cs-dir-grid cs-dir-grid--presentation cs-pitch-gallery",
+                  compareMode && phase === "gallery" && "cs-pitch-gallery--compare",
+                  phase === "reveal" && !compareMode && "cs-pitch-gallery--focus",
+                  phase === "reveal" && "is-revealing",
+                )}
+              >
+                {activeDirections.map((direction, index) => {
+                  const isVisible =
+                    phase === "gallery" || (phase === "reveal" && index < revealedCount);
+                  if (!isVisible) return null;
 
-                return (
-                  <DirectionPresentationCard
-                    key={direction.id}
-                    direction={direction}
-                    compareMode={compareMode && phase === "gallery"}
-                    selectingId={selectingId}
-                    hasWinner={hasWinner}
-                    isEntering={phase === "reveal" && index === revealedCount - 1}
-                    revealIndex={index}
-                    onSelect={handleSelect}
-                    onRegenerate={onRegenerate}
-                    onDuplicate={onDuplicate}
-                    onToggleCompare={onToggleCompare}
-                    regenerating={loading}
-                  />
-                );
-              })}
-            </div>
+                  return (
+                    <DirectionPresentationCard
+                      key={direction.id}
+                      direction={direction}
+                      compareMode={compareMode && phase === "gallery"}
+                      selectingId={selectingId}
+                      hasWinner={hasWinner}
+                      isEntering={phase === "reveal" && index === revealedCount - 1}
+                      revealIndex={index}
+                      variant={phase === "reveal" && !compareMode ? "focus" : "grid"}
+                      onSelect={handleSelect}
+                      onRegenerate={onRegenerate}
+                      onDuplicate={onDuplicate}
+                      onToggleCompare={onToggleCompare}
+                      regenerating={loading}
+                    />
+                  );
+                })}
+              </div>
+            )}
 
             {phase === "gallery" &&
             (directions?.filter((d) => d.archived).length ?? 0) > 0 ? (

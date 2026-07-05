@@ -18,9 +18,11 @@ interface CreativeDirectionsSidebarProps {
   directions?: DesignDirection[];
   iterations: DesignIteration[];
   activeIterationId: string;
+  activeDirectionId?: string | null;
   loading?: boolean;
   hasConcept: boolean;
   onGenerateDirections: () => void;
+  onNavigateDirection: (id: string) => void;
   onSelectDirection: (id: string) => void;
   onArchiveDirection: (id: string) => void;
   onDuplicateDirection: (id: string) => void;
@@ -29,38 +31,34 @@ interface CreativeDirectionsSidebarProps {
 
 type PipelineStepStatus = "complete" | "current" | "future";
 
-function DirectionPreview({ colors }: { colors: string[] }) {
-  return (
-    <div className="cs-direction-preview" aria-hidden>
-      {colors.map((color, index) => (
-        <span key={`${color}-${index}`} style={{ background: color }} />
-      ))}
-    </div>
-  );
-}
-
 function resolveVersionThumb(iteration: DesignIteration): string | undefined {
   const view = resolveMasterArtworkView(iteration.assets, iteration.label);
   return view.previewImageUrl ?? iteration.assets.mockupUrl ?? iteration.assets.svgUrl;
 }
 
+function DirectionNavPreview() {
+  return (
+    <div className="cs-dir-nav-preview" aria-hidden>
+      <div className="cs-dir-nav-preview-frame" />
+    </div>
+  );
+}
+
 function DirectionNavCard({
   direction,
-  onSelect,
+  isActive,
+  onNavigate,
   onArchive,
   onDuplicate,
 }: {
   direction: DesignDirection;
-  onSelect: (id: string) => void;
+  isActive?: boolean;
+  onNavigate: (id: string) => void;
   onArchive: (id: string) => void;
   onDuplicate: (id: string) => void;
 }) {
   const handleClick = () => {
-    onSelect(direction.id);
-    document.getElementById(`pitch-card-${direction.id}`)?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-    });
+    onNavigate(direction.id);
   };
 
   return (
@@ -68,17 +66,25 @@ function DirectionNavCard({
       className={cn(
         "cs-dir-nav-card-wrap",
         direction.selected && "is-selected",
+        isActive && "is-active",
         direction.archived && !direction.selected && "is-archived",
       )}
     >
       <button type="button" className="cs-dir-nav-card" onClick={handleClick}>
-        <DirectionPreview colors={direction.thumbnailColors} />
+        <DirectionNavPreview />
         <div className="cs-dir-nav-body">
           <span className="cs-dir-nav-title">{direction.title}</span>
-          <span className="cs-dir-nav-score">{direction.scores.commercial}% commercial</span>
+          {direction.selected ? (
+            <span className="cs-dir-nav-status">
+              <Check className="size-2.5" />
+              Selected
+            </span>
+          ) : (
+            <span className="cs-dir-nav-score">{direction.scores.commercial}% commercial</span>
+          )}
         </div>
         {direction.selected ? (
-          <span className="cs-dir-nav-selected" aria-label="Selected">
+          <span className="cs-dir-nav-selected" aria-hidden>
             <Check className="size-3" />
           </span>
         ) : null}
@@ -143,10 +149,12 @@ export function CreativeDirectionsSidebar({
   directions,
   iterations,
   activeIterationId,
+  activeDirectionId,
   loading,
   hasConcept,
   onGenerateDirections,
-  onSelectDirection,
+  onNavigateDirection,
+  onSelectDirection: _onSelectDirection,
   onArchiveDirection,
   onDuplicateDirection,
   onSelectVersion,
@@ -205,7 +213,8 @@ export function CreativeDirectionsSidebar({
                 <DirectionNavCard
                   key={direction.id}
                   direction={direction}
-                  onSelect={onSelectDirection}
+                  isActive={direction.id === activeDirectionId}
+                  onNavigate={onNavigateDirection}
                   onArchive={onArchiveDirection}
                   onDuplicate={onDuplicateDirection}
                 />

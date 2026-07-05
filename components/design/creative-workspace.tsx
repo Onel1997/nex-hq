@@ -277,8 +277,13 @@ export function CreativeWorkspace({
   const [handoffSendDebug, setHandoffSendDebug] = useState<HandoffSaveResult | null>(null);
   const [directionCompareMode, setDirectionCompareMode] = useState(false);
   const [directionCompareOpen, setDirectionCompareOpen] = useState(false);
+  const [activeDirectionId, setActiveDirectionId] = useState<string | null>(null);
   const [directionTransitioning, setDirectionTransitioning] = useState(false);
   const [regeneratingDirectionId, setRegeneratingDirectionId] = useState<string | null>(null);
+
+  const handleActiveDirectionChange = useCallback((directionId: string) => {
+    setActiveDirectionId((current) => (current === directionId ? current : directionId));
+  }, []);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
@@ -1079,9 +1084,11 @@ export function CreativeWorkspace({
             directions={canvasAssets.designDirections}
             iterations={workspace.iterations}
             activeIterationId={workspace.activeIterationId}
+            activeDirectionId={activeDirectionId}
             loading={actionLoading === "Generate Design Directions"}
             hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
             onGenerateDirections={() => void runDesignDirectionsGeneration()}
+            onNavigateDirection={handleActiveDirectionChange}
             onSelectDirection={selectDirection}
             onArchiveDirection={archiveDirection}
             onDuplicateDirection={duplicateDirection}
@@ -1098,6 +1105,8 @@ export function CreativeWorkspace({
               }
               hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
               compareMode={directionCompareMode}
+              activeDirectionId={activeDirectionId}
+              onActiveDirectionChange={handleActiveDirectionChange}
               onGenerate={() => void runDesignDirectionsGeneration()}
               onSelect={selectDirection}
               onRegenerate={(id) => void regenerateDirection(id)}

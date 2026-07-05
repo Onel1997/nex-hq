@@ -173,11 +173,19 @@ body:has(.cw-studio-app) {
 }
 
 .cs-workflow-step.is-done {
-  color: rgb(110 231 183 / 0.75);
+  color: rgb(110 231 183 / 0.62);
 }
 
 .cs-workflow-step.is-current {
-  color: var(--cs-accent);
+  color: rgb(var(--ds-accent-bright) / 0.98);
+  font-weight: 650;
+  font-size: 0.64rem;
+  letter-spacing: 0.075em;
+  text-shadow: 0 0 20px rgb(var(--ds-accent-rgb) / 0.42);
+}
+
+.cs-workflow-step.is-future {
+  color: rgb(148 163 184 / 0.28);
 }
 
 .cs-workflow-arrow {
@@ -1948,24 +1956,31 @@ body:has(.cw-studio-app) {
 
 .cs-pitch-gallery {
   align-items: stretch;
+  gap: 1.5rem;
 }
 
-@media (min-width: 640px) {
-  .cs-pitch-gallery {
+.cs-pitch-gallery--compare {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1024px) {
+  .cs-pitch-gallery--compare {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (min-width: 1024px) {
-  .cs-pitch-gallery {
+@media (min-width: 1440px) {
+  .cs-pitch-gallery--compare {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (min-width: 1440px) {
-  .cs-pitch-gallery {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+.cs-pitch-gallery--focus {
+  grid-template-columns: 1fr;
+  max-width: 38rem;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 1rem;
 }
 
 /* Presentation card */
@@ -1986,17 +2001,24 @@ body:has(.cw-studio-app) {
 }
 
 .cs-dir-presentation-card:hover:not(.is-faded):not(.is-skeleton) {
-  border-color: rgb(255 255 255 / 0.1);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.28);
-  transform: translateY(-3px);
+  border-color: rgb(var(--ds-accent-rgb) / 0.22);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.07) inset,
+    0 28px 64px rgb(0 0 0 / 0.42),
+    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.1),
+    0 0 32px rgb(var(--ds-accent-rgb) / 0.06);
+  transform: translateY(-5px);
 }
 
 .cs-dir-presentation-card.is-winner {
-  border-color: rgb(var(--ds-accent-rgb) / 0.45);
+  border-color: rgb(var(--ds-accent-rgb) / 0.55);
   box-shadow:
-    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.12),
-    0 20px 56px rgb(0 0 0 / 0.4),
-    0 0 48px rgb(var(--ds-accent-rgb) / 0.08);
+    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.22),
+    0 20px 48px rgb(0 0 0 / 0.4),
+    0 0 48px rgb(var(--ds-accent-rgb) / 0.14),
+    0 0 80px rgb(var(--ds-accent-rgb) / 0.06);
+  transform: scale(1.025);
+  animation: cs-pitch-winner-glow 3s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 
 .cs-dir-presentation-card.is-expanding {
@@ -2011,9 +2033,10 @@ body:has(.cw-studio-app) {
 }
 
 .cs-dir-presentation-card.is-faded {
-  opacity: 0.38;
-  filter: saturate(0.6);
-  transform: scale(0.97);
+  opacity: 0.7;
+  filter: saturate(0.72);
+  transform: scale(0.99);
+  pointer-events: none;
 }
 
 .cs-dir-presentation-card.is-compare {
@@ -3345,9 +3368,53 @@ body:has(.cw-studio-app) {
 }
 
 .cs-pitch-stage-head {
-  padding: 0.65rem 1rem 0.6rem;
+  padding: 0.75rem 1.15rem 0.7rem;
   background: rgb(8 10 14 / 0.96);
   border-bottom: 1px solid rgb(255 255 255 / 0.04);
+}
+
+.cs-pitch-stage-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cs-pitch-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.72rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(255 255 255 / 0.04);
+  backdrop-filter: blur(12px);
+  color: rgb(203 213 225 / 0.78);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    border-color 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.28s ease,
+    box-shadow 0.28s ease,
+    transform 0.28s ease;
+}
+
+.cs-pitch-toolbar-btn:hover {
+  border-color: rgb(var(--ds-accent-rgb) / 0.28);
+  background: rgb(var(--ds-accent-rgb) / 0.08);
+  color: rgb(var(--ds-accent-bright) / 0.95);
+  box-shadow: 0 0 20px rgb(var(--ds-accent-rgb) / 0.1);
+  transform: scale(1.02);
+}
+
+.cs-pitch-toolbar-btn.is-active {
+  border-color: rgb(var(--ds-accent-rgb) / 0.38);
+  background: rgb(var(--ds-accent-rgb) / 0.12);
+  color: rgb(var(--ds-accent-bright) / 0.98);
+  box-shadow: 0 0 24px rgb(var(--ds-accent-rgb) / 0.14);
 }
 
 .cs-pitch-stage-sub {
@@ -3365,102 +3432,260 @@ body:has(.cw-studio-app) {
 /* Pitch card shell */
 
 .cs-pitch-card {
-  max-height: min(24rem, calc(100dvh - var(--cs-chrome-h) - 9rem));
-  border-radius: 0.75rem;
-  border: 1px solid rgb(255 255 255 / 0.06);
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.9rem;
+  border: 1px solid rgb(255 255 255 / 0.07);
   background:
-    linear-gradient(165deg, rgb(255 255 255 / 0.04) 0%, rgb(255 255 255 / 0.015) 38%, rgb(255 255 255 / 0.008) 100%);
-  backdrop-filter: blur(14px);
+    linear-gradient(168deg, rgb(255 255 255 / 0.04) 0%, rgb(255 255 255 / 0.015) 48%, rgb(255 255 255 / 0.006) 100%);
+  backdrop-filter: blur(16px);
   box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.04) inset,
-    0 18px 48px rgb(0 0 0 / 0.32);
+    0 1px 0 rgb(255 255 255 / 0.05) inset,
+    0 20px 52px rgb(0 0 0 / 0.34);
+  transition:
+    border-color 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.cs-pitch-card:hover:not(.is-faded):not(.is-skeleton) {
-  border-color: rgb(255 255 255 / 0.12);
+.cs-pitch-card--focus {
+  width: 100%;
+  min-height: 46rem;
+}
+
+.cs-pitch-card--focus .cs-pitch-hero {
+  flex: 0 0 65%;
+  min-height: 24rem;
+  display: flex;
+  flex-direction: column;
+  padding: 1.35rem 1.4rem 0.75rem;
+}
+
+.cs-pitch-card--focus .cs-pitch-hero-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 22rem;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  backdrop-filter: blur(10px);
   box-shadow:
+    inset 0 2px 28px rgb(0 0 0 / 0.5),
+    inset 0 0 0 1px rgb(255 255 255 / 0.04),
     0 1px 0 rgb(255 255 255 / 0.06) inset,
-    0 24px 56px rgb(0 0 0 / 0.38),
-    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.06);
-  transform: translateY(-4px);
+    0 20px 56px rgb(0 0 0 / 0.48),
+    0 0 0 1px rgb(0 0 0 / 0.3);
+}
+
+.cs-pitch-card--focus .cs-pitch-card-body {
+  gap: 1.4rem;
+  padding: 1.4rem 1.45rem 1.5rem;
+}
+
+.cs-pitch-card--focus:hover:not(.is-faded):not(.is-skeleton) {
+  transform: scale(1.02);
+  translate: 0;
+}
+
+.cs-pitch-card:hover:not(.is-faded):not(.is-skeleton):not(.cs-pitch-card--focus) {
+  border-color: rgb(var(--ds-accent-rgb) / 0.22);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.07) inset,
+    0 28px 64px rgb(0 0 0 / 0.42),
+    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.1),
+    0 0 32px rgb(var(--ds-accent-rgb) / 0.06);
+  transform: scale(1.02);
 }
 
 .cs-pitch-card.is-winner {
-  border-color: rgb(var(--ds-accent-rgb) / 0.5);
+  border-color: rgb(var(--ds-accent-rgb) / 0.68);
   box-shadow:
-    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.18),
-    0 16px 40px rgb(0 0 0 / 0.38),
-    0 0 40px rgb(var(--ds-accent-rgb) / 0.1);
-  transform: scale(1.01);
+    0 0 0 1.5px rgb(var(--ds-accent-rgb) / 0.32),
+    0 20px 48px rgb(0 0 0 / 0.4),
+    0 0 56px rgb(var(--ds-accent-rgb) / 0.18),
+    0 0 96px rgb(var(--ds-accent-rgb) / 0.08);
+  transform: scale(1.02);
   z-index: 2;
+  animation: cs-pitch-winner-glow 3s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.cs-directions-presentation.has-winner .cs-dir-nav-card-wrap:not(.is-selected) {
+  opacity: 0.52;
+  filter: saturate(0.72);
+  transition:
+    opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .cs-pitch-card.is-expanding {
-  transform: scale(1.02);
+  transform: scale(1.035);
   z-index: 3;
-  border-color: rgb(var(--ds-accent-rgb) / 0.62);
+  border-color: rgb(var(--ds-accent-rgb) / 0.68);
   box-shadow:
-    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.28),
-    0 32px 80px rgb(0 0 0 / 0.48),
-    0 0 72px rgb(var(--ds-accent-rgb) / 0.18);
+    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.32),
+    0 36px 88px rgb(0 0 0 / 0.5),
+    0 0 80px rgb(var(--ds-accent-rgb) / 0.22);
+  animation: cs-dir-card-expand 1.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .cs-pitch-card.is-faded {
-  opacity: 0.42;
-  filter: saturate(0.55) blur(0.3px);
-  transform: scale(0.985);
+  opacity: 0.7;
+  filter: saturate(0.72);
+  transform: scale(0.99);
+  pointer-events: none;
 }
 
-/* Hero preview */
+@keyframes cs-pitch-winner-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1.5px rgb(var(--ds-accent-rgb) / 0.32),
+      0 20px 48px rgb(0 0 0 / 0.4),
+      0 0 56px rgb(var(--ds-accent-rgb) / 0.18),
+      0 0 96px rgb(var(--ds-accent-rgb) / 0.08);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1.5px rgb(var(--ds-accent-rgb) / 0.45),
+      0 24px 56px rgb(0 0 0 / 0.42),
+      0 0 72px rgb(var(--ds-accent-rgb) / 0.24),
+      0 0 112px rgb(var(--ds-accent-rgb) / 0.12);
+  }
+}
+
+/* Hero preview frame */
 
 .cs-pitch-hero {
-  position: relative;
+  padding: 1.2rem 1.25rem 0;
+  flex: none;
 }
 
-.cs-pitch-hero-canvas {
+.cs-pitch-hero-frame {
   position: relative;
-  height: 6.5rem;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  min-height: 18.5rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  background: rgb(5 7 10);
+  overflow: hidden;
+  box-shadow:
+    inset 0 2px 24px rgb(0 0 0 / 0.55),
+    inset 0 0 0 1px rgb(255 255 255 / 0.03),
+    0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 16px 48px rgb(0 0 0 / 0.45),
+    0 0 0 1px rgb(0 0 0 / 0.35);
+}
+
+.cs-pitch-hero-texture,
+.cs-pitch-hero-checker,
+.cs-pitch-hero-glow,
+.cs-pitch-hero-mount,
+.cs-pitch-hero-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.cs-pitch-hero-texture {
+  background:
+    radial-gradient(ellipse 70% 55% at 20% 12%, rgb(255 255 255 / 0.04), transparent 58%),
+    radial-gradient(ellipse 45% 35% at 88% 85%, rgb(var(--ds-accent-rgb) / 0.05), transparent 62%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgb(255 255 255 / 0.006) 2px,
+      rgb(255 255 255 / 0.006) 3px
+    ),
+    linear-gradient(172deg, rgb(16 18 24), rgb(5 7 10) 72%);
+}
+
+.cs-pitch-hero-checker {
+  background-image:
+    linear-gradient(45deg, rgb(255 255 255 / 0.012) 25%, transparent 25%),
+    linear-gradient(-45deg, rgb(255 255 255 / 0.012) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgb(255 255 255 / 0.012) 75%),
+    linear-gradient(-45deg, transparent 75%, rgb(255 255 255 / 0.012) 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+  opacity: 0.45;
+  mix-blend-mode: overlay;
+}
+
+.cs-pitch-hero-mount {
+  inset: 0.55rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgb(255 255 255 / 0.04);
+  box-shadow:
+    inset 0 0 32px rgb(0 0 0 / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+.cs-pitch-hero-particles {
   overflow: hidden;
 }
 
-.cs-pitch-hero-canvas .cs-dir-preview-gradient {
+.cs-pitch-hero-particle {
+  position: absolute;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.35);
+  box-shadow: 0 0 6px rgb(255 255 255 / 0.15);
+  animation: cs-pitch-particle-float 6s ease-in-out infinite;
+}
+
+@keyframes cs-pitch-particle-float {
+  0%, 100% {
+    opacity: 0.15;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.55;
+    transform: translateY(-6px);
+  }
+}
+
+.cs-pitch-hero-glow {
+  box-shadow:
+    inset 0 0 64px rgb(var(--ds-accent-rgb) / 0.035),
+    inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+.cs-pitch-hero-empty {
+  position: absolute;
+  inset: 0;
   display: flex;
-  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  z-index: 1;
 }
 
-.cs-pitch-hero-vignette {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, transparent 45%, rgb(0 0 0 / 0.55) 100%),
-    radial-gradient(ellipse at center, transparent 35%, rgb(0 0 0 / 0.25) 100%);
-  pointer-events: none;
+.cs-pitch-hero-empty-kicker {
+  font-size: 0.48rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgb(148 163 184 / 0.4);
 }
 
-.cs-pitch-hero-shine {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    125deg,
-    rgb(255 255 255 / 0.08) 0%,
-    transparent 38%,
-    transparent 62%,
-    rgb(255 255 255 / 0.04) 100%
-  );
-  pointer-events: none;
-}
-
-.cs-pitch-hero-type {
-  position: absolute;
-  right: 0.75rem;
-  bottom: 0.35rem;
+.cs-pitch-hero-empty-label {
   font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
-  font-size: 2.75rem;
-  font-weight: 300;
-  line-height: 1;
-  color: rgb(255 255 255 / 0.08);
-  pointer-events: none;
-  user-select: none;
+  font-size: 0.78rem;
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  color: rgb(203 213 225 / 0.32);
+}
+
+.cs-pitch-hero-canvas,
+.cs-pitch-hero-vignette,
+.cs-pitch-hero-shine,
+.cs-pitch-hero-type,
+.cs-dir-preview-gradient {
+  display: none;
 }
 
 .cs-pitch-hero-meta {
@@ -3497,34 +3722,30 @@ body:has(.cw-studio-app) {
 .cs-pitch-card-body {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.7rem 0.75rem 0.75rem;
+  gap: 1.35rem;
+  padding: 1.3rem 1.35rem 1.4rem;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
 }
 
 .cs-pitch-card-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin: 0;
+  padding-bottom: 0.1rem;
 }
 
 .cs-pitch-card-head h3 {
   margin: 0;
   font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
-  font-size: 0.95rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-size: 1.72rem;
+  font-weight: 600;
+  letter-spacing: 0.028em;
   text-transform: none;
-  color: rgb(244 241 235 / 0.98);
-  line-height: 1.2;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  color: rgb(250 248 244 / 0.98);
+  line-height: 1.18;
 }
 
 .cs-pitch-card-titles h3,
@@ -3535,18 +3756,30 @@ body:has(.cw-studio-app) {
 .cs-pitch-selected-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.22rem 0.55rem;
+  gap: 0.3rem;
+  padding: 0.28rem 0.62rem;
   border-radius: 999px;
-  border: 1px solid rgb(var(--ds-accent-rgb) / 0.35);
-  background: rgb(var(--ds-accent-rgb) / 0.14);
-  color: rgb(var(--ds-accent-rgb) / 0.98);
-  font-size: 0.55rem;
+  border: 1px solid rgb(var(--ds-accent-rgb) / 0.42);
+  background: rgb(var(--ds-accent-rgb) / 0.16);
+  color: rgb(var(--ds-accent-bright) / 0.98);
+  font-size: 0.58rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   flex-shrink: 0;
-  box-shadow: 0 0 18px rgb(var(--ds-accent-rgb) / 0.15);
+  box-shadow: 0 0 22px rgb(var(--ds-accent-rgb) / 0.2);
+  animation: cs-pitch-badge-in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes cs-pitch-badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* Score strip */
@@ -3554,15 +3787,64 @@ body:has(.cw-studio-app) {
 .cs-pitch-scores {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.25rem;
-  padding: 0.4rem 0.45rem;
-  border-radius: 0.45rem;
+  gap: 0.75rem 0.55rem;
+  padding: 0.9rem 0.7rem;
+  border-radius: 0.6rem;
   border: 1px solid rgb(255 255 255 / 0.05);
-  background: rgb(0 0 0 / 0.22);
+  background: rgb(0 0 0 / 0.14);
 }
 
+.cs-pitch-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  text-align: center;
+  min-width: 0;
+  width: 100%;
+}
+
+.cs-pitch-score-ring {
+  position: relative;
+  width: 2.65rem;
+  height: 2.65rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.cs-pitch-score-ring-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.cs-pitch-score-ring-track {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.06);
+  stroke-width: 2.5;
+}
+
+.cs-pitch-score-ring-fill {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cs-pitch-score.is-commercial .cs-pitch-score-ring-fill { stroke: rgb(var(--ds-gold-rgb) / 0.88); }
+.cs-pitch-score.is-brand .cs-pitch-score-ring-fill { stroke: rgb(var(--ds-accent-rgb) / 0.92); }
+.cs-pitch-score.is-original .cs-pitch-score-ring-fill { stroke: rgb(147 197 253 / 0.9); }
+.cs-pitch-score.is-production .cs-pitch-score-ring-fill { stroke: rgb(251 191 36 / 0.88); }
+.cs-pitch-score.is-conversion .cs-pitch-score-ring-fill { stroke: rgb(110 231 183 / 0.9); }
+
 .cs-pitch-score-value {
-  font-size: 0.78rem;
+  position: relative;
+  z-index: 1;
+  font-size: 0.62rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: rgb(226 232 240 / 0.95);
@@ -3570,99 +3852,118 @@ body:has(.cw-studio-app) {
 }
 
 .cs-pitch-score-label {
-  font-size: 0.42rem;
-  letter-spacing: 0.05em;
+  font-size: 0.4rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: rgb(148 163 184 / 0.62);
-  line-height: 1.15;
-}
-
-.cs-pitch-score-icon {
-  display: none;
+  color: rgb(148 163 184 / 0.58);
+  line-height: 1.3;
+  width: 100%;
+  max-width: 4.25rem;
 }
 
 .cs-pitch-story {
   margin: 0;
 }
 
-.cs-pitch-story h4 {
-  margin: 0 0 0.25rem;
-  font-size: 0.48rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgb(148 163 184 / 0.55);
+.cs-pitch-story-body {
+  position: relative;
 }
 
-.cs-pitch-story p {
+.cs-pitch-story-body p {
   margin: 0;
-  font-size: 0.68rem;
-  line-height: 1.45;
-  color: rgb(203 213 225 / 0.82);
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.72;
+  color: rgb(203 213 225 / 0.68);
+}
+
+.cs-pitch-story-body.is-clamped p {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.cs-pitch-tags-fold {
-  margin: 0;
-  border-radius: 0.4rem;
-  border: 1px solid rgb(255 255 255 / 0.04);
-  background: rgb(255 255 255 / 0.02);
+.cs-pitch-story-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.5rem;
+  background: linear-gradient(transparent, rgb(8 10 14 / 0.95));
+  pointer-events: none;
 }
 
-.cs-pitch-tags-fold summary {
-  padding: 0.35rem 0.5rem;
-  font-size: 0.48rem;
-  letter-spacing: 0.08em;
+.cs-pitch-story-more {
+  margin-top: 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.56rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: rgb(var(--ds-accent-rgb) / 0.65);
+  color: rgb(var(--ds-accent-rgb) / 0.75);
   cursor: pointer;
-  list-style: none;
+  transition: color 0.2s ease;
 }
 
-.cs-pitch-tags-fold summary::-webkit-details-marker {
-  display: none;
+.cs-pitch-story-more--inline {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0.15rem 0 0 1.5rem;
+  background: linear-gradient(90deg, transparent, rgb(8 10 14 / 0.98) 35%);
+  z-index: 1;
+}
+
+.cs-pitch-story-more:hover {
+  color: rgb(var(--ds-accent-bright) / 0.95);
 }
 
 .cs-pitch-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
-  padding: 0 0.5rem 0.45rem;
-  max-height: 3.5rem;
-  overflow-y: auto;
+  gap: 0.32rem;
+  margin-top: -0.1rem;
 }
 
 .cs-pitch-tag-chip {
-  padding: 0.15rem 0.4rem;
+  padding: 0.14rem 0.42rem;
   border-radius: 999px;
-  border: 1px solid rgb(255 255 255 / 0.06);
-  background: rgb(255 255 255 / 0.03);
-  font-size: 0.5rem;
-  letter-spacing: 0.04em;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.022));
+  font-size: 0.47rem;
+  font-weight: 500;
+  letter-spacing: 0.065em;
   text-transform: uppercase;
-  color: rgb(203 213 225 / 0.75);
+  color: rgb(203 213 225 / 0.68);
   white-space: nowrap;
+  line-height: 1.5;
+  transition:
+    border-color 0.28s ease,
+    background 0.28s ease,
+    color 0.28s ease,
+    transform 0.28s ease;
+}
+
+.cs-pitch-card:hover:not(.is-faded) .cs-pitch-tag-chip {
+  border-color: rgb(255 255 255 / 0.13);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.03));
 }
 
 .cs-pitch-tag,
 .cs-pitch-tag-label,
 .cs-pitch-tag-value,
-.cs-pitch-hero-meta {
+.cs-pitch-hero-meta,
+.cs-pitch-tags-fold {
   display: none;
 }
 
-.cs-pitch-score {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.08rem;
-  text-align: center;
-}
-
 .cs-pitch-score.is-commercial .cs-pitch-score-value { color: rgb(var(--ds-gold-rgb) / 0.92); }
-.cs-pitch-score.is-brand .cs-pitch-score-value { color: rgb(var(--ds-accent-rgb) / 0.95); }
+.cs-pitch-score.is-brand .cs-pitch-score-value { color: rgb(var(--ds-accent-bright) / 0.95); }
 .cs-pitch-score.is-original .cs-pitch-score-value { color: rgb(147 197 253 / 0.95); }
 .cs-pitch-score.is-production .cs-pitch-score-value { color: rgb(251 191 36 / 0.92); }
 .cs-pitch-score.is-conversion .cs-pitch-score-value { color: rgb(110 231 183 / 0.92); }
@@ -3671,31 +3972,216 @@ body:has(.cw-studio-app) {
 
 .cs-pitch-actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
   margin-top: auto;
-  padding-top: 0.35rem;
-  border-top: 1px solid rgb(255 255 255 / 0.04);
+  padding-top: 0.85rem;
+  border-top: 1px solid rgb(255 255 255 / 0.05);
   flex-shrink: 0;
 }
 
 .cs-pitch-select-btn {
-  flex: 1;
+  width: 100%;
   justify-content: center;
-  font-size: 0.68rem;
-  padding: 0.4rem 0.65rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 0.62rem 1rem;
+  border-radius: 0.55rem;
+  transition:
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.25s ease,
+    background 0.25s ease;
+}
+
+.cs-btn-primary.cs-pitch-select-btn:not(.is-selected):hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.25),
+    0 0 32px rgb(var(--ds-accent-rgb) / 0.22),
+    0 8px 24px rgb(0 0 0 / 0.28);
+}
+
+.cs-pitch-select-btn.is-selected {
+  border: 1px solid rgb(var(--ds-accent-rgb) / 0.55);
+  background: rgb(var(--ds-accent-rgb) / 0.16);
+  color: rgb(var(--ds-accent-bright) / 0.98);
+  box-shadow:
+    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.22),
+    0 0 36px rgb(var(--ds-accent-rgb) / 0.22);
+  cursor: default;
+  animation: cs-pitch-selected-btn 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@keyframes cs-pitch-selected-btn {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgb(var(--ds-accent-rgb) / 0.18),
+      0 0 28px rgb(var(--ds-accent-rgb) / 0.18);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgb(var(--ds-accent-rgb) / 0.32),
+      0 0 40px rgb(var(--ds-accent-rgb) / 0.28);
+  }
 }
 
 .cs-pitch-secondary-actions {
   display: flex;
-  gap: 0.25rem;
-  opacity: 0.72;
+  justify-content: center;
+  gap: 0.35rem;
+  opacity: 0.65;
   transition: opacity 0.2s ease;
 }
 
 .cs-pitch-card:hover .cs-pitch-secondary-actions {
   opacity: 1;
+}
+
+.cs-pitch-score-icon {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.1rem;
+  opacity: 0.4;
+  color: rgb(148 163 184 / 0.65);
+}
+
+/* Pitch carousel — single-card review mode */
+
+.cs-pitch-carousel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.35rem;
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 0.5rem 0.25rem 1.5rem;
+}
+
+.cs-pitch-carousel-rail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  position: relative;
+}
+
+.cs-pitch-carousel-stage {
+  flex: 1;
+  min-width: 0;
+  max-width: 36rem;
+  min-height: 46rem;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  contain: layout style paint;
+  pointer-events: auto;
+}
+
+.cs-pitch-carousel-slide {
+  width: 100%;
+  will-change: transform, opacity;
+  pointer-events: auto;
+}
+
+.cs-pitch-carousel-slide .cs-pitch-card--focus {
+  transition:
+    border-color 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cs-pitch-carousel-nav {
+  display: grid;
+  place-items: center;
+  width: 2.65rem;
+  height: 2.65rem;
+  flex-shrink: 0;
+  align-self: center;
+  position: relative;
+  z-index: 12;
+  pointer-events: auto;
+  border-radius: 999px;
+  border: 1px solid rgb(var(--ds-accent-rgb) / 0.28);
+  background: rgb(var(--ds-accent-rgb) / 0.1);
+  backdrop-filter: blur(14px);
+  color: rgb(var(--ds-accent-bright) / 0.92);
+  cursor: pointer;
+  box-shadow:
+    0 4px 20px rgb(0 0 0 / 0.35),
+    0 0 20px rgb(var(--ds-accent-rgb) / 0.12);
+  transition:
+    border-color 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.28s ease,
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cs-pitch-carousel-nav:hover:not(:disabled) {
+  border-color: rgb(var(--ds-accent-rgb) / 0.5);
+  background: rgb(var(--ds-accent-rgb) / 0.16);
+  color: rgb(var(--ds-accent-bright) / 1);
+  box-shadow:
+    0 6px 28px rgb(0 0 0 / 0.4),
+    0 0 32px rgb(var(--ds-accent-rgb) / 0.22);
+  transform: scale(1.05);
+}
+
+.cs-pitch-carousel-nav:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.cs-pitch-carousel-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.cs-pitch-carousel-count {
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(148 163 184 / 0.62);
+}
+
+.cs-pitch-carousel-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.cs-pitch-carousel-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: rgb(255 255 255 / 0.06);
+  padding: 0;
+  cursor: pointer;
+  transition:
+    transform 0.25s ease,
+    background 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.cs-pitch-carousel-dot.is-active {
+  transform: scale(1.2);
+  border-color: rgb(var(--ds-accent-rgb) / 0.55);
+  background: rgb(var(--ds-accent-rgb) / 0.75);
+  box-shadow: 0 0 12px rgb(var(--ds-accent-rgb) / 0.35);
+}
+
+.cs-pitch-carousel-dot:hover:not(.is-active) {
+  border-color: rgb(255 255 255 / 0.22);
+  background: rgb(255 255 255 / 0.12);
 }
 
 /* Sidebar navigation cards */
@@ -3707,20 +4193,53 @@ body:has(.cw-studio-app) {
 .cs-dir-nav-list {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
 .cs-dir-nav-card-wrap {
   position: relative;
   border-radius: 0.5rem;
   border: 1px solid transparent;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.cs-dir-nav-card-wrap::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  transition:
+    background 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.cs-dir-nav-card-wrap.is-active {
+  background: rgb(var(--ds-accent-rgb) / 0.05);
+}
+
+.cs-dir-nav-card-wrap.is-active::before {
+  background: rgb(var(--ds-accent-rgb) / 0.65);
+  box-shadow: 0 0 10px rgb(var(--ds-accent-rgb) / 0.35);
 }
 
 .cs-dir-nav-card-wrap.is-selected {
-  border-color: rgb(var(--ds-accent-rgb) / 0.4);
-  background: rgb(var(--ds-accent-rgb) / 0.06);
-  box-shadow: 0 0 0 1px rgb(var(--ds-accent-rgb) / 0.1);
+  border-color: rgb(var(--ds-accent-rgb) / 0.28);
+  background: rgb(var(--ds-accent-rgb) / 0.08);
+  box-shadow:
+    0 0 0 1px rgb(var(--ds-accent-rgb) / 0.08),
+    0 0 24px rgb(var(--ds-accent-rgb) / 0.08);
+}
+
+.cs-dir-nav-card-wrap.is-selected::before {
+  background: rgb(var(--ds-accent-bright) / 0.85);
+  box-shadow: 0 0 12px rgb(var(--ds-accent-rgb) / 0.45);
 }
 
 .cs-dir-nav-card-wrap.is-archived {
@@ -3741,10 +4260,57 @@ body:has(.cw-studio-app) {
 }
 
 .cs-dir-nav-card .cs-direction-preview {
-  width: 2.35rem;
-  height: 2.35rem;
-  border-radius: 0.4rem;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25);
+  display: none;
+}
+
+.cs-dir-nav-preview {
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0.2rem;
+  border-radius: 0.38rem;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  background: rgb(0 0 0 / 0.25);
+}
+
+.cs-dir-nav-preview-frame {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.22rem;
+  border: 1px solid rgb(255 255 255 / 0.04);
+  background:
+    linear-gradient(145deg, rgb(14 16 22), rgb(6 8 12)),
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 3px,
+      rgb(255 255 255 / 0.015) 3px,
+      rgb(255 255 255 / 0.015) 4px
+    );
+  box-shadow: inset 0 0 8px rgb(0 0 0 / 0.35);
+}
+
+.cs-dir-nav-card-wrap.is-active .cs-dir-nav-preview,
+.cs-dir-nav-card-wrap.is-selected .cs-dir-nav-preview {
+  border-color: rgb(var(--ds-accent-rgb) / 0.25);
+  box-shadow: 0 0 12px rgb(var(--ds-accent-rgb) / 0.1);
+}
+
+.cs-dir-nav-title {
+  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: rgb(244 241 235 / 0.88);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cs-dir-nav-card-wrap.is-active .cs-dir-nav-title,
+.cs-dir-nav-card-wrap.is-selected .cs-dir-nav-title {
+  color: rgb(250 248 244 / 0.98);
 }
 
 .cs-dir-nav-body {
@@ -3752,24 +4318,26 @@ body:has(.cw-studio-app) {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.12rem;
+  gap: 0.1rem;
 }
 
-.cs-dir-nav-title {
-  font-size: 0.68rem;
+.cs-dir-nav-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  font-size: 0.5rem;
   font-weight: 600;
-  line-height: 1.25;
-  color: rgb(244 241 235 / 0.92);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--ds-accent-bright) / 0.92);
+  animation: cs-pitch-badge-in 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .cs-dir-nav-score {
-  font-size: 0.55rem;
-  color: rgb(110 231 183 / 0.8);
+  font-size: 0.52rem;
+  color: rgb(148 163 184 / 0.55);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
 }
 
 .cs-dir-nav-selected {
@@ -3816,6 +4384,20 @@ body:has(.cw-studio-app) {
 
 @media (max-width: 900px) {
   .cs-pitch-scores {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.55rem 0.35rem;
+    padding: 0.75rem 0.5rem;
+  }
+
+  .cs-pitch-carousel-rail {
+    gap: 0.5rem;
+  }
+
+  .cs-pitch-carousel-nav {
+    display: none;
+  }
+
+  .cs-pitch-hero-frame {
+    min-height: 14.5rem;
   }
 }

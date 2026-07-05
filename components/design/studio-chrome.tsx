@@ -68,6 +68,7 @@ export function StudioChrome({
               "cs-workflow-step",
               index < activeStep && "is-done",
               index === activeStep && "is-current",
+              index > activeStep && "is-future",
             )}
           >
             {step}
