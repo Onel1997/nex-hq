@@ -1,20 +1,16 @@
 import type { Metadata } from "next";
-import { ResearchInterface } from "@/components/research/research-interface";
-import { AgentWorkspacePage } from "@/components/workspace/agent-workspace-page";
+import { ResearchStudio } from "@/components/research/v2";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
-import "@/app/research-hq.css";
+import "@/app/research-studio.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 
 export const metadata: Metadata = {
-  title: dict.research.page.title,
+  title: "Research Studio",
+  description: dict.research.page.description,
 };
 
 export default function ResearchAgentPage() {
-  return (
-    <AgentWorkspacePage agentId="research">
-      <ResearchInterface />
-    </AgentWorkspacePage>
-  );
+  return <ResearchStudio />;
 }
