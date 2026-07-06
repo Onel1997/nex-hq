@@ -39,6 +39,9 @@ export async function POST(request: Request) {
       score: result.commercialReview.score,
       approved: result.commercialReview.approved,
       generationMode: result.generationMode,
+      sourceType: result.sourceType,
+      textSafe: result.vectorArtwork?.typographyValidation.textSafe,
+      svgLength: result.svgString?.length,
     });
 
     return NextResponse.json({

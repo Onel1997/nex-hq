@@ -65,6 +65,7 @@ import {
   approveMasterArtworkState,
   buildAiDesignerMasterArtworkDraft,
   buildSvgDraftMasterArtwork,
+  buildVectorMasterArtworkDraft,
   resolveMasterArtworkView,
 } from "@/lib/design/master-artwork";
 import { sanitizePrintArtworkSvg } from "@/lib/design/sanitize-print-artwork";
@@ -577,6 +578,8 @@ export function CreativeWorkspace({
         transparentPngUrl?: string;
         productionPngUrl?: string;
         previewUrl?: string;
+        svgString?: string;
+        sourceType?: string;
         selectedConceptId?: string;
         designDirection?: string;
         generationMode?: "draft" | "production";
@@ -584,6 +587,10 @@ export function CreativeWorkspace({
         resolution?: string;
         transparentBackground?: boolean;
         printReady?: boolean;
+        vectorArtwork?: {
+          exportState?: { label?: string };
+          typographyValidation?: { textSafe?: boolean };
+        };
         commercialReview?: {
           approved?: boolean;
           iterations?: number;
@@ -592,8 +599,15 @@ export function CreativeWorkspace({
         };
       };
 
-      const artworkImageUrl = data.artworkImageUrl ?? data.previewUrl;
-      if (!artworkImageUrl) {
+      const svgString = data.svgString;
+      const artworkImageUrl = data.previewUrl ?? data.artworkImageUrl;
+      const isVectorArtwork = data.sourceType === "vector-artwork" || Boolean(svgString);
+
+      if (!artworkImageUrl && !svgString) {
+        throw new Error("Master artwork generation returned no vector artwork");
+      }
+
+      if (!isVectorArtwork && !artworkImageUrl) {
         throw new Error("Master artwork generation returned no image");
       }
 
@@ -602,38 +616,62 @@ export function CreativeWorkspace({
       onPatchMission((state) => {
         let next = setPipelineStage(state, commercialReview ? "commercial-review" : "design");
         next = setTimelineStage(next, "design");
-        next = updateMissionAssets(next, {
-          commercialApproved: commercialReview?.approved,
-          commercialScore: commercialReview?.score?.overall,
-          commercialIterations: commercialReview?.iterations,
-          imageStudioBlueprint: commercialReview?.imageStudioBlueprint,
-          masterArtwork: buildAiDesignerMasterArtworkDraft({
-            brief,
-            version: `V${iteration.version}`,
-            artworkImageUrl,
-            transparentPngUrl: data.transparentPngUrl ?? artworkImageUrl,
-            productionPngUrl: data.productionPngUrl ?? artworkImageUrl,
-            previewUrl: data.previewUrl ?? artworkImageUrl,
-            selectedConceptId: data.selectedConceptId ?? concept.designId,
-            designDirection:
-              data.designDirection ??
-              selectedDirection?.designStory ??
-              selectedDirection?.title ??
-              concept.creativeDirection.summary,
-            generationMode: data.generationMode ?? "draft",
-            dpi: data.dpi ?? 150,
-            resolution: data.resolution ?? "1024 × 1024 px",
-            transparentBackground: data.transparentBackground ?? true,
-            printReady: data.printReady ?? false,
-            commercialReview,
-          }),
-        });
+
+        const version = `V${iteration.version}`;
+        const shared = {
+          brief,
+          version,
+          selectedConceptId: data.selectedConceptId ?? concept.designId,
+          designDirection:
+            data.designDirection ??
+            selectedDirection?.designStory ??
+            selectedDirection?.title ??
+            concept.creativeDirection.summary,
+          generationMode: data.generationMode ?? "draft",
+          dpi: data.dpi ?? 150,
+          resolution: data.resolution ?? "Vector scalable",
+          transparentBackground: data.transparentBackground ?? true,
+          printReady: data.printReady ?? false,
+          commercialReview,
+        };
+
+        if (isVectorArtwork && svgString) {
+          next = updateMissionAssets(next, {
+            commercialApproved: commercialReview?.approved,
+            commercialScore: commercialReview?.score?.overall,
+            commercialIterations: commercialReview?.iterations,
+            imageStudioBlueprint: commercialReview?.imageStudioBlueprint,
+            svgMarkup: svgString,
+            masterArtwork: buildVectorMasterArtworkDraft({
+              ...shared,
+              svgMarkup: svgString,
+              vectorArtworkLabel:
+                data.vectorArtwork?.exportState?.label ?? "Vector Artwork — Text Safe",
+              previewUrl: artworkImageUrl,
+            }),
+          });
+        } else {
+          next = updateMissionAssets(next, {
+            commercialApproved: commercialReview?.approved,
+            commercialScore: commercialReview?.score?.overall,
+            commercialIterations: commercialReview?.iterations,
+            imageStudioBlueprint: commercialReview?.imageStudioBlueprint,
+            masterArtwork: buildAiDesignerMasterArtworkDraft({
+              ...shared,
+              artworkImageUrl: artworkImageUrl!,
+              transparentPngUrl: data.transparentPngUrl ?? artworkImageUrl!,
+              productionPngUrl: data.productionPngUrl ?? artworkImageUrl!,
+              previewUrl: data.previewUrl ?? artworkImageUrl!,
+            }),
+          });
+        }
+
         next = appendVersionEntry(next, "Master artwork generated", "design");
         return next;
       });
       setCanvasTab("master");
       setMasterRevealToken((token) => token + 1);
-      notify("Master artwork generated");
+      notify(isVectorArtwork ? "Vector master artwork generated — text safe" : "Master artwork generated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generate Master Artwork failed");
     } finally {

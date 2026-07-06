@@ -97,6 +97,10 @@ export function MasterArtworkStage({
     isGenerating,
   );
 
+  const isVectorArtwork = view.state.sourceType === "vector-artwork";
+  const vectorLabel =
+    view.state.vectorArtworkLabel ?? "Vector Artwork — Text Safe";
+
   const exportMarkup = view.state.approvedSvgMarkup ?? view.previewSvgMarkup ?? assets.svgMarkup;
   const canExport = Boolean(view.hasArtwork && (view.previewImageUrl || exportMarkup));
 
@@ -201,6 +205,11 @@ export function MasterArtworkStage({
             ) : null}
               <p className="ma-stage-direction-meta">
                 {versionLabel}
+                {isVectorArtwork ? (
+                  <span className="ma-approved-banner ma-approved-banner--compact ma-vector-badge">
+                    {vectorLabel}
+                  </span>
+                ) : null}
                 {view.isApproved ? (
                   <span className="ma-approved-banner ma-approved-banner--compact">
                     <CheckCircle2 className="size-3" />
@@ -307,18 +316,18 @@ export function MasterArtworkStage({
                     )}
                   >
                     <div className="ma-artwork-frame">
-                      {view.previewImageUrl ? (
+                      {view.previewSvgMarkup ? (
+                        <div
+                          className="ma-artwork-svg"
+                          dangerouslySetInnerHTML={{ __html: view.previewSvgMarkup }}
+                        />
+                      ) : view.previewImageUrl ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
                           src={view.previewImageUrl}
                           alt="Master artwork"
                           className="ma-artwork-img"
                           decoding="async"
-                        />
-                      ) : view.previewSvgMarkup ? (
-                        <div
-                          className="ma-artwork-svg"
-                          dangerouslySetInnerHTML={{ __html: view.previewSvgMarkup }}
                         />
                       ) : view.previewSvgUrl ? (
                         /* eslint-disable-next-line @next/next/no-img-element */

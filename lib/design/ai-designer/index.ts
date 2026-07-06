@@ -53,6 +53,10 @@ export {
  * Primary creative engine. Produces DesignConcept blueprints.
  * Does NOT generate SVG or images.
  *
- * Future pipeline:
- *   DesignConcept → Image Studio → Commercial Director → Mockups → Shopify
+ * Master artwork pipeline (Design Studio V2):
+ *   DesignConcept → Fashion Design Engine → GPT Image → Commercial Review
+ *   @see lib/design/fashion-design-engine
+ *
+ * Future vector pipeline:
+ *   TypographySpec / LayoutSpec / GraphicSpec → SVG export (Phase 3)
  */

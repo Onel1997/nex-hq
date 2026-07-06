@@ -8,7 +8,11 @@ import {
 
 export type MasterArtworkStatus = "empty" | "draft" | "in_review" | "approved";
 
-export type MasterArtworkSourceType = "ai-designer-artwork" | "svg-draft" | "uploaded";
+export type MasterArtworkSourceType =
+  | "vector-artwork"
+  | "ai-designer-artwork"
+  | "svg-draft"
+  | "uploaded";
 
 /** Canonical master artwork record — Design Studio owns creative truth. */
 export interface MasterArtworkState {
@@ -39,6 +43,10 @@ export interface MasterArtworkState {
   /** Locked at approval — production source of truth for Image Studio. */
   approvedArtworkUrl?: string;
   approvedProductionFileUrl?: string;
+  /** Vector artwork SVG — primary source for text-safe master artwork. */
+  vectorSvgMarkup?: string;
+  /** Text-safe vector artwork label for UI. */
+  vectorArtworkLabel?: string;
   /** Optional vector draft — secondary export support only. */
   approvedSvgMarkup?: string;
   /** Set when artwork file still contains a baked-in background. */
@@ -140,6 +148,51 @@ export function buildSvgDraftMasterArtwork(input: {
 /** @deprecated Use buildSvgDraftMasterArtwork for SVG drafts or buildAiDesignerMasterArtworkDraft for AI artwork. */
 export const buildMasterArtworkDraft = buildSvgDraftMasterArtwork;
 
+export function buildVectorMasterArtworkDraft(input: {
+  brief: DesignStudioBrief;
+  version: string;
+  svgMarkup: string;
+  vectorArtworkLabel?: string;
+  previewUrl?: string;
+  selectedConceptId: string;
+  designDirection: string;
+  generationMode: ImageGenerationMode;
+  dpi: number;
+  resolution: string;
+  printReady: boolean;
+  commercialReview?: MasterArtworkCommercialPayload;
+}): MasterArtworkState {
+  const score = input.commercialReview?.score?.overall;
+  const commercialApproved = Boolean(input.commercialReview?.approved);
+  const { svg: sanitizedSvg } = sanitizePrintArtworkSvg(input.svgMarkup);
+  const validation = validatePrintArtworkSvg(sanitizedSvg);
+
+  return {
+    status: commercialApproved ? "in_review" : "draft",
+    version: input.version,
+    sourceType: "vector-artwork",
+    commercialScore: score,
+    commercialApproved,
+    printReadiness: resolvePrintReadiness(input.brief, score, input.printReady),
+    resolutionLabel: parseSvgDimensions(sanitizedSvg),
+    resolution: input.resolution,
+    transparency: validation.valid,
+    transparentBackground: validation.valid,
+    transparencyWarning: validation.valid ? undefined : validation.reason,
+    placement: input.brief.placement,
+    printMethod: input.brief.productionMethod,
+    generatedAt: new Date().toISOString(),
+    vectorSvgMarkup: sanitizedSvg,
+    vectorArtworkLabel: input.vectorArtworkLabel ?? "Vector Artwork — Text Safe",
+    previewUrl: input.previewUrl,
+    selectedConceptId: input.selectedConceptId,
+    designDirection: input.designDirection,
+    generationMode: input.generationMode,
+    dpi: input.dpi,
+    printReady: input.printReady,
+  };
+}
+
 export function buildAiDesignerMasterArtworkDraft(input: {
   brief: DesignStudioBrief;
   version: string;
@@ -227,7 +280,11 @@ export function approveMasterArtworkState(
     approvedArtworkUrl: state.transparentPngUrl ?? artworkUrl ?? state.approvedArtworkUrl,
     approvedProductionFileUrl: productionUrl ?? state.approvedProductionFileUrl,
     approvedSvgMarkup:
-      state.sourceType === "svg-draft" ? assets.svgMarkup : state.approvedSvgMarkup,
+      state.sourceType === "vector-artwork"
+        ? (state.vectorSvgMarkup ?? assets.svgMarkup)
+        : state.sourceType === "svg-draft"
+          ? assets.svgMarkup
+          : state.approvedSvgMarkup,
     printReadiness: resolvePrintReadiness(
       brief,
       state.commercialScore ?? assets.commercialScore,
@@ -236,7 +293,11 @@ export function approveMasterArtworkState(
     commercialApproved: true,
   };
 
-  if (state.sourceType === "svg-draft" && assets.svgMarkup) {
+  if (state.sourceType === "vector-artwork" && (state.vectorSvgMarkup ?? assets.svgMarkup)) {
+    const markup = state.vectorSvgMarkup ?? assets.svgMarkup!;
+    approvedState.resolutionLabel = parseSvgDimensions(markup);
+    approvedState.transparency = detectTransparency(markup);
+  } else if (state.sourceType === "svg-draft" && assets.svgMarkup) {
     approvedState.resolutionLabel = parseSvgDimensions(assets.svgMarkup);
     approvedState.transparency = detectTransparency(assets.svgMarkup);
   }
@@ -253,6 +314,8 @@ export function approveMasterArtworkState(
 
 export function resolveMasterArtworkSourceLabel(sourceType?: MasterArtworkSourceType): string {
   switch (sourceType) {
+    case "vector-artwork":
+      return "Vector Artwork — Text Safe";
     case "ai-designer-artwork":
       return "AI Designer Artwork";
     case "svg-draft":
@@ -285,15 +348,24 @@ export function resolveMasterArtworkView(
   const approvedMarkup = state.approvedSvgMarkup;
 
   const previewImageUrl = resolveActiveArtworkUrl(state);
+  const vectorMarkup = state.vectorSvgMarkup ?? draftMarkup;
   const previewSvgMarkup =
-    state.sourceType === "svg-draft" && state.status !== "approved" && draftMarkup
-      ? draftMarkup
-      : state.status === "approved" && approvedMarkup
-        ? approvedMarkup
-        : undefined;
+    state.sourceType === "vector-artwork" && vectorMarkup
+      ? vectorMarkup
+      : state.sourceType === "svg-draft" && state.status !== "approved" && draftMarkup
+        ? draftMarkup
+        : state.status === "approved" && approvedMarkup
+          ? approvedMarkup
+          : state.sourceType === "vector-artwork"
+            ? state.vectorSvgMarkup
+            : undefined;
   const previewSvgUrl =
     state.sourceType === "svg-draft" && !previewSvgMarkup ? assets.svgUrl : undefined;
 
+  const hasVectorArtwork = Boolean(
+    (previewSvgMarkup?.trim() || state.vectorSvgMarkup?.trim()) &&
+      state.sourceType === "vector-artwork",
+  );
   const hasAiArtwork = Boolean(
     previewImageUrl?.trim() && state.sourceType === "ai-designer-artwork",
   );
@@ -301,11 +373,13 @@ export function resolveMasterArtworkView(
     (draftMarkup?.trim() || assets.svgUrl) &&
       (state.sourceType === "svg-draft" || !state.sourceType),
   );
-  const hasArtwork = Boolean(hasAiArtwork || previewImageUrl?.trim());
+  const hasArtwork = Boolean(hasVectorArtwork || hasAiArtwork || previewImageUrl?.trim() || previewSvgMarkup?.trim());
   const isApproved =
     state.status === "approved" &&
     Boolean(state.approvedArtworkUrl?.trim() || state.approvedSvgMarkup?.trim());
-  const canApprove = Boolean(previewImageUrl?.trim() || draftMarkup?.trim()) && !isApproved;
+  const canApprove =
+    Boolean(previewImageUrl?.trim() || previewSvgMarkup?.trim() || draftMarkup?.trim()) &&
+    !isApproved;
   const canSendToImageStudio = isApproved;
 
   return {

@@ -45,7 +45,7 @@ export interface ImageStudioHandoff {
   review?: DesignConceptReview;
   /** Approved master artwork — Image Studio production source (never redesign). */
   masterArtworkApproved?: boolean;
-  masterArtworkSourceType?: "ai-designer-artwork" | "svg-draft" | "uploaded";
+  masterArtworkSourceType?: "vector-artwork" | "ai-designer-artwork" | "svg-draft" | "uploaded";
   masterArtworkVersion?: string;
   masterArtworkArtworkUrl?: string;
   masterArtworkTransparentPngUrl?: string;
