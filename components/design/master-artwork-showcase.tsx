@@ -3,9 +3,10 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { DesignMissionAssets } from "@/lib/design/design-mission-store";
 import {
-  downloadPngFromSvg,
-  downloadPngFromUrl,
-  downloadSvgAsset,
+  downloadMasterArtworkPng,
+  downloadMasterArtworkSvg,
+} from "@/lib/design/master-artwork-export";
+import {
   resolveMasterArtworkStatusLabel,
   resolveMasterArtworkView,
 } from "@/lib/design/master-artwork";
@@ -49,26 +50,17 @@ export function MasterArtworkShowcase({
   );
   const isGenerating = loading === "Generate Master Artwork";
   const hasAiConcept = Boolean(assets.aiDesignerConcept);
-  const exportImageUrl =
-    view.state.approvedArtworkUrl ??
-    view.state.approvedProductionFileUrl ??
-    view.previewImageUrl;
-  const exportMarkup =
-    view.state.approvedSvgMarkup ?? view.previewSvgMarkup ?? assets.svgMarkup;
+  const canExport = Boolean(view.hasArtwork);
+  const hasSvgExport = Boolean(
+    view.state.approvedSvgMarkup ?? view.previewSvgMarkup ?? assets.svgMarkup,
+  );
 
   const handleDownloadPng = async () => {
-    if (exportImageUrl) {
-      await downloadPngFromUrl(exportImageUrl, `${brief.designId}-master-artwork`);
-      return;
-    }
-    if (exportMarkup) {
-      await downloadPngFromSvg(exportMarkup, `${brief.designId}-master-artwork`);
-    }
+    await downloadMasterArtworkPng(view.state, assets, `${brief.designId}-master-artwork`, view);
   };
 
   const handleDownloadSvg = async () => {
-    if (!exportMarkup) return;
-    await downloadSvgAsset(exportMarkup, `${brief.designId}-master-artwork`);
+    await downloadMasterArtworkSvg(assets, `${brief.designId}-master-artwork`, view);
   };
 
   return (
@@ -181,12 +173,12 @@ export function MasterArtworkShowcase({
             type="button"
             className="cw-btn cw-btn-secondary"
             onClick={() => void handleDownloadPng()}
-            disabled={!exportImageUrl && !exportMarkup}
+            disabled={!canExport}
           >
             <Download className="size-4" />
             Download PNG
           </button>
-          {exportMarkup ? (
+          {hasSvgExport ? (
             <button
               type="button"
               className="cw-btn cw-btn-secondary"

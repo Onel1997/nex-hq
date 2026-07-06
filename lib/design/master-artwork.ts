@@ -1,6 +1,10 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { DesignMissionAssets } from "@/lib/design/design-mission-store";
 import type { ImageGenerationMode } from "@/lib/image/image-generation-config";
+import {
+  sanitizePrintArtworkSvg,
+  validatePrintArtworkSvg,
+} from "@/lib/design/sanitize-print-artwork";
 
 export type MasterArtworkStatus = "empty" | "draft" | "in_review" | "approved";
 
@@ -37,6 +41,8 @@ export interface MasterArtworkState {
   approvedProductionFileUrl?: string;
   /** Optional vector draft — secondary export support only. */
   approvedSvgMarkup?: string;
+  /** Set when artwork file still contains a baked-in background. */
+  transparencyWarning?: string;
 }
 
 export interface MasterArtworkCommercialPayload {
@@ -98,7 +104,8 @@ export function createEmptyMasterArtwork(version = "V1"): MasterArtworkState {
     sourceType: undefined,
     printMethod: undefined,
     placement: undefined,
-    transparency: false,
+    transparency: true,
+    transparentBackground: true,
   };
 }
 
@@ -110,6 +117,9 @@ export function buildSvgDraftMasterArtwork(input: {
 }): MasterArtworkState {
   const score = input.commercialReview?.score?.overall;
   const commercialApproved = Boolean(input.commercialReview?.approved);
+  const { svg: sanitizedSvg } = sanitizePrintArtworkSvg(input.svgMarkup);
+  const validation = validatePrintArtworkSvg(sanitizedSvg);
+
   return {
     status: commercialApproved ? "in_review" : "draft",
     version: input.version,
@@ -117,8 +127,10 @@ export function buildSvgDraftMasterArtwork(input: {
     commercialScore: score,
     commercialApproved,
     printReadiness: resolvePrintReadiness(input.brief, score),
-    resolutionLabel: parseSvgDimensions(input.svgMarkup),
-    transparency: detectTransparency(input.svgMarkup),
+    resolutionLabel: parseSvgDimensions(sanitizedSvg),
+    transparency: validation.valid && detectTransparency(sanitizedSvg),
+    transparentBackground: validation.valid,
+    transparencyWarning: validation.valid ? undefined : validation.reason,
     placement: input.brief.placement,
     printMethod: input.brief.productionMethod,
     generatedAt: new Date().toISOString(),
@@ -143,6 +155,7 @@ export function buildAiDesignerMasterArtworkDraft(input: {
   transparentBackground: boolean;
   printReady: boolean;
   commercialReview?: MasterArtworkCommercialPayload;
+  transparencyWarning?: string;
 }): MasterArtworkState {
   const score = input.commercialReview?.score?.overall;
   const commercialApproved = Boolean(input.commercialReview?.approved);
@@ -170,24 +183,26 @@ export function buildAiDesignerMasterArtworkDraft(input: {
     generationMode: input.generationMode,
     dpi: input.dpi,
     printReady: input.printReady,
+    transparencyWarning: input.transparencyWarning,
   };
 }
 
 function resolveActiveArtworkUrl(state: MasterArtworkState): string | undefined {
   if (state.status === "approved") {
     return (
-      state.approvedArtworkUrl ??
+      state.transparentPngUrl ??
       state.approvedProductionFileUrl ??
+      state.approvedArtworkUrl ??
       state.productionPngUrl ??
       state.artworkImageUrl ??
       state.previewUrl
     );
   }
   return (
-    state.previewUrl ??
-    state.artworkImageUrl ??
     state.transparentPngUrl ??
-    state.productionPngUrl
+    state.productionPngUrl ??
+    state.previewUrl ??
+    state.artworkImageUrl
   );
 }
 
@@ -201,13 +216,15 @@ export function approveMasterArtworkState(
   if (!artworkUrl?.trim() && !assets.svgMarkup?.trim()) return {};
 
   const productionUrl =
-    state.productionPngUrl ?? state.transparentPngUrl ?? artworkUrl;
+    state.transparentPngUrl ??
+    state.productionPngUrl ??
+    artworkUrl;
 
   const approvedState: MasterArtworkState = {
     ...state,
     status: "approved",
     approvedAt: new Date().toISOString(),
-    approvedArtworkUrl: artworkUrl ?? state.approvedArtworkUrl,
+    approvedArtworkUrl: state.transparentPngUrl ?? artworkUrl ?? state.approvedArtworkUrl,
     approvedProductionFileUrl: productionUrl ?? state.approvedProductionFileUrl,
     approvedSvgMarkup:
       state.sourceType === "svg-draft" ? assets.svgMarkup : state.approvedSvgMarkup,
@@ -245,6 +262,18 @@ export function resolveMasterArtworkSourceLabel(sourceType?: MasterArtworkSource
     default:
       return "Not generated";
   }
+}
+
+/** Prefer transparent PNG URLs for export — never bake preview backgrounds into files. */
+export function resolveTransparentExportUrl(state: MasterArtworkState): string | undefined {
+  return (
+    state.transparentPngUrl ??
+    state.productionPngUrl ??
+    state.approvedProductionFileUrl ??
+    state.approvedArtworkUrl ??
+    state.artworkImageUrl ??
+    state.previewUrl
+  );
 }
 
 export function resolveMasterArtworkView(
@@ -293,7 +322,11 @@ export function resolveMasterArtworkView(
   };
 }
 
-export function resolveMasterArtworkStatusLabel(status: MasterArtworkStatus): string {
+export function resolveMasterArtworkStatusLabel(
+  status: MasterArtworkStatus,
+  transparencyWarning?: string,
+): string {
+  if (transparencyWarning?.trim()) return transparencyWarning;
   switch (status) {
     case "empty":
       return "Not generated";
@@ -336,8 +369,9 @@ export async function downloadPngFromSvg(svgMarkup: string, filename: string): P
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) throw new Error("Canvas unavailable");
+    ctx.clearRect(0, 0, width, height);
     ctx.drawImage(image, 0, 0, width, height);
     const pngUrl = canvas.toDataURL("image/png");
     const anchor = document.createElement("a");
@@ -386,7 +420,7 @@ export function buildMasterArtworkHandoffPayload(assets: DesignMissionAssets): {
     state.approvedArtworkUrl ??
     (view.isApproved ? view.previewImageUrl : undefined);
   const approvedProductionUrl =
-    state.approvedProductionFileUrl ??
+    state.transparentPngUrl ??
     state.productionPngUrl ??
     approvedArtworkUrl;
 

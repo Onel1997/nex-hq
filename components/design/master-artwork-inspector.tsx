@@ -286,6 +286,11 @@ export function MasterArtworkInspector({
           defaultOpen={false}
         >
           <p className={cn("ma-readiness", view.state.printReady && "is-ready")}>{printReadiness}</p>
+          {(view.state.transparentBackground ?? view.state.transparency ?? view.hasArtwork) ? (
+            <p className="ma-transparent-badge ma-transparent-badge--inspector">
+              Transparent Artwork ✓
+            </p>
+          ) : null}
           <InspectorField
             icon={Layers}
             label="Composition"

@@ -5,6 +5,12 @@ function joinParts(parts: string[]): string {
   return parts.filter(Boolean).join(". ");
 }
 
+/** Appended to every master artwork request — must never be removed or altered. */
+export const MANDATORY_TRANSPARENT_ARTWORK_SUFFIX =
+  "Generate ONLY the isolated artwork as a transparent PNG. " +
+  "No background. No canvas. No poster. No frame. No paper. No mockup. " +
+  "No lighting. No environment. Transparent background only.";
+
 /** Build the standalone printable artwork prompt — no garment, no mockup, no scene. */
 export function buildMasterArtworkGenerationPrompt(input: {
   brief: DesignStudioBrief;
@@ -16,15 +22,22 @@ export function buildMasterArtworkGenerationPrompt(input: {
     input.designDirection?.trim() ||
     concept.creativeDirection.summary ||
     brief.visualConcept ||
-  "";
+    "";
 
-  return joinParts([
+  const creative = joinParts([
     "Create only the printable apparel artwork",
+    "Isolated apparel artwork on a transparent PNG",
     "No shirt",
     "No model",
     "No mockup",
     "No scene",
     "No background",
+    "No canvas",
+    "No poster",
+    "No frame",
+    "No paper",
+    "No lighting",
+    "No environment",
     "Centered composition",
     "Transparent background if supported",
     "Premium streetwear graphic design",
@@ -51,4 +64,6 @@ export function buildMasterArtworkGenerationPrompt(input: {
     "Print-friendly flat graphic composition",
     "No watermarks, no labels, no garment folds",
   ]);
+
+  return `${creative}\n\n${MANDATORY_TRANSPARENT_ARTWORK_SUFFIX}`;
 }

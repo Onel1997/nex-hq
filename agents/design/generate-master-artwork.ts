@@ -13,6 +13,11 @@ import {
   type MasterArtworkCommercialReview,
 } from "@/lib/design/master-artwork-commercial";
 import type { NormalizedMasterArtworkRequest } from "@/lib/design/master-artwork-request";
+import {
+  MASTER_ARTWORK_PNG_MAX_ATTEMPTS,
+  validateTransparentArtworkPng,
+} from "@/lib/design/validate-transparent-artwork-png";
+import { TRANSPARENT_ARTWORK_BACKGROUND_WARNING } from "@/lib/design/sanitize-print-artwork";
 import type { MasterArtworkSourceType } from "@/lib/design/master-artwork";
 
 export interface GenerateMasterArtworkResult {
@@ -30,6 +35,7 @@ export interface GenerateMasterArtworkResult {
   printReady: boolean;
   prompt: string;
   commercialReview: MasterArtworkCommercialReview;
+  transparencyWarning?: string;
 }
 
 const MASTER_ARTWORK_DIMENSIONS = "1024x1024";
@@ -65,6 +71,7 @@ async function generateTransparentMasterArtwork(prompt: string): Promise<Buffer>
     size: payload.size,
     quality: payload.quality,
     promptLength: prompt.length,
+    background: "transparent",
   });
 
   const response = await openai.images.generate(payload);
@@ -74,6 +81,35 @@ async function generateTransparentMasterArtwork(prompt: string): Promise<Buffer>
   }
 
   return Buffer.from(item.b64_json, "base64");
+}
+
+async function generateValidatedTransparentMasterArtwork(
+  prompt: string,
+): Promise<{ imageBytes: Buffer; prompt: string; transparencyWarning?: string }> {
+  let lastReason: string | undefined;
+
+  for (let attempt = 1; attempt <= MASTER_ARTWORK_PNG_MAX_ATTEMPTS; attempt += 1) {
+    const attemptPrompt =
+      attempt === 1
+        ? prompt
+        : `${prompt}\n\nRETRY ${attempt}: Previous output included a background rectangle. Output ONLY isolated print artwork on fully transparent pixels.`;
+
+    const imageBytes = await generateTransparentMasterArtwork(attemptPrompt);
+    const validation = validateTransparentArtworkPng(imageBytes);
+
+    if (validation.valid) {
+      return { imageBytes, prompt: attemptPrompt };
+    }
+
+    lastReason = validation.reason;
+    console.warn("[Master Artwork] rejected baked background — regenerating", {
+      attempt,
+      edgeConnectedOpaqueRatio: validation.edgeConnectedOpaqueRatio,
+      fullyTransparentRatio: validation.fullyTransparentRatio,
+    });
+  }
+
+  throw new Error(lastReason ?? TRANSPARENT_ARTWORK_BACKGROUND_WARNING);
 }
 
 export async function runGenerateMasterArtwork(
@@ -95,7 +131,7 @@ export async function runGenerateMasterArtwork(
     designDirection,
   });
 
-  const imageBytes = await generateTransparentMasterArtwork(prompt);
+  const { imageBytes, prompt: finalPrompt } = await generateValidatedTransparentMasterArtwork(prompt);
   const dataUrl = `data:image/png;base64,${imageBytes.toString("base64")}`;
   const generationMode = getImageGenerationMode();
   const dpi = resolveMasterArtworkDpi(generationMode);
@@ -118,7 +154,7 @@ export async function runGenerateMasterArtwork(
     resolution,
     transparentBackground: true,
     printReady,
-    prompt,
+    prompt: finalPrompt,
     commercialReview,
   };
 }

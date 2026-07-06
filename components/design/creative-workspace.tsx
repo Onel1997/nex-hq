@@ -67,6 +67,7 @@ import {
   buildSvgDraftMasterArtwork,
   resolveMasterArtworkView,
 } from "@/lib/design/master-artwork";
+import { sanitizePrintArtworkSvg } from "@/lib/design/sanitize-print-artwork";
 import { buildDesignMockupPayload } from "@/lib/design/mockup-request";
 import { buildDesignRenderPayload } from "@/lib/design/render-request";
 import { sendDesignHandoffToImageStudio, type HandoffSaveResult } from "@/lib/image/image-handoff-store";
@@ -415,7 +416,8 @@ export function CreativeWorkspace({
         throw new Error(err || "SVG generation failed");
       }
 
-      const svgMarkup = extractGeneratedSvg(payload);
+      const rawSvgMarkup = extractGeneratedSvg(payload);
+      const { svg: svgMarkup } = sanitizePrintArtworkSvg(rawSvgMarkup);
       const svgUrl = svgMarkupToDataUrl(svgMarkup);
       const commercialReview = (
         payload as {

@@ -8,6 +8,10 @@ import {
   buildAiDesignerMasterArtworkDraft,
   type MasterArtworkCommercialPayload,
 } from "@/lib/design/master-artwork";
+import {
+  sanitizePrintArtworkSvg,
+  validatePrintArtworkSvg,
+} from "@/lib/design/sanitize-print-artwork";
 import { buildDesignStudioFromProductKnowledge } from "@/lib/design/studio-intelligence";
 import { getMockCommerceIntelligence } from "@/lib/design/mock-commerce-intelligence";
 import type { DesignStudioData } from "@/components/design/use-design-studio";
@@ -315,18 +319,12 @@ export function getMockReportId(): string {
 function buildMockArtworkSvg(
   title: string,
   colors: string[],
-  options?: { printStyle?: string; placement?: string },
 ): string {
   const [primary, secondary, accent] = colors;
   const inkPrimary = primary ?? "#1a1f2e";
   const inkSecondary = secondary ?? "#8a8278";
   const inkAccent = accent ?? "#52c2c2";
   const shortTitle = title.toUpperCase().slice(0, 14);
-  const printLabel = options?.printStyle?.includes("Embroidery")
-    ? "EMBROIDERY"
-    : options?.printStyle?.includes("DTG")
-      ? "DTG"
-      : "SCREEN";
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1080" width="900" height="1080">
   <defs>
@@ -334,18 +332,8 @@ function buildMockArtworkSvg(
       <stop offset="0%" stop-color="${inkSecondary}" stop-opacity="0.95"/>
       <stop offset="100%" stop-color="${inkAccent}" stop-opacity="0.75"/>
     </linearGradient>
-    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="2" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
   </defs>
-  <!-- transparent artboard -->
-  <rect width="900" height="1080" fill="none"/>
-  <!-- print area bounds -->
-  <rect x="180" y="220" width="540" height="640" fill="none" stroke="${inkPrimary}" stroke-width="1.5" stroke-dasharray="10 8" opacity="0.22"/>
-  <text x="450" y="205" text-anchor="middle" fill="${inkPrimary}" font-family="system-ui,sans-serif" font-size="11" letter-spacing="4" opacity="0.35">PRINT AREA</text>
-  <!-- symbol system -->
-  <g opacity="0.88" filter="url(#softGlow)">
+  <g opacity="0.92">
     <circle cx="450" cy="420" r="52" fill="none" stroke="url(#inkGrad)" stroke-width="3"/>
     <path d="M398 420 H502" stroke="${inkPrimary}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
     <path d="M450 368 V472" stroke="${inkPrimary}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
@@ -354,26 +342,21 @@ function buildMockArtworkSvg(
     <path d="M370 600 Q450 560 530 600" fill="none" stroke="${inkSecondary}" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
     <circle cx="450" cy="420" r="8" fill="${inkAccent}" opacity="0.9"/>
   </g>
-  <!-- typography -->
   <text x="450" y="700" text-anchor="middle" fill="${inkPrimary}" font-family="Georgia,serif" font-size="38" font-weight="600" letter-spacing="12" opacity="0.82">${shortTitle}</text>
   <text x="450" y="738" text-anchor="middle" fill="${inkSecondary}" font-family="system-ui,sans-serif" font-size="13" letter-spacing="6" opacity="0.55">QUIET ASCENT</text>
-  <!-- micro marks -->
   <g opacity="0.4">
     <rect x="260" y="780" width="28" height="2" fill="${inkPrimary}"/>
     <rect x="612" y="780" width="28" height="2" fill="${inkPrimary}"/>
     <circle cx="450" cy="790" r="3" fill="${inkAccent}"/>
   </g>
-  <!-- production metadata -->
-  <text x="450" y="860" text-anchor="middle" fill="${inkPrimary}" font-family="system-ui,sans-serif" font-size="10" letter-spacing="3" opacity="0.28">${printLabel} · ${options?.placement ?? "FRONT CHEST"}</text>
 </svg>`;
 }
 
 export function buildMockMasterArtworkDataUrl(
   title: string,
   colors: string[],
-  options?: { printStyle?: string; placement?: string },
 ): string {
-  const svg = buildMockArtworkSvg(title, colors, options);
+  const svg = buildMockArtworkSvg(title, colors);
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
@@ -388,10 +371,10 @@ export function buildMockMasterArtworkState(input: {
   placement?: string;
   commercialScore?: number;
 }) {
-  const artworkUrl = buildMockMasterArtworkDataUrl(input.directionTitle, input.directionColors, {
-    printStyle: input.printStyle,
-    placement: input.placement ?? input.brief.placement,
-  });
+  const rawSvg = buildMockArtworkSvg(input.directionTitle, input.directionColors);
+  const { svg: sanitizedSvg } = sanitizePrintArtworkSvg(rawSvg);
+  const validation = validatePrintArtworkSvg(sanitizedSvg);
+  const artworkUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sanitizedSvg)}`;
   const printMethod = input.printStyle ?? input.brief.productionMethod;
   const commercialReview: MasterArtworkCommercialPayload = {
     approved: false,
@@ -419,6 +402,7 @@ export function buildMockMasterArtworkState(input: {
     }),
     printMethod,
     placement: input.placement ?? input.brief.placement,
+    transparencyWarning: validation.valid ? undefined : validation.reason,
   };
 }
 

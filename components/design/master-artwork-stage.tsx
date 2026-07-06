@@ -4,20 +4,30 @@ import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { DesignDirection } from "@/lib/design/design-directions";
 import type { DesignMissionAssets } from "@/lib/design/design-mission-store";
 import {
-  downloadPngFromSvg,
-  downloadPngFromUrl,
+  downloadMasterArtworkPng,
+  downloadMasterArtworkPrintFile,
+} from "@/lib/design/master-artwork-export";
+import {
   resolveMasterArtworkStatusLabel,
   resolveMasterArtworkView,
 } from "@/lib/design/master-artwork";
+import { MasterArtworkMockupFrame } from "@/components/design/master-artwork-mockup-frame";
+import { MasterArtworkPreviewSurface } from "@/components/design/master-artwork-preview-surface";
+import {
+  DEFAULT_CANVAS_BACKGROUND,
+  DEFAULT_MOCKUP_GARMENT,
+  MasterArtworkPreviewControls,
+  type CanvasBackgroundId,
+  type MockupGarmentId,
+} from "@/components/design/master-artwork-preview-controls";
 import { MasterArtworkThinking } from "@/components/design/master-artwork-thinking";
 import { MasterArtworkStatus } from "@/components/design/master-artwork-status";
 import { useMasterArtworkReveal } from "@/hooks/use-master-artwork-reveal";
 import { cn } from "@/lib/utils";
 import {
   CheckCircle2,
-  Download,
   Expand,
-  Grid3x3,
+  Download,
   Maximize2,
   Minus,
   Plus,
@@ -71,7 +81,9 @@ export function MasterArtworkStage({
   const artboardRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<ZoomMode>("fit");
   const [fitScale, setFitScale] = useState(1);
-  const [checkerboard, setCheckerboard] = useState(true);
+  const [canvasBackground, setCanvasBackground] = useState<CanvasBackgroundId>(DEFAULT_CANVAS_BACKGROUND);
+  const [mockupMode, setMockupMode] = useState(false);
+  const [mockupGarment, setMockupGarment] = useState<MockupGarmentId>(DEFAULT_MOCKUP_GARMENT);
   const [fullscreen, setFullscreen] = useState(false);
 
   const view = useMemo(
@@ -85,34 +97,15 @@ export function MasterArtworkStage({
     isGenerating,
   );
 
-  const exportImageUrl =
-    view.state.approvedArtworkUrl ??
-    view.state.approvedProductionFileUrl ??
-    view.previewImageUrl;
-  const printFileUrl =
-    view.state.approvedProductionFileUrl ??
-    view.state.productionPngUrl ??
-    exportImageUrl;
   const exportMarkup = view.state.approvedSvgMarkup ?? view.previewSvgMarkup ?? assets.svgMarkup;
+  const canExport = Boolean(view.hasArtwork && (view.previewImageUrl || exportMarkup));
 
   const handleDownloadPng = async () => {
-    if (exportImageUrl) {
-      await downloadPngFromUrl(exportImageUrl, `${brief.designId}-master-artwork`);
-      return;
-    }
-    if (exportMarkup) {
-      await downloadPngFromSvg(exportMarkup, `${brief.designId}-master-artwork`);
-    }
+    await downloadMasterArtworkPng(view.state, assets, `${brief.designId}-master-artwork`, view);
   };
 
   const handleDownloadPrintFile = async () => {
-    if (printFileUrl) {
-      await downloadPngFromUrl(printFileUrl, `${brief.designId}-print-production`);
-      return;
-    }
-    if (exportMarkup) {
-      await downloadPngFromSvg(exportMarkup, `${brief.designId}-print-production`);
-    }
+    await downloadMasterArtworkPrintFile(view.state, assets, `${brief.designId}-print-production`, view);
   };
 
   const toggleFullscreen = useCallback(async () => {
@@ -247,15 +240,6 @@ export function MasterArtworkStage({
             <span className="ma-zoom-divider" aria-hidden />
             <button
               type="button"
-              className={cn("ma-zoom-btn", checkerboard && "is-active")}
-              onClick={() => setCheckerboard((v) => !v)}
-              title="Toggle grid"
-              aria-label="Toggle transparency grid"
-            >
-              <Grid3x3 className="size-3.5" />
-            </button>
-            <button
-              type="button"
               className="ma-zoom-btn"
               onClick={() => void toggleFullscreen()}
               title="Fullscreen"
@@ -264,6 +248,16 @@ export function MasterArtworkStage({
               <Maximize2 className="size-3.5" />
             </button>
           </div>
+
+          <MasterArtworkPreviewControls
+            canvasBackground={canvasBackground}
+            onCanvasBackgroundChange={setCanvasBackground}
+            mockupMode={mockupMode}
+            onMockupModeChange={setMockupMode}
+            mockupGarment={mockupGarment}
+            onMockupGarmentChange={setMockupGarment}
+            hasArtwork={view.hasArtwork}
+          />
         </div>
 
         <div className="ma-artboard-stack">
@@ -282,7 +276,7 @@ export function MasterArtworkStage({
                 ref={artboardRef}
                 className={cn(
                   "ma-artboard",
-                  checkerboard && "has-checker",
+                  mockupMode && "is-mockup-mode",
                   view.hasArtwork && "has-artwork",
                   view.isApproved && "is-approved",
                   isGenerating && "is-generating",
@@ -291,7 +285,8 @@ export function MasterArtworkStage({
                 )}
               >
                 {!view.hasArtwork && !isGenerating ? (
-                  <div className="ma-empty-decor" aria-hidden>
+                  <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
+                    <div className="ma-empty-decor" aria-hidden>
                     <svg className="ma-empty-blueprint" viewBox="0 0 900 900" preserveAspectRatio="none">
                       <line x1="450" y1="0" x2="450" y2="900" stroke="currentColor" strokeWidth="0.5" opacity="0.15" />
                       <line x1="0" y1="450" x2="900" y2="450" stroke="currentColor" strokeWidth="0.5" opacity="0.15" />
@@ -302,12 +297,24 @@ export function MasterArtworkStage({
                     <span className="ma-empty-spark ma-empty-spark--1" />
                     <span className="ma-empty-spark ma-empty-spark--2" />
                     <span className="ma-empty-spark ma-empty-spark--3" />
-                  </div>
+                    </div>
+                  </MasterArtworkPreviewSurface>
                 ) : null}
 
                 {isGenerating ? (
-                  <MasterArtworkThinking active variant="canvas" />
+                  <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
+                    <MasterArtworkThinking active variant="canvas" />
+                  </MasterArtworkPreviewSurface>
                 ) : view.hasArtwork ? (
+                  mockupMode ? (
+                    <MasterArtworkMockupFrame
+                      garment={mockupGarment}
+                      imageUrl={view.previewImageUrl}
+                      svgMarkup={view.previewSvgMarkup}
+                      svgUrl={view.previewSvgUrl}
+                    />
+                  ) : (
+                  <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
                   <div
                     className={cn(
                       "ma-artwork-preview",
@@ -341,20 +348,27 @@ export function MasterArtworkStage({
                       ) : null}
                     </div>
                   </div>
+                  </MasterArtworkPreviewSurface>
+                  )
                 ) : (
+                  <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
                   <div className="ma-empty-state">
                     <div className="ma-empty-glow" aria-hidden />
                     <Sparkles className="ma-empty-icon" />
                     <h2>Ready to generate Master Artwork</h2>
                     <p>Transform the selected direction into a print-ready apparel design.</p>
                   </div>
+                  </MasterArtworkPreviewSurface>
                 )}
               </div>
             </div>
 
             <MasterArtworkStatus
               phase={revealPhase}
-              fallbackLabel={resolveMasterArtworkStatusLabel(view.state.status)}
+              fallbackLabel={resolveMasterArtworkStatusLabel(
+                view.state.status,
+                view.state.transparencyWarning,
+              )}
               isApproved={view.isApproved}
             />
           </div>
@@ -403,7 +417,7 @@ export function MasterArtworkStage({
               type="button"
               className="cs-btn cs-btn-compact ma-action-dock"
               onClick={() => void handleDownloadPng()}
-              disabled={!exportImageUrl && !exportMarkup}
+              disabled={!canExport}
             >
               <Download className="size-3.5" />
               Download PNG
@@ -412,7 +426,7 @@ export function MasterArtworkStage({
               type="button"
               className="cs-btn cs-btn-compact ma-action-dock"
               onClick={() => void handleDownloadPrintFile()}
-              disabled={!printFileUrl && !exportMarkup}
+              disabled={!canExport}
             >
               <Download className="size-3.5" />
               Download Print File
