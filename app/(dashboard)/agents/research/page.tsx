@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ResearchStudio } from "@/components/research/v2";
+import { ResearchStudioV3 } from "@/components/research/v3";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
-import "@/app/research-studio.css";
+import "@/app/research-studio-v3.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 
@@ -12,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function ResearchAgentPage() {
-  return <ResearchStudio />;
+  return <ResearchStudioV3 />;
 }
