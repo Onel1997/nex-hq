@@ -20,9 +20,11 @@ import {
   type CanvasBackgroundId,
   type MockupGarmentId,
 } from "@/components/design/master-artwork-preview-controls";
+import { MasterArtworkPreviewMedia } from "@/components/design/master-artwork-preview-media";
 import { MasterArtworkThinking } from "@/components/design/master-artwork-thinking";
 import { MasterArtworkStatus } from "@/components/design/master-artwork-status";
 import { useMasterArtworkReveal } from "@/hooks/use-master-artwork-reveal";
+import { useMasterArtworkViewport } from "@/hooks/use-master-artwork-viewport";
 import { cn } from "@/lib/utils";
 import {
   CheckCircle2,
@@ -77,7 +79,7 @@ export function MasterArtworkStage({
   onSendToMarketing,
 }: MasterArtworkStageProps) {
   const stageRef = useRef<HTMLElement>(null);
-  const heroRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const artboardRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<ZoomMode>("fit");
   const [fitScale, setFitScale] = useState(1);
@@ -91,9 +93,17 @@ export function MasterArtworkStage({
     [assets, versionLabel],
   );
   const isGenerating = loading === "Generate Master Artwork";
+  const hasPreviewContent = Boolean(
+    view.previewImageUrl?.trim() ||
+      view.previewSvgMarkup?.trim() ||
+      view.previewSvgUrl?.trim() ||
+      assets.svgMarkup?.trim() ||
+      assets.masterArtwork?.vectorSvgMarkup?.trim() ||
+      assets.masterArtwork?.previewUrl?.trim(),
+  );
   const { phase: revealPhase, isRevealing, isGlowing } = useMasterArtworkReveal(
     revealToken,
-    view.hasArtwork,
+    hasPreviewContent,
     isGenerating,
   );
 
@@ -106,6 +116,20 @@ export function MasterArtworkStage({
 
   const exportMarkup = view.state.approvedSvgMarkup ?? view.previewSvgMarkup ?? assets.svgMarkup;
   const canExport = Boolean(view.hasArtwork && (view.previewImageUrl || exportMarkup));
+  const previewKey = `${revealToken}:${view.previewImageUrl ?? ""}:${view.previewSvgMarkup?.length ?? 0}`;
+
+  const { zoomScale, recomputeFit } = useMasterArtworkViewport({
+    viewportRef,
+    artboardRef,
+    hasPreview: hasPreviewContent,
+    isGenerating,
+    previewKey,
+    focusMode,
+    zoom,
+    fitScale,
+    setZoom,
+    setFitScale,
+  });
 
   const handleDownloadPng = async () => {
     await downloadMasterArtworkPng(view.state, assets, `${brief.designId}-master-artwork`, view);
@@ -127,37 +151,6 @@ export function MasterArtworkStage({
     }
   }, []);
 
-  const recomputeFit = useCallback(() => {
-    const hero = heroRef.current;
-    const artboard = artboardRef.current;
-    if (!hero || !artboard || !view.hasArtwork) {
-      setFitScale(1);
-      return;
-    }
-
-    const heroRect = hero.getBoundingClientRect();
-    const artboardRect = artboard.getBoundingClientRect();
-    if (artboardRect.width <= 0 || artboardRect.height <= 0) return;
-
-    const padding = focusMode ? 12 : 20;
-    const availableW = heroRect.width - padding * 2;
-    const availableH = heroRect.height - padding * 2;
-    const scaleW = availableW / artboardRect.width;
-    const scaleH = availableH / artboardRect.height;
-    const next = Math.min(scaleW, scaleH);
-    setFitScale(Math.max(0.35, Math.min(1.25, next)));
-  }, [focusMode, view.hasArtwork]);
-
-  useEffect(() => {
-    recomputeFit();
-    const hero = heroRef.current;
-    if (!hero) return;
-
-    const observer = new ResizeObserver(() => recomputeFit());
-    observer.observe(hero);
-    return () => observer.disconnect();
-  }, [recomputeFit, view.hasArtwork, view.previewImageUrl, focusMode]);
-
   useEffect(() => {
     const onFullscreenChange = () => {
       setFullscreen(Boolean(document.fullscreenElement));
@@ -166,8 +159,6 @@ export function MasterArtworkStage({
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, [recomputeFit]);
-
-  const zoomScale = zoom === "fit" ? fitScale : zoom;
 
   const zoomOut = () => {
     setZoom((current) => {
@@ -193,7 +184,8 @@ export function MasterArtworkStage({
         focusMode && "is-focus-mode",
         view.isApproved && "is-approved",
         view.hasArtwork && "has-artwork",
-        !view.hasArtwork && "is-pre-generation",
+        hasPreviewContent && "has-preview-content",
+        !hasPreviewContent && "is-pre-generation",
         isGlowing && "is-artwork-glow",
         revealPhase === "success" && "is-reveal-success",
       )}
@@ -290,96 +282,76 @@ export function MasterArtworkStage({
         </div>
 
         <div className="ma-artboard-stack">
-          <div ref={heroRef} className="ma-stage-hero">
+          <div className="ma-stage-hero">
             <div className="ma-stage-spotlight" aria-hidden />
             <div className="ma-stage-vignette" aria-hidden />
 
-            <div
-              className="ma-artboard-wrap"
-              style={{
-                transform: `scale(${zoomScale})`,
-                transition: "transform 220ms ease-in-out",
-              }}
-            >
+            <div ref={viewportRef} className="ma-artwork-viewport">
               <div
-                ref={artboardRef}
-                className={cn(
-                  "ma-artboard",
-                  mockupMode && "is-mockup-mode",
-                  view.hasArtwork && "has-artwork",
-                  view.isApproved && "is-approved",
-                  isGenerating && "is-generating",
-                  isRevealing && "is-revealing",
-                  isGlowing && "is-artwork-glow",
-                )}
+                className="ma-artboard-wrap"
+                style={{
+                  transform: `scale(${zoomScale})`,
+                  transition: "transform 220ms ease-in-out",
+                }}
               >
-                {isGenerating ? (
-                  <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
-                    <MasterArtworkThinking active variant="canvas" />
-                  </MasterArtworkPreviewSurface>
-                ) : view.hasArtwork ? (
-                  mockupMode ? (
-                    <MasterArtworkMockupFrame
-                      garment={mockupGarment}
-                      imageUrl={view.previewImageUrl}
-                      svgMarkup={view.previewSvgMarkup}
-                      svgUrl={view.previewSvgUrl}
-                    />
+                <div
+                  ref={artboardRef}
+                  className={cn(
+                    "ma-artboard",
+                    mockupMode && "is-mockup-mode",
+                    view.hasArtwork && "has-artwork",
+                    hasPreviewContent && "has-preview-content",
+                    view.isApproved && "is-approved",
+                    isGenerating && "is-generating",
+                    isRevealing && "is-revealing",
+                    isGlowing && "is-artwork-glow",
+                  )}
+                >
+                  {isGenerating ? (
+                    <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
+                      <MasterArtworkThinking active variant="canvas" />
+                    </MasterArtworkPreviewSurface>
+                  ) : hasPreviewContent ? (
+                    mockupMode ? (
+                      <MasterArtworkMockupFrame
+                        garment={mockupGarment}
+                        imageUrl={view.previewImageUrl ?? assets.masterArtwork?.previewUrl}
+                        svgMarkup={view.previewSvgMarkup ?? assets.svgMarkup}
+                        svgUrl={view.previewSvgUrl ?? assets.svgUrl}
+                      />
+                    ) : (
+                      <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
+                        <MasterArtworkPreviewMedia
+                          imageUrl={view.previewImageUrl ?? assets.masterArtwork?.previewUrl}
+                          svgMarkup={view.previewSvgMarkup ?? assets.svgMarkup}
+                          svgUrl={view.previewSvgUrl ?? assets.svgUrl}
+                          className={cn(
+                            isTransitioning && "is-revealing",
+                            isRevealing && "is-premium-reveal",
+                            isGlowing && "is-premium-settled",
+                          )}
+                        />
+                      </MasterArtworkPreviewSurface>
+                    )
                   ) : (
-                  <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
-                  <div
-                    className={cn(
-                      "ma-artwork-preview",
-                      isTransitioning && "is-revealing",
-                      isRevealing && "is-premium-reveal",
-                      isGlowing && "is-premium-settled",
-                    )}
-                  >
-                    <div className="ma-artwork-frame">
-                      {view.previewSvgMarkup ? (
-                        <div
-                          className="ma-artwork-svg"
-                          dangerouslySetInnerHTML={{ __html: view.previewSvgMarkup }}
-                        />
-                      ) : view.previewImageUrl ? (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img
-                          src={view.previewImageUrl}
-                          alt="Master artwork"
-                          className="ma-artwork-img"
-                          decoding="async"
-                        />
-                      ) : view.previewSvgUrl ? (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img
-                          src={view.previewSvgUrl}
-                          alt="Master artwork"
-                          className="ma-artwork-img"
-                          decoding="async"
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-                  </MasterArtworkPreviewSurface>
-                  )
-                ) : (
-                  <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
-                  <div className="ma-empty-state">
-                    <div className="ma-empty-decor" aria-hidden>
-                      <svg className="ma-empty-blueprint" viewBox="0 0 900 900" preserveAspectRatio="none">
-                        <line x1="450" y1="0" x2="450" y2="900" stroke="currentColor" strokeWidth="0.5" opacity="0.15" />
-                        <line x1="0" y1="450" x2="900" y2="450" stroke="currentColor" strokeWidth="0.5" opacity="0.15" />
-                        <rect x="60" y="60" width="780" height="780" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.12" strokeDasharray="6 8" />
-                        <circle cx="450" cy="450" r="180" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.08" />
-                      </svg>
-                    </div>
-                    <div className="ma-empty-glow" aria-hidden />
-                    <Sparkles className="ma-empty-icon" />
-                    <h2>Generate Master Artwork</h2>
-                    <p>Transform the selected direction into a premium transparent streetwear print.</p>
-                  </div>
-                  </MasterArtworkPreviewSurface>
-                )}
+                    <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
+                      <div className="ma-empty-state">
+                        <div className="ma-empty-decor" aria-hidden>
+                          <svg className="ma-empty-blueprint" viewBox="0 0 900 900" preserveAspectRatio="xMidYMid meet">
+                            <line x1="450" y1="0" x2="450" y2="900" stroke="currentColor" strokeWidth="0.5" opacity="0.15" />
+                            <line x1="0" y1="450" x2="900" y2="450" stroke="currentColor" strokeWidth="0.5" opacity="0.15" />
+                            <rect x="60" y="60" width="780" height="780" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.12" strokeDasharray="6 8" />
+                            <circle cx="450" cy="450" r="180" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.08" />
+                          </svg>
+                        </div>
+                        <div className="ma-empty-glow" aria-hidden />
+                        <Sparkles className="ma-empty-icon" />
+                        <h2>Generate Master Artwork</h2>
+                        <p>Transform the selected direction into a premium transparent streetwear print.</p>
+                      </div>
+                    </MasterArtworkPreviewSurface>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -388,6 +360,7 @@ export function MasterArtworkStage({
               fallbackLabel={resolveMasterArtworkStatusLabel(
                 view.state.status,
                 view.state.transparencyWarning,
+                view.state.qualityGateWarning,
               )}
               isApproved={view.isApproved}
             />

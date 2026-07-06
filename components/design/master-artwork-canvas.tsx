@@ -13,6 +13,7 @@ import {
   resolveMasterArtworkView,
 } from "@/lib/design/master-artwork";
 import { MasterArtworkMockupFrame } from "@/components/design/master-artwork-mockup-frame";
+import { MasterArtworkPreviewMedia } from "@/components/design/master-artwork-preview-media";
 import { MasterArtworkPreviewSurface } from "@/components/design/master-artwork-preview-surface";
 import {
   DEFAULT_CANVAS_BACKGROUND,
@@ -139,7 +140,7 @@ export function MasterArtworkCanvas({
             <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
               <MasterArtworkThinking active variant="canvas" />
             </MasterArtworkPreviewSurface>
-          ) : view.hasArtwork ? (
+          ) : view.hasArtwork || view.previewSvgMarkup || view.previewImageUrl || assets.svgMarkup ? (
             mockupMode ? (
               <MasterArtworkMockupFrame
                 garment={mockupGarment}
@@ -149,20 +150,16 @@ export function MasterArtworkCanvas({
               />
             ) : (
             <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
-            <div className={cn("cs-canvas-preview", isTransitioning && "is-revealing")}>
-              {view.previewImageUrl ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={view.previewImageUrl} alt="Master artwork" className="cs-canvas-img" />
-              ) : view.previewSvgMarkup ? (
-                <div
-                  className="cs-canvas-svg"
-                  dangerouslySetInnerHTML={{ __html: view.previewSvgMarkup }}
+              <div className="ma-artwork-viewport cs-canvas-artwork-viewport">
+                <MasterArtworkPreviewMedia
+                  imageUrl={view.previewImageUrl ?? assets.masterArtwork?.previewUrl}
+                  svgMarkup={view.previewSvgMarkup ?? assets.svgMarkup}
+                  svgUrl={view.previewSvgUrl ?? assets.svgUrl}
+                  className={cn("cs-canvas-preview", isTransitioning && "is-revealing")}
+                  imgClassName="cs-canvas-img"
+                  svgClassName="cs-canvas-svg"
                 />
-              ) : view.previewSvgUrl ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={view.previewSvgUrl} alt="Master artwork" className="cs-canvas-img" />
-              ) : null}
-            </div>
+              </div>
             </MasterArtworkPreviewSurface>
             )
           ) : (

@@ -601,6 +601,7 @@ export function CreativeWorkspace({
           printReadyDraft?: boolean;
           templateLabel?: string;
         };
+        exportThresholdWarning?: string;
         commercialReview?: {
           approved?: boolean;
           iterations?: number;
@@ -669,6 +670,7 @@ export function CreativeWorkspace({
                 data.vectorArtwork?.exportState?.printReadyDraft,
               qualityTemplateLabel: data.designQuality?.templateLabel,
               previewUrl: artworkImageUrl,
+              qualityGateWarning: data.exportThresholdWarning,
             }),
           });
         } else {
@@ -692,7 +694,11 @@ export function CreativeWorkspace({
       });
       setCanvasTab("master");
       setMasterRevealToken((token) => token + 1);
-      notify(isVectorArtwork ? "Premium vector artwork generated — text safe" : "Master artwork generated");
+      if (data.exportThresholdWarning) {
+        notify(data.exportThresholdWarning);
+      } else {
+        notify(isVectorArtwork ? "Premium vector artwork generated — text safe" : "Master artwork generated");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generate Master Artwork failed");
     } finally {

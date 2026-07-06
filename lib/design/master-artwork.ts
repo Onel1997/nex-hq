@@ -59,6 +59,8 @@ export interface MasterArtworkState {
   approvedSvgMarkup?: string;
   /** Set when artwork file still contains a baked-in background. */
   transparencyWarning?: string;
+  /** Set when export thresholds were not met but best candidate is shown. */
+  qualityGateWarning?: string;
 }
 
 export interface MasterArtworkCommercialPayload {
@@ -166,6 +168,7 @@ export function buildVectorMasterArtworkDraft(input: {
   printReadyDraft?: boolean;
   qualityTemplateLabel?: string;
   previewUrl?: string;
+  qualityGateWarning?: string;
   selectedConceptId: string;
   designDirection: string;
   generationMode: ImageGenerationMode;
@@ -203,6 +206,7 @@ export function buildVectorMasterArtworkDraft(input: {
     printReadyDraft: input.printReadyDraft,
     qualityTemplateLabel: input.qualityTemplateLabel,
     previewUrl: input.previewUrl,
+    qualityGateWarning: input.qualityGateWarning,
     selectedConceptId: input.selectedConceptId,
     designDirection: input.designDirection,
     generationMode: input.generationMode,
@@ -368,21 +372,23 @@ export function resolveMasterArtworkView(
   const previewImageUrl = resolveActiveArtworkUrl(state);
   const vectorMarkup = state.vectorSvgMarkup ?? draftMarkup;
   const previewSvgMarkup =
-    state.sourceType === "vector-artwork" && vectorMarkup
+    (state.sourceType === "vector-artwork" || vectorMarkup) && vectorMarkup
       ? vectorMarkup
       : state.sourceType === "svg-draft" && state.status !== "approved" && draftMarkup
         ? draftMarkup
         : state.status === "approved" && approvedMarkup
           ? approvedMarkup
-          : state.sourceType === "vector-artwork"
-            ? state.vectorSvgMarkup
+          : draftMarkup?.trim()
+            ? draftMarkup
             : undefined;
   const previewSvgUrl =
-    state.sourceType === "svg-draft" && !previewSvgMarkup ? assets.svgUrl : undefined;
+    !previewSvgMarkup && (state.sourceType === "svg-draft" || !state.sourceType)
+      ? assets.svgUrl
+      : undefined;
 
   const hasVectorArtwork = Boolean(
-    (previewSvgMarkup?.trim() || state.vectorSvgMarkup?.trim()) &&
-      state.sourceType === "vector-artwork",
+    previewSvgMarkup?.trim() &&
+      (state.sourceType === "vector-artwork" || state.sourceType === "svg-draft" || !state.sourceType),
   );
   const hasAiArtwork = Boolean(
     previewImageUrl?.trim() && state.sourceType === "ai-designer-artwork",
@@ -391,7 +397,13 @@ export function resolveMasterArtworkView(
     (draftMarkup?.trim() || assets.svgUrl) &&
       (state.sourceType === "svg-draft" || !state.sourceType),
   );
-  const hasArtwork = Boolean(hasVectorArtwork || hasAiArtwork || previewImageUrl?.trim() || previewSvgMarkup?.trim());
+  const hasArtwork = Boolean(
+    hasVectorArtwork ||
+      hasAiArtwork ||
+      previewImageUrl?.trim() ||
+      previewSvgMarkup?.trim() ||
+      previewSvgUrl?.trim(),
+  );
   const isApproved =
     state.status === "approved" &&
     Boolean(state.approvedArtworkUrl?.trim() || state.approvedSvgMarkup?.trim());
@@ -417,7 +429,9 @@ export function resolveMasterArtworkView(
 export function resolveMasterArtworkStatusLabel(
   status: MasterArtworkStatus,
   transparencyWarning?: string,
+  qualityGateWarning?: string,
 ): string {
+  if (qualityGateWarning?.trim()) return qualityGateWarning;
   if (transparencyWarning?.trim()) return transparencyWarning;
   switch (status) {
     case "empty":

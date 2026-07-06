@@ -2,22 +2,26 @@
 
 html:has(.cw-studio-app),
 body:has(.cw-studio-app) {
-  overflow: hidden;
-  height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  height: auto;
+  min-height: 100dvh;
 }
 
 .facility-app-layout:has(.cw-studio-app),
 .facility-app-main:has(.cw-studio-app),
 .facility-app-main:has(.cw-studio-app) .facility-app-transition {
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
+  height: auto;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .design-studio-shell:has(.cw-studio-app) {
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
+  height: auto;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .design-studio-shell:has(.cw-studio-app) .workspace-main,
@@ -25,9 +29,10 @@ body:has(.cw-studio-app) {
 .design-studio-shell:has(.cw-studio-app) .workspace-center,
 .design-studio-shell:has(.cw-studio-app) .design-studio,
 .design-studio-shell:has(.cw-studio-app) .design-studio-body-workspace {
-  height: 100%;
+  height: auto;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .design-studio-shell:has(.cw-studio-app) .design-studio-topbar-lab {
@@ -63,10 +68,11 @@ body:has(.cw-studio-app) {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
-  max-height: 100%;
+  height: auto;
+  max-height: none;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
   background: var(--cs-bg);
   color: var(--cs-text);
   grid-template-columns: 1fr;
@@ -200,22 +206,24 @@ body:has(.cw-studio-app) {
 /* Workspace grid */
 
 .cs-workspace {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  height: 100%;
+  height: auto;
   display: grid;
   grid-template-columns: var(--cs-left-w) minmax(0, 1fr) var(--cs-right-w);
-  overflow: hidden;
-  align-items: stretch;
+  overflow-x: hidden;
+  overflow-y: visible;
+  align-items: start;
 }
 
 .cs-workspace-center {
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  height: auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 /* NexHQ scroll — Design Studio */
@@ -249,11 +257,16 @@ body:has(.cw-studio-app) {
 
 .cs-sidebar {
   min-height: 0;
-  height: 100%;
-  max-height: 100%;
+  height: auto;
+  max-height: none;
+  align-self: start;
+  position: sticky;
+  top: 0;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: transparent;
   border-color: var(--cs-border);
 }
@@ -672,12 +685,15 @@ body:has(.cw-studio-app) {
   min-height: 14rem;
   max-height: min(52vh, 26rem);
   aspect-ratio: 1 / 1;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
   border-radius: 0.25rem;
   border: none;
   background: transparent;
   box-shadow: none;
+  overflow: hidden;
 }
 
 .cs-canvas-artboard.has-artwork {
@@ -686,25 +702,74 @@ body:has(.cw-studio-app) {
   max-height: min(62vh, 38rem);
 }
 
-.cs-canvas-preview {
+.cs-canvas-artwork-viewport {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   width: 100%;
   height: 100%;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+}
+
+.cs-canvas-artwork-viewport .ma-artwork-preview {
   padding: 0.5rem;
 }
 
+.cs-canvas-preview {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  box-sizing: border-box;
+}
+
+.cs-canvas-preview .ma-artwork-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: auto;
+}
+
 .cs-canvas-img {
+  display: block;
+  margin: auto;
   max-width: 100%;
   max-height: 100%;
   width: auto;
   height: auto;
   object-fit: contain;
+  object-position: center center;
   filter: drop-shadow(0 32px 64px rgb(0 0 0 / 0.55)) drop-shadow(0 8px 24px rgb(0 0 0 / 0.35));
 }
 
+.cs-canvas-svg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: auto;
+}
+
 .cs-canvas-svg svg {
-  max-width: min(100%, 28rem);
+  display: block;
+  margin: auto;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
   height: auto;
 }
 
@@ -5661,13 +5726,29 @@ body:has(.cw-studio-app) {
   position: relative;
   flex: none;
   width: 100%;
-  min-height: var(--ma-artboard-size);
+  min-height: 0;
+  height: min(62vh, var(--ma-artboard-size));
+  max-height: min(62vh, var(--ma-artboard-size));
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  overflow: visible;
+  overflow: hidden;
   z-index: 1;
+}
+
+.ma-artwork-viewport {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
 }
 
 .ma-stage-spotlight {
@@ -5700,6 +5781,7 @@ body:has(.cw-studio-app) {
   transform-origin: center center;
   transition: transform 220ms var(--ma-ease, ease-in-out);
   flex-shrink: 0;
+  margin: auto;
 }
 
 /* Large square artboard — the hero */
@@ -5711,8 +5793,9 @@ body:has(.cw-studio-app) {
   height: var(--ma-artboard-size);
   flex-shrink: 0;
   aspect-ratio: 1 / 1;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 0.35rem;
   transform-origin: center center;
   overflow: hidden;
@@ -5766,7 +5849,11 @@ body:has(.cw-studio-app) {
   position: relative;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .ma-canvas-bg-layer {
@@ -5787,8 +5874,11 @@ body:has(.cw-studio-app) {
   z-index: 1;
   width: 100%;
   height: 100%;
-  display: grid;
-  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
 }
 
@@ -6104,18 +6194,28 @@ body:has(.cw-studio-app) {
 .ma-artwork-preview {
   width: 100%;
   height: 100%;
-  display: grid;
-  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 1.35rem 1.5rem;
+  box-sizing: border-box;
   pointer-events: auto;
+  overflow: hidden;
 }
 
 .ma-artwork-frame {
   position: relative;
-  display: grid;
-  place-items: center;
-  max-width: calc(100% - 1rem);
-  max-height: calc(100% - 1rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 1 auto;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: auto;
   padding: 0;
   border-radius: 0;
   border: none;
@@ -6207,11 +6307,15 @@ body:has(.cw-studio-app) {
 }
 
 .ma-artwork-img {
+  display: block;
   max-width: 100%;
   max-height: 100%;
   width: auto;
   height: auto;
+  margin: auto;
   object-fit: contain;
+  object-position: center center;
+  transform-origin: center center;
   image-rendering: auto;
   -webkit-font-smoothing: antialiased;
   filter: drop-shadow(0 10px 22px rgb(0 0 0 / 0.28)) drop-shadow(0 2px 6px rgb(0 0 0 / 0.14));
@@ -6219,17 +6323,25 @@ body:has(.cw-studio-app) {
 }
 
 .ma-artwork-svg {
-  width: 100%;
-  height: 100%;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: auto;
+  transform-origin: center center;
 }
 
 .ma-artwork-svg svg {
-  max-width: calc(100% - 0.5rem);
-  max-height: calc(100% - 0.5rem);
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
   width: auto;
   height: auto;
+  margin: auto;
+  transform-origin: center center;
 }
 
 /* Empty state inside artboard */

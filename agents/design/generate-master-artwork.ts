@@ -21,10 +21,15 @@ import {
   runDesignQualityLayer,
   type DesignQualityLayerResult,
 } from "@/lib/design/design-quality-layer";
+import { QUALITY_PASS_THRESHOLD } from "@/lib/design/design-quality-layer/types";
 import {
   runFashionKnowledgePipeline,
   type FashionKnowledgePipelineResult,
 } from "@/lib/design/fashion-knowledge";
+import {
+  EXPORT_SCORE_THRESHOLDS,
+  meetsExportScoreThresholds,
+} from "@/lib/design/fashion-knowledge/types";
 import {
   renderVectorArtwork,
   type VectorArtworkRenderResult,
@@ -55,9 +60,65 @@ export interface GenerateMasterArtworkResult {
   fashionKnowledge?: FashionKnowledgePipelineResult;
   /** @deprecated GPT image path — not used for typography. */
   optionalTextureLayerUrl?: string;
+  /** Set when export thresholds were not met but best candidate is returned. */
+  exportThresholdWarning?: string;
 }
 
 const MASTER_ARTWORK_DIMENSIONS = "1024x1024";
+const MAX_EXPORT_ATTEMPTS = 20;
+
+function meetsProductionExportGate(
+  fashionKnowledge: FashionKnowledgePipelineResult,
+  designQuality: DesignQualityLayerResult,
+): boolean {
+  return (
+    meetsExportScoreThresholds(fashionKnowledge.ranking) &&
+    fashionKnowledge.creativeVerdict.passed &&
+    designQuality.qualityScore.overall >= EXPORT_SCORE_THRESHOLDS.overall &&
+    designQuality.qualityScore.typographyQuality >= EXPORT_SCORE_THRESHOLDS.typography &&
+    designQuality.qualityScore.compositionQuality >= EXPORT_SCORE_THRESHOLDS.composition &&
+    designQuality.qualityScore.printReadiness >= EXPORT_SCORE_THRESHOLDS.printability &&
+    designQuality.qualityScore.kittlBenchmarkScore >= QUALITY_PASS_THRESHOLD
+  );
+}
+
+type ExportCandidate = {
+  fashionEngine: FashionDesignEngineResult;
+  fashionKnowledge: FashionKnowledgePipelineResult;
+  designQuality: DesignQualityLayerResult;
+  vectorArtwork: VectorArtworkRenderResult;
+  score: number;
+};
+
+function scoreExportCandidate(
+  fashionKnowledge: FashionKnowledgePipelineResult,
+  designQuality: DesignQualityLayerResult,
+): number {
+  const ranking = fashionKnowledge.ranking;
+  const quality = designQuality.qualityScore;
+  return (
+    ranking.overall * 0.35 +
+    quality.overall * 0.35 +
+    quality.kittlBenchmarkScore * 0.15 +
+    ranking.commercial * 0.15
+  );
+}
+
+function buildExportThresholdWarning(
+  attemptCount: number,
+  fashionKnowledge: FashionKnowledgePipelineResult,
+  designQuality: DesignQualityLayerResult,
+): string {
+  const ranking = fashionKnowledge.ranking;
+  const quality = designQuality.qualityScore;
+  return (
+    `Export thresholds not met after ${attemptCount} attempts — showing best candidate. ` +
+    `Commercial ${ranking.commercial}, Brand ${ranking.brandDna}, ` +
+    `Typography ${ranking.typography}, Composition ${ranking.composition}, ` +
+    `Luxury ${ranking.luxury}, Print ${ranking.printability}, ` +
+    `Quality ${Math.round(quality.overall)}, Kittl ${Math.round(quality.kittlBenchmarkScore)}`
+  );
+}
 
 function resolveMasterArtworkDpi(mode: "draft" | "production"): number {
   return mode === "production" ? 300 : 150;
@@ -161,66 +222,140 @@ export async function runGenerateMasterArtwork(
   const dpi = resolveMasterArtworkDpi(generationMode);
   const printReady = generationMode === "production";
 
-  // 1. Fashion Design Engine — creative specs
   let fashionEngine = runFashionDesignEngine(
     { brief, concept, designDirection },
     { generationMode },
   );
 
-  // 2. Fashion Knowledge System — senior director thinking + commercial ranking (up to 20 iterations)
-  const fashionKnowledge = runFashionKnowledgePipeline({
-    brief,
-    concept,
-    engine: fashionEngine,
-    designDirection,
-    maxIterations: 20,
-  });
-  fashionEngine = {
-    ...fashionKnowledge.engine,
-    fashionKnowledge,
-  };
+  let fashionKnowledge: FashionKnowledgePipelineResult | null = null;
+  let designQuality: DesignQualityLayerResult | null = null;
+  let vectorArtwork: VectorArtworkRenderResult | null = null;
+  let exportAttempt = 0;
+  let bestCandidate: ExportCandidate | null = null;
 
-  // 3. Design Quality Layer — premium composition templates + Kittl benchmark scoring
-  const designQuality = runDesignQualityLayer({
-    engine: fashionEngine,
-    generationMode,
-    maxAttempts: 3,
-  });
+  while (exportAttempt < MAX_EXPORT_ATTEMPTS) {
+    exportAttempt += 1;
 
-  fashionEngine.typographySpec = designQuality.typographySpec;
-  fashionEngine.layoutSpec = designQuality.layoutSpec;
-  fashionEngine.graphicSpec = designQuality.graphicSpec;
-  fashionEngine.compositionSpec = designQuality.compositionSpec;
-
-  // 4. Vector Artwork Renderer — text-safe SVG (default path)
-  let vectorArtwork: VectorArtworkRenderResult;
-  try {
-    vectorArtwork = renderVectorArtwork({
-      designId: brief.designId,
-      title: brief.title,
-      typographySpec: designQuality.typographySpec,
-      layoutSpec: designQuality.layoutSpec,
-      graphicSpec: designQuality.graphicSpec,
-      compositionSpec: designQuality.compositionSpec,
-      printSpec: fashionEngine.printSpec,
-      commercialAssessment: fashionEngine.commercialAssessment,
-      includeLayoutGuides: generationMode === "draft",
-      qualityLayerMarkup: designQuality.premiumGraphicsMarkup,
-      exportLabel: designQuality.exportLabel,
+    fashionKnowledge = runFashionKnowledgePipeline({
+      brief,
+      concept,
+      engine: fashionEngine,
+      designDirection,
+      maxIterations: MAX_EXPORT_ATTEMPTS,
+      seedOffset: exportAttempt,
     });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Vector artwork rendering failed";
-    throw new Error(
-      `Master artwork vector rendering failed — ${message}. GPT Image is not used for typography. Fix TypographySpec or LayoutSpec and retry.`,
-    );
+    fashionEngine = {
+      ...fashionKnowledge.engine,
+      fashionKnowledge,
+    };
+
+    designQuality = runDesignQualityLayer({
+      engine: fashionEngine,
+      generationMode,
+      maxAttempts: MAX_EXPORT_ATTEMPTS,
+      fashionKnowledge,
+    });
+
+    fashionEngine.typographySpec = designQuality.typographySpec;
+    fashionEngine.layoutSpec = designQuality.layoutSpec;
+    fashionEngine.graphicSpec = designQuality.graphicSpec;
+    fashionEngine.compositionSpec = designQuality.compositionSpec;
+
+    let renderedVector: VectorArtworkRenderResult;
+    try {
+      renderedVector = renderVectorArtwork({
+        designId: brief.designId,
+        title: brief.title,
+        typographySpec: designQuality.typographySpec,
+        layoutSpec: designQuality.layoutSpec,
+        graphicSpec: designQuality.graphicSpec,
+        compositionSpec: designQuality.compositionSpec,
+        printSpec: fashionEngine.printSpec,
+        commercialAssessment: fashionEngine.commercialAssessment,
+        includeLayoutGuides: generationMode === "draft",
+        qualityLayerMarkup: designQuality.premiumGraphicsMarkup,
+        exportLabel: designQuality.exportLabel,
+      });
+    } catch (error) {
+      if (exportAttempt >= MAX_EXPORT_ATTEMPTS && bestCandidate) {
+        break;
+      }
+      if (exportAttempt >= MAX_EXPORT_ATTEMPTS) {
+        const message =
+          error instanceof Error ? error.message : "Vector artwork rendering failed";
+        throw new Error(
+          `Master artwork vector rendering failed — ${message}. GPT Image is not used for typography. Fix TypographySpec or LayoutSpec and retry.`,
+        );
+      }
+      fashionEngine = runFashionDesignEngine(
+        { brief, concept, designDirection },
+        { generationMode },
+      );
+      continue;
+    }
+
+    if (!renderedVector.typographyValidation.textSafe) {
+      if (exportAttempt >= MAX_EXPORT_ATTEMPTS && bestCandidate) {
+        break;
+      }
+      if (exportAttempt >= MAX_EXPORT_ATTEMPTS) {
+        throw new Error(
+          `Vector artwork failed text-safety validation: ${renderedVector.typographyValidation.issues.map((i) => i.message).join("; ")}`,
+        );
+      }
+      fashionEngine = runFashionDesignEngine(
+        { brief, concept, designDirection },
+        { generationMode },
+      );
+      continue;
+    }
+
+    vectorArtwork = renderedVector;
+    const candidateScore = scoreExportCandidate(fashionKnowledge, designQuality);
+    if (!bestCandidate || candidateScore > bestCandidate.score) {
+      bestCandidate = {
+        fashionEngine,
+        fashionKnowledge,
+        designQuality,
+        vectorArtwork: renderedVector,
+        score: candidateScore,
+      };
+    }
+
+    if (meetsProductionExportGate(fashionKnowledge, designQuality)) {
+      break;
+    }
+
+    if (exportAttempt < MAX_EXPORT_ATTEMPTS) {
+      fashionEngine = runFashionDesignEngine(
+        { brief, concept, designDirection },
+        { generationMode },
+      );
+    }
   }
 
-  if (!vectorArtwork.typographyValidation.textSafe) {
-    throw new Error(
-      `Vector artwork failed text-safety validation: ${vectorArtwork.typographyValidation.issues.map((i) => i.message).join("; ")}`,
-    );
+  if ((!fashionKnowledge || !designQuality || !vectorArtwork) && bestCandidate) {
+    fashionEngine = bestCandidate.fashionEngine;
+    fashionKnowledge = bestCandidate.fashionKnowledge;
+    designQuality = bestCandidate.designQuality;
+    vectorArtwork = bestCandidate.vectorArtwork;
   }
+
+  if (!fashionKnowledge || !designQuality || !vectorArtwork) {
+    throw new Error("Master artwork generation failed — pipeline did not produce artwork");
+  }
+
+  const exportGatePassed = meetsProductionExportGate(fashionKnowledge, designQuality);
+  if (!exportGatePassed && bestCandidate) {
+    fashionEngine = bestCandidate.fashionEngine;
+    fashionKnowledge = bestCandidate.fashionKnowledge;
+    designQuality = bestCandidate.designQuality;
+    vectorArtwork = bestCandidate.vectorArtwork;
+  }
+
+  const exportThresholdWarning = exportGatePassed
+    ? undefined
+    : buildExportThresholdWarning(exportAttempt, fashionKnowledge, designQuality);
 
   fashionEngine.printSpec = {
     ...fashionEngine.printSpec,
@@ -306,5 +441,6 @@ export async function runGenerateMasterArtwork(
     designQuality,
     fashionKnowledge,
     optionalTextureLayerUrl,
+    exportThresholdWarning,
   };
 }
