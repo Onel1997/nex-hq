@@ -21,9 +21,14 @@ const allDesignsRequestSchema = z.object({
   mode: z.literal("all"),
 });
 
+const reportHandoffRequestSchema = z.object({
+  reportId: z.string().uuid(),
+});
+
 const handoffRequestSchema = z.union([
   singleDesignRequestSchema,
   allDesignsRequestSchema,
+  reportHandoffRequestSchema,
 ]);
 
 export async function POST(request: Request) {
@@ -43,7 +48,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json(
         {
-          error: "Invalid request — provide reportId + designId, or reportId + mode: \"all\"",
+          error: "Invalid request — provide reportId, reportId + designId, or reportId + mode: \"all\"",
           details: parsed.error.flatten(),
         },
         { status: 400 },

@@ -3,6 +3,8 @@
  * Probes without blocking UI; auto-disables when backend recovers.
  */
 
+import { isProviderQuotaError } from "@/lib/facility/provider-errors";
+
 const PROBE_INTERVAL_MS = 45_000;
 const PROBE_TIMEOUT_MS = 6_000;
 
@@ -12,16 +14,45 @@ let mockModeActive = false;
 let probeTimer: ReturnType<typeof setInterval> | null = null;
 const listeners = new Set<MockModeListener>();
 
-function isSupabaseOfflineResponse(status: number, body: unknown): boolean {
-  if (status !== 503) return false;
-  if (!body || typeof body !== "object") return true;
-  const error = "error" in body ? String((body as { error?: unknown }).error ?? "") : "";
-  return (
-    /supabase/i.test(error) ||
-    /not configured/i.test(error) ||
-    /quota/i.test(error) ||
-    /backend/i.test(error)
-  );
+function extractErrorText(body: unknown): string {
+  if (!body || typeof body !== "object") return "";
+  const record = body as Record<string, unknown>;
+  return [record.error, record.message]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ");
+}
+
+/** True when an API response indicates Supabase/Brain is offline or over quota. */
+export function isBackendOfflineFailure(status: number, body?: unknown): boolean {
+  const errorText = extractErrorText(body);
+
+  if (status === 429) return true;
+
+  if (status === 503) {
+    return (
+      !errorText ||
+      /supabase/i.test(errorText) ||
+      /not configured/i.test(errorText) ||
+      /quota/i.test(errorText) ||
+      /backend/i.test(errorText) ||
+      isProviderQuotaError(errorText)
+    );
+  }
+
+  if (status >= 500) {
+    return isProviderQuotaError(errorText) || /supabase/i.test(errorText);
+  }
+
+  return false;
+}
+
+function isNetworkFailure(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof Error) {
+    return /fetch failed|network|failed to fetch|load failed/i.test(error.message);
+  }
+  return false;
 }
 
 /** Lightweight probe — 503 on directions route means Supabase gate failed. */
@@ -43,16 +74,10 @@ export async function probeDesignBackendHealth(): Promise<boolean> {
     try {
       body = await res.json();
     } catch {
-      // non-json still counts as reachable unless 503
+      // non-json still counts as reachable unless offline
     }
 
-    if (isSupabaseOfflineResponse(res.status, body)) {
-      return false;
-    }
-
-    // 400 = passed Supabase gate (invalid body) — backend online
-    // 200 = unlikely with empty body but still online
-    return res.status === 400 || res.status === 200 || res.status === 422;
+    return !isBackendOfflineFailure(res.status, body);
   } catch {
     return false;
   }
@@ -77,14 +102,16 @@ export function subscribeMockMode(listener: MockModeListener): () => void {
 }
 
 /** Mark mock mode from a failed API call without waiting for probe. */
-export function activateMockModeFromFailure(status: number, body?: unknown): void {
-  if (isSupabaseOfflineResponse(status, body)) {
-    setMockModeActive(true);
-    return;
-  }
-  if (status >= 500) {
-    setMockModeActive(true);
-  }
+export function activateMockModeFromFailure(status: number, body?: unknown): boolean {
+  if (!isBackendOfflineFailure(status, body)) return false;
+  setMockModeActive(true);
+  return true;
+}
+
+export function activateMockModeFromNetworkFailure(error: unknown): boolean {
+  if (!isNetworkFailure(error)) return false;
+  setMockModeActive(true);
+  return true;
 }
 
 export async function refreshMockModeState(): Promise<boolean> {
@@ -124,8 +151,11 @@ export async function withMockFallback<T>(
     return await operation();
   } catch (error) {
     if (options?.activateOnFailure !== false) {
-      setMockModeActive(true);
+      activateMockModeFromNetworkFailure(error);
     }
-    return fallback();
+    if (mockModeActive) {
+      return fallback();
+    }
+    throw error;
   }
 }

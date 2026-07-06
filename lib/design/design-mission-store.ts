@@ -336,6 +336,14 @@ function loadMission(): DesignMissionState | null {
   }
 }
 
+export function getDesignMissionForReport(
+  reportId: string,
+): DesignMissionState | null {
+  const mission = loadMission();
+  if (!mission || mission.reportId !== reportId) return null;
+  return mission;
+}
+
 export function saveDesignMission(state: DesignMissionState): void {
   if (typeof window === "undefined") return;
 

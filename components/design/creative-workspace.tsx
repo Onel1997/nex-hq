@@ -77,7 +77,6 @@ import { useStudioMockMode } from "@/hooks/use-studio-mock-mode";
 import {
   activateMockModeFromFailure,
   getMockModeActive,
-  setMockModeActive,
 } from "@/lib/design/studio-mock-mode";
 import {
   buildMockMasterArtworkState,
@@ -535,7 +534,14 @@ export function CreativeWorkspace({
       });
       const payload = await readGenerationPayload(res);
       if (!res.ok) {
-        activateMockModeFromFailure(res.status, payload);
+        if (!activateMockModeFromFailure(res.status, payload)) {
+          const err =
+            payload && typeof payload === "object" && "error" in payload
+              ? String((payload as { error?: unknown }).error ?? "")
+              : "";
+          throw new Error(err || "Master artwork generation failed");
+        }
+
         await mockGenerationDelay(11_200);
         const masterArtwork = buildMockMasterArtworkState({
           brief,
@@ -655,15 +661,18 @@ export function CreativeWorkspace({
         }),
       );
       notify(`${directions.length} design directions ready — commercial review complete`);
-    } catch {
-      const directions = generateMockDesignDirections(brief, concept);
-      setMockModeActive(true);
-      onPatchMission((state) =>
-        updateMissionAssets(state, {
-          designDirections: directions,
-        }),
-      );
-      notify(`${directions.length} design directions ready (mock)`);
+    } catch (err) {
+      if (getMockModeActive()) {
+        const directions = generateMockDesignDirections(brief, concept);
+        onPatchMission((state) =>
+          updateMissionAssets(state, {
+            designDirections: directions,
+          }),
+        );
+        notify(`${directions.length} design directions ready (mock fallback)`);
+      } else {
+        setError(err instanceof Error ? err.message : "Design directions generation failed");
+      }
     } finally {
       setActionLoading(null);
     }
@@ -845,10 +854,16 @@ export function CreativeWorkspace({
       });
       const payload = await readGenerationPayload(res);
       if (!res.ok) {
-        activateMockModeFromFailure(res.status, payload);
-        const mock = createMockAiDesignerConcept(brief);
-        applyAiDesignerConcept(mock.concept, mock.renderPlan, mock.review);
-        return;
+        if (activateMockModeFromFailure(res.status, payload)) {
+          const mock = createMockAiDesignerConcept(brief);
+          applyAiDesignerConcept(mock.concept, mock.renderPlan, mock.review);
+          return;
+        }
+        const err =
+          payload && typeof payload === "object" && "error" in payload
+            ? String((payload as { error?: unknown }).error ?? "")
+            : "";
+        throw new Error(err || "AI Designer failed");
       }
 
       const data = payload as {
@@ -858,19 +873,15 @@ export function CreativeWorkspace({
         review?: import("@/lib/design/ai-designer/types").DesignConceptReview;
       };
       if (!data.ok || !data.concept) {
-        const mock = createMockAiDesignerConcept(brief);
-        setMockModeActive(true);
-        applyAiDesignerConcept(mock.concept, mock.renderPlan, mock.review);
-        return;
+        throw new Error("AI Designer returned no concept");
       }
 
       applyAiDesignerConcept(data.concept, data.renderPlan, data.review);
-    } catch {
-      try {
+    } catch (err) {
+      if (getMockModeActive()) {
         const mock = createMockAiDesignerConcept(brief);
-        setMockModeActive(true);
         applyAiDesignerConcept(mock.concept, mock.renderPlan, mock.review);
-      } catch (err) {
+      } else {
         setError(err instanceof Error ? err.message : "AI Designer failed");
       }
     } finally {

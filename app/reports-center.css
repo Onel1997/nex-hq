@@ -504,6 +504,23 @@
   border-bottom: 1px solid rgb(21 32 48 / 0.55);
 }
 
+.rc-preview-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.rc-preview-header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.rc-preview-header-actions {
+  flex-shrink: 0;
+  padding-top: 0.15rem;
+}
+
 .rc-preview-meta {
   display: flex;
   align-items: center;
@@ -930,6 +947,47 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.rc-handoff-btn-primary {
+  padding: 0.55rem 0.95rem;
+  border: 1px solid rgb(34 211 238 / 0.45);
+  background: linear-gradient(
+    135deg,
+    rgb(34 211 238 / 0.22),
+    rgb(34 211 238 / 0.1)
+  );
+  color: #ecfeff;
+  font-size: 0.76rem;
+  box-shadow: 0 0 0 1px rgb(34 211 238 / 0.08);
+}
+
+.rc-handoff-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    rgb(34 211 238 / 0.32),
+    rgb(34 211 238 / 0.16)
+  );
+}
+
+.rc-dept-handoff {
+  margin-top: 0.75rem;
+}
+
+.rc-handoff-toast {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 5.5rem;
+  z-index: 60;
+  max-width: min(360px, calc(100vw - 2rem));
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgb(248 113 113 / 0.35);
+  background: rgb(15 23 42 / 0.96);
+  color: #fecaca;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.35);
 }
 
 .rc-handoff-btn:hover:not(:disabled) {

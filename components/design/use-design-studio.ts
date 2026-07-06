@@ -5,7 +5,9 @@ import type { DesignStudioIntelligence } from "@/lib/design/studio-intelligence"
 import { buildMockDesignStudioData } from "@/lib/design/studio-mock-data";
 import {
   activateMockModeFromFailure,
+  activateMockModeFromNetworkFailure,
   getMockModeActive,
+  refreshMockModeState,
   setMockModeActive,
 } from "@/lib/design/studio-mock-mode";
 import type { ProductKnowledge } from "@/lib/shopify/types";
@@ -39,7 +41,8 @@ export function useDesignStudio() {
     setLoading(true);
     setError(null);
 
-    if (getMockModeActive()) {
+    const online = await refreshMockModeState();
+    if (!online) {
       setData(buildMockDesignStudioData());
       setLoading(false);
       return;
@@ -49,16 +52,20 @@ export function useDesignStudio() {
       const studioResponse = await fetch("/api/design/studio");
       const body = (await studioResponse.json()) as DesignStudioResponse;
 
-      let studio = body.studio;
-      let productKnowledge = body.productKnowledge;
-      let businessMeta = body.businessMeta;
+      const studio = body.studio;
+      const productKnowledge = body.productKnowledge;
+      const businessMeta = body.businessMeta;
       let commerceHistory: CommerceHistoryResponse | null = null;
 
       if (!studioResponse.ok || !body.ok || !studio || !productKnowledge) {
-        activateMockModeFromFailure(studioResponse.status, body);
-        const mock = buildMockDesignStudioData();
-        setData(mock);
-        setError(null);
+        if (activateMockModeFromFailure(studioResponse.status, body)) {
+          setData(buildMockDesignStudioData());
+          setError(null);
+          return;
+        }
+
+        setData(null);
+        setError(body.error ?? "Failed to load Design Studio");
         return;
       }
 
@@ -89,9 +96,13 @@ export function useDesignStudio() {
       });
       setMockModeActive(false);
     } catch (err) {
-      setMockModeActive(true);
-      setData(buildMockDesignStudioData());
-      setError(null);
+      if (activateMockModeFromNetworkFailure(err) || getMockModeActive()) {
+        setData(buildMockDesignStudioData());
+        setError(null);
+      } else {
+        setData(null);
+        setError(err instanceof Error ? err.message : "Failed to load Design Studio");
+      }
     } finally {
       setLoading(false);
     }

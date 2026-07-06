@@ -3,9 +3,12 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import {
   buildDesignMissionFromHandoff,
+  getDesignMissionForReport,
   saveDesignMission,
 } from "@/lib/design/design-mission-store";
+import { AGENT_STUDIO_NAMES } from "@/lib/workspace/agent-routes";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FacilityDepartmentShell } from "@/components/facility/facility-department-shell";
 import type {
   ReportsCenterAgentTab,
@@ -19,6 +22,7 @@ import { REPORT_SOURCE_LABELS } from "@/lib/reports/report-source";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
+  ArrowRight,
   Archive,
   Briefcase,
   Crown,
@@ -26,7 +30,6 @@ import {
   Loader2,
   Palette,
   RefreshCw,
-  Send,
   ShoppingBag,
   Target,
   TrendingUp,
@@ -345,6 +348,13 @@ function ReportPreview({
     designResearch?.hasDesignResearch && designResearch.designs.length > 0;
   const displayTitle =
     designResearch?.collection?.name?.trim() || report.title;
+  const connectedToDesignStudio = report.preview.connectedDepartments.includes(
+    AGENT_STUDIO_NAMES.designer,
+  );
+  const canHandoffToDesign =
+    report.agentTab === "research" ||
+    hasStructuredDesign ||
+    connectedToDesignStudio;
 
   return (
     <article className="rc-preview">
@@ -354,29 +364,47 @@ function ReportPreview({
       </button>
 
       <header className="rc-preview-header">
-        <div className="rc-preview-meta">
-          <span className="rc-preview-type">
-            <Icon className="size-4" />
-            {report.department}
-          </span>
-          <span className={cn("rc-card-source", `rc-source-${report.source}`)}>
-            {REPORT_SOURCE_LABELS[report.source]}
-          </span>
-          <span className={cn("rc-card-status", `rc-status-${report.status}`)}>
-            {STATUS_LABELS[report.status]}
-          </span>
-        </div>
-        <h2>{displayTitle}</h2>
-        <div className="rc-preview-info">
-          <span>{report.agent}</span>
-          <span>{Math.round(report.confidence * 100)}% confidence</span>
-          <span>
-            {new Date(report.date).toLocaleDateString("en-GB", {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
-          </span>
+        <div className="rc-preview-header-row">
+          <div className="rc-preview-header-main">
+            <div className="rc-preview-meta">
+              <span className="rc-preview-type">
+                <Icon className="size-4" />
+                {report.department}
+              </span>
+              <span className={cn("rc-card-source", `rc-source-${report.source}`)}>
+                {REPORT_SOURCE_LABELS[report.source]}
+              </span>
+              <span className={cn("rc-card-status", `rc-status-${report.status}`)}>
+                {STATUS_LABELS[report.status]}
+              </span>
+            </div>
+            <h2>{displayTitle}</h2>
+            <div className="rc-preview-info">
+              <span>{report.agent}</span>
+              <span>{Math.round(report.confidence * 100)}% confidence</span>
+              <span>
+                {new Date(report.date).toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </span>
+            </div>
+          </div>
+
+          {canHandoffToDesign ? (
+            <div className="rc-preview-header-actions">
+              <DesignStudioHandoffButton
+                reportId={report.reportId}
+                hasStructuredDesign={hasStructuredDesign}
+                mode={hasStructuredDesign ? "all" : undefined}
+                label="Send to Design Studio"
+                openLabel="Open in Design Studio"
+                variant="primary"
+                navigateOnSuccess
+              />
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -438,6 +466,19 @@ function ReportPreview({
                     <span key={dept}>{dept}</span>
                   ))}
                 </div>
+                {connectedToDesignStudio ? (
+                  <div className="rc-dept-handoff">
+                    <DesignStudioHandoffButton
+                      reportId={report.reportId}
+                      hasStructuredDesign={hasStructuredDesign}
+                      mode={hasStructuredDesign ? "all" : undefined}
+                      label="Send to Design Studio"
+                      openLabel="Open in Design Studio"
+                      variant="primary"
+                      navigateOnSuccess
+                    />
+                  </div>
+                ) : null}
               </PreviewSection>
             </div>
           </>
@@ -620,19 +661,39 @@ function DesignStudioHandoffButton({
   designId,
   mode,
   label,
-  variant,
+  openLabel = "Open in Design Studio",
+  variant = "design",
+  navigateOnSuccess = false,
+  hasStructuredDesign = false,
 }: {
   reportId: string;
   designId?: string;
   mode?: "all";
   label: string;
-  variant: "design" | "collection";
+  openLabel?: string;
+  variant?: "design" | "collection" | "primary";
+  navigateOnSuccess?: boolean;
+  hasStructuredDesign?: boolean;
 }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [existingMission, setExistingMission] = useState(false);
+
+  useEffect(() => {
+    setExistingMission(Boolean(getDesignMissionForReport(reportId)));
+  }, [reportId]);
+
+  const showOpenLabel = existingMission || hasStructuredDesign;
+  const buttonLabel = showOpenLabel ? openLabel : label;
 
   const handleClick = async () => {
+    if (existingMission && navigateOnSuccess) {
+      router.push("/agents/design");
+      return;
+    }
+
     setLoading(true);
     setMessage(null);
     setError(null);
@@ -641,7 +702,9 @@ function DesignStudioHandoffButton({
       const body =
         mode === "all"
           ? { reportId, mode: "all" as const }
-          : { reportId, designId: designId ?? "" };
+          : designId
+            ? { reportId, designId }
+            : { reportId };
 
       const res = await fetch("/api/design/from-research", {
         method: "POST",
@@ -698,6 +761,11 @@ function DesignStudioHandoffButton({
             : "Sent to Design Studio",
         );
       }
+
+      if (navigateOnSuccess) {
+        router.push("/agents/design");
+        return;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Design Studio handoff failed");
     } finally {
@@ -706,26 +774,39 @@ function DesignStudioHandoffButton({
   };
 
   return (
-    <div className="rc-handoff-wrap">
-      <button
-        type="button"
-        className={cn(
-          "rc-handoff-btn",
-          variant === "collection" && "rc-handoff-btn-collection",
-        )}
-        onClick={() => void handleClick()}
-        disabled={loading}
-      >
-        {loading ? (
-          <Loader2 className="size-3.5 animate-spin" />
-        ) : (
-          <Send className="size-3.5" />
-        )}
-        {label}
-      </button>
-      {message ? <p className="rc-handoff-success">{message}</p> : null}
-      {error ? <p className="rc-handoff-error">{error}</p> : null}
-    </div>
+    <>
+      <div className="rc-handoff-wrap">
+        <button
+          type="button"
+          className={cn(
+            "rc-handoff-btn",
+            variant === "collection" && "rc-handoff-btn-collection",
+            (variant === "primary" || showOpenLabel) && "rc-handoff-btn-primary",
+          )}
+          onClick={() => void handleClick()}
+          disabled={loading}
+        >
+          {loading ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <Palette className="size-3.5" />
+          )}
+          {loading ? "Sending to Design Studio..." : buttonLabel}
+          {!loading ? <ArrowRight className="size-3.5" /> : null}
+        </button>
+        {message && !navigateOnSuccess ? (
+          <p className="rc-handoff-success">{message}</p>
+        ) : null}
+        {error && !navigateOnSuccess ? (
+          <p className="rc-handoff-error">{error}</p>
+        ) : null}
+      </div>
+      {error && navigateOnSuccess ? (
+        <div className="rc-handoff-toast" role="alert">
+          {error}
+        </div>
+      ) : null}
+    </>
   );
 }
 

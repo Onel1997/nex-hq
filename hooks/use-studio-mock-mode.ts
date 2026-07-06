@@ -16,7 +16,10 @@ export function useStudioMockMode() {
     setMockMode(getMockModeActive());
     const unsubscribe = subscribeMockMode(setMockMode);
     const stopProbe = startMockModeProbeLoop();
-    setProbing(false);
+
+    void refreshMockModeState().finally(() => {
+      setProbing(false);
+    });
 
     return () => {
       unsubscribe();

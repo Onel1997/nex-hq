@@ -6,8 +6,8 @@ import {
 } from "@/lib/design/studio-mock-data";
 import {
   activateMockModeFromFailure,
+  activateMockModeFromNetworkFailure,
   getMockModeActive,
-  setMockModeActive,
 } from "@/lib/design/studio-mock-mode";
 
 export interface DesignDirectionScores {
@@ -104,8 +104,8 @@ async function fetchDirectionsFromApi(
     }
 
     return data.directions ?? [];
-  } catch {
-    setMockModeActive(true);
+  } catch (error) {
+    activateMockModeFromNetworkFailure(error);
     return null;
   }
 }
@@ -128,7 +128,11 @@ export async function generateDesignDirections(
     return directions.sort((a, b) => b.scores.commercial - a.scores.commercial);
   }
 
-  return generateMockDesignDirections(brief, concept);
+  if (getMockModeActive()) {
+    return generateMockDesignDirections(brief, concept);
+  }
+
+  throw new Error("Failed to generate design directions");
 }
 
 export async function regenerateDesignDirection(
@@ -156,9 +160,24 @@ export async function regenerateDesignDirection(
     },
   );
 
-  const refreshed =
-    apiResult?.[0] ??
-    regenerateMockDesignDirection(brief, concept, directions, directionId);
+  const refreshed = apiResult?.[0];
+  if (!refreshed) {
+    if (getMockModeActive()) {
+      const mockRefreshed = regenerateMockDesignDirection(brief, concept, directions, directionId);
+      return directions.map((d) =>
+        d.id === directionId
+          ? {
+              ...mockRefreshed,
+              id: d.id,
+              selected: d.selected,
+              archived: d.archived,
+              compareSelected: d.compareSelected,
+            }
+          : d,
+      );
+    }
+    throw new Error("Failed to regenerate design direction");
+  }
 
   return directions.map((d) =>
     d.id === directionId
