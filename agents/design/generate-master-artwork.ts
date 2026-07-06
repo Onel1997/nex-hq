@@ -92,7 +92,7 @@ async function generateValidatedTransparentMasterArtwork(
     const attemptPrompt =
       attempt === 1
         ? prompt
-        : `${prompt}\n\nRETRY ${attempt}: Previous output included a background rectangle. Output ONLY isolated print artwork on fully transparent pixels.`;
+        : `${prompt}\n\nRETRY ${attempt}: Previous output included a background rectangle or forbidden report/dashboard text. Output ONLY isolated print artwork on fully transparent pixels. Render visibleText only — never Research Report, Intelligence Report, Key Findings, or similar labels.`;
 
     const imageBytes = await generateTransparentMasterArtwork(attemptPrompt);
     const validation = validateTransparentArtworkPng(imageBytes);

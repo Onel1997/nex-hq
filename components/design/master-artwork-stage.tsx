@@ -138,7 +138,7 @@ export function MasterArtworkStage({
     const scaleW = availableW / artboardRect.width;
     const scaleH = availableH / artboardRect.height;
     const next = Math.min(scaleW, scaleH);
-    setFitScale(Math.max(1, next));
+    setFitScale(Math.max(0.35, Math.min(1.25, next)));
   }, [focusMode, view.hasArtwork]);
 
   useEffect(() => {
@@ -284,23 +284,6 @@ export function MasterArtworkStage({
                   isGlowing && "is-artwork-glow",
                 )}
               >
-                {!view.hasArtwork && !isGenerating ? (
-                  <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
-                    <div className="ma-empty-decor" aria-hidden>
-                    <svg className="ma-empty-blueprint" viewBox="0 0 900 900" preserveAspectRatio="none">
-                      <line x1="450" y1="0" x2="450" y2="900" stroke="currentColor" strokeWidth="0.5" opacity="0.15" />
-                      <line x1="0" y1="450" x2="900" y2="450" stroke="currentColor" strokeWidth="0.5" opacity="0.15" />
-                      <rect x="60" y="60" width="780" height="780" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.12" strokeDasharray="6 8" />
-                      <circle cx="450" cy="450" r="180" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.08" />
-                      <circle cx="450" cy="450" r="320" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.06" />
-                    </svg>
-                    <span className="ma-empty-spark ma-empty-spark--1" />
-                    <span className="ma-empty-spark ma-empty-spark--2" />
-                    <span className="ma-empty-spark ma-empty-spark--3" />
-                    </div>
-                  </MasterArtworkPreviewSurface>
-                ) : null}
-
                 {isGenerating ? (
                   <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
                     <MasterArtworkThinking active variant="canvas" />
@@ -353,10 +336,18 @@ export function MasterArtworkStage({
                 ) : (
                   <MasterArtworkPreviewSurface canvasBackground={canvasBackground}>
                   <div className="ma-empty-state">
+                    <div className="ma-empty-decor" aria-hidden>
+                      <svg className="ma-empty-blueprint" viewBox="0 0 900 900" preserveAspectRatio="none">
+                        <line x1="450" y1="0" x2="450" y2="900" stroke="currentColor" strokeWidth="0.5" opacity="0.15" />
+                        <line x1="0" y1="450" x2="900" y2="450" stroke="currentColor" strokeWidth="0.5" opacity="0.15" />
+                        <rect x="60" y="60" width="780" height="780" fill="none" stroke="currentColor" strokeWidth="0.75" opacity="0.12" strokeDasharray="6 8" />
+                        <circle cx="450" cy="450" r="180" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.08" />
+                      </svg>
+                    </div>
                     <div className="ma-empty-glow" aria-hidden />
                     <Sparkles className="ma-empty-icon" />
-                    <h2>Ready to generate Master Artwork</h2>
-                    <p>Transform the selected direction into a print-ready apparel design.</p>
+                    <h2>Generate Master Artwork</h2>
+                    <p>Transform the selected direction into a premium transparent streetwear print.</p>
                   </div>
                   </MasterArtworkPreviewSurface>
                 )}
@@ -390,7 +381,7 @@ export function MasterArtworkStage({
               ) : (
                 <Sparkles className="size-3.5" />
               )}
-              {view.hasArtwork ? "Regenerate" : "Generate Artwork"}
+              {view.hasArtwork ? "Regenerate" : "Generate Master Artwork"}
             </button>
             {onRefineDirection ? (
               <button
