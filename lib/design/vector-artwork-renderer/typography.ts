@@ -61,20 +61,29 @@ function renderTextBlock(
         ? "end"
         : "middle";
 
-  let textX = x;
-  if (block.alignment === "left") {
-    textX = panel.offsetFromCenterMm < 0
-      ? panel.safeMarginMm + 10
-      : panel.safeMarginMm;
-  } else if (block.alignment === "right") {
-    textX = panel.boundingBoxMm.width - panel.safeMarginMm;
+  let textX = block.positionMm?.x ?? x;
+  let textY = block.positionMm?.y ?? y;
+
+  if (!block.positionMm) {
+    if (block.alignment === "left") {
+      textX = panel.offsetFromCenterMm < 0
+        ? panel.safeMarginMm + 10
+        : panel.safeMarginMm;
+    } else if (block.alignment === "right") {
+      textX = panel.boundingBoxMm.width - panel.safeMarginMm;
+    }
   }
 
   const opacity = block.opacity;
+  const transform =
+    block.rotationDeg != null && block.rotationDeg !== 0
+      ? `transform="rotate(${block.rotationDeg} ${textX} ${textY})"`
+      : "";
+
   const attrs = [
     `id="${escapeXml(block.id)}"`,
     `x="${textX}"`,
-    `y="${y}"`,
+    `y="${textY}"`,
     `font-family="${escapeXml(block.fontFamily)}"`,
     `font-weight="${block.fontWeight}"`,
     `font-size="${block.fontSizeMm}mm"`,
@@ -82,6 +91,7 @@ function renderTextBlock(
     `text-anchor="${anchor}"`,
     `fill="#ECEAE4"`,
     opacity < 1 ? `opacity="${opacity}"` : "",
+    transform,
     `data-role="${block.role}"`,
     `data-vector-text="true"`,
   ]
@@ -125,10 +135,15 @@ export function renderTypographyBlocks(
       }
     }
 
-    cursorY += block.fontSizeMm;
-    elements.push(renderTextBlock(block, centerX, cursorY, panel));
+    if (!block.positionMm) {
+      cursorY += block.fontSizeMm;
+    }
+    const blockY = block.positionMm?.y ?? cursorY;
+    elements.push(renderTextBlock(block, centerX, blockY, panel));
     renderedTexts.push(content);
-    cursorY += block.fontSizeMm * (block.lineHeight - 1) + 2;
+    if (!block.positionMm) {
+      cursorY += block.fontSizeMm * (block.lineHeight - 1) + 2;
+    }
   }
 
   return {

@@ -47,6 +47,14 @@ export interface MasterArtworkState {
   vectorSvgMarkup?: string;
   /** Text-safe vector artwork label for UI. */
   vectorArtworkLabel?: string;
+  /** Kittl benchmark score from design quality layer. */
+  kittlBenchmarkScore?: number;
+  /** Whether typography passed text-safety validation. */
+  textSafe?: boolean;
+  /** Print-ready draft status from quality layer. */
+  printReadyDraft?: boolean;
+  /** Premium composition template applied. */
+  qualityTemplateLabel?: string;
   /** Optional vector draft — secondary export support only. */
   approvedSvgMarkup?: string;
   /** Set when artwork file still contains a baked-in background. */
@@ -153,6 +161,10 @@ export function buildVectorMasterArtworkDraft(input: {
   version: string;
   svgMarkup: string;
   vectorArtworkLabel?: string;
+  kittlBenchmarkScore?: number;
+  textSafe?: boolean;
+  printReadyDraft?: boolean;
+  qualityTemplateLabel?: string;
   previewUrl?: string;
   selectedConceptId: string;
   designDirection: string;
@@ -173,7 +185,9 @@ export function buildVectorMasterArtworkDraft(input: {
     sourceType: "vector-artwork",
     commercialScore: score,
     commercialApproved,
-    printReadiness: resolvePrintReadiness(input.brief, score, input.printReady),
+    printReadiness: input.printReadyDraft
+      ? "Print ready"
+      : resolvePrintReadiness(input.brief, score, input.printReady),
     resolutionLabel: parseSvgDimensions(sanitizedSvg),
     resolution: input.resolution,
     transparency: validation.valid,
@@ -183,7 +197,11 @@ export function buildVectorMasterArtworkDraft(input: {
     printMethod: input.brief.productionMethod,
     generatedAt: new Date().toISOString(),
     vectorSvgMarkup: sanitizedSvg,
-    vectorArtworkLabel: input.vectorArtworkLabel ?? "Vector Artwork — Text Safe",
+    vectorArtworkLabel: input.vectorArtworkLabel ?? "Premium Vector Artwork",
+    kittlBenchmarkScore: input.kittlBenchmarkScore,
+    textSafe: input.textSafe ?? true,
+    printReadyDraft: input.printReadyDraft,
+    qualityTemplateLabel: input.qualityTemplateLabel,
     previewUrl: input.previewUrl,
     selectedConceptId: input.selectedConceptId,
     designDirection: input.designDirection,

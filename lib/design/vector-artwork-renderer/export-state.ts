@@ -7,6 +7,10 @@ export function exportVectorArtworkState(input: {
   printSpec: PrintSpec;
   svgString: string;
   dpi: number;
+  label?: VectorArtworkExportState["label"];
+  kittlBenchmarkScore?: number;
+  textSafe?: boolean;
+  printReadyDraft?: boolean;
 }): VectorArtworkExportState {
   const { designId, printSpec, dpi } = input;
 
@@ -25,6 +29,9 @@ export function exportVectorArtworkState(input: {
     dpi,
     designId,
     generatedAt: new Date().toISOString(),
-    label: "Vector Artwork — Text Safe",
+    label: input.label ?? "Vector Artwork — Text Safe",
+    kittlBenchmarkScore: input.kittlBenchmarkScore,
+    textSafe: input.textSafe ?? true,
+    printReadyDraft: input.printReadyDraft,
   };
 }

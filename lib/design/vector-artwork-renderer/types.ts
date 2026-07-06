@@ -18,6 +18,10 @@ export interface VectorArtworkRenderInput {
   commercialAssessment?: FashionCommercialAssessment;
   /** Include dashed safe-zone guides in SVG (hidden in production export). */
   includeLayoutGuides?: boolean;
+  /** Premium graphic systems from design quality layer (no text). */
+  qualityLayerMarkup?: string;
+  /** Export label override from design quality layer. */
+  exportLabel?: VectorArtworkExportState["label"];
 }
 
 export interface TypographyValidationIssue {
@@ -50,6 +54,8 @@ export interface VectorCommercialMetadata {
   explanations: string[];
   inkColors: string[];
   productionMethod: string;
+  kittlBenchmarkScore?: number;
+  qualityLayerTemplate?: string;
 }
 
 export interface VectorArtworkExportState {
@@ -64,7 +70,10 @@ export interface VectorArtworkExportState {
   dpi: number;
   designId: string;
   generatedAt: string;
-  label: "Vector Artwork — Text Safe";
+  label: "Vector Artwork — Text Safe" | "Premium Vector Artwork";
+  kittlBenchmarkScore?: number;
+  textSafe?: boolean;
+  printReadyDraft?: boolean;
 }
 
 export interface VectorArtworkRenderResult {

@@ -1,5 +1,6 @@
 import type { DesignStudioBrief, IntelligenceHandoffContext } from "@/agents/design/studio-brief";
 import type { DesignConcept } from "@/lib/design/ai-designer/types";
+import type { FashionKnowledgePipelineResult } from "@/lib/design/fashion-knowledge/types";
 
 /* ── Phase 3: Future vector pipeline interfaces ───────────────── */
 
@@ -30,6 +31,10 @@ export interface TypographyBlock {
   textTransform: "uppercase" | "lowercase" | "none";
   alignment: "left" | "center" | "right";
   opacity: number;
+  /** Optional absolute position in panel mm — used by design quality layer templates. */
+  positionMm?: { x: number; y: number };
+  /** Optional rotation in degrees for spine / editorial layouts. */
+  rotationDeg?: number;
 }
 
 export interface FontRecommendation {
@@ -296,4 +301,6 @@ export interface FashionDesignEngineResult {
   imageGenerationPrompt: string;
   progress: FashionEngineProgressStep[];
   completedAt: string;
+  /** Fashion knowledge pipeline result — populated when knowledge layer runs. */
+  fashionKnowledge?: FashionKnowledgePipelineResult;
 }

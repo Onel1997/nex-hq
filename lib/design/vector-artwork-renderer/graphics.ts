@@ -62,6 +62,26 @@ function renderLineSystem(
     return arcs.join("");
   }
 
+  if (system.type === "grid") {
+    const left = panel.safeMarginMm + 6;
+    const top = panel.offsetFromCollarMm + 6;
+    const right = panel.boundingBoxMm.width - panel.safeMarginMm - 6;
+    const bottom = top + panel.boundingBoxMm.height * 0.65;
+    const lines: string[] = [];
+    const rows = Math.min(system.count, 4);
+    for (let i = 0; i <= rows; i += 1) {
+      const y = top + ((bottom - top) / rows) * i;
+      lines.push(
+        line(left, y, right, y, {
+          stroke: ink,
+          "stroke-width": `${system.strokeWidthMm}mm`,
+          opacity: system.opacity * 0.8,
+        }),
+      );
+    }
+    return lines.join("");
+  }
+
   const w = panel.boundingBoxMm.width * 0.5;
   const h = panel.boundingBoxMm.height * 0.35;
   return path(`M ${cx - w / 2} ${cy} H ${cx + w / 2}`, {

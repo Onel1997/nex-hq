@@ -286,6 +286,28 @@ export function MasterArtworkInspector({
           defaultOpen={false}
         >
           <p className={cn("ma-readiness", view.state.printReady && "is-ready")}>{printReadiness}</p>
+          {view.state.sourceType === "vector-artwork" ? (
+            <div className="ma-quality-badges">
+              {view.state.kittlBenchmarkScore != null ? (
+                <p className="ma-kittl-score">
+                  Kittl Benchmark Score: <strong>{view.state.kittlBenchmarkScore}</strong>
+                </p>
+              ) : null}
+              {view.state.textSafe ? (
+                <p className="ma-text-safe-badge ma-text-safe-badge--inspector">Text Safe</p>
+              ) : null}
+              {view.state.printReadyDraft ? (
+                <p className="ma-print-ready-badge ma-print-ready-badge--inspector">Print Ready Draft</p>
+              ) : null}
+              {view.state.qualityTemplateLabel ? (
+                <InspectorField
+                  icon={Sparkles}
+                  label="Composition Template"
+                  value={view.state.qualityTemplateLabel}
+                />
+              ) : null}
+            </div>
+          ) : null}
           {(view.state.transparentBackground ?? view.state.transparency ?? view.hasArtwork) ? (
             <p className="ma-transparent-badge ma-transparent-badge--inspector">
               Transparent Artwork ✓

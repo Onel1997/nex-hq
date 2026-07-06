@@ -588,8 +588,18 @@ export function CreativeWorkspace({
         transparentBackground?: boolean;
         printReady?: boolean;
         vectorArtwork?: {
-          exportState?: { label?: string };
+          exportState?: {
+            label?: string;
+            kittlBenchmarkScore?: number;
+            textSafe?: boolean;
+            printReadyDraft?: boolean;
+          };
           typographyValidation?: { textSafe?: boolean };
+        };
+        designQuality?: {
+          qualityScore: { kittlBenchmarkScore: number };
+          printReadyDraft?: boolean;
+          templateLabel?: string;
         };
         commercialReview?: {
           approved?: boolean;
@@ -646,7 +656,18 @@ export function CreativeWorkspace({
               ...shared,
               svgMarkup: svgString,
               vectorArtworkLabel:
-                data.vectorArtwork?.exportState?.label ?? "Vector Artwork — Text Safe",
+                data.vectorArtwork?.exportState?.label ?? "Premium Vector Artwork",
+              kittlBenchmarkScore:
+                data.designQuality?.qualityScore.kittlBenchmarkScore ??
+                data.vectorArtwork?.exportState?.kittlBenchmarkScore,
+              textSafe:
+                data.vectorArtwork?.typographyValidation?.textSafe ??
+                data.vectorArtwork?.exportState?.textSafe ??
+                true,
+              printReadyDraft:
+                data.designQuality?.printReadyDraft ??
+                data.vectorArtwork?.exportState?.printReadyDraft,
+              qualityTemplateLabel: data.designQuality?.templateLabel,
               previewUrl: artworkImageUrl,
             }),
           });
@@ -671,7 +692,7 @@ export function CreativeWorkspace({
       });
       setCanvasTab("master");
       setMasterRevealToken((token) => token + 1);
-      notify(isVectorArtwork ? "Vector master artwork generated — text safe" : "Master artwork generated");
+      notify(isVectorArtwork ? "Premium vector artwork generated — text safe" : "Master artwork generated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generate Master Artwork failed");
     } finally {

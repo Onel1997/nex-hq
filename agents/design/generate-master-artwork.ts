@@ -18,6 +18,14 @@ import {
   type FashionDesignEngineResult,
 } from "@/lib/design/fashion-design-engine";
 import {
+  runDesignQualityLayer,
+  type DesignQualityLayerResult,
+} from "@/lib/design/design-quality-layer";
+import {
+  runFashionKnowledgePipeline,
+  type FashionKnowledgePipelineResult,
+} from "@/lib/design/fashion-knowledge";
+import {
   renderVectorArtwork,
   type VectorArtworkRenderResult,
 } from "@/lib/design/vector-artwork-renderer";
@@ -43,6 +51,8 @@ export interface GenerateMasterArtworkResult {
   transparencyWarning?: string;
   fashionEngine?: FashionDesignEngineResult;
   vectorArtwork?: VectorArtworkRenderResult;
+  designQuality?: DesignQualityLayerResult;
+  fashionKnowledge?: FashionKnowledgePipelineResult;
   /** @deprecated GPT image path — not used for typography. */
   optionalTextureLayerUrl?: string;
 }
@@ -67,26 +77,40 @@ function mergeCommercialReview(
   engine: FashionDesignEngineResult,
   vector: VectorArtworkRenderResult,
   legacy: MasterArtworkCommercialReview,
+  designQuality?: DesignQualityLayerResult,
+  fashionKnowledge?: FashionKnowledgePipelineResult,
 ): MasterArtworkCommercialReview {
   const engineScore = engine.commercialAssessment.overall;
   const vectorScore = vector.commercialMetadata.overallScore;
-  const blended = Math.round((legacy.score + engineScore + vectorScore) / 3);
+  const qualityScore = designQuality?.qualityScore.overall;
+  const fashionKnowledgeScore = fashionKnowledge?.ranking.overall;
+  const allScores = [legacy.score, engineScore, vectorScore, qualityScore, fashionKnowledgeScore].filter(
+    (s): s is number => s != null,
+  );
+  const blendedScore = Math.round(allScores.reduce((sum, s) => sum + s, 0) / allScores.length);
   const approved =
     legacy.approved ||
     engine.commercialAssessment.approved ||
-    vector.commercialMetadata.approved;
+    vector.commercialMetadata.approved ||
+    Boolean(designQuality?.qualityScore.passed) ||
+    Boolean(fashionKnowledge?.exportApproved);
 
   return {
     ...legacy,
     approved,
-    score: Math.max(blended, legacy.score),
+    score: Math.max(blendedScore, legacy.score),
     critique: {
       ...legacy.critique,
       directorNotes: [
         ...legacy.critique.directorNotes,
-        "Vector artwork — text-safe SVG typography",
+        fashionKnowledge
+          ? `Fashion knowledge — ${fashionKnowledge.selectedPattern.name} (${fashionKnowledge.ranking.overall}/100)`
+          : null,
+        designQuality
+          ? `Premium vector artwork — Kittl benchmark ${designQuality.qualityScore.kittlBenchmarkScore}/100`
+          : "Vector artwork — text-safe SVG typography",
         ...engine.commercialAssessment.explanations.slice(0, 1),
-      ],
+      ].filter((note): note is string => Boolean(note)),
     },
   };
 }
@@ -138,24 +162,51 @@ export async function runGenerateMasterArtwork(
   const printReady = generationMode === "production";
 
   // 1. Fashion Design Engine — creative specs
-  const fashionEngine = runFashionDesignEngine(
+  let fashionEngine = runFashionDesignEngine(
     { brief, concept, designDirection },
     { generationMode },
   );
 
-  // 2. Vector Artwork Renderer — text-safe SVG (default path)
+  // 2. Fashion Knowledge System — senior director thinking + commercial ranking (up to 20 iterations)
+  const fashionKnowledge = runFashionKnowledgePipeline({
+    brief,
+    concept,
+    engine: fashionEngine,
+    designDirection,
+    maxIterations: 20,
+  });
+  fashionEngine = {
+    ...fashionKnowledge.engine,
+    fashionKnowledge,
+  };
+
+  // 3. Design Quality Layer — premium composition templates + Kittl benchmark scoring
+  const designQuality = runDesignQualityLayer({
+    engine: fashionEngine,
+    generationMode,
+    maxAttempts: 3,
+  });
+
+  fashionEngine.typographySpec = designQuality.typographySpec;
+  fashionEngine.layoutSpec = designQuality.layoutSpec;
+  fashionEngine.graphicSpec = designQuality.graphicSpec;
+  fashionEngine.compositionSpec = designQuality.compositionSpec;
+
+  // 4. Vector Artwork Renderer — text-safe SVG (default path)
   let vectorArtwork: VectorArtworkRenderResult;
   try {
     vectorArtwork = renderVectorArtwork({
       designId: brief.designId,
       title: brief.title,
-      typographySpec: fashionEngine.typographySpec,
-      layoutSpec: fashionEngine.layoutSpec,
-      graphicSpec: fashionEngine.graphicSpec,
-      compositionSpec: fashionEngine.compositionSpec,
+      typographySpec: designQuality.typographySpec,
+      layoutSpec: designQuality.layoutSpec,
+      graphicSpec: designQuality.graphicSpec,
+      compositionSpec: designQuality.compositionSpec,
       printSpec: fashionEngine.printSpec,
       commercialAssessment: fashionEngine.commercialAssessment,
       includeLayoutGuides: generationMode === "draft",
+      qualityLayerMarkup: designQuality.premiumGraphicsMarkup,
+      exportLabel: designQuality.exportLabel,
     });
   } catch (error) {
     const message =
@@ -197,16 +248,40 @@ export async function runGenerateMasterArtwork(
     fashionEngine,
     vectorArtwork,
     legacyCommercialReview,
+    designQuality,
+    fashionKnowledge,
   );
+
+  vectorArtwork.commercialMetadata = {
+    ...vectorArtwork.commercialMetadata,
+    kittlBenchmarkScore: designQuality.qualityScore.kittlBenchmarkScore,
+    qualityLayerTemplate: designQuality.templateId,
+    overallScore: Math.max(
+      vectorArtwork.commercialMetadata.overallScore,
+      designQuality.qualityScore.overall,
+    ),
+  };
+
+  vectorArtwork.exportState = {
+    ...vectorArtwork.exportState,
+    label: designQuality.exportLabel,
+    kittlBenchmarkScore: designQuality.qualityScore.kittlBenchmarkScore,
+    textSafe: vectorArtwork.typographyValidation.textSafe,
+    printReadyDraft: designQuality.printReadyDraft,
+  };
 
   const optionalTextureLayerUrl = await generateOptionalTextureLayer(
     `Subtle material texture for ${brief.product} — no typography`,
   );
 
   const prompt = [
-    "Vector artwork rendered via Fashion Design Engine + Vector Artwork Renderer",
+    "Vector artwork via Fashion Knowledge → Fashion Design Engine → Design Quality Layer → Vector Renderer",
+    `Pattern: ${fashionKnowledge.selectedPattern.name} (${fashionKnowledge.candidatesEvaluated} candidates)`,
+    `Commercial ranking: ${fashionKnowledge.ranking.overall}/100`,
+    `Template: ${designQuality.templateLabel}`,
+    `Kittl benchmark: ${designQuality.qualityScore.kittlBenchmarkScore}/100`,
     `Typography blocks: ${vectorArtwork.typographyValidation.renderedTexts.join(" / ")}`,
-    `Composition score: ${vectorArtwork.commercialMetadata.compositionScore}`,
+    `Creative gate: ${fashionKnowledge.creativeVerdict.passed ? "passed" : "best-effort"}`,
     optionalTextureLayerUrl ? "Optional GPT texture layer applied" : "No GPT image layer",
   ].join(". ");
 
@@ -228,6 +303,8 @@ export async function runGenerateMasterArtwork(
     commercialReview,
     fashionEngine,
     vectorArtwork,
+    designQuality,
+    fashionKnowledge,
     optionalTextureLayerUrl,
   };
 }

@@ -5,6 +5,10 @@ import {
   decideFromKnowledge,
   queryFromBrief,
 } from "@/lib/design/design-knowledge/art-direction/creative-director";
+import {
+  buildFashionKnowledgeQuery,
+  decideFromFashionKnowledge,
+} from "@/lib/design/fashion-knowledge";
 import { hashString } from "@/lib/design/vector-engine/hash";
 import type { CreativeDesignBrief } from "../types";
 import type { ResearchHandoffContext } from "../research-handoff";
@@ -37,6 +41,9 @@ export function runCreativeDirectorAgent(
   const { brief, concept, designDirection, research } = input;
   const seed = hashString(brief.designId) % 10000;
   const creativeDirector = decideFromKnowledge(queryFromBrief(brief, seed));
+  const fashionKnowledge = decideFromFashionKnowledge(
+    buildFashionKnowledgeQuery(brief, concept, designDirection),
+  );
   const brandDna = buildBrandDnaProfile(brief, creativeDirector);
 
   const direction =
@@ -46,7 +53,7 @@ export function runCreativeDirectorAgent(
 
   const emotionalCore = resolveEmotionalCore(concept, research);
   const story = buildStory(brief, concept, research, direction);
-  const designPhilosophy = buildPhilosophy(concept, brandDna);
+  const designPhilosophy = buildPhilosophy(concept, brandDna, fashionKnowledge.creativeBrief);
   const originalityAnalysis = analyzeOriginality(brief, concept, direction);
   const brandDnaValidation = validateBrandDna(brief, brandDna, concept);
 
@@ -64,6 +71,7 @@ export function runCreativeDirectorAgent(
     antiPatterns: [
       ...FORBIDDEN_CLICHES,
       ...concept.fashionLanguage.antiPatterns.slice(0, 4),
+      ...fashionKnowledge.antiPatterns.slice(0, 4),
     ],
     collectionRole: brief.role || concept.creativeDirection.collectionRole,
     targetEmotion: concept.creativeDirection.emotion,
@@ -101,11 +109,13 @@ function buildStory(
 function buildPhilosophy(
   concept: DesignConcept,
   brandDna: ReturnType<typeof buildBrandDnaProfile>,
+  knowledgeBrief: string[],
 ): string {
   return [
     "Meaning over hype — calm luxury streetwear for urban creatives.",
     concept.fashionLanguage.principles.slice(0, 2).join(". "),
     brandDna.philosophy.slice(0, 2).join(". "),
+    knowledgeBrief[0] ?? "Fashion knowledge pattern applied",
     "Editorial restraint with layered symbolic meaning.",
   ]
     .filter(Boolean)

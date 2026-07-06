@@ -50,6 +50,8 @@ function buildCommercialMetadata(
     explanations: assessment?.explanations ?? input.compositionSpec.recommendations,
     inkColors: input.printSpec.metadata.inkColors,
     productionMethod: input.printSpec.productionMethod,
+    kittlBenchmarkScore: input.compositionSpec.score,
+    qualityLayerTemplate: input.qualityLayerMarkup ? "design-quality-layer" : undefined,
   };
 }
 
@@ -59,23 +61,31 @@ function buildSvgDocument(input: {
   artboard: { widthMm: number; heightMm: number };
   typographyMarkup: string;
   graphicMarkup: string;
+  qualityLayerMarkup: string;
   guideMarkup: string;
+  premium?: boolean;
 }): string {
   const { title, designId, artboard } = input;
   const w = artboard.widthMm;
   const h = artboard.heightMm;
+  const qualityTag = input.premium ? "DESIGN_QUALITY_LAYER" : "VECTOR_ARTWORK_RENDERER";
 
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<!-- VECTOR_ARTWORK_RENDERER v${RENDERER_VERSION} -->`,
+    `<!-- ${qualityTag} v${RENDERER_VERSION} -->`,
     `<!-- DESIGN_STUDIO_V2_TEXT_SAFE -->`,
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}mm" height="${h}mm" role="img" aria-label="${escapeXml(title)}">`,
     `<title>${escapeXml(title)}</title>`,
-    `<metadata><desc>designId:${escapeXml(designId)}; text-safe:true; renderer:vector-artwork-renderer</desc></metadata>`,
-    group("vector-artwork-root", `${input.graphicMarkup}${input.typographyMarkup}`, {
-      "data-design-id": designId,
-      "data-text-safe": "true",
-    }),
+    `<metadata><desc>designId:${escapeXml(designId)}; text-safe:true; renderer:vector-artwork-renderer${input.premium ? "; premium:true" : ""}</desc></metadata>`,
+    group(
+      "vector-artwork-root",
+      `${input.qualityLayerMarkup}${input.graphicMarkup}${input.typographyMarkup}`,
+      {
+        "data-design-id": designId,
+        "data-text-safe": "true",
+        ...(input.premium ? { "data-premium-vector": "true" } : {}),
+      },
+    ),
     input.guideMarkup,
     `</svg>`,
   ].join("");
@@ -106,6 +116,8 @@ export function renderVectorArtwork(
   const guideMarkup = input.includeLayoutGuides
     ? renderLayoutGuides(input.layoutSpec, panel, artboard)
     : "";
+  const qualityLayerMarkup = input.qualityLayerMarkup ?? "";
+  const isPremium = Boolean(qualityLayerMarkup.trim());
 
   const svgString = buildSvgDocument({
     title: input.title,
@@ -113,7 +125,9 @@ export function renderVectorArtwork(
     artboard,
     typographyMarkup,
     graphicMarkup,
+    qualityLayerMarkup,
     guideMarkup,
+    premium: isPremium,
   });
 
   const validation = validateVectorArtwork(
@@ -132,6 +146,10 @@ export function renderVectorArtwork(
     printSpec: input.printSpec,
     svgString,
     dpi: input.printSpec.dpi,
+    label: input.exportLabel,
+    kittlBenchmarkScore: input.compositionSpec.score,
+    textSafe: true,
+    printReadyDraft: input.exportLabel === "Premium Vector Artwork",
   });
 
   return {

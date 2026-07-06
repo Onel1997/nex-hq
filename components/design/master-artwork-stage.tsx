@@ -99,7 +99,10 @@ export function MasterArtworkStage({
 
   const isVectorArtwork = view.state.sourceType === "vector-artwork";
   const vectorLabel =
-    view.state.vectorArtworkLabel ?? "Vector Artwork — Text Safe";
+    view.state.vectorArtworkLabel ?? "Premium Vector Artwork";
+  const kittlScore = view.state.kittlBenchmarkScore;
+  const textSafe = view.state.textSafe ?? true;
+  const printReadyDraft = view.state.printReadyDraft;
 
   const exportMarkup = view.state.approvedSvgMarkup ?? view.previewSvgMarkup ?? assets.svgMarkup;
   const canExport = Boolean(view.hasArtwork && (view.previewImageUrl || exportMarkup));
@@ -206,9 +209,26 @@ export function MasterArtworkStage({
               <p className="ma-stage-direction-meta">
                 {versionLabel}
                 {isVectorArtwork ? (
-                  <span className="ma-approved-banner ma-approved-banner--compact ma-vector-badge">
-                    {vectorLabel}
-                  </span>
+                  <>
+                    <span className="ma-approved-banner ma-approved-banner--compact ma-vector-badge">
+                      {vectorLabel}
+                    </span>
+                    {kittlScore != null ? (
+                      <span className="ma-approved-banner ma-approved-banner--compact ma-kittl-badge">
+                        Kittl {kittlScore}
+                      </span>
+                    ) : null}
+                    {textSafe ? (
+                      <span className="ma-approved-banner ma-approved-banner--compact ma-text-safe-badge">
+                        Text Safe
+                      </span>
+                    ) : null}
+                    {printReadyDraft ? (
+                      <span className="ma-approved-banner ma-approved-banner--compact ma-print-ready-badge">
+                        Print Ready Draft
+                      </span>
+                    ) : null}
+                  </>
                 ) : null}
                 {view.isApproved ? (
                   <span className="ma-approved-banner ma-approved-banner--compact">
