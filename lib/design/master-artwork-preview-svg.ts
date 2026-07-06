@@ -41,7 +41,7 @@ export function prepareMasterArtworkPreviewSvg(svgMarkup: string): string {
   const normalized = normalizeViewBox(svgMarkup);
 
   return normalized.replace(/<svg\b([^>]*)>/i, (_match, attrs: string) => {
-    let cleaned = attrs
+    const cleaned = attrs
       .replace(/\s(width|height)=["'][^"']*["']/gi, "")
       .replace(/\sstyle=["'][^"']*["']/gi, "")
       .replace(/\spreserveAspectRatio=["'][^"']*["']/gi, "");

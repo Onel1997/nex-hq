@@ -1,30 +1,17 @@
 "use client";
 
-import {
-  CreativeWorkspace,
-  CreativeWorkspaceEmpty,
-} from "@/components/design/creative-workspace";
+import { MasterArtworkWorkspace } from "@/components/design/v2";
 import type { DesignMissionState } from "@/lib/design/design-mission-store";
-import type { ReactNode } from "react";
 
 interface DesignMissionPanelProps {
-  mission: DesignMissionState;
-  onSelectBrief?: (designId: string) => void;
-  onSaveDraft?: () => void;
+  mission?: DesignMissionState;
   onPatchMission: (updater: (state: DesignMissionState) => DesignMissionState) => void;
-  renderCommerceSection?: () => ReactNode;
 }
 
-export function DesignMissionEmptyState({
-  onStartDemo,
-  mockMode,
-}: {
-  onStartDemo?: () => void;
-  mockMode?: boolean;
-}) {
-  return <CreativeWorkspaceEmpty onStartDemo={onStartDemo} mockMode={mockMode} />;
+export function DesignMissionPanel({ mission, onPatchMission }: DesignMissionPanelProps) {
+  return <MasterArtworkWorkspace mission={mission} onPatchMission={onPatchMission} />;
 }
 
-export function DesignMissionPanel(props: DesignMissionPanelProps) {
-  return <CreativeWorkspace {...props} />;
+export function DesignMissionEmptyState() {
+  return <MasterArtworkWorkspace />;
 }
