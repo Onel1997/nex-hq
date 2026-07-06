@@ -15,10 +15,13 @@ const WORKFLOW_STEPS = [
 
 interface StudioChromeProps {
   title: string;
+  reportTitle?: string;
+  sourceLabel?: string;
   collectionName?: string;
   activeStep: number;
   loading?: string | null;
   hasConcept: boolean;
+  hasReportBrief?: boolean;
   designs?: Array<{ designId: string; title: string }>;
   activeDesignId?: string;
   onSelectDesign?: (id: string) => void;
@@ -27,20 +30,27 @@ interface StudioChromeProps {
 
 export function StudioChrome({
   title,
+  reportTitle,
+  sourceLabel,
   collectionName,
   activeStep,
   loading,
   hasConcept,
+  hasReportBrief = false,
   designs,
   activeDesignId,
   onSelectDesign,
   onGenerateConcept,
 }: StudioChromeProps) {
+  const headerTitle = reportTitle?.trim() || title;
+
   return (
     <header className="cs-chrome">
       <div className="cs-chrome-left">
-        <p className="cs-chrome-eyebrow">{collectionName ?? "Design Studio"}</p>
-        <h1 className="cs-chrome-title">{title}</h1>
+        <p className="cs-chrome-eyebrow">
+          {sourceLabel ?? collectionName ?? "Design Studio"}
+        </p>
+        <h1 className="cs-chrome-title">{headerTitle}</h1>
         {designs && designs.length > 1 ? (
           <div className="cs-chrome-designs">
             {designs.map((design) => (
@@ -91,7 +101,7 @@ export function StudioChrome({
           ) : (
             <Sparkles className="size-3.5" />
           )}
-          {hasConcept ? "Refresh Concept" : "AI Concept"}
+          {hasConcept ? "Refresh Concept" : hasReportBrief ? "Generate AI Design Concept" : "AI Concept"}
         </button>
       </div>
     </header>
@@ -104,11 +114,13 @@ export function deriveWorkflowStep(
   hasSelectedDirection: boolean,
   hasArtwork: boolean,
   isApproved: boolean,
+  hasReportBrief = false,
 ): number {
   if (isApproved) return 6;
   if (hasArtwork) return 4;
   if (hasSelectedDirection) return 3;
   if (hasDirections) return 2;
   if (hasConcept) return 1;
+  if (hasReportBrief) return 0;
   return 0;
 }

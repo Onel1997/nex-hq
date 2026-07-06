@@ -120,7 +120,7 @@ export function DesignStudioCenter() {
               <>
                 <ChevronRight className="size-3.5 design-studio-crumb-sep" aria-hidden />
                 <span className="design-studio-crumb design-studio-crumb-design">
-                  {mission.brief.title}
+                  {mission.reportTitle || mission.brief.title}
                 </span>
               </>
             ) : null}

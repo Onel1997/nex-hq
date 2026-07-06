@@ -1,6 +1,6 @@
 "use client";
 
-import type { DesignStudioBrief } from "@/agents/design/studio-brief";
+import type { DesignStudioBrief, IntelligenceHandoffContext } from "@/agents/design/studio-brief";
 import type {
   DesignHealthScores,
   DesignIteration,
@@ -83,6 +83,7 @@ interface StudioInspectorProps {
   masterArtworkView: MasterArtworkViewModel;
   commercialScore?: number;
   collectionName?: string;
+  intelligenceContext?: IntelligenceHandoffContext;
   versionHistory: DesignVersionEntry[];
   activeIteration: DesignIteration;
   selectedDirection?: DesignDirection;
@@ -99,6 +100,7 @@ export function StudioInspector({
   masterArtworkView,
   commercialScore,
   collectionName,
+  intelligenceContext,
   versionHistory,
   activeIteration,
   selectedDirection,
@@ -151,7 +153,8 @@ export function StudioInspector({
           "Research Director",
           concept
             ? `${concept.creativeDirection.collectionRole}. Brand DNA alignment at ${brief.dnaScore ?? health.brandConsistency}%.`
-            : `${brief.title} — brand fit pending concept review.`,
+            : intelligenceContext?.executiveSummary ??
+              `${brief.title} — brand fit pending concept review.`,
         ),
       },
       {
@@ -175,6 +178,7 @@ export function StudioInspector({
     masterArtworkView.state.commercialScore,
     review?.score,
     teamInsight,
+    intelligenceContext?.executiveSummary,
   ]);
 
   const copyPrompt = useCallback(() => {
@@ -222,11 +226,45 @@ export function StudioInspector({
             Metadata
           </summary>
           <dl className="cs-meta-grid">
+            {intelligenceContext ? (
+              <>
+                <div><dt>Source</dt><dd>{intelligenceContext.sourceType}</dd></div>
+                <div><dt>Report ID</dt><dd>{intelligenceContext.sourceReportId}</dd></div>
+              </>
+            ) : null}
             <div><dt>Collection</dt><dd>{collectionName ?? "—"}</dd></div>
             <div><dt>Version</dt><dd>{activeIteration.label}</dd></div>
-            <div><dt>Product</dt><dd>{brief.product}</dd></div>
+            <div><dt>Product</dt><dd>{intelligenceContext?.productName ?? brief.product}</dd></div>
             <div><dt>Color</dt><dd>{brief.color}</dd></div>
           </dl>
+          {intelligenceContext?.keyFindings.length ? (
+            <div className="cs-meta-block">
+              <p className="cs-meta-block-label">Key findings</p>
+              <ul className="cs-meta-list">
+                {intelligenceContext.keyFindings.slice(0, 4).map((finding) => (
+                  <li key={finding}>{finding}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {intelligenceContext?.recommendations.length ? (
+            <div className="cs-meta-block">
+              <p className="cs-meta-block-label">Recommendations</p>
+              <ul className="cs-meta-list">
+                {intelligenceContext.recommendations.slice(0, 4).map((rec) => (
+                  <li key={rec}>{rec}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {intelligenceContext?.connectedDepartments.length ? (
+            <div className="cs-meta-block">
+              <p className="cs-meta-block-label">Connected departments</p>
+              <p className="cs-meta-inline">
+                {intelligenceContext.connectedDepartments.join(" · ")}
+              </p>
+            </div>
+          ) : null}
         </details>
 
         <details className="cs-compact-details">

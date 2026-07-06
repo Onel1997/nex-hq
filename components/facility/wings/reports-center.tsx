@@ -1,12 +1,11 @@
 "use client";
 
-import type { DesignStudioBrief } from "@/agents/design/studio-brief";
+import type { DesignStudioBrief, IntelligenceHandoffContext } from "@/agents/design/studio-brief";
 import {
   buildDesignMissionFromHandoff,
   getDesignMissionForReport,
   saveDesignMission,
 } from "@/lib/design/design-mission-store";
-import { AGENT_STUDIO_NAMES } from "@/lib/workspace/agent-routes";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FacilityDepartmentShell } from "@/components/facility/facility-department-shell";
@@ -348,13 +347,31 @@ function ReportPreview({
     designResearch?.hasDesignResearch && designResearch.designs.length > 0;
   const displayTitle =
     designResearch?.collection?.name?.trim() || report.title;
-  const connectedToDesignStudio = report.preview.connectedDepartments.includes(
-    AGENT_STUDIO_NAMES.designer,
-  );
-  const canHandoffToDesign =
-    report.agentTab === "research" ||
-    hasStructuredDesign ||
-    connectedToDesignStudio;
+  const shouldShowDesignHandoff = true;
+  const existingMission = Boolean(getDesignMissionForReport(report.reportId));
+
+  useEffect(() => {
+    console.log("[ReportPreview] design handoff", {
+      componentName: "ReportPreview",
+      reportId: report.reportId,
+      shouldShowDesignHandoff,
+      buttonRendered: shouldShowDesignHandoff,
+      agentTab: report.agentTab,
+      source: report.source,
+      hasStructuredDesign,
+      designCount: designResearch?.designCount ?? 0,
+      connectedDepartments: report.preview.connectedDepartments,
+      existingMission,
+    });
+  }, [
+    report.reportId,
+    report.agentTab,
+    report.source,
+    report.preview.connectedDepartments,
+    hasStructuredDesign,
+    designResearch?.designCount,
+    existingMission,
+  ]);
 
   return (
     <article className="rc-preview">
@@ -379,6 +396,9 @@ function ReportPreview({
               </span>
             </div>
             <h2>{displayTitle}</h2>
+            <p className="rc-handoff-debug-marker" aria-hidden="true">
+              HANDOFF UI ACTIVE
+            </p>
             <div className="rc-preview-info">
               <span>{report.agent}</span>
               <span>{Math.round(report.confidence * 100)}% confidence</span>
@@ -392,19 +412,15 @@ function ReportPreview({
             </div>
           </div>
 
-          {canHandoffToDesign ? (
-            <div className="rc-preview-header-actions">
-              <DesignStudioHandoffButton
-                reportId={report.reportId}
-                hasStructuredDesign={hasStructuredDesign}
-                mode={hasStructuredDesign ? "all" : undefined}
-                label="Send to Design Studio"
-                openLabel="Open in Design Studio"
-                variant="primary"
-                navigateOnSuccess
-              />
-            </div>
-          ) : null}
+          <div className="rc-preview-header-actions">
+            <DesignStudioHandoffButton
+              reportId={report.reportId}
+              label="Send to Design Studio"
+              openLabel="Open in Design Studio"
+              variant="primary"
+              navigateOnSuccess
+            />
+          </div>
         </div>
       </header>
 
@@ -466,19 +482,6 @@ function ReportPreview({
                     <span key={dept}>{dept}</span>
                   ))}
                 </div>
-                {connectedToDesignStudio ? (
-                  <div className="rc-dept-handoff">
-                    <DesignStudioHandoffButton
-                      reportId={report.reportId}
-                      hasStructuredDesign={hasStructuredDesign}
-                      mode={hasStructuredDesign ? "all" : undefined}
-                      label="Send to Design Studio"
-                      openLabel="Open in Design Studio"
-                      variant="primary"
-                      navigateOnSuccess
-                    />
-                  </div>
-                ) : null}
               </PreviewSection>
             </div>
           </>
@@ -664,7 +667,6 @@ function DesignStudioHandoffButton({
   openLabel = "Open in Design Studio",
   variant = "design",
   navigateOnSuccess = false,
-  hasStructuredDesign = false,
 }: {
   reportId: string;
   designId?: string;
@@ -673,7 +675,6 @@ function DesignStudioHandoffButton({
   openLabel?: string;
   variant?: "design" | "collection" | "primary";
   navigateOnSuccess?: boolean;
-  hasStructuredDesign?: boolean;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -682,11 +683,18 @@ function DesignStudioHandoffButton({
   const [existingMission, setExistingMission] = useState(false);
 
   useEffect(() => {
-    setExistingMission(Boolean(getDesignMissionForReport(reportId)));
-  }, [reportId]);
+    const mission = Boolean(getDesignMissionForReport(reportId));
+    setExistingMission(mission);
+    console.log("[DesignStudioHandoffButton]", {
+      componentName: "DesignStudioHandoffButton",
+      reportId,
+      existingMission: mission,
+      buttonRendered: true,
+      buttonLabel: mission ? openLabel : label,
+    });
+  }, [reportId, openLabel, label]);
 
-  const showOpenLabel = existingMission || hasStructuredDesign;
-  const buttonLabel = showOpenLabel ? openLabel : label;
+  const buttonLabel = existingMission ? openLabel : label;
 
   const handleClick = async () => {
     if (existingMission && navigateOnSuccess) {
@@ -719,6 +727,7 @@ function DesignStudioHandoffButton({
         brainRecordId?: string;
         reportTitle?: string;
         collectionName?: string;
+        intelligenceContext?: IntelligenceHandoffContext;
         brief?: DesignStudioBrief;
         briefs?: DesignStudioBrief[];
       };
@@ -737,6 +746,7 @@ function DesignStudioHandoffButton({
               brainRecordId: data.brainRecordId,
               reportTitle: data.reportTitle,
               collectionName: data.collectionName,
+              intelligenceContext: data.intelligenceContext,
               brief: briefs[0],
               allBriefs: briefs,
             }),
@@ -751,6 +761,7 @@ function DesignStudioHandoffButton({
               brainRecordId: data.brainRecordId,
               reportTitle: data.reportTitle,
               collectionName: data.collectionName,
+              intelligenceContext: data.intelligenceContext,
               brief: data.brief,
             }),
           );
@@ -781,7 +792,7 @@ function DesignStudioHandoffButton({
           className={cn(
             "rc-handoff-btn",
             variant === "collection" && "rc-handoff-btn-collection",
-            (variant === "primary" || showOpenLabel) && "rc-handoff-btn-primary",
+            (variant === "primary" || existingMission) && "rc-handoff-btn-primary",
           )}
           onClick={() => void handleClick()}
           disabled={loading}

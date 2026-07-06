@@ -37,10 +37,23 @@ export const designStudioBriefSchema = z.object({
 export type DesignStudioColor = z.infer<typeof designStudioColorSchema>;
 export type DesignStudioBrief = z.infer<typeof designStudioBriefSchema>;
 
+export interface IntelligenceHandoffContext {
+  sourceType: string;
+  sourceReportId: string;
+  reportTitle: string;
+  executiveSummary: string;
+  keyFindings: string[];
+  recommendations: string[];
+  connectedDepartments: string[];
+  productName: string;
+  collectionName?: string;
+}
+
 export interface ResearchHandoffResult {
   reportId: string;
   brainRecordId: string;
   reportTitle: string;
   collectionName?: string;
+  intelligenceContext?: IntelligenceHandoffContext;
   briefs: DesignStudioBrief[];
 }

@@ -76,6 +76,7 @@ export async function POST(request: Request) {
         brainRecordId: result.brainRecordId,
         reportTitle: result.reportTitle,
         collectionName: result.collectionName,
+        intelligenceContext: result.intelligenceContext,
         briefs: result.briefs,
         timestamp: new Date().toISOString(),
       });
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
       brainRecordId: result.brainRecordId,
       reportTitle: result.reportTitle,
       collectionName: result.collectionName,
+      intelligenceContext: result.intelligenceContext,
       brief: result.briefs[0],
       timestamp: new Date().toISOString(),
     });

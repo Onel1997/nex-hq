@@ -1,6 +1,6 @@
 "use client";
 
-import type { DesignStudioBrief } from "@/agents/design/studio-brief";
+import type { DesignStudioBrief, IntelligenceHandoffContext } from "@/agents/design/studio-brief";
 import type {
   DesignConcept,
   DesignConceptReview,
@@ -151,6 +151,7 @@ export interface DesignMissionState {
   reportTitle: string;
   collectionName?: string;
   collectionMood?: string;
+  intelligenceContext?: IntelligenceHandoffContext;
   brief: DesignStudioBrief;
   allBriefs?: DesignStudioBrief[];
   handoffAt: string;
@@ -284,7 +285,9 @@ function syncMissionSurface(state: DesignMissionState): DesignMissionState {
 }
 
 function migrateMission(raw: DesignMissionState): DesignMissionState {
-  const brief = raw.brief;
+  const reportTitle = raw.reportTitle?.trim() || raw.brief.title;
+  const brief =
+    raw.brief.title !== reportTitle ? { ...raw.brief, title: reportTitle } : raw.brief;
   const legacyWorkspace = createDesignWorkspace(brief, {
     assets: raw.assets ?? {},
     promptOverrides: raw.promptOverrides ?? {},
@@ -306,6 +309,24 @@ function migrateMission(raw: DesignMissionState): DesignMissionState {
 
   const migrated: DesignMissionState = {
     ...raw,
+    reportTitle,
+    brief,
+    intelligenceContext:
+      raw.intelligenceContext ??
+      (raw.reportId && raw.handoffAt
+        ? {
+            sourceType: "Intelligence Report",
+            sourceReportId: raw.reportId,
+            reportTitle,
+            executiveSummary:
+              brief.designDescription?.slice(0, 500) ?? reportTitle,
+            keyFindings: [],
+            recommendations: [],
+            connectedDepartments: [],
+            productName: brief.product,
+            collectionName: raw.collectionName,
+          }
+        : undefined),
     pipelineStage: raw.pipelineStage ?? "design",
     timelineStage: raw.timelineStage ?? "design",
     versionHistory:
@@ -646,11 +667,18 @@ export function buildDesignMissionFromHandoff(input: {
   brainRecordId?: string;
   reportTitle: string;
   collectionName?: string;
+  intelligenceContext?: IntelligenceHandoffContext;
   brief: DesignStudioBrief;
   allBriefs?: DesignStudioBrief[];
 }): DesignMissionState {
   const now = new Date().toISOString();
   const designWorkspaces: Record<string, PerDesignWorkspace> = {};
+  const reportTitle = input.intelligenceContext?.reportTitle ?? input.reportTitle;
+  const collectionName =
+    input.intelligenceContext?.collectionName ??
+    input.collectionName ??
+    input.brief.title;
+
   for (const b of input.allBriefs ?? [input.brief]) {
     designWorkspaces[b.designId] = createDesignWorkspace(b);
   }
@@ -658,10 +686,11 @@ export function buildDesignMissionFromHandoff(input: {
   return migrateMission({
     reportId: input.reportId,
     brainRecordId: input.brainRecordId,
-    reportTitle: input.reportTitle,
-    collectionName: input.collectionName,
-    collectionMood: deriveCollectionMood(input.brief, input.collectionName),
-    brief: input.brief,
+    reportTitle,
+    collectionName,
+    intelligenceContext: input.intelligenceContext,
+    collectionMood: deriveCollectionMood(input.brief, collectionName),
+    brief: { ...input.brief, title: reportTitle },
     allBriefs: input.allBriefs,
     handoffAt: now,
     pipelineStage: "design",

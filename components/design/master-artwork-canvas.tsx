@@ -2,7 +2,7 @@
 
 import { DesignEvolutionPanel } from "@/components/design/design-evolution-panel";
 import type { DesignDirection, EvolutionAction } from "@/lib/design/design-directions";
-import type { DesignStudioBrief } from "@/agents/design/studio-brief";
+import type { DesignStudioBrief, IntelligenceHandoffContext } from "@/agents/design/studio-brief";
 import type { DesignMissionAssets } from "@/lib/design/design-mission-store";
 import {
   downloadMasterArtworkPng,
@@ -42,6 +42,8 @@ interface MasterArtworkCanvasProps {
   versionLabel: string;
   loading?: string | null;
   hasConcept: boolean;
+  hasReportBrief?: boolean;
+  intelligenceContext?: IntelligenceHandoffContext;
   canGenerate: boolean;
   selectedDirection?: DesignDirection;
   otherDirections?: DesignDirection[];
@@ -55,6 +57,7 @@ interface MasterArtworkCanvasProps {
   onEvolve?: (action: EvolutionAction) => void;
   onBlend?: (secondaryId: string) => void;
   onRevision?: (prompt: string) => void;
+  onGenerateConcept?: () => void;
 }
 
 export function MasterArtworkCanvas({
@@ -63,6 +66,8 @@ export function MasterArtworkCanvas({
   versionLabel,
   loading,
   hasConcept,
+  hasReportBrief = false,
+  intelligenceContext,
   canGenerate,
   selectedDirection,
   otherDirections = [],
@@ -75,6 +80,7 @@ export function MasterArtworkCanvas({
   onSendToImageStudio,
   onEvolve,
   onRevision,
+  onGenerateConcept,
 }: MasterArtworkCanvasProps) {
   const view = useMemo(
     () => resolveMasterArtworkView(assets, versionLabel),
@@ -174,6 +180,28 @@ export function MasterArtworkCanvas({
                   <p className="cs-canvas-unlock-copy">
                     Your selected direction is locked in. Generate master artwork to enter production review.
                   </p>
+                </>
+              ) : hasReportBrief && intelligenceContext && !hasConcept ? (
+                <>
+                  <p className="cs-canvas-direction-ref-kicker">{intelligenceContext.sourceType}</p>
+                  <p className="cs-canvas-direction-title">{intelligenceContext.reportTitle}</p>
+                  <p className="cs-canvas-unlock-copy">{intelligenceContext.executiveSummary}</p>
+                  {intelligenceContext.keyFindings.length > 0 ? (
+                    <ul className="cs-canvas-brief-list">
+                      {intelligenceContext.keyFindings.slice(0, 3).map((finding) => (
+                        <li key={finding}>{finding}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="cs-btn cs-btn-primary cs-btn-generate-master"
+                    disabled={loading === "Generate AI Design Concept"}
+                    onClick={() => onGenerateConcept?.()}
+                  >
+                    <Sparkles className="size-4" />
+                    Generate AI Design Concept
+                  </button>
                 </>
               ) : (
                 <>

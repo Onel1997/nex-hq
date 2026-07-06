@@ -21,6 +21,8 @@ interface CreativeDirectionsSidebarProps {
   activeDirectionId?: string | null;
   loading?: boolean;
   hasConcept: boolean;
+  hasReportBrief?: boolean;
+  onGenerateConcept?: () => void;
   onGenerateDirections: () => void;
   onNavigateDirection: (id: string) => void;
   onSelectDirection: (id: string) => void;
@@ -152,6 +154,8 @@ export function CreativeDirectionsSidebar({
   activeDirectionId,
   loading,
   hasConcept,
+  hasReportBrief = false,
+  onGenerateConcept,
   onGenerateDirections,
   onNavigateDirection,
   onSelectDirection: _onSelectDirection,
@@ -164,14 +168,18 @@ export function CreativeDirectionsSidebar({
   const hasDirections = Boolean(directions?.length);
   const activeNavDirections = directions?.filter((d) => !d.archived) ?? [];
 
-  const researchStatus: PipelineStepStatus = hasConcept ? "complete" : "current";
-  const directionsStatus: PipelineStepStatus = !hasConcept
-    ? "future"
-    : hasDirections
-      ? selectedDirection
-        ? "complete"
-        : "current"
-      : "current";
+  const researchStatus: PipelineStepStatus =
+    hasReportBrief || hasConcept ? "complete" : "current";
+  const directionsStatus: PipelineStepStatus =
+    !hasReportBrief && !hasConcept
+      ? "future"
+      : !hasConcept
+        ? "current"
+        : hasDirections
+          ? selectedDirection
+            ? "complete"
+            : "current"
+          : "current";
   const versionsStatus: PipelineStepStatus =
     iterations.length > 1 ? "current" : selectedDirection ? "current" : "future";
 
@@ -184,13 +192,33 @@ export function CreativeDirectionsSidebar({
       <ol className="cs-pipeline cs-pipeline-compact cs-nexhq-scroll">
         <PipelineStep label="Research" status={researchStatus} isLast={false} defaultOpen={false}>
           <p className="cs-pipeline-note">
-            {hasConcept ? "Brief ready" : "Awaiting concept"}
+            {hasReportBrief
+              ? "Report brief loaded"
+              : hasConcept
+                ? "Brief ready"
+                : "Awaiting concept"}
           </p>
         </PipelineStep>
 
         <PipelineStep label="Design Directions" status={directionsStatus} defaultOpen>
-          {!hasConcept ? (
+          {!hasReportBrief && !hasConcept ? (
             <p className="cs-pipeline-note">Generate concept first</p>
+          ) : !hasConcept ? (
+            <div className="cs-pipeline-actions">
+              <button
+                type="button"
+                className="cs-btn cs-btn-primary cs-btn-compact cs-pipeline-generate"
+                disabled={loading}
+                onClick={() => onGenerateConcept?.()}
+              >
+                {loading ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="size-3.5" />
+                )}
+                Generate AI Design Concept
+              </button>
+            </div>
           ) : !hasDirections ? (
             <div className="cs-pipeline-actions">
               <button

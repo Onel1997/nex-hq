@@ -1160,12 +1160,17 @@ export function CreativeWorkspace({
 
   const selectedDirection = resolveSelectedDirection(canvasAssets.designDirections);
   const hasDirections = Boolean(canvasAssets.designDirections?.length);
+  const hasReportBrief = Boolean(
+    mission.intelligenceContext?.sourceReportId ||
+      (mission.reportId && mission.handoffAt),
+  );
   const workflowStep = deriveWorkflowStep(
     Boolean(canvasAssets.aiDesignerConcept),
     hasDirections,
     Boolean(selectedDirection),
     masterArtworkView.hasArtwork,
     masterArtworkView.isApproved,
+    hasReportBrief,
   );
   const canGenerateMaster =
     Boolean(canvasAssets.aiDesignerConcept) &&
@@ -1269,10 +1274,15 @@ export function CreativeWorkspace({
       <div className="cw-main">
         <StudioChrome
           title={brief.title}
-          collectionName={mission.collectionName}
+          reportTitle={mission.reportTitle}
+          sourceLabel={mission.intelligenceContext?.sourceType}
+          collectionName={
+            mission.intelligenceContext?.collectionName ?? mission.collectionName
+          }
           activeStep={workflowStep}
           loading={actionLoading}
           hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+          hasReportBrief={hasReportBrief}
           designs={mission.allBriefs ?? [brief]}
           activeDesignId={brief.designId}
           onSelectDesign={onSelectBrief}
@@ -1305,8 +1315,13 @@ export function CreativeWorkspace({
               iterations={workspace.iterations}
               activeIterationId={workspace.activeIterationId}
               activeDirectionId={activeDirectionId}
-              loading={actionLoading === "Generate Design Directions"}
+              loading={
+                actionLoading === "Generate Design Directions" ||
+                actionLoading === "Generate AI Design Concept"
+              }
               hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+              hasReportBrief={hasReportBrief}
+              onGenerateConcept={() => void runAiDesignerConcept()}
               onGenerateDirections={() => void runDesignDirectionsGeneration()}
               onNavigateDirection={handleActiveDirectionChange}
               onSelectDirection={selectDirection}
@@ -1380,6 +1395,8 @@ export function CreativeWorkspace({
               versionLabel={iteration.label}
               loading={actionLoading}
               hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+              hasReportBrief={hasReportBrief}
+              intelligenceContext={mission.intelligenceContext}
               canGenerate={canGenerateMaster}
               selectedDirection={selectedDirection}
               otherDirections={canvasAssets.designDirections ?? []}
@@ -1392,6 +1409,7 @@ export function CreativeWorkspace({
               onSendToImageStudio={sendToImageStudio}
               onEvolve={evolveDirection}
               onRevision={sendDirectorMessage}
+              onGenerateConcept={() => void runAiDesignerConcept()}
             />
           ) : (
             <MasterArtworkCanvas
@@ -1400,6 +1418,8 @@ export function CreativeWorkspace({
               versionLabel={iteration.label}
               loading={actionLoading}
               hasConcept={Boolean(canvasAssets.aiDesignerConcept)}
+              hasReportBrief={hasReportBrief}
+              intelligenceContext={mission.intelligenceContext}
               canGenerate={canGenerateMaster}
               selectedDirection={selectedDirection}
               chatLoading={chatLoading}
@@ -1409,6 +1429,7 @@ export function CreativeWorkspace({
               onApprove={approveMasterArtwork}
               onSendToImageStudio={sendToImageStudio}
               onRevision={sendDirectorMessage}
+              onGenerateConcept={() => void runAiDesignerConcept()}
             />
           )}
 
@@ -1435,7 +1456,10 @@ export function CreativeWorkspace({
               health={workspace.health}
               masterArtworkView={masterArtworkView}
               commercialScore={brief.commercialScore ?? canvasAssets.commercialScore}
-              collectionName={mission.collectionName}
+              collectionName={
+                mission.intelligenceContext?.collectionName ?? mission.collectionName
+              }
+              intelligenceContext={mission.intelligenceContext}
               versionHistory={mission.versionHistory}
               activeIteration={iteration}
               selectedDirection={selectedDirection}

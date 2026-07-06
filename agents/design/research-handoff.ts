@@ -5,11 +5,12 @@ import {
   type LoadedResearchDesignReport,
 } from "./load-research-design";
 import {
-  convertReportPreviewToStudioBrief,
-  loadResearchReportRecord,
+  buildIntelligenceHandoffContext,
+  convertIntelligenceReportToStudioBrief,
+  loadIntelligenceReportRecord,
 } from "./report-preview-handoff";
 import { convertResearchConceptToStudioBrief } from "./research-handoff-transform";
-import type { ResearchHandoffResult } from "./studio-brief";
+import type { IntelligenceHandoffContext, ResearchHandoffResult } from "./studio-brief";
 
 export { convertResearchConceptToStudioBrief } from "./research-handoff-transform";
 
@@ -47,17 +48,31 @@ export interface ResearchHandoffInput {
   workspaceId?: string;
 }
 
-function handoffFromReportPreview(
-  report: NonNullable<Awaited<ReturnType<typeof loadResearchReportRecord>>>,
+function handoffFromIntelligenceReport(
+  report: NonNullable<Awaited<ReturnType<typeof loadIntelligenceReportRecord>>>,
 ): ResearchHandoffResult {
-  const brief = convertReportPreviewToStudioBrief(report.content, report.title);
+  const intelligenceContext = buildIntelligenceHandoffContext(report.listItem);
+  const brief = convertIntelligenceReportToStudioBrief(
+    report.listItem,
+    report.content,
+  );
   return {
     reportId: report.reportId,
     brainRecordId: report.brainRecordId,
-    reportTitle: report.title,
-    collectionName: brief.title,
+    reportTitle: intelligenceContext.reportTitle,
+    collectionName: intelligenceContext.collectionName ?? extractCollectionLabel(brief, intelligenceContext),
+    intelligenceContext,
     briefs: [brief],
   };
+}
+
+function extractCollectionLabel(
+  brief: { title: string },
+  context: IntelligenceHandoffContext,
+): string | undefined {
+  if (context.collectionName?.trim()) return context.collectionName;
+  if (brief.title !== context.reportTitle) return brief.title;
+  return undefined;
 }
 
 /** Load a research report and convert design concept(s) to Design Studio briefs. */
@@ -93,13 +108,13 @@ export async function handoffResearchToDesignStudio(
     return toHandoffResult(report, [hero]);
   }
 
-  const previewReport = await loadResearchReportRecord(
+  const previewReport = await loadIntelligenceReportRecord(
     workspaceId,
     input.reportId,
   );
   if (!previewReport) {
     throw new ResearchHandoffError(
-      `Research report not found: ${input.reportId}`,
+      `Report not found: ${input.reportId}`,
       "report_not_found",
     );
   }
@@ -111,5 +126,5 @@ export async function handoffResearchToDesignStudio(
     );
   }
 
-  return handoffFromReportPreview(previewReport);
+  return handoffFromIntelligenceReport(previewReport);
 }
