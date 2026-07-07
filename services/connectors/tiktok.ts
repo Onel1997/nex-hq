@@ -1,3 +1,12 @@
+import {
+  fetchLiveTikTok,
+  isTikTokLiveConfigured,
+} from "./clients/tiktok-client";
+import {
+  aggregateConnectorScores,
+  computeConfidence,
+  normalizeSignals,
+} from "./signal-utils";
 import type { ConnectorInput, IntelligenceSignal, SourceIntelligence } from "./types";
 
 export interface TikTokTrend {
@@ -16,84 +25,92 @@ export interface TikTokIntelligenceData {
   silhouettes: string[];
 }
 
-const BASE_DATA: TikTokIntelligenceData = {
-  viralTrends: [
-    {
-      hashtag: "#oversizedstreetwear",
-      views: 2_400_000_000,
-      change: 24,
-      category: "silhouette",
-      insight: "Boxy oversized fits dominating TikTok outfit videos",
-    },
-    {
-      hashtag: "#earthtones",
-      views: 1_800_000_000,
-      change: 31,
-      category: "color",
-      insight: "Earth brown and sage green outfit combos viral",
-    },
-    {
-      hashtag: "#quietluxurystreetwear",
-      views: 890_000_000,
-      change: 19,
-      category: "outfit",
-      insight: "Premium minimal fits without loud logos trending",
-    },
-    {
-      hashtag: "#heavweight hoodie",
-      views: 620_000_000,
-      change: 16,
-      category: "silhouette",
-      insight: "Heavy fleece hoodies as hero piece",
-    },
-    {
-      hashtag: "#capsulewardrobe",
-      views: 1_200_000_000,
-      change: 14,
-      category: "outfit",
-      insight: "3-5 piece capsule drops preferred",
-    },
-  ],
-  hashtags: [
-    "#oversizedstreetwear",
-    "#earthtones",
-    "#quietluxurystreetwear",
-    "#premiumstreetwear",
-    "#boxyfit",
-    "#streetwearcapsule",
-  ],
-  outfitTrends: [
-    "Oversized tee tucked into wide cargos",
-    "Monochrome earth tone layering",
-    "Heavy hoodie + structured cap combo",
-    "Minimal branding premium blanks",
-  ],
-  colors: ["Earth Brown", "Sage Green", "Obsidian Black", "Off White"],
-  silhouettes: ["Oversized", "Boxy", "Wide-leg", "Relaxed"],
+export const EMPTY_TIKTOK_DATA: TikTokIntelligenceData = {
+  viralTrends: [],
+  hashtags: [],
+  outfitTrends: [],
+  colors: [],
+  silhouettes: [],
 };
 
 function toSignals(data: TikTokIntelligenceData): IntelligenceSignal[] {
-  return data.viralTrends.map((t) => ({
-    id: `tiktok-${t.hashtag.replace("#", "")}`,
+  const trendSignals = data.viralTrends.map((trend) => ({
+    id: `tiktok-${trend.hashtag.replace("#", "")}`,
     category: "social" as const,
     source: "tiktok" as const,
-    label: t.hashtag,
-    message: t.insight,
-    score: Math.min(100, 50 + t.change),
-    direction: t.change >= 0 ? ("up" as const) : ("down" as const),
-    tags: [t.category, "viral"],
+    label: trend.hashtag,
+    message: trend.insight,
+    score: Math.min(100, 50 + trend.change),
+    direction: trend.change >= 0 ? ("up" as const) : ("down" as const),
+    tags: [trend.category, "hashtag"],
   }));
+
+  const silhouetteSignals = data.silhouettes.slice(0, 2).map((silhouette, index) => ({
+    id: `tiktok-silhouette-${index}`,
+    category: "trend" as const,
+    source: "tiktok" as const,
+    label: "Silhouette Signal",
+    message: `${silhouette} silhouette present in DE fashion videos`,
+    score: 68 + index * 4,
+    direction: "up" as const,
+    tags: ["silhouette"],
+  }));
+
+  return [...trendSignals, ...silhouetteSignals];
 }
 
-/** Scan TikTok for viral streetwear trends and hashtags. */
+function buildResult(
+  data: TikTokIntelligenceData,
+  mode: "live" | "simulated",
+  simulatedReason?: string,
+): SourceIntelligence<TikTokIntelligenceData> {
+  const rawSignals = toSignals(data);
+  const sampleSize =
+    data.viralTrends.length + data.hashtags.length + data.silhouettes.length;
+  const confidence = computeConfidence({
+    mode,
+    sampleSize,
+    freshness: mode === "live" ? 0.75 : 0.4,
+    dataQuality: mode === "live" ? 0.85 : 0.4,
+  });
+  const signals = normalizeSignals(rawSignals, confidence);
+  const scores = aggregateConnectorScores(
+    signals,
+    { social: 0.7, trend: 0.3 },
+    confidence,
+  );
+
+  return {
+    source: "tiktok",
+    mode,
+    loadedAt: new Date().toISOString(),
+    signals,
+    data,
+    simulatedReason,
+    scores,
+  };
+}
+
+/** Scan TikTok for fashion hashtag engagement via the official Research API. */
 export async function scanTikTok(
   _input: ConnectorInput = {},
 ): Promise<SourceIntelligence<TikTokIntelligenceData>> {
-  return {
-    source: "tiktok",
-    mode: process.env.TIKTOK_API_KEY ? "live" : "simulated",
-    loadedAt: new Date().toISOString(),
-    signals: toSignals(BASE_DATA),
-    data: BASE_DATA,
-  };
+  if (isTikTokLiveConfigured()) {
+    try {
+      const data = await fetchLiveTikTok();
+      return buildResult(data, "live");
+    } catch (error) {
+      const reason =
+        error instanceof Error
+          ? `TikTok Research API failed (${error.message}) — no data fabricated`
+          : "TikTok Research API failed — no data fabricated";
+      return buildResult(EMPTY_TIKTOK_DATA, "simulated", reason);
+    }
+  }
+
+  return buildResult(
+    EMPTY_TIKTOK_DATA,
+    "simulated",
+    "TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET not set — no TikTok data is returned without credentials",
+  );
 }

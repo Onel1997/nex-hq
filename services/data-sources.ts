@@ -115,11 +115,17 @@ export function isLiveConnector(id: DataSourceId): boolean {
     case "pinterest":
       return Boolean(process.env.PINTEREST_ACCESS_TOKEN);
     case "tiktok":
-      return Boolean(process.env.TIKTOK_API_KEY);
+      return Boolean(
+        process.env.TIKTOK_CLIENT_KEY && process.env.TIKTOK_CLIENT_SECRET,
+      );
     case "etsy":
       return Boolean(process.env.ETSY_API_KEY);
     case "amazon":
-      return Boolean(process.env.AMAZON_API_KEY);
+      return Boolean(
+        process.env.AMAZON_ACCESS_KEY &&
+          process.env.AMAZON_SECRET_KEY &&
+          process.env.AMAZON_PARTNER_TAG,
+      );
     default:
       return false;
   }

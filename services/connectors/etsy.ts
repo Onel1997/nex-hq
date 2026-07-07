@@ -1,3 +1,12 @@
+import {
+  fetchLiveEtsy,
+  isEtsyLiveConfigured,
+} from "./clients/etsy-client";
+import {
+  aggregateConnectorScores,
+  computeConfidence,
+  normalizeSignals,
+} from "./signal-utils";
 import type { ConnectorInput, IntelligenceSignal, SourceIntelligence } from "./types";
 
 export interface EtsyBestseller {
@@ -5,6 +14,7 @@ export interface EtsyBestseller {
   category: string;
   priceRange: string;
   keyword: string;
+  /** Favorites count (num_favorers) — popularity proxy, NOT real sales. */
   sales: number;
 }
 
@@ -15,94 +25,102 @@ export interface EtsyIntelligenceData {
   priceRanges: Array<{ category: string; min: number; max: number; sweet: number }>;
 }
 
-const BASE_DATA: EtsyIntelligenceData = {
-  bestsellers: [
-    {
-      title: "Oversized Heavyweight Hoodie",
-      category: "Hoodies",
-      priceRange: "€45–€75",
-      keyword: "oversized hoodie heavyweight",
-      sales: 2840,
-    },
-    {
-      title: "Earth Tone Graphic Tee",
-      category: "T-Shirts",
-      priceRange: "€25–€40",
-      keyword: "earth tone tee",
-      sales: 1920,
-    },
-    {
-      title: "Embroidered Cap",
-      category: "Accessories",
-      priceRange: "€20–€35",
-      keyword: "embroidered cap streetwear",
-      sales: 1560,
-    },
-    {
-      title: "Wide Leg Cargo Pants",
-      category: "Pants",
-      priceRange: "€40–€65",
-      keyword: "wide leg cargo",
-      sales: 1340,
-    },
-  ],
-  keywords: [
-    "oversized hoodie heavyweight",
-    "earth tone streetwear",
-    "embroidered hoodie",
-    "boxy tee premium",
-    "minimalist streetwear",
-    "capsule wardrobe clothing",
-  ],
-  printTrends: [
-    "Tone-on-tone embroidery over bold graphics",
-    "Small chest logo placement",
-    "Earth tone pigment prints",
-    "Minimal typography on heavyweight blanks",
-  ],
-  priceRanges: [
-    { category: "Tees", min: 22, max: 45, sweet: 32 },
-    { category: "Hoodies", min: 45, max: 85, sweet: 62 },
-    { category: "Caps", min: 18, max: 35, sweet: 26 },
-    { category: "Cargos", min: 40, max: 75, sweet: 55 },
-  ],
+export const EMPTY_ETSY_DATA: EtsyIntelligenceData = {
+  bestsellers: [],
+  keywords: [],
+  printTrends: [],
+  priceRanges: [],
 };
 
 function toSignals(data: EtsyIntelligenceData): IntelligenceSignal[] {
-  const bestsellerSignals = data.bestsellers.map((b) => ({
-    id: `etsy-${b.keyword.replace(/\s+/g, "-")}`,
+  const bestsellerSignals = data.bestsellers.map((bestseller) => ({
+    id: `etsy-${bestseller.keyword.replace(/\s+/g, "-")}`,
     category: "commerce" as const,
     source: "etsy" as const,
-    label: b.title,
-    message: `${b.category} · ${b.priceRange} · ~${b.sales} sales · "${b.keyword}"`,
-    score: Math.min(100, Math.round(b.sales / 30)),
+    label: bestseller.title,
+    message: `${bestseller.category} · ${bestseller.priceRange} · ${bestseller.sales.toLocaleString("de-DE")} favorites · "${bestseller.keyword}"`,
+    score: Math.min(100, Math.round(bestseller.sales / 30)),
     direction: "up" as const,
-    tags: ["bestseller", b.category],
+    tags: ["popular", bestseller.category],
   }));
 
-  const printSignals = data.printTrends.slice(0, 2).map((p, i) => ({
-    id: `etsy-print-${i}`,
+  const printSignals = data.printTrends.slice(0, 2).map((pattern, index) => ({
+    id: `etsy-pattern-${index}`,
     category: "trend" as const,
     source: "etsy" as const,
-    label: "Print Trend",
-    message: p,
-    score: 68 + i * 4,
+    label: "Listing Pattern",
+    message: pattern,
+    score: 66 + index * 4,
     direction: "up" as const,
-    tags: ["print"],
+    tags: ["listing", "pattern"],
   }));
 
-  return [...bestsellerSignals, ...printSignals];
+  const priceSignals = data.priceRanges.slice(0, 2).map((range, index) => ({
+    id: `etsy-price-${index}`,
+    category: "commerce" as const,
+    source: "etsy" as const,
+    label: `${range.category} price band`,
+    message: `${range.category}: sweet spot ${range.sweet} (range ${range.min}–${range.max})`,
+    score: 60 + index * 4,
+    direction: "stable" as const,
+    tags: ["pricing", range.category],
+  }));
+
+  return [...bestsellerSignals, ...printSignals, ...priceSignals];
 }
 
-/** Scan Etsy for bestsellers, keywords and print-on-demand trends. */
+function buildResult(
+  data: EtsyIntelligenceData,
+  mode: "live" | "simulated",
+  simulatedReason?: string,
+): SourceIntelligence<EtsyIntelligenceData> {
+  const rawSignals = toSignals(data);
+  const sampleSize =
+    data.bestsellers.length + data.keywords.length + data.priceRanges.length;
+  const confidence = computeConfidence({
+    mode,
+    sampleSize,
+    freshness: mode === "live" ? 0.85 : 0.4,
+    dataQuality: mode === "live" ? 0.8 : 0.4,
+  });
+  const signals = normalizeSignals(rawSignals, confidence);
+  const scores = aggregateConnectorScores(
+    signals,
+    { demand: 0.7, trend: 0.3 },
+    confidence,
+  );
+
+  return {
+    source: "etsy",
+    mode,
+    loadedAt: new Date().toISOString(),
+    data,
+    signals,
+    simulatedReason,
+    scores,
+  };
+}
+
+/** Scan Etsy for fashion listings, keywords, pricing and popularity signals. */
 export async function scanEtsy(
   _input: ConnectorInput = {},
 ): Promise<SourceIntelligence<EtsyIntelligenceData>> {
-  return {
-    source: "etsy",
-    mode: process.env.ETSY_API_KEY ? "live" : "simulated",
-    loadedAt: new Date().toISOString(),
-    data: BASE_DATA,
-    signals: toSignals(BASE_DATA),
-  };
+  if (isEtsyLiveConfigured()) {
+    try {
+      const data = await fetchLiveEtsy();
+      return buildResult(data, "live");
+    } catch (error) {
+      const reason =
+        error instanceof Error
+          ? `Etsy API failed (${error.message}) — no data fabricated`
+          : "Etsy API failed — no data fabricated";
+      return buildResult(EMPTY_ETSY_DATA, "simulated", reason);
+    }
+  }
+
+  return buildResult(
+    EMPTY_ETSY_DATA,
+    "simulated",
+    "ETSY_API_KEY not set — no Etsy data is returned without credentials",
+  );
 }

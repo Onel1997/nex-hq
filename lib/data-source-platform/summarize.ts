@@ -75,65 +75,125 @@ export function summarizeGoogleTrends(
   };
 }
 
-export function summarizePinterest(data: PinterestIntelligenceData): {
+export function summarizePinterest(
+  data: PinterestIntelligenceData,
+  mode: "live" | "simulated" = "live",
+): {
   summary: string[];
   trending: string[];
 } {
+  const prefix = mode === "live" ? "Live" : "Simulated";
   const risingBoards = data.boards
-    .filter((b) => b.trend === "rising")
+    .filter((board) => board.trend === "rising")
     .slice(0, 3);
+
+  const summary = [
+    `${prefix} · ${data.outfitTrends.length} trending keywords · ${data.boards.length} boards`,
+    `${data.aesthetics.length} aesthetics · ${data.colorWorlds.length} color worlds`,
+  ];
+
+  if (mode === "simulated") {
+    summary.push("No live Pinterest data — credentials missing or API unreachable");
+  } else if (data.outfitTrends[0]) {
+    summary.push(`Top trend: ${data.outfitTrends[0]}`);
+  }
+
   return {
-    summary: [
-      `${data.aesthetics.length} aesthetics monitored`,
-      `${data.colorWorlds.length} color worlds active`,
-    ],
+    summary,
     trending: [
-      ...risingBoards.map((b) => b.aesthetic),
-      ...data.capsuleTrends.slice(0, 2),
+      ...data.outfitTrends.slice(0, 2),
+      ...risingBoards.map((board) => board.aesthetic),
+      ...data.capsuleTrends.slice(0, 1),
     ].slice(0, 4),
   };
 }
 
-export function summarizeTikTok(data: TikTokIntelligenceData): {
+export function summarizeTikTok(
+  data: TikTokIntelligenceData,
+  mode: "live" | "simulated" = "live",
+): {
   summary: string[];
   trending: string[];
 } {
-  const top = data.viralTrends
-    .sort((a, b) => b.change - a.change)
+  const prefix = mode === "live" ? "Live" : "Simulated";
+  const top = [...data.viralTrends]
+    .sort((a, b) => b.views - a.views)
     .slice(0, 3);
+
+  const summary = [
+    `${prefix} · ${data.viralTrends.length} hashtags · ${data.hashtags.length} tags tracked`,
+    `${data.silhouettes.length} silhouettes · ${data.colors.length} color signals`,
+  ];
+
+  if (mode === "simulated") {
+    summary.push("No live TikTok data — credentials missing or API unreachable");
+  } else if (top[0]) {
+    summary.push(`Top: ${top[0].hashtag} · ${top[0].insight}`);
+  }
+
   return {
-    summary: [
-      `${data.hashtags.length} hashtags tracked`,
-      `${data.silhouettes.length} silhouette trends`,
-    ],
-    trending: top.map((t) => t.insight),
+    summary,
+    trending:
+      top.length > 0
+        ? top.map((trend) => trend.insight)
+        : data.hashtags.slice(0, 3),
   };
 }
 
-export function summarizeAmazon(data: AmazonIntelligenceData): {
+export function summarizeAmazon(
+  data: AmazonIntelligenceData,
+  mode: "live" | "simulated" = "live",
+): {
   summary: string[];
   trending: string[];
 } {
+  const prefix = mode === "live" ? "Live" : "Simulated";
+  const ranked = data.bestsellers.filter((bestseller) => bestseller.rank > 0);
+
+  const summary = [
+    `${prefix} · ${data.bestsellers.length} products · ${data.categories.length} categories`,
+    ranked.length > 0
+      ? `${ranked.length} with sales-rank · rank is a proxy, not sales`
+      : `${data.demandSignals.length} demand signals · no sales data via API`,
+  ];
+
+  if (mode === "simulated") {
+    summary.push("No live Amazon data — credentials missing or API unreachable");
+  } else if (data.bestsellers[0]) {
+    summary.push(`Top: ${data.bestsellers[0].title} (${data.bestsellers[0].priceRange})`);
+  }
+
   return {
-    summary: [
-      `${data.bestsellers.length} bestsellers scanned`,
-      `${data.categories.length} categories tracked`,
-    ],
-    trending: data.bestsellers.slice(0, 4).map((b) => b.title),
+    summary,
+    trending: data.bestsellers.slice(0, 4).map((bestseller) => bestseller.title),
   };
 }
 
-export function summarizeEtsy(data: EtsyIntelligenceData): {
+export function summarizeEtsy(
+  data: EtsyIntelligenceData,
+  mode: "live" | "simulated" = "live",
+): {
   summary: string[];
   trending: string[];
 } {
+  const prefix = mode === "live" ? "Live" : "Simulated";
+  const summary = [
+    `${prefix} · ${data.bestsellers.length} popular listings · ${data.keywords.length} keywords`,
+    `${data.priceRanges.length} price bands · favorites-ranked (no true sales data)`,
+  ];
+
+  if (mode === "simulated") {
+    summary.push("No live Etsy data — credentials missing or API unreachable");
+  } else if (data.bestsellers[0]) {
+    summary.push(
+      `Top: ${data.bestsellers[0].title} (${data.bestsellers[0].priceRange})`,
+    );
+  }
+
   return {
-    summary: [
-      `${data.bestsellers.length} bestsellers found`,
-      `${data.keywords.length} keywords tracked`,
-    ],
+    summary,
     trending: [
-      ...data.bestsellers.slice(0, 2).map((b) => b.title),
+      ...data.bestsellers.slice(0, 2).map((bestseller) => bestseller.title),
       ...data.keywords.slice(0, 2),
     ].slice(0, 4),
   };

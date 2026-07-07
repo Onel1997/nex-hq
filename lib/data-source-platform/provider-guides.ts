@@ -47,48 +47,71 @@ export const PROVIDER_SETUP_GUIDES: Record<ProviderId, ProviderSetupGuide> = {
     docsUrl: "https://serpapi.com/google-trends-api",
   },
   pinterest: {
-    purpose: "Pinterest aesthetics, color worlds, and rising board trends.",
+    purpose:
+      "DE fashion trending keywords, authenticated board insights, pin color signals, and aesthetic trends via Pinterest API v5.",
     steps: [
-      "Obtain a Pinterest API access token with read scopes.",
-      "Set PINTEREST_ACCESS_TOKEN in .env.local.",
-      "Restart and run Test.",
+      "Create a Pinterest app at developers.pinterest.com and generate an OAuth access token.",
+      "Required scopes: user_accounts:read (health), boards:read (boards), pins:read (pin colors). Trends API may require additional Business/Ads approval.",
+      "Set PINTEREST_ACCESS_TOKEN in .env.local (never commit the token).",
+      "Restart the dev server, then run Health and Test in this panel.",
+      "Live mode fetches DE fashion trending keywords, your account boards, and dominant_color from owned pins.",
+      "Limitation: Trends API returns keywords only — not full trends.pinterest.com visuals. Boards/pins are from your account, not global Pinterest.",
     ],
     simulatedWhen:
-      "Without PINTEREST_ACCESS_TOKEN, aesthetics and board trends use static fashion intelligence — not live Pinterest API data.",
+      "Without PINTEREST_ACCESS_TOKEN, or if the API is unreachable, no Pinterest data is returned. Status shows Simulated (missing credentials) or Offline (API failure). Save counts are unavailable via API — follower_count is used as a proxy on boards.",
     requiredEnvKeys: ["PINTEREST_ACCESS_TOKEN"],
+    docsUrl: "https://developers.pinterest.com/docs/api/v5/trending_keywords-list",
   },
   tiktok: {
-    purpose: "TikTok hashtag velocity, viral trends, and silhouette signals.",
+    purpose:
+      "DE fashion hashtag engagement (views, likes, comments, shares), co-occurring hashtags, and color/silhouette signals via the official TikTok Research API.",
     steps: [
-      "Obtain a TikTok Research or Marketing API key from TikTok for Developers.",
-      "Set TIKTOK_API_KEY in .env.local.",
-      "Restart and run Test.",
+      "Apply for TikTok Research API access at developers.tiktok.com/products/research-api (approved research projects only — academic/non-profit; approval can take ~4 weeks).",
+      "Create a project and copy the Client key and Client secret.",
+      "Set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET in .env.local (never commit the secret).",
+      "Restart the dev server, then run Health and Test in this panel.",
+      "Live mode queries a fixed set of DE fashion hashtags and aggregates engagement per hashtag over the last 30 days.",
+      "Limitation: The official API has NO global trend-discovery endpoint — new/emerging hashtags cannot be discovered, only queried. Data is archived (up to 48h/10d lag) and 'change' reflects engagement rate, not velocity.",
     ],
     simulatedWhen:
-      "Without TIKTOK_API_KEY, hashtag and trend data is simulated streetwear intelligence.",
-    requiredEnvKeys: ["TIKTOK_API_KEY"],
+      "Without TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET, or if the Research API is unreachable/unapproved, no TikTok data is returned. Status shows Simulated (missing credentials) or Offline (API failure). Global trend discovery and sound-trend data are not available via the official API.",
+    requiredEnvKeys: ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"],
+    docsUrl: "https://developers.tiktok.com/doc/research-api-specs-query-videos/",
   },
   etsy: {
-    purpose: "Etsy marketplace bestsellers and handmade fashion keywords.",
+    purpose:
+      "Etsy marketplace fashion listings, popular items (by favorites), keyword tags, price bands, and title/handmade patterns via the Etsy Open API v3.",
     steps: [
-      "Register an Etsy app and obtain an API key string.",
-      "Set ETSY_API_KEY in .env.local.",
-      "Restart and run Test.",
+      "Register an app at etsy.com/developers/your-apps to get an API Key keystring.",
+      "Set ETSY_API_KEY in .env.local (the keystring is used as the x-api-key header; never commit it).",
+      "Restart the dev server, then run Health and Test in this panel.",
+      "Live mode searches active fashion listings across curated streetwear keywords and aggregates prices, tags, and favorites.",
+      "Limitation: Etsy exposes NO true sales/bestseller ranking via the public API — num_favorers (favorites) is used as a popularity proxy, not sales. Receipts/sales require OAuth and are not accessed.",
     ],
     simulatedWhen:
-      "Without ETSY_API_KEY, bestseller and keyword data is simulated.",
+      "Without ETSY_API_KEY, or if the Open API is unreachable, no Etsy data is returned. Status shows Simulated (missing credentials) or Offline (API failure). Bestseller ranking is approximated by favorites — real sales counts are not available from Etsy's public API.",
     requiredEnvKeys: ["ETSY_API_KEY"],
+    docsUrl: "https://developer.etsy.com/documentation/reference/#operation/findAllListingsActive",
   },
   amazon: {
-    purpose: "Amazon category bestsellers and competitive pricing signals.",
+    purpose:
+      "Amazon fashion product signals: titles/keywords, categories, price ranges, and category sales-rank (popularity proxy) via the Product Advertising API v5 (DE marketplace).",
     steps: [
-      "Obtain an Amazon Product Advertising or Selling Partner API credential.",
-      "Set AMAZON_API_KEY in .env.local.",
-      "Restart and run Test.",
+      "Join the Amazon Associates program and register for the Product Advertising API (requires ~10 qualifying sales in the trailing 30 days to stay eligible).",
+      "Create PA-API credentials: Access Key, Secret Key, and your Associate Partner Tag.",
+      "Set AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY and AMAZON_PARTNER_TAG in .env.local (never commit the secret key).",
+      "Optional: override AMAZON_PAAPI_HOST / AMAZON_PAAPI_REGION / AMAZON_PAAPI_MARKETPLACE (defaults target amazon.de / eu-west-1).",
+      "Restart the dev server, then run Health and Test in this panel.",
+      "Limitation: PA-API exposes NO real sales counts — WebsiteSalesRank is a category rank proxy. Review count/rating are unavailable to most accounts. PA-API 5.0 is deprecated 2026-05-15.",
     ],
     simulatedWhen:
-      "Without AMAZON_API_KEY, category and bestseller data is simulated.",
-    requiredEnvKeys: ["AMAZON_API_KEY"],
+      "Without the three PA-API credentials, or if the API is unreachable/ineligible, no Amazon data is returned. Status shows Simulated (missing credentials) or Offline (API failure). True bestseller/sales figures are not available — only a category sales-rank proxy where present.",
+    requiredEnvKeys: [
+      "AMAZON_ACCESS_KEY",
+      "AMAZON_SECRET_KEY",
+      "AMAZON_PARTNER_TAG",
+    ],
+    docsUrl: "https://webservices.amazon.com/paapi5/documentation/search-items.html",
   },
   reddit: {
     purpose: "Reddit community discussions and emerging fashion topics.",

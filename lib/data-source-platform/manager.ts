@@ -1,8 +1,12 @@
 import "server-only";
 
 import { PROVIDER_ADAPTERS, getProviderAdapter } from "./adapters";
+import { testAmazonProvider } from "./adapters/amazon";
+import { testEtsyProvider } from "./adapters/etsy";
 import { testGoogleTrendsProvider } from "./adapters/google-trends";
+import { testPinterestProvider } from "./adapters/pinterest";
 import { testShopifyProvider } from "./adapters/shopify";
+import { testTikTokProvider } from "./adapters/tiktok";
 import { clearProviderCache } from "./cache";
 import { getProviderSetupGuide } from "./provider-guides";
 import type {
@@ -216,6 +220,10 @@ export class DataSourceManager {
   } | null> {
     if (id === "shopify") return testShopifyProvider();
     if (id === "google_trends") return testGoogleTrendsProvider();
+    if (id === "pinterest") return testPinterestProvider();
+    if (id === "tiktok") return testTikTokProvider();
+    if (id === "etsy") return testEtsyProvider();
+    if (id === "amazon") return testAmazonProvider();
     const adapter = getProviderAdapter(id);
     if (!adapter) return null;
     const health = await adapter.healthCheck();

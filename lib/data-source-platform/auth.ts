@@ -27,16 +27,20 @@ const AUTH_CONFIG: Record<ProviderId, AuthConfig> = {
     envKeys: ["PINTEREST_ACCESS_TOKEN"],
   },
   tiktok: {
-    method: "api_key",
-    envKeys: ["TIKTOK_API_KEY"],
+    method: "oauth",
+    envKeys: ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"],
   },
   etsy: {
     method: "api_key",
     envKeys: ["ETSY_API_KEY"],
   },
   amazon: {
-    method: "api_key",
-    envKeys: ["AMAZON_API_KEY"],
+    method: "client_credentials",
+    envKeys: [
+      "AMAZON_ACCESS_KEY",
+      "AMAZON_SECRET_KEY",
+      "AMAZON_PARTNER_TAG",
+    ],
   },
   instagram: {
     method: "api_key",
