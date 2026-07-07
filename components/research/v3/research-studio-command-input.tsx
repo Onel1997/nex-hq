@@ -7,6 +7,7 @@ import {
   ArrowUp,
   ImagePlus,
   LayoutGrid,
+  Loader2,
   Mic,
   Paperclip,
 } from "lucide-react";
@@ -14,11 +15,15 @@ import {
 interface ResearchStudioCommandInputProps {
   value: string;
   onChange: (value: string) => void;
+  onSubmit: (text: string) => void;
+  disabled?: boolean;
 }
 
 export function ResearchStudioCommandInput({
   value,
   onChange,
+  onSubmit,
+  disabled = false,
 }: ResearchStudioCommandInputProps) {
   const [focused, setFocused] = useState(false);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -33,6 +38,15 @@ export function ResearchStudioCommandInput({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      if (!disabled && value.trim()) {
+        onSubmit(value);
+      }
+    }
+  };
+
+  const handleSubmit = () => {
+    if (!disabled && value.trim()) {
+      onSubmit(value);
     }
   };
 
@@ -55,6 +69,7 @@ export function ResearchStudioCommandInput({
           rows={4}
           className="rs3-command-input"
           aria-label="Research command"
+          disabled={disabled}
         />
         <div className="rs3-command-toolbar">
           <div className="rs3-command-actions">
@@ -102,16 +117,21 @@ export function ResearchStudioCommandInput({
           <button
             type="button"
             className="rs3-command-submit"
-            disabled={!value.trim()}
-            aria-label="Launch research — Coming Soon"
-            title="Research workflow — Coming Soon"
+            disabled={disabled || !value.trim()}
+            onClick={handleSubmit}
+            aria-label="Launch research"
+            title="Launch research"
           >
-            <ArrowUp className="size-4" strokeWidth={2.25} />
+            {disabled ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <ArrowUp className="size-4" strokeWidth={2.25} />
+            )}
           </button>
         </div>
       </div>
       <p className="rs3-command-hint">
-        Type or paste your research mission · Workflow launching soon
+        Enter to launch · Shift+Enter for new line
       </p>
     </div>
   );

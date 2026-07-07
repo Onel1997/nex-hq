@@ -17,6 +17,7 @@ import {
   Activity,
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
   Database,
   Loader2,
   PlugZap,
@@ -43,7 +44,13 @@ interface ResearchStudioDataSourcesCenterProps {
   onAction: (
     id: string,
     action: ProviderAction,
-  ) => Promise<{ ok?: boolean; error?: string; health?: { healthy: boolean; message?: string } }>;
+  ) => Promise<{
+    ok?: boolean;
+    error?: string;
+    message?: string;
+    health?: { healthy: boolean; message?: string };
+    test?: { ok?: boolean; message?: string; mode?: string };
+  }>;
 }
 
 function SourceMark({ name, color }: { name: string; color: string }) {
@@ -82,8 +89,11 @@ function ProviderCard({
   feedback: ActionFeedback | null;
   onAction: (action: ProviderAction) => void;
 }) {
+  const [debugOpen, setDebugOpen] = useState(false);
   const displayStatus = resolveDisplayStatus(provider.status, provider.mode);
   const comingSoon = displayStatus === "coming_soon";
+  const guide = provider.setupGuide;
+  const missingKeys = provider.auth.missingKeys;
 
   return (
     <article className={cn("rs3-dsc-card", comingSoon && "rs3-dsc-card-soon")}>
@@ -102,6 +112,35 @@ function ProviderCard({
           {displayStatusLabel(displayStatus)}
         </span>
       </div>
+
+      {provider.mode === "simulated" && provider.simulatedReason ? (
+        <div className="rs3-dsc-simulated-banner">
+          <AlertCircle className="size-3.5 shrink-0" />
+          <span>{provider.simulatedReason}</span>
+        </div>
+      ) : null}
+
+      {guide ? (
+        <div className="rs3-dsc-setup">
+          <p className="rs3-dsc-setup-purpose">{guide.purpose}</p>
+          <ol className="rs3-dsc-setup-steps">
+            {guide.steps.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+          {guide.docsUrl ? (
+            <a
+              href={guide.docsUrl}
+              className="rs3-dsc-setup-docs"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Documentation →
+            </a>
+          ) : null}
+          <p className="rs3-dsc-setup-simulated-note">{guide.simulatedWhen}</p>
+        </div>
+      ) : null}
 
       <div className="rs3-dsc-metrics">
         <div className="rs3-dsc-metric">
@@ -159,6 +198,37 @@ function ProviderCard({
         <div className="rs3-dsc-error">
           <AlertCircle className="size-3.5 shrink-0" />
           <span>{provider.error}</span>
+        </div>
+      ) : null}
+
+      {!provider.auth.configured && missingKeys.length > 0 ? (
+        <div className="rs3-dsc-debug">
+          <button
+            type="button"
+            className="rs3-dsc-debug-toggle"
+            onClick={() => setDebugOpen((open) => !open)}
+            aria-expanded={debugOpen}
+          >
+            <ChevronDown
+              className={cn("size-3.5 transition-transform", debugOpen && "rotate-180")}
+            />
+            Developer setup
+          </button>
+          {debugOpen ? (
+            <div className="rs3-dsc-debug-panel">
+              <p className="rs3-dsc-debug-label">Missing environment variables</p>
+              <ul>
+                {missingKeys.map((key) => (
+                  <li key={key}>
+                    <code>{key}</code>
+                  </li>
+                ))}
+              </ul>
+              <p className="rs3-dsc-debug-hint">
+                Add these to .env.local — values are never shown here.
+              </p>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -294,9 +364,11 @@ export function ResearchStudioDataSourcesCenter({
             ...prev,
             [id]: {
               type: result.ok ? "success" : "error",
-              message: result.ok
-                ? "Manual test completed"
-                : result.error ?? "Manual test failed",
+              message:
+                result.message ??
+                (result.ok
+                  ? "Manual test completed"
+                  : result.error ?? "Manual test failed"),
             },
           }));
         } else if (action === "disconnect") {

@@ -82,6 +82,7 @@ function buildFromBaseline(
 function buildResult(
   data: GoogleTrendsData,
   mode: "live" | "simulated",
+  simulatedReason?: string,
 ): SourceIntelligence<GoogleTrendsData> {
   const rawSignals = toSignals(data);
   const confidence = computeConfidence({
@@ -103,6 +104,7 @@ function buildResult(
     loadedAt: new Date().toISOString(),
     signals,
     data,
+    simulatedReason,
     scores: {
       ...scores,
       demandScore: Math.round(
@@ -137,10 +139,22 @@ export async function scanGoogleTrends(
     try {
       const data = await fetchLiveGoogleTrends(region, extraKeywords);
       return buildResult(data, "live");
-    } catch {
-      return buildResult(buildFromBaseline(input.baseline ?? null, region), "simulated");
+    } catch (error) {
+      const reason =
+        error instanceof Error
+          ? `SerpAPI failed (${error.message}) — using static keyword estimates`
+          : "SerpAPI failed — using static keyword estimates";
+      return buildResult(
+        buildFromBaseline(input.baseline ?? null, region),
+        "simulated",
+        reason,
+      );
     }
   }
 
-  return buildResult(buildFromBaseline(input.baseline ?? null, region), "simulated");
+  return buildResult(
+    buildFromBaseline(input.baseline ?? null, region),
+    "simulated",
+    "GOOGLE_TRENDS_API_KEY not set — static streetwear keyword estimates, not live Google Trends",
+  );
 }

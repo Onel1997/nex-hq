@@ -5,9 +5,13 @@ import { cn } from "@/lib/utils";
 
 interface ResearchStudioMissionsProps {
   onSelect: (prompt: string) => void;
+  disabled?: boolean;
 }
 
-export function ResearchStudioMissions({ onSelect }: ResearchStudioMissionsProps) {
+export function ResearchStudioMissions({
+  onSelect,
+  disabled = false,
+}: ResearchStudioMissionsProps) {
   return (
     <section className="rs3-missions" aria-label="Quick missions">
       <div className="rs3-missions-header">
@@ -26,6 +30,7 @@ export function ResearchStudioMissions({ onSelect }: ResearchStudioMissionsProps
               type="button"
               className={cn("rs3-mission-card", `rs3-mission-accent-${mission.accent}`)}
               onClick={() => onSelect(mission.prompt)}
+              disabled={disabled}
             >
               <span className="rs3-mission-card-glow" />
               <span className="rs3-mission-icon-wrap">

@@ -55,6 +55,23 @@ function statusLabel(status: ProviderSnapshot["status"]): string {
   }
 }
 
+function statusShort(status: ProviderSnapshot["status"]): string {
+  switch (status) {
+    case "connected":
+      return "Live";
+    case "syncing":
+      return "Sync";
+    case "authentication_error":
+      return "Auth";
+    case "rate_limited":
+      return "Limit";
+    case "offline":
+      return "Off";
+    case "disconnected":
+      return "Soon";
+  }
+}
+
 function statusClass(status: ProviderSnapshot["status"]): string {
   switch (status) {
     case "connected":
@@ -103,6 +120,40 @@ export function ResearchStudioSidebarRight({
       aria-label="Live intelligence sources"
     >
       <div className="rs3-sidebar-header rs3-sidebar-header-right">
+        {!collapsed ? (
+          <div className="rs3-sources-heading">
+            <div className="rs3-sources-heading-title">
+              <span className="rs3-sources-pulse" />
+              <span className="rs3-sources-heading-text">
+                Live Intelligence
+              </span>
+            </div>
+            <div className="rs3-sources-heading-actions">
+              {onOpenDataSources ? (
+                <button
+                  type="button"
+                  className="rs3-sources-manage"
+                  onClick={onOpenDataSources}
+                  title="Open Data Sources Center"
+                >
+                  Manage
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="rs3-sources-refresh"
+                onClick={onRefreshAll}
+                disabled={refreshing}
+                aria-label="Refresh all sources"
+                title="Refresh all sources"
+              >
+                <RefreshCw
+                  className={cn("size-3.5", refreshing && "animate-spin")}
+                />
+              </button>
+            </div>
+          </div>
+        ) : null}
         <button
           type="button"
           className="rs3-sidebar-toggle"
@@ -115,34 +166,6 @@ export function ResearchStudioSidebarRight({
             <ChevronRight className="size-4" />
           )}
         </button>
-        {!collapsed ? (
-          <div className="rs3-sources-heading">
-            <span className="rs3-sources-pulse" />
-            <span>Live Intelligence Sources</span>
-            {onOpenDataSources ? (
-              <button
-                type="button"
-                className="rs3-sources-manage"
-                onClick={onOpenDataSources}
-                title="Open Data Sources Center"
-              >
-                Manage
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="rs3-sources-refresh"
-              onClick={onRefreshAll}
-              disabled={refreshing}
-              aria-label="Refresh all sources"
-              title="Refresh all sources"
-            >
-              <RefreshCw
-                className={cn("size-3.5", refreshing && "animate-spin")}
-              />
-            </button>
-          </div>
-        ) : null}
       </div>
 
       <div className="rs3-sources-list">
@@ -160,26 +183,27 @@ export function ResearchStudioSidebarRight({
           </div>
         ) : null}
 
-        {providers.map((source) => (
+        {providers.map((source, index) => (
           <div
             key={source.id}
             className={cn(
               "rs3-source-card",
+              source.status === "connected" &&
+                source.mode === "live" &&
+                "rs3-source-card-live",
               source.status === "disconnected" && "rs3-source-card-soon",
               source.error && source.status !== "disconnected" && "rs3-source-card-error",
+              index > 0 && "rs3-source-card-divided",
             )}
           >
             {!collapsed ? (
               <>
-                <div className="rs3-source-card-top">
+                <div className="rs3-source-card-head">
                   <div className="rs3-source-identity">
                     <SourceMark name={source.name} color={source.brandColor} />
-                    <div className="rs3-source-title-block">
-                      <span className="rs3-source-name">{source.name}</span>
-                      <span className={cn("rs3-health-dot", healthClass(source))} />
-                    </div>
+                    <span className="rs3-source-name">{source.name}</span>
                   </div>
-                  <div className="rs3-source-actions">
+                  <div className="rs3-source-head-actions">
                     <button
                       type="button"
                       className="rs3-source-refresh-btn"
@@ -190,18 +214,22 @@ export function ResearchStudioSidebarRight({
                       <RefreshCw className="size-3" />
                     </button>
                     <span
-                      className={cn("rs3-source-status", statusClass(source.status))}
+                      className={cn(
+                        "rs3-source-status-pill",
+                        statusClass(source.status),
+                      )}
+                      title={statusLabel(source.status)}
                     >
-                      {source.status === "connected" ? (
-                        <span className="rs3-source-status-dot" />
-                      ) : null}
-                      {statusLabel(source.status)}
+                      <span className="rs3-source-status-dot" aria-hidden />
+                      <span className="rs3-source-status-text">
+                        {statusShort(source.status)}
+                      </span>
                     </span>
                   </div>
                 </div>
 
                 {source.status !== "disconnected" ? (
-                  <>
+                  <div className="rs3-source-body">
                     {source.trending.length > 0 ? (
                       <div className="rs3-source-trending">
                         <span className="rs3-source-trending-label">Trending</span>
@@ -211,8 +239,9 @@ export function ResearchStudioSidebarRight({
                               <TrendingUp
                                 className="rs3-source-trend-icon"
                                 strokeWidth={2.5}
+                                aria-hidden
                               />
-                              {item}
+                              <span className="rs3-source-trend-text">{item}</span>
                             </li>
                           ))}
                         </ul>
@@ -222,25 +251,28 @@ export function ResearchStudioSidebarRight({
                     ) : null}
 
                     <div className="rs3-source-meta">
+                      <span className={cn("rs3-health-dot", healthClass(source))} />
                       <span className="rs3-source-sync">
-                        Last sync: {formatRelativeSync(source.lastSync)}
+                        {formatRelativeSync(source.lastSync)}
                       </span>
                       {source.fromCache && source.cacheAgeMs != null ? (
                         <span className="rs3-source-cache">
-                          Cached {formatRelativeSync(
-                            new Date(Date.now() - source.cacheAgeMs).toISOString(),
-                          )}
+                          Cached
                         </span>
                       ) : null}
                       {source.mode === "simulated" ? (
-                        <span className="rs3-source-mode">Simulated</span>
+                        <span className="rs3-source-mode">Sim</span>
+                      ) : source.status === "connected" && source.mode === "live" ? (
+                        <span className="rs3-source-mode rs3-source-mode-live">
+                          Live
+                        </span>
                       ) : null}
                     </div>
 
                     {source.error ? (
                       <p className="rs3-source-error-text">{source.error}</p>
                     ) : null}
-                  </>
+                  </div>
                 ) : (
                   <p className="rs3-source-summary rs3-source-summary-muted">
                     Intelligence feed launching soon
@@ -248,7 +280,10 @@ export function ResearchStudioSidebarRight({
                 )}
               </>
             ) : (
-              <div className="rs3-source-collapsed">
+              <div
+                className="rs3-source-collapsed"
+                title={`${source.name} — ${statusLabel(source.status)}`}
+              >
                 <SourceMark name={source.name} color={source.brandColor} />
                 <span className={cn("rs3-health-dot", healthClass(source))} />
               </div>

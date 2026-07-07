@@ -56,6 +56,7 @@ export interface ProviderSyncResult<T = unknown> {
   error?: string;
   health?: ProviderHealth;
   rateLimit?: ProviderRateLimit;
+  simulatedReason?: string;
 }
 
 export interface ProviderSnapshot {
@@ -99,6 +100,13 @@ export interface ProviderSettingsEntry {
   health: ProviderHealth | null;
   error?: string;
   rateLimit?: ProviderRateLimit;
+  simulatedReason?: string;
+  setupGuide?: {
+    purpose: string;
+    steps: string[];
+    simulatedWhen: string;
+    docsUrl?: string;
+  };
 }
 
 export interface DataSourceSettingsSnapshot {

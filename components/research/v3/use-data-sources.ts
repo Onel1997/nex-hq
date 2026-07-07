@@ -17,8 +17,10 @@ interface UseDataSourcesOptions {
 interface ProviderActionResult {
   ok?: boolean;
   error?: string;
+  message?: string;
   health?: { healthy: boolean; message?: string; latencyMs?: number };
   provider?: unknown;
+  test?: { ok?: boolean; message?: string; mode?: string };
 }
 
 export function useDataSources(options: UseDataSourcesOptions = {}) {
@@ -135,8 +137,10 @@ export function useDataSources(options: UseDataSourcesOptions = {}) {
       return {
         ok: data.ok,
         error: data.error,
+        message: data.message ?? data.test?.message,
         health: data.health,
         provider: data.provider,
+        test: data.test,
       };
     },
     [fetchSources, loadSettings],

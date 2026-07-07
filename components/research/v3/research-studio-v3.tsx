@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useWorkspace } from "@/lib/i18n";
 import { ResearchStudioAtmosphere } from "./research-studio-atmosphere";
 import { ResearchStudioDataSourcesCenter } from "./research-studio-data-sources-center";
-import { ResearchStudioHero } from "./research-studio-hero";
+import { ResearchStudioWorkspace } from "./research-studio-workspace";
+import { useResearchRun } from "./use-research-run";
 import { ResearchStudioSidebarLeft } from "./research-studio-sidebar-left";
 import { ResearchStudioSidebarRight } from "./research-studio-sidebar-right";
 import { useDataSources } from "./use-data-sources";
@@ -15,10 +16,21 @@ const MOBILE_BREAKPOINT = 1100;
 
 export function ResearchStudioV3() {
   const workspace = useWorkspace();
-  const [request, setRequest] = useState("");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [dataSourcesOpen, setDataSourcesOpen] = useState(false);
+
+  const {
+    request,
+    setRequest,
+    isLoading,
+    error: runError,
+    result,
+    phase,
+    runResearch,
+    reset,
+    retry,
+  } = useResearchRun();
 
   const {
     snapshot,
@@ -47,9 +59,19 @@ export function ResearchStudioV3() {
     return () => mq.removeEventListener("change", apply);
   }, []);
 
-  const handleSelectMission = useCallback((prompt: string) => {
-    setRequest(prompt);
-  }, []);
+  const handleSelectMission = useCallback(
+    (prompt: string) => {
+      setRequest(prompt);
+    },
+    [setRequest],
+  );
+
+  const handleSubmit = useCallback(
+    (text: string) => {
+      void runResearch(text);
+    },
+    [runResearch],
+  );
 
   const handleOpenDataSources = useCallback(async () => {
     setDataSourcesOpen(true);
@@ -99,9 +121,16 @@ export function ResearchStudioV3() {
 
         <main className="rs3-main">
           <div className="rs3-main-scroll">
-            <ResearchStudioHero
+            <ResearchStudioWorkspace
               request={request}
               onRequestChange={setRequest}
+              onSubmit={handleSubmit}
+              isLoading={isLoading}
+              error={runError}
+              phase={phase}
+              result={result}
+              onReset={reset}
+              onRetry={retry}
               onSelectMission={handleSelectMission}
             />
           </div>

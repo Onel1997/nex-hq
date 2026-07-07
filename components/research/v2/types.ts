@@ -16,6 +16,7 @@ export interface DesignBriefSummary {
   competitorScore?: number;
   confidence?: number;
   rationale?: string;
+  intelligenceMode?: "live" | "simulated";
 }
 
 export interface DesignReportResult {

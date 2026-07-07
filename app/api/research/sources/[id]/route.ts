@@ -79,11 +79,18 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     if (action === "test") {
-      const [result, health] = await Promise.all([
+      const [result, health, test] = await Promise.all([
         DataSourceManager.syncProvider(id, { force: true }),
         DataSourceManager.healthCheckProvider(id),
+        DataSourceManager.testProvider(id),
       ]);
-      return NextResponse.json({ ok: true, provider: result, health });
+      return NextResponse.json({
+        ok: test?.ok ?? result?.mode === "live",
+        provider: result,
+        health,
+        test,
+        message: test?.message,
+      });
     }
 
     const result = await DataSourceManager.syncProvider(id, { force: true });

@@ -179,6 +179,38 @@ async function fetchRisingQueries(
     .slice(0, 6);
 }
 
+/** Ping SerpAPI with a single keyword — cheap health check. */
+export async function pingGoogleTrendsLive(
+  region = REGION,
+): Promise<{ ok: boolean; latencyMs: number; message: string }> {
+  const apiKey = process.env.GOOGLE_TRENDS_API_KEY;
+  if (!apiKey) {
+    return {
+      ok: false,
+      latencyMs: 0,
+      message: "GOOGLE_TRENDS_API_KEY not configured",
+    };
+  }
+
+  const started = Date.now();
+  const result = await fetchKeywordTrend("streetwear", region, apiKey);
+  const latencyMs = Date.now() - started;
+
+  if (!result) {
+    return {
+      ok: false,
+      latencyMs,
+      message: "SerpAPI returned no trend data for health ping",
+    };
+  }
+
+  return {
+    ok: true,
+    latencyMs,
+    message: `Live · ${result.keyword} demand ${result.demand}/100 in ${result.region}`,
+  };
+}
+
 /** Fetch live Google Trends intelligence for Germany streetwear keywords. */
 export async function fetchLiveGoogleTrends(
   region = REGION,

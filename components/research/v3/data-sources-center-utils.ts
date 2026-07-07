@@ -28,7 +28,13 @@ export function resolveDisplayStatus(
 ): ProviderDisplayStatus {
   if (status === "disconnected") return "coming_soon";
   if (status === "connected" && mode === "live") return "connected";
-  if (mode === "simulated") return "simulated";
+  if (
+    mode === "simulated" &&
+    status !== "offline" &&
+    status !== "rate_limited"
+  ) {
+    return "simulated";
+  }
   return "offline";
 }
 

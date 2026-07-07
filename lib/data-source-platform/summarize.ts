@@ -11,40 +11,67 @@ export function summarizeShopify(baseline: MilaeneCommerceBaseline): {
   trending: string[];
 } {
   const ci = baseline.commerceIntelligence;
+  const knowledge = baseline.knowledge;
+  const pk = baseline.productKnowledge;
   const topCount = ci.topUnits.length;
-  const lowStock = baseline.productKnowledge.inventoryState.lowStock;
-  const collectionCount = baseline.knowledge.collections.length;
-  const productCount = baseline.knowledge.products.length;
+  const lowStock = pk.inventoryState.lowStock;
+  const collectionCount = knowledge.collections.length;
+  const productCount = knowledge.products.length;
+  const withImages = knowledge.products.filter((p) => p.imageUrl).length;
+  const taggedCount = knowledge.products.filter((p) => p.tags.length > 0).length;
+  const tagUniverse = new Set(
+    knowledge.products.flatMap((p) => p.tags).slice(0, 40),
+  );
 
   const summary = [
-    `${productCount} products · ${collectionCount} collections`,
+    `Live · ${productCount} products · ${collectionCount} collections`,
     topCount > 0
-      ? `${topCount} top sellers tracked`
-      : "Catalog intelligence active",
-    lowStock > 0 ? `${lowStock} low-stock SKUs flagged` : "Inventory synced",
+      ? `${topCount} top sellers · ${withImages} with images`
+      : `${withImages} products with images`,
+    lowStock > 0
+      ? `${lowStock} low-stock SKUs · ${taggedCount} tagged products`
+      : `Inventory synced · ${taggedCount} tagged · ${tagUniverse.size} unique tags`,
   ];
 
   const trending = [
     ...ci.topUnits.slice(0, 3).map((u) => u.title),
-    ...baseline.productKnowledge.bestsellerCandidates
-      .slice(0, 2)
-      .map((p) => p.title),
+    ...pk.bestsellerCandidates.slice(0, 2).map((p) => p.title),
   ].filter(Boolean);
 
   return { summary, trending: trending.slice(0, 4) };
 }
 
-export function summarizeGoogleTrends(data: GoogleTrendsData): {
+export function summarizeGoogleTrends(
+  data: GoogleTrendsData,
+  mode: "live" | "simulated" = "live",
+): {
   summary: string[];
   trending: string[];
 } {
+  const prefix = mode === "live" ? "Live" : "Simulated";
   const rising = data.topRising.slice(0, 3);
+  const topKeyword = data.keywords[0];
+  const region = topKeyword?.region ?? "DE";
+
+  const summary = [
+    `${prefix} · ${data.keywords.length} keywords · region ${region}`,
+    data.seasonalityNote,
+  ];
+
+  if (mode === "simulated") {
+    summary.push("Static estimates — not live Google Trends data");
+  } else if (topKeyword) {
+    summary.push(
+      `Top: ${topKeyword.keyword} ${topKeyword.change >= 0 ? "+" : ""}${topKeyword.change}% · ${topKeyword.seasonality}`,
+    );
+  }
+
   return {
-    summary: [
-      `${data.keywords.length} keywords tracked`,
-      data.seasonalityNote,
-    ],
-    trending: rising.length > 0 ? rising : data.keywords.slice(0, 3).map((k) => k.keyword),
+    summary,
+    trending:
+      rising.length > 0
+        ? rising
+        : data.keywords.slice(0, 3).map((k) => k.keyword),
   };
 }
 

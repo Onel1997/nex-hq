@@ -7,12 +7,16 @@ interface ResearchStudioHeroProps {
   request: string;
   onRequestChange: (value: string) => void;
   onSelectMission: (prompt: string) => void;
+  onSubmit: (text: string) => void;
+  disabled?: boolean;
 }
 
 export function ResearchStudioHero({
   request,
   onRequestChange,
   onSelectMission,
+  onSubmit,
+  disabled = false,
 }: ResearchStudioHeroProps) {
   return (
     <div className="rs3-hero">
@@ -25,9 +29,14 @@ export function ResearchStudioHero({
         </p>
       </div>
 
-      <ResearchStudioCommandInput value={request} onChange={onRequestChange} />
+      <ResearchStudioCommandInput
+        value={request}
+        onChange={onRequestChange}
+        onSubmit={onSubmit}
+        disabled={disabled}
+      />
 
-      <ResearchStudioMissions onSelect={onSelectMission} />
+      <ResearchStudioMissions onSelect={onSelectMission} disabled={disabled} />
     </div>
   );
 }

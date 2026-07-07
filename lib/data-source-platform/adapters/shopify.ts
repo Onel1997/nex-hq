@@ -1,6 +1,7 @@
 import { loadMilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
 import type { MilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
 import { ShopifyApiError, ShopifyConfigError } from "@/lib/shopify/client";
+import { testShopifyConnection } from "@/lib/shopify/connection-test";
 import { getProviderAuthStatus } from "../auth";
 import {
   clearProviderCache,
@@ -28,6 +29,26 @@ function mapShopifyError(error: unknown): ProviderConnectionStatus {
   return "offline";
 }
 
+function missingCredentialsResult(): ProviderSyncResult<MilaeneCommerceBaseline> {
+  const auth = getProviderAuthStatus("shopify");
+  return {
+    id: "shopify",
+    status: "authentication_error",
+    mode: "simulated",
+    data: null,
+    summary: ["Shopify credentials not configured"],
+    trending: [],
+    lastSync: new Date().toISOString(),
+    lastSuccessfulSync: null,
+    cacheAgeMs: null,
+    fromCache: false,
+    apiVersion: API_VERSION,
+    error: `Missing credentials: ${auth.missingKeys.join(", ")}`,
+    simulatedReason:
+      "Set Shopify Client Credentials in .env.local — no catalog data is fabricated",
+  };
+}
+
 export const shopifyAdapter: DataProviderAdapter<MilaeneCommerceBaseline> = {
   id: "shopify",
   label: "Shopify",
@@ -36,49 +57,29 @@ export const shopifyAdapter: DataProviderAdapter<MilaeneCommerceBaseline> = {
   cacheTtlMs: CACHE_TTL_MS,
   getAuthStatus: () => getProviderAuthStatus("shopify"),
   async healthCheck(): Promise<ProviderHealth> {
-    const started = Date.now();
     const auth = getProviderAuthStatus("shopify");
     if (!auth.configured) {
       return {
         healthy: false,
-        message: `Missing: ${auth.missingKeys.join(", ")}`,
+        message: `Missing credentials: ${auth.missingKeys.join(", ")}`,
         checkedAt: new Date().toISOString(),
       };
     }
-    try {
-      const baseline = await loadMilaeneCommerceBaseline();
-      return {
-        healthy: Boolean(baseline.storeDomain),
-        latencyMs: Date.now() - started,
-        message: `Store ${baseline.storeDomain} reachable`,
-        checkedAt: new Date().toISOString(),
-      };
-    } catch (error) {
-      return {
-        healthy: false,
-        latencyMs: Date.now() - started,
-        message: error instanceof Error ? error.message : "Health check failed",
-        checkedAt: new Date().toISOString(),
-      };
-    }
+
+    const test = await testShopifyConnection();
+    return {
+      healthy: test.ok,
+      latencyMs: test.latencyMs,
+      message: test.ok
+        ? `Live · ${test.shopName} · ${test.productSampleCount} products sampled · ${test.collectionSampleCount} collections`
+        : test.error ?? "Health check failed",
+      checkedAt: new Date().toISOString(),
+    };
   },
   async sync(options = {}): Promise<ProviderSyncResult<MilaeneCommerceBaseline>> {
     const auth = getProviderAuthStatus("shopify");
     if (!auth.configured) {
-      return {
-        id: "shopify",
-        status: "authentication_error",
-        mode: "simulated",
-        data: null,
-        summary: ["Shopify credentials not configured"],
-        trending: [],
-        lastSync: new Date().toISOString(),
-        lastSuccessfulSync: null,
-        cacheAgeMs: null,
-        fromCache: false,
-        apiVersion: API_VERSION,
-        error: `Missing: ${auth.missingKeys.join(", ")}`,
-      };
+      return missingCredentialsResult();
     }
 
     if (!options.force) {
@@ -104,7 +105,6 @@ export const shopifyAdapter: DataProviderAdapter<MilaeneCommerceBaseline> = {
         cacheAgeMs: 0,
         fromCache: false,
         apiVersion: API_VERSION,
-        rateLimit: { limit: 40, remaining: 38 },
       };
       setCachedProviderResult("shopify", result);
       return result;
@@ -115,7 +115,7 @@ export const shopifyAdapter: DataProviderAdapter<MilaeneCommerceBaseline> = {
         status,
         mode: "simulated",
         data: null,
-        summary: ["Shopify sync failed"],
+        summary: ["Shopify sync failed — no catalog data returned"],
         trending: [],
         lastSync: new Date().toISOString(),
         lastSuccessfulSync: null,
@@ -123,6 +123,8 @@ export const shopifyAdapter: DataProviderAdapter<MilaeneCommerceBaseline> = {
         fromCache: false,
         apiVersion: API_VERSION,
         error: error instanceof Error ? error.message : "Sync failed",
+        simulatedReason:
+          "API unreachable — Shopify data is not fabricated when sync fails",
       };
     }
   },
@@ -130,4 +132,36 @@ export const shopifyAdapter: DataProviderAdapter<MilaeneCommerceBaseline> = {
 
 export function disconnectShopify(): void {
   clearProviderCache("shopify");
+}
+
+/** Manual connection test for Data Sources Center. */
+export async function testShopifyProvider(): Promise<{
+  ok: boolean;
+  message: string;
+  details?: Record<string, string | number>;
+}> {
+  const auth = getProviderAuthStatus("shopify");
+  if (!auth.configured) {
+    return {
+      ok: false,
+      message: `Missing credentials: ${auth.missingKeys.join(", ")}`,
+    };
+  }
+
+  const test = await testShopifyConnection();
+  if (!test.ok) {
+    return { ok: false, message: test.error ?? "Connection test failed" };
+  }
+
+  return {
+    ok: true,
+    message: `Live · ${test.shopName} reachable`,
+    details: {
+      productsSampled: test.productSampleCount ?? 0,
+      collectionsSampled: test.collectionSampleCount ?? 0,
+      withImages: test.productsWithImages ?? 0,
+      tagged: test.taggedProducts ?? 0,
+      latencyMs: test.latencyMs ?? 0,
+    },
+  };
 }

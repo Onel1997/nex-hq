@@ -1,7 +1,10 @@
 import "server-only";
 
 import { PROVIDER_ADAPTERS, getProviderAdapter } from "./adapters";
+import { testGoogleTrendsProvider } from "./adapters/google-trends";
+import { testShopifyProvider } from "./adapters/shopify";
 import { clearProviderCache } from "./cache";
+import { getProviderSetupGuide } from "./provider-guides";
 import type {
   DataSourcePlatformSnapshot,
   DataSourceSettingsSnapshot,
@@ -148,6 +151,7 @@ export class DataSourceManager {
 
     const providers = results.map((result) => {
       const adapter = getProviderAdapter(result.id)!;
+      const guide = getProviderSetupGuide(result.id);
       return {
         id: result.id,
         name: adapter.label,
@@ -163,6 +167,13 @@ export class DataSourceManager {
         health: result.health ?? null,
         error: result.error,
         rateLimit: result.rateLimit,
+        simulatedReason: result.simulatedReason,
+        setupGuide: {
+          purpose: guide.purpose,
+          steps: guide.steps,
+          simulatedWhen: guide.simulatedWhen,
+          docsUrl: guide.docsUrl,
+        },
       };
     });
 
@@ -196,6 +207,23 @@ export class DataSourceManager {
   static disconnectAll(): void {
     clearProviderCache();
   }
+
+  static async testProvider(id: ProviderId): Promise<{
+    ok: boolean;
+    message: string;
+    mode?: "live" | "simulated";
+    details?: Record<string, string | number>;
+  } | null> {
+    if (id === "shopify") return testShopifyProvider();
+    if (id === "google_trends") return testGoogleTrendsProvider();
+    const adapter = getProviderAdapter(id);
+    if (!adapter) return null;
+    const health = await adapter.healthCheck();
+    return {
+      ok: health.healthy,
+      message: health.message ?? (health.healthy ? "Test passed" : "Test failed"),
+    };
+  }
 }
 
 export async function loadDataSourcePlatformSnapshot(options?: {
@@ -217,6 +245,12 @@ export function resolveDisplayStatus(
 ): ProviderDisplayStatus {
   if (status === "disconnected") return "coming_soon";
   if (status === "connected" && mode === "live") return "connected";
-  if (mode === "simulated") return "simulated";
+  if (
+    mode === "simulated" &&
+    status !== "offline" &&
+    status !== "rate_limited"
+  ) {
+    return "simulated";
+  }
   return "offline";
 }

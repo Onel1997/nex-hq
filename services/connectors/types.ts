@@ -36,6 +36,7 @@ export interface SourceIntelligence<T> {
   signals: IntelligenceSignal[];
   data: T;
   scores?: ConnectorIntelligenceScores;
+  simulatedReason?: string;
 }
 
 export interface ConnectorInput {
