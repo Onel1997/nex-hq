@@ -1,5 +1,5 @@
 import {
-  fetchLiveRedditIntelligence,
+  fetchLiveReddit,
   isRedditLiveConfigured,
 } from "./clients/reddit-client";
 import {
@@ -15,88 +15,85 @@ export interface RedditThreadSignal {
   sentiment: "positive" | "neutral" | "negative";
   insight: string;
   upvotes: number;
+  /** Comment count on the source thread (0 when unavailable). */
+  comments?: number;
+  /** Reddit link flair, when the post carries one. */
+  flair?: string | null;
+  /** Which listing this thread was collected from. */
+  sort?: "hot" | "top" | "rising";
+  /** Time window the thread was collected under (top listings only). */
+  timeframe?: "24h" | "7d" | "30d" | "all";
+}
+
+/** A term aggregated across the collected community sample with its frequency. */
+export interface RedditMention {
+  term: string;
+  count: number;
+}
+
+/** Aggregate engagement math derived from the collected sample only. */
+export interface RedditEngagement {
+  avgUpvotes: number;
+  avgComments: number;
+  /** Approx comments per hour, averaged across dated posts. */
+  commentVelocity: number;
+  /** Number of unique posts the aggregates were computed from. */
+  sampleSize: number;
 }
 
 export interface RedditIntelligenceData {
   subreddits: string[];
+  /** Sort + timeframe combinations that were actually collected. */
+  collections?: string[];
   purchaseBehavior: string[];
   wishes: string[];
   problems: string[];
   recommendations: string[];
   trends: string[];
   threads: RedditThreadSignal[];
+  // Phase 4.6 structured intelligence (empty in simulated/offline mode).
+  flairs: RedditMention[];
+  keywords: RedditMention[];
+  brandMentions: RedditMention[];
+  colorMentions: RedditMention[];
+  materialMentions: RedditMention[];
+  silhouetteMentions: RedditMention[];
+  graphicTrends: RedditMention[];
+  aesthetics: RedditMention[];
+  /** Highest-upvoted post titles (most upvoted ideas). */
+  topIdeas: string[];
+  engagement: RedditEngagement;
 }
 
-const SUBREDDITS = [
-  "streetwear",
-  "fashion",
-  "fashionreps",
-  "streetwearstartup",
-  "malefashionadvice",
-];
-
-const BASE_DATA: RedditIntelligenceData = {
-  subreddits: SUBREDDITS,
-  purchaseBehavior: [
-    "Quality over hype — buyers prefer premium blanks with subtle branding",
-    "Capsule drops outperform always-on catalogs in streetwear communities",
-    "POD skepticism wenn Qualität nicht premium wirkt",
-    "Oversized fits dominieren Kaufentscheidungen 18-28",
-  ],
-  wishes: [
-    "More earth tone palettes without fast-fashion aesthetic",
-    "Heavyweight hoodies with embroidery under €80",
-    "Wide-leg cargos with premium construction",
-    "Scarcity without artificial hype tactics",
-  ],
-  problems: [
-    "Low-quality POD prints fade after few washes",
-    "Generic designs — hard to differentiate",
-    "Shorts category weak conversion in indie brands",
-    "Accessories ohne klare Markenidentität",
-  ],
-  recommendations: [
-    "Invest in heavyweight blanks + embroidery",
-    "Earth tone capsule for SS26",
-    "Reduce SKU count — focus hero products",
-    "Faith/Dream Tee formula auf Hoodies übertragen",
-  ],
-  trends: [
-    "Oversized silhouettes accelerating",
-    "Earth tones replacing loud graphics",
-    "Premium minimalism over logo-heavy",
-    "UK streetwear aesthetic gaining DE traction",
-  ],
-  threads: [
-    {
-      subreddit: "streetwear",
-      topic: "Best oversized hoodies 2026",
-      sentiment: "positive",
-      insight: "Earth tones + heavy fleece most requested",
-      upvotes: 842,
-    },
-    {
-      subreddit: "malefashionadvice",
-      topic: "Capsule wardrobe streetwear",
-      sentiment: "positive",
-      insight: "3-5 hero pieces preferred over large catalogs",
-      upvotes: 1204,
-    },
-    {
-      subreddit: "streetwearstartup",
-      topic: "POD quality expectations",
-      sentiment: "negative",
-      insight: "Print quality is #1 churn reason",
-      upvotes: 567,
-    },
-    {
-      subreddit: "fashionreps",
-      topic: "Premium blank suppliers",
-      sentiment: "neutral",
-      insight: "Heavyweight tees and hoodies most discussed",
-      upvotes: 923,
-    },
-  ],
+/**
+ * Honest empty payload. Reddit never fabricates community data — when
+ * credentials are missing or the API fails we return this shape so the UI can
+ * report Simulated/Offline without inventing engagement or threads.
+ */
+export const EMPTY_REDDIT_DATA: RedditIntelligenceData = {
+  subreddits: [],
+  collections: [],
+  purchaseBehavior: [],
+  wishes: [],
+  problems: [],
+  recommendations: [],
+  trends: [],
+  threads: [],
+  flairs: [],
+  keywords: [],
+  brandMentions: [],
+  colorMentions: [],
+  materialMentions: [],
+  silhouetteMentions: [],
+  graphicTrends: [],
+  aesthetics: [],
+  topIdeas: [],
+  engagement: {
+    avgUpvotes: 0,
+    avgComments: 0,
+    commentVelocity: 0,
+    sampleSize: 0,
+  },
 };
 
 function toSignals(data: RedditIntelligenceData): IntelligenceSignal[] {
@@ -144,22 +141,44 @@ function toSignals(data: RedditIntelligenceData): IntelligenceSignal[] {
     tags: ["trend"],
   }));
 
-  return [...threadSignals, ...complaintSignals, ...demandSignals, ...trendSignals];
+  const aestheticSignals = data.aesthetics.slice(0, 2).map((mention, i) => ({
+    id: `reddit-aesthetic-${i}`,
+    category: "consumer" as const,
+    source: "reddit" as const,
+    label: "Aesthetic",
+    message: `${mention.term} (${mention.count} mentions)`,
+    score: 66 + i * 4,
+    direction: "up" as const,
+    tags: ["trend", "aesthetic"],
+  }));
+
+  return [
+    ...threadSignals,
+    ...complaintSignals,
+    ...demandSignals,
+    ...trendSignals,
+    ...aestheticSignals,
+  ];
 }
 
 function buildResult(
   data: RedditIntelligenceData,
   mode: "live" | "simulated",
+  simulatedReason?: string,
 ): SourceIntelligence<RedditIntelligenceData> {
   const rawSignals = toSignals(data);
   const confidence = computeConfidence({
     mode,
     sampleSize: data.threads.length + data.trends.length,
-    freshness: mode === "live" ? 0.95 : 0.7,
-    dataQuality: mode === "live" ? 0.92 : 0.85,
+    freshness: mode === "live" ? 0.95 : 0.5,
+    dataQuality: mode === "live" ? 0.92 : 0.4,
   });
   const signals = normalizeSignals(rawSignals, confidence);
-  const scores = aggregateConnectorScores(signals, { social: 0.7, demand: 0.3 }, confidence);
+  const scores = aggregateConnectorScores(
+    signals,
+    { social: 0.7, demand: 0.3 },
+    confidence,
+  );
 
   return {
     source: "reddit",
@@ -167,6 +186,7 @@ function buildResult(
     loadedAt: new Date().toISOString(),
     signals,
     data,
+    simulatedReason,
     scores,
   };
 }
@@ -177,12 +197,20 @@ export async function scanReddit(
 ): Promise<SourceIntelligence<RedditIntelligenceData>> {
   if (isRedditLiveConfigured()) {
     try {
-      const data = await fetchLiveRedditIntelligence();
+      const data = await fetchLiveReddit();
       return buildResult(data, "live");
-    } catch {
-      return buildResult(BASE_DATA, "simulated");
+    } catch (error) {
+      const reason =
+        error instanceof Error
+          ? `Reddit API failed (${error.message}) — no data fabricated`
+          : "Reddit API failed — no data fabricated";
+      return buildResult(EMPTY_REDDIT_DATA, "simulated", reason);
     }
   }
 
-  return buildResult(BASE_DATA, "simulated");
+  return buildResult(
+    EMPTY_REDDIT_DATA,
+    "simulated",
+    "REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET not set — no Reddit data is returned without credentials",
+  );
 }

@@ -2,11 +2,17 @@ import "server-only";
 
 import { PROVIDER_ADAPTERS, getProviderAdapter } from "./adapters";
 import { testAmazonProvider } from "./adapters/amazon";
+import { testDepopProvider } from "./adapters/depop";
 import { testEtsyProvider } from "./adapters/etsy";
+import { testGrailedProvider } from "./adapters/grailed";
+import { testStockXProvider } from "./adapters/stockx";
+import { testFashionNewsProvider } from "./adapters/fashion-news";
 import { testGoogleTrendsProvider } from "./adapters/google-trends";
 import { testPinterestProvider } from "./adapters/pinterest";
+import { testRedditProvider } from "./adapters/reddit";
 import { testShopifyProvider } from "./adapters/shopify";
 import { testTikTokProvider } from "./adapters/tiktok";
+import { testYouTubeProvider } from "./adapters/youtube";
 import { clearProviderCache } from "./cache";
 import { getProviderSetupGuide } from "./provider-guides";
 import type {
@@ -224,6 +230,12 @@ export class DataSourceManager {
     if (id === "tiktok") return testTikTokProvider();
     if (id === "etsy") return testEtsyProvider();
     if (id === "amazon") return testAmazonProvider();
+    if (id === "reddit") return testRedditProvider();
+    if (id === "fashion_news") return testFashionNewsProvider();
+    if (id === "youtube") return testYouTubeProvider();
+    if (id === "depop") return testDepopProvider();
+    if (id === "stockx") return testStockXProvider();
+    if (id === "grailed") return testGrailedProvider();
     const adapter = getProviderAdapter(id);
     if (!adapter) return null;
     const health = await adapter.healthCheck();

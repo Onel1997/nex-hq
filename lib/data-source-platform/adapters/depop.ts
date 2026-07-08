@@ -1,36 +1,38 @@
-import { scanReddit } from "@/services/connectors/reddit";
-import type { RedditIntelligenceData } from "@/services/connectors/reddit";
-import { EMPTY_REDDIT_DATA } from "@/services/connectors/reddit";
+import { scanDepop } from "@/services/connectors/depop";
+import type { DepopIntelligenceData } from "@/services/connectors/depop";
+import { EMPTY_DEPOP_DATA } from "@/services/connectors/depop";
 import {
-  pingRedditLive,
-  REDDIT_API_LIMITATIONS,
-} from "@/services/connectors/clients/reddit-client";
+  pingDepopLive,
+  DEPOP_API_LIMITATIONS,
+} from "@/services/connectors/clients/depop-client";
 import { getProviderAuthStatus } from "../auth";
 import {
   clearProviderCache,
   getCachedProviderResult,
   setCachedProviderResult,
 } from "../cache";
-import { summarizeReddit } from "../summarize";
+import { summarizeDepop } from "../summarize";
 import type {
   DataProviderAdapter,
   ProviderHealth,
   ProviderSyncResult,
 } from "../types";
 
-const API_VERSION = "oauth-v1";
-const CACHE_TTL_MS = 10 * 60 * 1000;
+export type { DepopIntelligenceData };
+
+const API_VERSION = "partner-v1";
+const CACHE_TTL_MS = 20 * 60 * 1000;
 
 function buildResult(
-  data: RedditIntelligenceData | null,
+  data: DepopIntelligenceData | null,
   mode: "live" | "simulated",
   options: {
     error?: string;
     simulatedReason?: string;
     status?: ProviderSyncResult["status"];
   } = {},
-): ProviderSyncResult<RedditIntelligenceData> {
-  const auth = getProviderAuthStatus("reddit");
+): ProviderSyncResult<DepopIntelligenceData> {
+  const auth = getProviderAuthStatus("depop");
   const status =
     options.status ??
     (mode === "live"
@@ -39,11 +41,11 @@ function buildResult(
         ? "offline"
         : "disconnected");
 
-  const summaryData = data ?? EMPTY_REDDIT_DATA;
-  const { summary, trending } = summarizeReddit(summaryData, mode);
+  const summaryData = data ?? EMPTY_DEPOP_DATA;
+  const { summary, trending } = summarizeDepop(summaryData, mode);
 
   return {
-    id: "reddit",
+    id: "depop",
     status,
     mode,
     data,
@@ -56,41 +58,40 @@ function buildResult(
     apiVersion: API_VERSION,
     error: options.error,
     simulatedReason: options.simulatedReason,
-    rateLimit: { limit: 60, remaining: mode === "live" ? 55 : 60 },
   };
 }
 
-function missingCredentialsResult(): ProviderSyncResult<RedditIntelligenceData> {
-  const auth = getProviderAuthStatus("reddit");
+function missingCredentialsResult(): ProviderSyncResult<DepopIntelligenceData> {
+  const auth = getProviderAuthStatus("depop");
   return buildResult(null, "simulated", {
     status: "disconnected",
     error: `Missing credentials: ${auth.missingKeys.join(", ")}`,
     simulatedReason:
-      "Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in .env.local — no Reddit data is fabricated without credentials",
+      "Depop Partner Selling API requires DEPOP_API_KEY (approved partner access) — no resale data is fabricated without credentials",
   });
 }
 
-export const redditAdapter: DataProviderAdapter<RedditIntelligenceData> = {
-  id: "reddit",
-  label: "Reddit",
-  brandColor: "#ff4500",
+export const depopAdapter: DataProviderAdapter<DepopIntelligenceData> = {
+  id: "depop",
+  label: "Depop",
+  brandColor: "#ff2300",
   apiVersion: API_VERSION,
   cacheTtlMs: CACHE_TTL_MS,
-  getAuthStatus: () => getProviderAuthStatus("reddit"),
+  getAuthStatus: () => getProviderAuthStatus("depop"),
   async healthCheck(): Promise<ProviderHealth> {
-    const auth = getProviderAuthStatus("reddit");
+    const auth = getProviderAuthStatus("depop");
     const started = Date.now();
 
     if (!auth.configured) {
       return {
         healthy: false,
         message:
-          "Simulated — REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET not set (application OAuth required for live communities)",
+          "Coming Soon — DEPOP_API_KEY not set (Depop Partner Selling API requires approved partner credentials; no public marketplace API)",
         checkedAt: new Date().toISOString(),
       };
     }
 
-    const ping = await pingRedditLive();
+    const ping = await pingDepopLive();
     return {
       healthy: ping.ok,
       latencyMs: ping.latencyMs || Date.now() - started,
@@ -98,22 +99,22 @@ export const redditAdapter: DataProviderAdapter<RedditIntelligenceData> = {
       checkedAt: new Date().toISOString(),
     };
   },
-  async sync(options = {}): Promise<ProviderSyncResult<RedditIntelligenceData>> {
-    const auth = getProviderAuthStatus("reddit");
+  async sync(options = {}): Promise<ProviderSyncResult<DepopIntelligenceData>> {
+    const auth = getProviderAuthStatus("depop");
     if (!auth.configured) {
       return missingCredentialsResult();
     }
 
     if (!options.force) {
-      const cached = getCachedProviderResult<RedditIntelligenceData>(
-        "reddit",
+      const cached = getCachedProviderResult<DepopIntelligenceData>(
+        "depop",
         CACHE_TTL_MS,
       );
       if (cached) return cached;
     }
 
     try {
-      const intel = await scanReddit();
+      const intel = await scanDepop();
       const result = buildResult(
         intel.mode === "live" ? intel.data : null,
         intel.mode,
@@ -125,58 +126,58 @@ export const redditAdapter: DataProviderAdapter<RedditIntelligenceData> = {
       );
 
       if (intel.mode === "live" && result.summary.length > 0) {
-        result.summary.push(REDDIT_API_LIMITATIONS);
+        result.summary.push(DEPOP_API_LIMITATIONS);
       }
 
-      setCachedProviderResult("reddit", result);
+      setCachedProviderResult("depop", result);
       return result;
     } catch (error) {
       return buildResult(null, "simulated", {
         error: error instanceof Error ? error.message : "Sync failed",
         simulatedReason:
-          "Reddit sync error — no data fabricated when the API fails",
+          "Depop sync error — no data fabricated when the API fails",
         status: "offline",
       });
     }
   },
 };
 
-export function disconnectReddit(): void {
-  clearProviderCache("reddit");
+export function disconnectDepop(): void {
+  clearProviderCache("depop");
 }
 
 /** Manual connection test for Data Sources Center. */
-export async function testRedditProvider(): Promise<{
+export async function testDepopProvider(): Promise<{
   ok: boolean;
   message: string;
   mode: "live" | "simulated";
   details?: Record<string, string | number>;
 }> {
-  const auth = getProviderAuthStatus("reddit");
+  const auth = getProviderAuthStatus("depop");
   if (!auth.configured) {
     return {
       ok: false,
       mode: "simulated",
       message:
-        "Simulated — set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET for live community intelligence",
+        "Coming Soon — set DEPOP_API_KEY after Depop partner approval for live resale inventory intelligence",
     };
   }
 
-  const ping = await pingRedditLive();
+  const ping = await pingDepopLive();
   if (!ping.ok) {
     return {
       ok: false,
       mode: "simulated",
-      message: `Live API unreachable — ${ping.message}`,
+      message: `Partner API unreachable — ${ping.message}`,
     };
   }
 
-  const intel = await scanReddit();
+  const intel = await scanDepop();
   if (intel.mode !== "live") {
     return {
       ok: false,
       mode: "simulated",
-      message: intel.simulatedReason ?? "Reddit returned no live data",
+      message: intel.simulatedReason ?? "Depop returned no live data",
     };
   }
 
@@ -184,16 +185,13 @@ export async function testRedditProvider(): Promise<{
   return {
     ok: true,
     mode: "live",
-    message: `Live · ${data.subreddits.length} communities · ${data.threads.length} threads · ${data.brandMentions.length} brand signals`,
+    message: `Live · ${data.listings.length} listings · ${data.popularBrands.length} brands · ${data.priceBands.length} price bands`,
     details: {
-      communities: data.subreddits.length,
-      threads: data.threads.length,
-      keywords: data.keywords.length,
-      brandMentions: data.brandMentions.length,
-      colorMentions: data.colorMentions.length,
-      silhouetteMentions: data.silhouetteMentions.length,
-      avgUpvotes: data.engagement.avgUpvotes,
-      commentVelocity: data.engagement.commentVelocity,
+      listings: data.listings.length,
+      brands: data.popularBrands.length,
+      styles: data.risingStyles.length,
+      priceBands: data.priceBands.length,
+      keywords: data.streetwearKeywords.length,
       latencyMs: ping.latencyMs,
     },
   };

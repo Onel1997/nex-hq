@@ -1,6 +1,11 @@
 import type { MilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
 import type { AmazonIntelligenceData } from "@/services/connectors/amazon";
 import type { EtsyIntelligenceData } from "@/services/connectors/etsy";
+import type { DepopIntelligenceData } from "@/services/connectors/depop";
+import type { GrailedIntelligenceData } from "@/services/connectors/grailed";
+import type { StockXIntelligenceData } from "@/services/connectors/stockx";
+import type { FashionNewsIntelligenceData } from "@/services/connectors/fashion-news";
+import type { YouTubeIntelligenceData } from "@/services/connectors/youtube";
 import type { GoogleTrendsData } from "@/services/connectors/google-trends";
 import type { PinterestIntelligenceData } from "@/services/connectors/pinterest";
 import type { RedditIntelligenceData } from "@/services/connectors/reddit";
@@ -199,15 +204,224 @@ export function summarizeEtsy(
   };
 }
 
-export function summarizeReddit(data: RedditIntelligenceData): {
+export function summarizeDepop(
+  data: DepopIntelligenceData,
+  mode: "live" | "simulated" = "live",
+): {
   summary: string[];
   trending: string[];
 } {
+  const prefix = mode === "live" ? "Live" : "Simulated";
+
+  const summary = [
+    `${prefix} · ${data.listings.length} listings · ${data.popularBrands.length} brands`,
+    `${data.priceBands.length} price bands · ${data.risingStyles.length} rising styles · partner inventory only`,
+  ];
+
+  if (mode === "simulated") {
+    summary.push(
+      "No live Depop data — partner API credentials missing or unreachable",
+    );
+  } else if (data.listings[0]) {
+    summary.push(
+      `Top: ${data.listings[0].brand ?? data.listings[0].category} — ${data.listings[0].title}`,
+    );
+  }
+
   return {
-    summary: [
-      `${data.subreddits.length} communities monitored`,
-      `${data.threads.length} active discussions`,
-    ],
+    summary,
+    trending: [
+      ...data.risingStyles.slice(0, 2).map((s) => s.term),
+      ...data.popularBrands.slice(0, 1).map((b) => b.term),
+      ...data.streetwearKeywords.slice(0, 1).map((k) => k.term),
+    ]
+      .filter(Boolean)
+      .slice(0, 4),
+  };
+}
+
+export function summarizeStockX(
+  data: StockXIntelligenceData,
+  mode: "live" | "simulated" = "live",
+): {
+  summary: string[];
+  trending: string[];
+} {
+  const prefix = mode === "live" ? "Live" : "Simulated";
+  const withMarket = data.products.filter((p) => p.marketPrice != null).length;
+  const withPremium = data.products.filter((p) => p.pricePremium != null).length;
+
+  const summary = [
+    `${prefix} · ${data.products.length} products · ${data.risingBrands.length} brands`,
+    `${data.trendingSilhouettes.length} silhouettes · ${data.premiumPriceRanges.length} premium bands · ${withMarket} with market price`,
+  ];
+
+  if (mode === "simulated") {
+    summary.push(
+      "No live StockX data — developer API credentials missing or unreachable",
+    );
+  } else if (data.products[0]) {
+    const top = data.products[0];
+    const priceNote =
+      top.marketPrice != null
+        ? `market $${top.marketPrice}`
+        : top.retailPrice != null
+          ? `retail $${top.retailPrice}`
+          : "price pending";
+    summary.push(`Top: ${top.brand} — ${top.title} (${priceNote})`);
+  }
+
+  if (mode === "live" && withPremium > 0) {
+    summary.push(`${withPremium} products with API-reported premium over retail`);
+  }
+
+  return {
+    summary,
+    trending: [
+      ...data.risingBrands.slice(0, 2).map((b) => b.term),
+      ...data.trendingSilhouettes.slice(0, 1).map((s) => s.term),
+      ...data.colorwayTrends.slice(0, 1).map((c) => c.term),
+    ]
+      .filter(Boolean)
+      .slice(0, 4),
+  };
+}
+
+export function summarizeGrailed(
+  data: GrailedIntelligenceData,
+  mode: "live" | "simulated" = "live",
+): {
+  summary: string[];
+  trending: string[];
+} {
+  const prefix = mode === "live" ? "Live" : "Simulated";
+  const withDemand = data.listings.filter((l) => l.demandProxy != null).length;
+
+  const summary = [
+    `${prefix} · ${data.listings.length} listings · ${data.risingDesigners.length} designers`,
+    `${data.archiveFashionSignals.length} archive signals · ${data.luxuryStreetwearSignals.length} luxury streetwear · ${data.designerPriceBands.length} price bands`,
+  ];
+
+  if (mode === "simulated") {
+    summary.push(
+      "No live Grailed data — no open public API; partner credentials missing or unreachable",
+    );
+  } else if (data.listings[0]) {
+    const top = data.listings[0];
+    summary.push(
+      `Top: ${top.designer ?? top.brand ?? top.category} — ${top.title} (${top.currency}${top.price})`,
+    );
+  }
+
+  if (mode === "live" && withDemand > 0) {
+    summary.push(`${withDemand} listings with API-reported demand proxies`);
+  }
+
+  return {
+    summary,
+    trending: [
+      ...data.risingDesigners.slice(0, 2).map((d) => d.term),
+      ...data.archiveFashionSignals.slice(0, 1).map((s) => s.term),
+      ...data.luxuryStreetwearSignals.slice(0, 1).map((s) => s.term),
+    ]
+      .filter(Boolean)
+      .slice(0, 4),
+  };
+}
+
+export function summarizeYouTube(
+  data: YouTubeIntelligenceData,
+  mode: "live" | "simulated" = "live",
+): {
+  summary: string[];
+  trending: string[];
+} {
+  const prefix = mode === "live" ? "Live" : "Simulated";
+
+  const summary = [
+    `${prefix} · ${data.videos.length} videos · ${data.searchCategories.length} topic categories`,
+    `${data.brandMentions.length} brands · ${data.creatorRanking.length} creators · ${data.avgEngagement}% avg engagement`,
+  ];
+
+  if (mode === "simulated") {
+    summary.push("No live YouTube data — credentials missing or API unreachable");
+  } else if (data.videos[0]) {
+    summary.push(
+      `Top: ${data.videos[0].channel} — ${data.videos[0].title} (${data.avgViews.toLocaleString("de-DE")} avg views)`,
+    );
+  }
+
+  return {
+    summary,
+    trending: [
+      ...data.fastestGrowingTopics.slice(0, 2),
+      ...data.trendingTopics.slice(0, 1).map((t) => t.term),
+      ...data.videos.slice(0, 1).map((v) => v.title),
+    ]
+      .filter(Boolean)
+      .slice(0, 4),
+  };
+}
+
+export function summarizeFashionNews(
+  data: FashionNewsIntelligenceData,
+  mode: "live" | "simulated" = "live",
+): {
+  summary: string[];
+  trending: string[];
+} {
+  const prefix = mode === "live" ? "Live" : "Simulated";
+
+  const summary = [
+    `${prefix} · ${data.articles.length} articles · ${data.sources.length} sources`,
+    `${data.keywords.length} keyword · ${data.brandMentions.length} brand · ${data.emergingThemes.length} emerging-theme signals`,
+  ];
+
+  if (mode === "simulated") {
+    summary.push(
+      "No live fashion news — no feed configured or feeds unreachable",
+    );
+  } else if (data.articles[0]) {
+    summary.push(`Top: ${data.articles[0].source} — ${data.articles[0].title}`);
+  }
+
+  return {
+    summary,
+    trending: [
+      ...data.headlines.slice(0, 2),
+      ...data.repeatedTopics.slice(0, 1),
+      ...data.emergingThemes.slice(0, 1),
+    ]
+      .filter(Boolean)
+      .slice(0, 4),
+  };
+}
+
+export function summarizeReddit(
+  data: RedditIntelligenceData,
+  mode: "live" | "simulated" = "live",
+): {
+  summary: string[];
+  trending: string[];
+} {
+  const prefix = mode === "live" ? "Live" : "Simulated";
+  const engagement = data.engagement;
+
+  const summary = [
+    `${prefix} · ${data.subreddits.length} communities · ${data.threads.length} discussions`,
+    `${data.brandMentions.length} brand · ${data.colorMentions.length} color · ${data.silhouetteMentions.length} silhouette signals`,
+  ];
+
+  if (mode === "simulated") {
+    summary.push("No live Reddit data — credentials missing or API unreachable");
+  } else if (engagement.sampleSize > 0) {
+    summary.push(
+      `Avg ${engagement.avgUpvotes} upvotes · ${engagement.avgComments} comments · velocity ${engagement.commentVelocity}/h across ${engagement.sampleSize} posts`,
+    );
+  }
+
+  return {
+    summary,
     trending: [
       ...data.trends.slice(0, 2),
       ...data.threads.slice(0, 2).map((t) => `r/${t.subreddit}: ${t.topic}`),

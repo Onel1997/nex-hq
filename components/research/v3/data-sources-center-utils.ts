@@ -18,6 +18,10 @@ export const PROVIDER_DISPLAY_ORDER: ProviderId[] = [
   "etsy",
   "amazon",
   "reddit",
+  "youtube",
+  "depop",
+  "stockx",
+  "grailed",
   "instagram",
   "fashion_news",
 ];

@@ -15,6 +15,10 @@ const VALID_IDS = new Set([
   "amazon",
   "etsy",
   "reddit",
+  "youtube",
+  "depop",
+  "stockx",
+  "grailed",
   "instagram",
   "fashion_news",
 ]);

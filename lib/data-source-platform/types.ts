@@ -8,6 +8,10 @@ export type ProviderId =
   | "amazon"
   | "etsy"
   | "reddit"
+  | "youtube"
+  | "depop"
+  | "stockx"
+  | "grailed"
   | "instagram"
   | "fashion_news";
 

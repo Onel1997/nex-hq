@@ -22,6 +22,22 @@ const AUTH_CONFIG: Record<ProviderId, AuthConfig> = {
     method: "oauth",
     envKeys: ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
   },
+  youtube: {
+    method: "api_key",
+    envKeys: ["YOUTUBE_API_KEY"],
+  },
+  depop: {
+    method: "api_key",
+    envKeys: ["DEPOP_API_KEY"],
+  },
+  stockx: {
+    method: "oauth",
+    envKeys: ["STOCKX_API_KEY", "STOCKX_ACCESS_TOKEN"],
+  },
+  grailed: {
+    method: "api_key",
+    envKeys: ["GRAILED_API_KEY", "GRAILED_API_BASE_URL"],
+  },
   pinterest: {
     method: "api_key",
     envKeys: ["PINTEREST_ACCESS_TOKEN"],

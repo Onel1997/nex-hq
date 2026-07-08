@@ -1,12 +1,16 @@
 import { amazonAdapter } from "./amazon";
+import { depopAdapter } from "./depop";
 import { etsyAdapter } from "./etsy";
 import { fashionNewsAdapter } from "./fashion-news";
 import { googleTrendsAdapter } from "./google-trends";
+import { grailedAdapter } from "./grailed";
 import { instagramAdapter } from "./instagram";
 import { pinterestAdapter } from "./pinterest";
 import { redditAdapter } from "./reddit";
 import { shopifyAdapter } from "./shopify";
+import { stockxAdapter } from "./stockx";
 import { tiktokAdapter } from "./tiktok";
+import { youtubeAdapter } from "./youtube";
 import type { DataProviderAdapter, ProviderId } from "../types";
 
 export const PROVIDER_ADAPTERS: DataProviderAdapter[] = [
@@ -17,6 +21,10 @@ export const PROVIDER_ADAPTERS: DataProviderAdapter[] = [
   amazonAdapter,
   etsyAdapter,
   redditAdapter,
+  youtubeAdapter,
+  depopAdapter,
+  stockxAdapter,
+  grailedAdapter,
   instagramAdapter,
   fashionNewsAdapter,
 ];
@@ -38,6 +46,10 @@ export {
   amazonAdapter,
   etsyAdapter,
   redditAdapter,
+  youtubeAdapter,
+  depopAdapter,
+  stockxAdapter,
+  grailedAdapter,
   instagramAdapter,
   fashionNewsAdapter,
 };
