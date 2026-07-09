@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { MarketingParseError, parseMarketingOutput } from "./parse-output";
 import {
@@ -22,9 +23,13 @@ function buildMarketingSystemPrompt(
   return `Du bist der Marketing-Agent von NexHQ — Growth-Stratege für den Workspace "${workspaceName}".
 
 ## Deine Rolle
-- Erstelle vollständige Launch- und Kampagnenpläne für Streetwear/Luxury-Streetwear Drops
-- Nutze AUSSCHLIESSLICH den bereitgestellten Wissensspeicher-Kontext (Research-, CEO- und Design-Berichte plus Markenregeln)
-- Du darfst NIEMALS nur aus allgemeinem Modellwissen antworten — jede Empfehlung muss auf Intelligence basieren
+- Erstelle vollständige Launch- und Kampagnenpläne für Premium Streetwear Drops
+- Positioniere die Marke als Premium Fashion Brand — minimalist streetwear, nicht Discount-Marketing
+- Nutze AUSSCHLIESSLICH den bereitgestellten Wissensspeicher-Kontext und SHOPIFY KNOWLEDGE
+- Aktive Produkte, Inventar, Kollektionen und Preise aus SHOPIFY KNOWLEDGE sind Pflichtgrundlage
+- Du DARFST empfehlen: Launch-Empfehlungen, Produktfokus, Kampagnenvorschläge — basierend auf echtem Katalog
+- Du darfst NIEMALS nur aus allgemeinem Modellwissen antworten — jede Empfehlung muss auf Intelligence und Shopify basieren
+- Keine Mock-Produkte. Keine erfundenen Preise. Alles stammt aus Shopify.
 - Zitiere explizit Berichtstitel, die deine Marketingentscheidungen begründen
 - Schreibe AUSSCHLIESSLICH auf Deutsch
 - Denke wie ein Growth-Lead mit strategischem Verständnis für "${workspaceName}"
@@ -98,6 +103,8 @@ export async function runMarketing(
     locale: DEFAULT_LOCALE,
   });
 
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+
   const openai = getOpenAIClient();
 
   const completion = await openai.chat.completions.create({
@@ -114,6 +121,8 @@ export async function runMarketing(
             knowledge.reportTitles,
             knowledge.loadedTags,
           ) +
+          "\n\n" +
+          formatAgentBusinessRules("marketing", businessProfile) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },
@@ -170,6 +179,7 @@ export async function runMarketing(
     workspaceId: input.workspaceId,
     brief: input.brief,
     output,
+    originTaskId: input.originTaskId,
   });
 
   console.info("[Marketing Run] Saved to Brain", {

@@ -1,17 +1,32 @@
 import type { AgentId } from "@/lib/constants/agents";
 
-export type TaskStatus =
-  | "pending"
-  | "assigned"
-  | "in_progress"
-  | "completed"
-  | "failed"
-  | "cancelled";
+export const TASK_STATUSES = [
+  "pending",
+  "assigned",
+  "in_progress",
+  "review",
+  "completed",
+  "failed",
+] as const;
 
-export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+export const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
+export const TASK_STATUS_ORDER: TaskStatus[] = [
+  "pending",
+  "assigned",
+  "in_progress",
+  "review",
+  "completed",
+  "failed",
+];
 
 export interface Task {
   id: string;
+  brainRecordId: string;
   title: string;
   description: string;
   status: TaskStatus;
@@ -25,12 +40,26 @@ export interface Task {
   completedAt: string | null;
 }
 
+/** UI list view model for the task board. */
+export type TaskListItem = Task;
+
 export interface CreateTaskInput {
   title: string;
   description: string;
   priority?: TaskPriority;
-  assigneeAgentId?: AgentId;
-  parentTaskId?: string;
+  status?: TaskStatus;
+  assigneeAgentId?: AgentId | null;
+  parentTaskId?: string | null;
   payload?: Record<string, unknown>;
   createdByAgentId: AgentId | "human";
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  assigneeAgentId?: AgentId | null;
+  parentTaskId?: string | null;
+  payload?: Record<string, unknown>;
 }

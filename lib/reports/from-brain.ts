@@ -1,4 +1,5 @@
 import type {
+  BrainCeoFinalSections,
   BrainCeoNextStep,
   BrainContentSections,
   BrainDesignSections,
@@ -6,6 +7,7 @@ import type {
   BrainMarketingSections,
   BrainReportContent,
   BrainShopifySections,
+  CeoFinalReportType,
   CeoReportType,
   ContentReportType,
   DesignReportType,
@@ -17,6 +19,11 @@ import type {
 import type { BrainRecord } from "@/brain/types";
 import type { ReportCategory, ReportListItem } from "@/lib/mock/reports";
 import { toImageProjectView } from "@/lib/reports/image-project";
+import { extractDesignResearchView } from "@/lib/reports/design-research-view";
+import {
+  agentTabForAgentId,
+  inferBrainReportSource,
+} from "@/lib/reports/report-source";
 import type { AgentId } from "@/lib/constants/agents";
 
 function mapAgentToCategory(agentId: AgentId): ReportCategory {
@@ -46,14 +53,26 @@ function mapBrainStatusToUi(
 ): ReportListItem["status"] {
   if (recordStatus === "archived") return "archived";
   if (recordStatus === "approved") return "approved";
+  if (recordStatus === "rejected") return "rejected";
+  if (recordStatus === "revision_requested") return "revision_requested";
+  if (recordStatus === "pending_review") return "pending_review";
   if (contentStatus === "draft" || recordStatus === "draft") return "draft";
-  return "submitted";
+  if (
+    contentStatus === "submitted" ||
+    contentStatus === "pending_review"
+  ) {
+    return "pending_review";
+  }
+  return "pending_review";
 }
 
 function inferReportTypeFromTags(
   tags: string[] | undefined,
 ): BrainReportContent["reportType"] | undefined {
   if (!tags) return undefined;
+  if (tags.includes("ceo-final-report")) {
+    return "ceo-final-report";
+  }
   if (tags.includes("ceo-report") || tags.includes("ceo")) {
     return "ceo-report";
   }
@@ -79,6 +98,29 @@ function inferReportTypeFromTags(
   }
   const types = ["competitor", "trend", "design", "pricing", "audience"] as const;
   return types.find((type) => tags.includes(type));
+}
+
+function mapCeoFinalSections(
+  sections: BrainCeoFinalSections | undefined,
+): ReportListItem["ceoFinalReport"] {
+  if (!sections) return undefined;
+  return {
+    executiveSummary: sections.executiveSummary,
+    keyFindings: sections.keyFindings,
+    opportunities: sections.opportunities,
+    risks: sections.risks,
+    recommendedActions: mapCeoNextSteps(sections.recommendedActions) ?? [],
+    launchStrategy: sections.launchStrategy,
+    nextMilestones: sections.nextMilestones,
+    ceoVerdict: sections.ceoVerdict,
+    completionScore: sections.completionScore,
+    founderGoal: sections.founderGoal,
+    parentGoalTaskId: sections.parentGoalTaskId,
+    sourceTaskIds: sections.sourceTaskIds,
+    researchReports: sections.researchReports,
+    designReports: sections.designReports,
+    marketingReports: sections.marketingReports,
+  };
 }
 
 function mapCeoNextSteps(
@@ -116,14 +158,28 @@ function mapDesignSections(
 ): ReportListItem["designReport"] {
   if (!sections) return undefined;
   return {
+    schemaVersion: sections.schemaVersion,
     collectionName: sections.collectionName,
+    season: sections.season,
+    theme: sections.theme,
+    story: sections.story ?? sections.collectionStory,
     collectionStory: sections.collectionStory,
+    targetAudience: sections.targetAudience,
     colorPalette: sections.colorPalette,
     silhouettes: sections.silhouettes,
+    fits: sections.fits,
+    products: sections.products,
     productLineup: sections.productLineup,
     heroProducts: sections.heroProducts,
     materials: sections.materials,
+    stylingDirection: sections.stylingDirection ?? sections.designDirection,
     designDirection: sections.designDirection,
+    visualKeywords: sections.visualKeywords,
+    mockupIdeas: sections.mockupIdeas,
+    campaignIdeas: sections.campaignIdeas,
+    photographyStyle: sections.photographyStyle,
+    imagePrompts: sections.imagePrompts,
+    moodDescription: sections.moodDescription,
     launchRecommendations: sections.launchRecommendations,
     sourceReportTitles: sections.sourceReportTitles,
   };
@@ -175,6 +231,7 @@ export function brainReportRecordToListItem(
   const content = record.content as BrainReportContent;
   const researchSections = content.researchSections;
   const ceoSections = content.ceoSections;
+  const ceoFinalSections = content.ceoFinalSections;
   const designSections = content.designSections;
   const marketingSections = content.marketingSections;
   const shopifySections = content.shopifySections;
@@ -183,6 +240,7 @@ export function brainReportRecordToListItem(
   const reportType:
     | ResearchReportType
     | CeoReportType
+    | CeoFinalReportType
     | DesignReportType
     | MarketingReportType
     | ShopifyReportType
@@ -191,7 +249,12 @@ export function brainReportRecordToListItem(
     | "image-report"
     | undefined = content.reportType ?? inferReportTypeFromTags(record.tags);
 
-  const isCeoReport = reportType === "ceo-report" || content.agentId === "ceo";
+  const isCeoFinalReport =
+    reportType === "ceo-final-report" ||
+    Boolean(content.ceoFinalSections);
+  const isCeoReport =
+    !isCeoFinalReport &&
+    (reportType === "ceo-report" || content.agentId === "ceo");
   const isDesignReport =
     reportType === "design-report" || content.agentId === "designer";
   const isMarketingReport =
@@ -218,7 +281,11 @@ export function brainReportRecordToListItem(
         : isMarketingReport
           ? marketingSections?.launchStrategy ?? content.summary
           : isDesignReport
-            ? designSections?.collectionStory ?? content.summary
+            ? designSections?.story ??
+              designSections?.collectionStory ??
+              content.summary
+            : isCeoFinalReport
+              ? ceoFinalSections?.executiveSummary ?? content.summary
             : ceoSections?.executiveSummary ??
               researchSections?.executiveSummary ??
               content.summary,
@@ -227,8 +294,11 @@ export function brainReportRecordToListItem(
     status: mapBrainStatusToUi(record.status, content.status),
     confidence: content.confidence,
     createdAt: record.createdAt,
+    originTaskId: content.originTaskId,
     highlights: isImageReport
-      ? toImageProjectView(imageSections)?.corePackage.map((item) => item.title)
+      ? toImageProjectView(imageSections)?.productionAssets
+          .map((item) => item.title ?? item.productName)
+          .filter(Boolean)
       : isContentReport
       ? contentSections?.socialContent.launchPosts
       : isShopifyReport
@@ -236,7 +306,10 @@ export function brainReportRecordToListItem(
         : isMarketingReport
           ? marketingSections?.contentPillars
           : isDesignReport
-            ? designSections?.silhouettes
+            ? designSections?.visualKeywords ??
+              designSections?.silhouettes
+            : isCeoFinalReport
+              ? ceoFinalSections?.keyFindings
             : isCeoReport
               ? ceoSections?.keyInsights
               : researchSections?.keyFindings ?? content.keyFindings,
@@ -250,6 +323,8 @@ export function brainReportRecordToListItem(
           ? "marketing-report"
           : isDesignReport
             ? "design-report"
+            : isCeoFinalReport
+              ? "ceo-final-report"
             : isCeoReport
               ? "ceo-report"
               : reportType,
@@ -262,7 +337,11 @@ export function brainReportRecordToListItem(
         : isMarketingReport
           ? marketingSections?.launchStrategy ?? content.summary
           : isDesignReport
-            ? designSections?.collectionStory ?? content.summary
+            ? designSections?.story ??
+              designSections?.collectionStory ??
+              content.summary
+            : isCeoFinalReport
+              ? ceoFinalSections?.executiveSummary ?? content.summary
             : ceoSections?.executiveSummary ??
               researchSections?.executiveSummary ??
               content.summary,
@@ -276,18 +355,27 @@ export function brainReportRecordToListItem(
           ? marketingSections?.contentPillars
           : isCeoReport || isDesignReport
             ? isDesignReport
-              ? designSections?.launchRecommendations
+              ? designSections?.mockupIdeas ??
+                designSections?.launchRecommendations
               : undefined
             : researchSections?.recommendations,
-    opportunities: isCeoReport
+    opportunities: isCeoFinalReport
+      ? ceoFinalSections?.opportunities
+      : isCeoReport
       ? ceoSections?.strategicOpportunities
       : researchSections?.opportunities,
     risks: isShopifyReport
       ? shopifySections?.storefrontWarnings
+      : isCeoFinalReport
+        ? ceoFinalSections?.risks
       : isCeoReport
         ? ceoSections?.risks
         : researchSections?.risks,
-    nextSteps: isCeoReport ? mapCeoNextSteps(ceoSections?.nextSteps) : undefined,
+    nextSteps: isCeoFinalReport
+      ? mapCeoNextSteps(ceoFinalSections?.recommendedActions)
+      : isCeoReport
+        ? mapCeoNextSteps(ceoSections?.nextSteps)
+        : undefined,
     sourceReportTitles: isImageReport
       ? imageSections?.sourceReportTitles
       : isContentReport
@@ -312,6 +400,12 @@ export function brainReportRecordToListItem(
     imageProject: isImageReport
       ? mapImageSections(imageSections)
       : undefined,
+    ceoFinalReport: isCeoFinalReport
+      ? mapCeoFinalSections(ceoFinalSections)
+      : undefined,
+    source: inferBrainReportSource(record, content),
+    agentTab: agentTabForAgentId(content.agentId),
+    designResearch: extractDesignResearchView(content),
   };
 }
 

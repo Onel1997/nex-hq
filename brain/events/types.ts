@@ -14,7 +14,23 @@ export type BrainEventType =
   | "record.embedded"
   | "context.assembled"
   | "search.performed"
-  | "integration.synced";
+  | "integration.synced"
+  | "report.approved"
+  | "report.rejected"
+  | "report.revision_requested"
+  | "task.created"
+  | "task.updated"
+  | "task.assigned"
+  | "task.status_changed"
+  | "task.completed"
+  | "task.deleted"
+  | "task.execution.started"
+  | "task.execution.completed"
+  | "task.execution.failed"
+  | "task.review.completed"
+  | "ceo.final_report.started"
+  | "ceo.final_report.generated"
+  | "ceo.final_report.completed";
 
 export interface BrainEventBase {
   id: string;

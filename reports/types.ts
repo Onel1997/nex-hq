@@ -1,6 +1,12 @@
 import type { AgentId } from "@/lib/constants/agents";
 
-export type ReportStatus = "draft" | "submitted" | "approved" | "rejected";
+export type ReportStatus =
+  | "draft"
+  | "pending_review"
+  | "submitted"
+  | "approved"
+  | "rejected"
+  | "revision_requested";
 
 export interface ReportArtifact {
   id: string;

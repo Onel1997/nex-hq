@@ -5,12 +5,14 @@ import { ShopifyParseError } from "@/agents/shopify/parse-output";
 import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { resolveOriginTaskId } from "@/lib/tasks/resolve-origin-task";
 import { isSupabaseConfigured } from "@/lib/supabase/admin";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 
 const shopifyRequestSchema = z.object({
   brief: z.string().min(3).max(4000),
+  taskId: z.string().uuid().optional(),
 });
 
 export async function POST(request: Request) {
@@ -47,11 +49,13 @@ export async function POST(request: Request) {
     }
 
     const { workspace } = await ensureWorkspaceBrainSeeded();
+    const originTaskId = await resolveOriginTaskId(parsed.data.taskId);
 
     const result = await runShopify({
       brief: parsed.data.brief,
       workspaceId: workspace.id,
       workspaceName: workspace.name,
+      originTaskId,
     });
 
     console.info(`[Shopify Run ${requestId}] Success`, {

@@ -4,12 +4,14 @@ import type {
 } from "@/brain/domains/reports";
 import { getBrainClient } from "@/brain/client";
 import { slugify } from "@/brain/client/utils";
+import { resolveReportTaskIds } from "@/lib/reports/task-link";
 import type { MarketingOutput } from "./types";
 
 export interface SaveMarketingInput {
   workspaceId: string;
   brief: string;
   output: MarketingOutput;
+  originTaskId?: string;
 }
 
 export interface SaveMarketingResult {
@@ -40,7 +42,11 @@ export async function saveMarketingToBrain(
 ): Promise<SaveMarketingResult> {
   const brain = getBrainClient();
   const reportId = crypto.randomUUID();
-  const taskId = `marketing-${reportId}`;
+  const { taskId, originTaskId } = resolveReportTaskIds(
+    input.originTaskId,
+    reportId,
+    "marketing",
+  );
   const baseSlug = slugify(input.output.title).slice(0, 48) || "marketing";
   const slugSuffix = reportId.slice(0, 8);
   const marketingSections = buildMarketingSections(input.output);
@@ -49,6 +55,7 @@ export async function saveMarketingToBrain(
     kind: "reports",
     reportId,
     taskId,
+    ...(originTaskId ? { originTaskId } : {}),
     agentId: "marketing",
     status: "submitted",
     summary: input.output.launchStrategy.slice(0, 500),

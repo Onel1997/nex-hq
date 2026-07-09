@@ -27,6 +27,8 @@ export type BrainRecordStatus =
   | "draft"
   | "pending_review"
   | "approved"
+  | "rejected"
+  | "revision_requested"
   | "archived"
   | "superseded";
 

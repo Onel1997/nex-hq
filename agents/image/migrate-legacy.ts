@@ -1,10 +1,12 @@
 import type { BrainImageSections } from "@/brain/domains/reports";
 import { buildArtDirectionPrompt } from "./art-direction";
+import { normalizeStudioSections } from "./enrich-studio";
 import {
-  type ImageCampaignShot,
-  type NormalizedImageAsset,
-  IMAGE_SCHEMA_VERSION,
-} from "./normalized";
+  type LegacyImageCampaignShot,
+  type LegacyNormalizedImageAsset,
+  IMAGE_SCHEMA_VERSION_V2,
+} from "./legacy-v2";
+import type { ImageMoodboardSection, ImagePalette } from "./studio-schema";
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -24,7 +26,7 @@ function normalizePrompts(
   value: unknown,
   collectionName: string,
   subject: string,
-): NormalizedImageAsset["prompt"] {
+): LegacyNormalizedImageAsset["prompt"] {
   const obj = asRecord(value);
   if (!obj?.midjourney && !obj?.openai && !obj?.flux) {
     const single = asString(obj?.prompt) || asString(obj?.openaiPrompt);
@@ -45,9 +47,9 @@ function normalizePrompts(
 }
 
 function mergeGeneratedState(
-  asset: NormalizedImageAsset,
+  asset: LegacyNormalizedImageAsset,
   generated?: BrainImageSections["generatedAssets"],
-): NormalizedImageAsset {
+): LegacyNormalizedImageAsset {
   if (!generated?.length) return asset;
   const legacyKeyPrefix = asset.id;
   const hit = generated.find(
@@ -73,9 +75,10 @@ export function isV2ImageSections(
 ): boolean {
   const record = sections as Record<string, unknown>;
   return (
-    record.schemaVersion === IMAGE_SCHEMA_VERSION ||
+    record.schemaVersion === IMAGE_SCHEMA_VERSION_V2 ||
     (Array.isArray(record.corePackage) &&
-      (record.corePackage as unknown[]).length > 0)
+      (record.corePackage as unknown[]).length > 0 &&
+      !Array.isArray(record.productionAssets))
   );
 }
 
@@ -86,14 +89,14 @@ export function migrateLegacyImageSections(
   if (isV2ImageSections(raw)) {
     return {
       ...raw,
-      schemaVersion: IMAGE_SCHEMA_VERSION,
+      schemaVersion: IMAGE_SCHEMA_VERSION_V2,
       corePackage: raw.corePackage ?? [],
       advancedPackage: raw.advancedPackage ?? [],
     };
   }
 
-  const core: NormalizedImageAsset[] = [];
-  const advanced: NormalizedImageAsset[] = [];
+  const core: LegacyNormalizedImageAsset[] = [];
+  const advanced: LegacyNormalizedImageAsset[] = [];
   const generated = raw.generatedAssets;
 
   const hero = raw.heroBanner;
@@ -370,7 +373,7 @@ export function migrateLegacyImageSections(
     });
   }
 
-  const campaignShots: ImageCampaignShot[] = asArray(raw.campaignShots)
+  const campaignShots: LegacyImageCampaignShot[] = asArray(raw.campaignShots)
     .map((item) => {
       const obj = asRecord(item);
       if (!obj) return null;
@@ -382,10 +385,10 @@ export function migrateLegacyImageSections(
         purpose: asString(obj.purpose) || "Campaign production",
       };
     })
-    .filter((item): item is ImageCampaignShot => Boolean(item));
+    .filter((item): item is LegacyImageCampaignShot => Boolean(item));
 
   return {
-    schemaVersion: IMAGE_SCHEMA_VERSION,
+    schemaVersion: IMAGE_SCHEMA_VERSION_V2,
     projectName: raw.projectName,
     moodboard: raw.moodboard,
     palette: raw.palette,
@@ -402,5 +405,19 @@ export function normalizeImageSections(
   sections: BrainImageSections | undefined,
 ): BrainImageSections | undefined {
   if (!sections) return undefined;
+
+  if (sections.productionAssets?.length) {
+    return sections;
+  }
+
+  const normalized = normalizeStudioSections(
+    sections as unknown as Record<string, unknown>,
+    sections.collectionName ?? sections.projectName,
+  );
+
+  if (normalized) {
+    return normalized as unknown as BrainImageSections;
+  }
+
   return migrateLegacyImageSections(sections, sections.projectName);
 }

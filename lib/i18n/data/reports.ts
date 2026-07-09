@@ -42,6 +42,10 @@ export function getCeoReportTypeLabel(locale: Locale): string {
   return getDictionary(locale).reports.reportType.ceoReport;
 }
 
+export function getCeoFinalReportTypeLabel(locale: Locale): string {
+  return getDictionary(locale).reports.reportType.ceoFinalReport;
+}
+
 export function getDesignReportTypeLabel(locale: Locale): string {
   return getDictionary(locale).reports.reportType.designReport;
 }
@@ -78,7 +82,7 @@ export function getMockReports(locale: Locale): ReportListItem[] {
       summary: reports.items.rpt001.summary,
       category: "research",
       agentId: "research",
-      status: "submitted",
+      status: "pending_review",
       confidence: 0.89,
       createdAt: "2026-06-07T14:00:00Z",
       drop: "SS26 Capsule",
@@ -102,7 +106,7 @@ export function getMockReports(locale: Locale): ReportListItem[] {
       summary: reports.items.rpt003.summary,
       category: "design",
       agentId: "designer",
-      status: "submitted",
+      status: "pending_review",
       confidence: 0.91,
       createdAt: "2026-06-06T16:45:00Z",
       drop: "SS26 Capsule",
@@ -138,7 +142,7 @@ export function getMockReports(locale: Locale): ReportListItem[] {
       summary: reports.items.rpt006.summary,
       category: "marketing",
       agentId: "marketing",
-      status: "submitted",
+      status: "pending_review",
       confidence: 0.86,
       createdAt: "2026-06-07T08:30:00Z",
       drop: "SS26 Capsule",

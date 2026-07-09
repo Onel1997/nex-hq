@@ -9,3 +9,21 @@ export type { CeoChatInput, CeoChatOutput } from "./chat";
 
 export { runCeo, CeoKnowledgeError, CeoParseError } from "./run";
 export type { CeoRunInput, CeoRunResult } from "./types";
+
+export {
+  runCeoDelegation,
+  CeoDelegationParseError,
+} from "./delegate";
+export type {
+  CeoDelegationInput,
+  CeoDelegationResult,
+  CeoDelegatedTaskResult,
+} from "./delegation-types";
+export {
+  runCeoFinalReport,
+  CeoFinalParseError,
+} from "./final-report";
+export type {
+  CeoFinalReportInput,
+  CeoFinalReportResult,
+} from "./final-report-types";

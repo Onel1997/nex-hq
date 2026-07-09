@@ -6,15 +6,23 @@ export const EXPECTED_DESIGN_SCHEMA = {
   title: "string (required)",
   reportType: '"design-report" (required)',
   collectionName: "string (required)",
-  collectionStory: "string (required, min 120 chars)",
+  season: "string (required)",
+  theme: "string (required, min 8 chars)",
+  story: "string (required, min 120 chars)",
+  targetAudience: "string (required, min 40 chars)",
   colorPalette: '{ name, hex?, role }[] (required, 3–8)',
-  silhouettes: "string[] (required, 3–10)",
-  productLineup:
-    '{ name, category, description }[] (required, 4–14)',
-  heroProducts: '{ name, description, rationale }[] (required, 2–6)',
   materials: "string[] (required, 3–10)",
-  designDirection: "string (required, min 100 chars)",
-  launchRecommendations: "string[] (required, 3–8)",
+  silhouettes: "string[] (required, 3–10)",
+  fits: "string[] (required, 2–8)",
+  products:
+    '{ name, category, fit, material, color, details, pricePosition, priority, marketPrintSuitability }[] (required, 4–14)',
+  stylingDirection: "string (required, min 100 chars)",
+  visualKeywords: "string[] (required, 3–12)",
+  mockupIdeas: "string[] (required, 3–10)",
+  campaignIdeas: "string[] (required, 3–8)",
+  photographyStyle: "string (required, min 40 chars)",
+  imagePrompts: "string[] (required, 2–8, min 40 chars each)",
+  moodDescription: "string (required, min 60 chars)",
   confidence: "number 0–1 (required)",
   sourceReportTitles: "string[] (required, min 1)",
   fullConcept: "string (required, min 800 chars, Markdown)",
@@ -118,14 +126,22 @@ const REQUIRED_TOP_LEVEL_FIELDS = [
   "title",
   "reportType",
   "collectionName",
-  "collectionStory",
+  "season",
+  "theme",
+  "story",
+  "targetAudience",
   "colorPalette",
-  "silhouettes",
-  "productLineup",
-  "heroProducts",
   "materials",
-  "designDirection",
-  "launchRecommendations",
+  "silhouettes",
+  "fits",
+  "products",
+  "stylingDirection",
+  "visualKeywords",
+  "mockupIdeas",
+  "campaignIdeas",
+  "photographyStyle",
+  "imagePrompts",
+  "moodDescription",
   "confidence",
   "sourceReportTitles",
   "fullConcept",
@@ -188,16 +204,26 @@ function normalizeDesignPayload(
 
   const aliasMap: Record<string, string> = {
     collection_name: "collectionName",
-    collection_story: "collectionStory",
+    collection_story: "story",
+    story: "story",
     color_palette: "colorPalette",
-    product_lineup: "productLineup",
-    hero_products: "heroProducts",
-    design_direction: "designDirection",
-    launch_recommendations: "launchRecommendations",
+    product_lineup: "products",
+    products: "products",
+    styling_direction: "stylingDirection",
+    design_direction: "stylingDirection",
+    visual_keywords: "visualKeywords",
+    mockup_ideas: "mockupIdeas",
+    campaign_ideas: "campaignIdeas",
+    launch_recommendations: "campaignIdeas",
+    target_audience: "targetAudience",
+    photography_style: "photographyStyle",
+    image_prompts: "imagePrompts",
+    mood_description: "moodDescription",
     source_report_titles: "sourceReportTitles",
     full_concept: "fullConcept",
     concept: "fullConcept",
     briefing: "fullConcept",
+    hero_products: "products",
   };
 
   for (const [from, to] of Object.entries(aliasMap)) {
@@ -205,6 +231,16 @@ function normalizeDesignPayload(
       normalized[to] = normalized[from];
       adjustments.push(`alias ${from} -> ${to}`);
     }
+  }
+
+  if (normalized.collectionStory && !normalized.story) {
+    normalized.story = normalized.collectionStory;
+    adjustments.push("alias collectionStory -> story");
+  }
+
+  if (normalized.designDirection && !normalized.stylingDirection) {
+    normalized.stylingDirection = normalized.designDirection;
+    adjustments.push("alias designDirection -> stylingDirection");
   }
 
   if (typeof normalized.confidence === "string") {

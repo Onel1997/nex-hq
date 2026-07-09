@@ -4,6 +4,21 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 import "./globals.css";
+import "./workspace.css";
+import "./hq-navigation.css";
+import "./shopify-operations.css";
+import "./department-hq.css";
+import "./design-studio.css";
+import "./design-lab.css";
+import "./design-creative-workspace.css";
+import "./commerce-lab.css";
+import "./facility-wings.css";
+import "./mission-control.css";
+import "./knowledge-vault.css";
+import "./reports-center.css";
+import "./brain-core.css";
+import "./analytics-chamber.css";
+import "./image-studio.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 

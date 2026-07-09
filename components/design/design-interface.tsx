@@ -1,12 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
-import type {
-  DesignColor,
-  DesignHeroProduct,
-  DesignProduct,
-} from "@/agents/design/types";
+import { useCallback, useEffect, useState } from "react";
+import type { DesignColor, DesignProductV2 } from "@/agents/design/types";
 import { useT, useWorkspace } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { ArrowRight, CheckCircle2, Loader2, Palette } from "lucide-react";
@@ -17,26 +13,56 @@ interface DesignResult {
   reportId: string;
   title: string;
   collectionName: string;
-  collectionStory: string;
+  season: string;
+  theme: string;
+  story: string;
+  targetAudience: string;
   colorPalette: DesignColor[];
   silhouettes: string[];
-  productLineup: DesignProduct[];
-  heroProducts: DesignHeroProduct[];
+  products: DesignProductV2[];
   materials: string[];
-  designDirection: string;
-  launchRecommendations: string[];
+  stylingDirection: string;
+  visualKeywords: string[];
+  mockupIdeas: string[];
+  campaignIdeas: string[];
+  photographyStyle: string;
+  moodDescription: string;
   confidence: number;
   sourceReportTitles: string[];
   contextRecordCount: number;
 }
 
-export function DesignInterface() {
+interface DesignInterfaceProps {
+  variant?: "default" | "compact";
+}
+
+export function DesignInterface({ variant = "default" }: DesignInterfaceProps) {
   const t = useT();
   const workspace = useWorkspace();
   const [brief, setBrief] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DesignResult | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadResearchBrief() {
+      try {
+        const res = await fetch("/api/research/design-brief");
+        const data = await res.json();
+        if (!res.ok || !data.prefill || cancelled) return;
+        setBrief((current) => (current.trim() ? current : data.prefill));
+      } catch {
+        // Research brief prefill is optional
+      }
+    }
+
+    void loadResearchBrief();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const examples = [
     t("design.examples.ss26Capsule"),
@@ -67,22 +93,7 @@ export function DesignInterface() {
           throw new Error(data.error ?? t("design.errors.unexpected"));
         }
 
-        setResult({
-          reportId: data.reportId,
-          title: data.title,
-          collectionName: data.collectionName,
-          collectionStory: data.collectionStory,
-          colorPalette: data.colorPalette,
-          silhouettes: data.silhouettes,
-          productLineup: data.productLineup,
-          heroProducts: data.heroProducts,
-          materials: data.materials,
-          designDirection: data.designDirection,
-          launchRecommendations: data.launchRecommendations,
-          confidence: data.confidence,
-          sourceReportTitles: data.sourceReportTitles,
-          contextRecordCount: data.contextRecordCount,
-        });
+        setResult(data as DesignResult);
         setBrief("");
       } catch (err) {
         setError(
@@ -99,6 +110,94 @@ export function DesignInterface() {
     e.preventDefault();
     runDesign(brief);
   };
+
+  const heroProducts = result?.products.filter((p) => p.priority === "hero") ?? [];
+  const isCompact = variant === "compact";
+
+  if (isCompact) {
+    return (
+      <div className="design-mission-panel">
+        <h2 className="design-mission-title">Creative Director Mission</h2>
+
+        <form onSubmit={handleSubmit} className="design-mission-form">
+          <textarea
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            placeholder={t("design.interface.placeholder")}
+            rows={2}
+            disabled={isLoading}
+            className="design-mission-input"
+          />
+          <div className="design-mission-actions">
+            <button
+              type="submit"
+              disabled={isLoading || !brief.trim()}
+              className="design-mission-submit"
+            >
+              {isLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Palette className="size-4" />
+              )}
+              {isLoading
+                ? t("design.interface.running")
+                : t("design.interface.submit")}
+            </button>
+            <div className="design-mission-examples">
+              {examples.slice(0, 3).map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => runDesign(label)}
+                  disabled={isLoading}
+                  className="design-mission-example"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </form>
+
+        {error ? <p className="design-mission-error">{error}</p> : null}
+
+        {result ? (
+          <div className="design-mission-result">
+            <div className="design-mission-result-head">
+              <CheckCircle2 className="size-4 shrink-0 text-[#22d3ee]" />
+              <div>
+                <p className="design-mission-result-title">{result.title}</p>
+                <p className="design-mission-result-meta">
+                  {result.collectionName}
+                  {result.season ? ` · ${result.season}` : ""} ·{" "}
+                  {Math.round(result.confidence * 100)}% confidence
+                </p>
+              </div>
+              <Link href="/facility/reports" className="design-mission-result-link">
+                Reports
+                <ArrowRight className="size-3" />
+              </Link>
+            </div>
+            <p className="design-mission-result-story">{result.story}</p>
+            <ul className="design-mission-result-products">
+              {result.products.slice(0, 4).map((product) => (
+                <li key={product.name}>
+                  <span>{product.name}</span>
+                  <span>
+                    {product.priority}
+                    {"marketPrintSuitability" in product &&
+                    product.marketPrintSuitability != null
+                      ? ` · MP ${product.marketPrintSuitability}%`
+                      : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <section className="space-y-10">
@@ -199,7 +298,11 @@ export function DesignInterface() {
               </h3>
               <p className="text-sm font-medium text-primary/80">
                 {t("design.interface.collectionName")}: {result.collectionName}
+                {result.season ? ` · ${result.season}` : ""}
               </p>
+              {result.theme ? (
+                <p className="text-sm text-muted-foreground">{result.theme}</p>
+              ) : null}
               <p className="text-sm text-muted-foreground">
                 {t("design.interface.contextRecords", {
                   count: String(result.contextRecordCount),
@@ -213,9 +316,18 @@ export function DesignInterface() {
               {t("design.interface.collectionStory")}
             </p>
             <p className="text-base leading-relaxed text-muted-foreground">
-              {result.collectionStory}
+              {result.story}
             </p>
           </div>
+
+          {result.moodDescription ? (
+            <div className="space-y-2">
+              <p className="text-label text-primary/80">Mood</p>
+              <p className="text-base leading-relaxed text-muted-foreground">
+                {result.moodDescription}
+              </p>
+            </div>
+          ) : null}
 
           <div className="space-y-3">
             <p className="text-label text-primary/80">
@@ -269,7 +381,7 @@ export function DesignInterface() {
               {t("design.interface.productLineup")}
             </p>
             <ul className="space-y-3">
-              {result.productLineup.map((product) => (
+              {result.products.map((product) => (
                 <li
                   key={product.name}
                   className="rounded-xl border border-border bg-muted/20 p-5"
@@ -279,34 +391,62 @@ export function DesignInterface() {
                     <Badge variant="secondary" className="font-normal">
                       {product.category}
                     </Badge>
+                    <Badge variant="outline" className="font-normal">
+                      {product.priority}
+                    </Badge>
                   </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {product.fit} · {product.material} · {product.color} ·{" "}
+                    {product.pricePosition}
+                    {"marketPrintSuitability" in product &&
+                    product.marketPrintSuitability != null
+                      ? ` · MP ${product.marketPrintSuitability}%`
+                      : null}
+                  </p>
                   <p className="mt-2 text-base text-muted-foreground">
-                    {product.description}
+                    {product.details}
                   </p>
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="space-y-3">
-            <p className="text-label text-primary/80">
-              {t("design.interface.heroProducts")}
-            </p>
-            <ul className="space-y-3">
-              {result.heroProducts.map((hero) => (
-                <li
-                  key={hero.name}
-                  className="rounded-xl border border-primary/20 bg-primary/5 p-5"
-                >
-                  <p className="font-medium text-foreground">{hero.name}</p>
-                  <p className="mt-2 text-base text-muted-foreground">
-                    {hero.description}
-                  </p>
-                  <p className="mt-2 text-sm text-primary/80">{hero.rationale}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {heroProducts.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-label text-primary/80">
+                {t("design.interface.heroProducts")}
+              </p>
+              <ul className="space-y-3">
+                {heroProducts.map((hero) => (
+                  <li
+                    key={hero.name}
+                    className="rounded-xl border border-primary/20 bg-primary/5 p-5"
+                  >
+                    <p className="font-medium text-foreground">{hero.name}</p>
+                    <p className="mt-2 text-base text-muted-foreground">
+                      {hero.details}
+                    </p>
+                    <p className="mt-2 text-sm text-primary/80">
+                      {hero.pricePosition}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {result.visualKeywords.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-label text-primary/80">Visual Keywords</p>
+              <div className="flex flex-wrap gap-2">
+                {result.visualKeywords.map((keyword) => (
+                  <Badge key={keyword} variant="secondary" className="font-normal">
+                    {keyword}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <p className="text-label text-primary/80">
@@ -330,16 +470,25 @@ export function DesignInterface() {
               {t("design.interface.designDirection")}
             </p>
             <p className="text-base leading-relaxed text-muted-foreground">
-              {result.designDirection}
+              {result.stylingDirection}
             </p>
           </div>
+
+          {result.photographyStyle ? (
+            <div className="space-y-2">
+              <p className="text-label text-primary/80">Photography Style</p>
+              <p className="text-base leading-relaxed text-muted-foreground">
+                {result.photographyStyle}
+              </p>
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <p className="text-label text-primary/80">
               {t("design.interface.launchRecommendations")}
             </p>
             <ul className="space-y-2 rounded-xl border border-border bg-muted/20 p-5">
-              {result.launchRecommendations.map((item) => (
+              {result.campaignIdeas.map((item) => (
                 <li
                   key={item}
                   className="flex gap-3 text-base text-muted-foreground"
@@ -377,7 +526,7 @@ export function DesignInterface() {
               </span>
             </div>
             <Link
-              href="/reports"
+              href="/facility/reports"
               className="inline-flex items-center gap-2 text-base text-primary hover:underline"
             >
               {t("design.interface.viewReports")}

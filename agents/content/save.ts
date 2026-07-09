@@ -4,12 +4,14 @@ import type {
 } from "@/brain/domains/reports";
 import { getBrainClient } from "@/brain/client";
 import { slugify } from "@/brain/client/utils";
+import { resolveReportTaskIds } from "@/lib/reports/task-link";
 import type { ContentOutput } from "./types";
 
 export interface SaveContentInput {
   workspaceId: string;
   brief: string;
   output: ContentOutput;
+  originTaskId?: string;
 }
 
 export interface SaveContentResult {
@@ -34,7 +36,11 @@ export async function saveContentToBrain(
 ): Promise<SaveContentResult> {
   const brain = getBrainClient();
   const reportId = crypto.randomUUID();
-  const taskId = `content-${reportId}`;
+  const { taskId, originTaskId } = resolveReportTaskIds(
+    input.originTaskId,
+    reportId,
+    "content",
+  );
   const baseSlug = slugify(input.output.title).slice(0, 48) || "content";
   const slugSuffix = reportId.slice(0, 8);
   const contentSections = buildContentSections(input.output);
@@ -43,6 +49,7 @@ export async function saveContentToBrain(
     kind: "reports",
     reportId,
     taskId,
+    ...(originTaskId ? { originTaskId } : {}),
     agentId: "content",
     status: "submitted",
     summary: input.output.brandNarrative.slice(0, 500),

@@ -8,12 +8,20 @@ import {
   getBrainContextAssembler,
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
+import { loadBusinessProfile } from "@/lib/business/load-profile";
+import { formatImageCommerceSignals } from "@/lib/commerce/department-signals";
+import { loadMilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
 import type { BrainReportContent } from "@/brain/domains/reports";
+import {
+  extractImageInputsFromDesign,
+  formatDesignCreativeBrief,
+} from "@/lib/design/creative-brief";
 import type { BrainRecord } from "@/brain/types";
 import {
   type ImageCollectionIdentity,
   extractCollectionIdentity,
 } from "./collection-identity";
+import type { ProductKnowledge } from "@/lib/shopify/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 
@@ -104,6 +112,9 @@ export interface ImageKnowledgeContext {
   reportTitles: string[];
   loadedTags: string[];
   collectionIdentity: ImageCollectionIdentity;
+  designCreativeBrief: string | null;
+  designImageInputs: ReturnType<typeof extractImageInputsFromDesign> | null;
+  shopifyKnowledge: ProductKnowledge;
 }
 
 function mergeRecordsIntoSlice(
@@ -133,6 +144,31 @@ function mergeRecordsIntoSlice(
     ...slices,
     { domain, records: newRecords, relevanceScore: 1 },
   ];
+}
+
+function extractLatestDesignContext(slices: BrainContextSlice[]): {
+  brief: string | null;
+  inputs: ReturnType<typeof extractImageInputsFromDesign> | null;
+} {
+  const reportSlice = slices.find((s) => s.domain === "reports");
+  if (!reportSlice) return { brief: null, inputs: null };
+
+  const designRecord = reportSlice.records
+    .filter((record) => matchesReportType(record, "design-report"))
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )[0];
+
+  if (!designRecord) return { brief: null, inputs: null };
+
+  const content = getRecordContent(designRecord);
+  if (!content?.designSections) return { brief: null, inputs: null };
+
+  return {
+    brief: formatDesignCreativeBrief(content.designSections),
+    inputs: extractImageInputsFromDesign(content.designSections),
+  };
 }
 
 function extractReportTitles(slices: BrainContextSlice[]): string[] {
@@ -408,13 +444,27 @@ export async function retrieveImageKnowledge(input: {
     ...new Set(slices.flatMap((s) => s.records.map((r) => r.id))),
   ];
 
-  const promptContext = buildPromptContext(slices, locale);
+  const baseline = await loadMilaeneCommerceBaseline();
+  const { productKnowledge: shopifyKnowledge, marketPrintIntelligence } = baseline;
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+  const promptContext =
+    buildPromptContext(
+      slices,
+      locale,
+      shopifyKnowledge,
+      businessProfile,
+      null,
+      marketPrintIntelligence,
+    ) +
+    "\n\n" +
+    formatImageCommerceSignals(baseline);
   const reportTitles = extractReportTitles(slices);
   const collectionIdentity = extractCollectionIdentity({
     slices,
     brief: input.brief,
     workspaceName: input.workspaceName,
   });
+  const designContext = extractLatestDesignContext(slices);
 
   const brainContext: BrainAgentContext = {
     ...baseContext,
@@ -450,5 +500,8 @@ export async function retrieveImageKnowledge(input: {
     reportTitles,
     loadedTags,
     collectionIdentity,
+    designCreativeBrief: designContext.brief,
+    designImageInputs: designContext.inputs,
+    shopifyKnowledge,
   };
 }

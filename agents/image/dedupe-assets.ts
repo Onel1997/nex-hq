@@ -4,23 +4,23 @@ import {
   CORE_ASSET_SPECS,
   findAssetSpec,
 } from "./asset-specs";
-import type { NormalizedImageAsset } from "./normalized";
+import type { LegacyNormalizedImageAsset } from "./legacy-v2";
 
 const SPEC_IDS = new Set([
   ...CORE_ASSET_SPECS.map((s) => s.id),
   ...ADVANCED_ASSET_SPECS.map((s) => s.id),
 ]);
 
-function specPriority(asset: NormalizedImageAsset): number {
+function specPriority(asset: LegacyNormalizedImageAsset): number {
   if (SPEC_IDS.has(asset.id)) return 2;
   if (findAssetSpec(asset.id)) return 2;
   return 1;
 }
 
 function preferAsset(
-  existing: NormalizedImageAsset,
-  candidate: NormalizedImageAsset,
-): NormalizedImageAsset {
+  existing: LegacyNormalizedImageAsset,
+  candidate: LegacyNormalizedImageAsset,
+): LegacyNormalizedImageAsset {
   const existingPriority = specPriority(existing);
   const candidatePriority = specPriority(candidate);
   if (candidatePriority > existingPriority) return candidate;
@@ -33,9 +33,9 @@ function preferAsset(
  * Keeps one asset per dedup key (type or type+variant).
  */
 export function dedupeImageAssets(
-  assets: NormalizedImageAsset[],
-): NormalizedImageAsset[] {
-  const byKey = new Map<string, NormalizedImageAsset>();
+  assets: LegacyNormalizedImageAsset[],
+): LegacyNormalizedImageAsset[] {
+  const byKey = new Map<string, LegacyNormalizedImageAsset>();
 
   for (const asset of assets) {
     const key = assetDedupKey(asset);
@@ -51,7 +51,7 @@ export function dedupeImageAssets(
 }
 
 export function matchAssetToSpec(
-  asset: NormalizedImageAsset,
+  asset: LegacyNormalizedImageAsset,
   specs: typeof CORE_ASSET_SPECS,
 ): (typeof CORE_ASSET_SPECS)[number] | undefined {
   const byId = specs.find((s) => s.id === asset.id);

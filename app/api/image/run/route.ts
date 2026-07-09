@@ -5,12 +5,14 @@ import { ImageParseError } from "@/agents/image/parse-output";
 import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { resolveOriginTaskId } from "@/lib/tasks/resolve-origin-task";
 import { isSupabaseConfigured } from "@/lib/supabase/admin";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 
 const imageRequestSchema = z.object({
   brief: z.string().min(3).max(4000),
+  taskId: z.string().uuid().optional(),
 });
 
 export async function POST(request: Request) {
@@ -47,11 +49,13 @@ export async function POST(request: Request) {
     }
 
     const { workspace } = await ensureWorkspaceBrainSeeded();
+    const originTaskId = await resolveOriginTaskId(parsed.data.taskId);
 
     const result = await runImage({
       brief: parsed.data.brief,
       workspaceId: workspace.id,
       workspaceName: workspace.name,
+      originTaskId,
     });
 
     console.info(`[Image Run ${requestId}] Success`, {
@@ -87,9 +91,18 @@ export async function POST(request: Request) {
     if (error instanceof ImageParseError) {
       console.error(`[Image Run ${requestId}] Parse error`, error.toLogPayload());
       console.error(
+        `[Image Run ${requestId}] Schema: ${error.schemaName ?? "unknown"}`,
+      );
+      console.error(
         `[Image Run ${requestId}] Validation issues:`,
         JSON.stringify(error.validationIssues, null, 2),
       );
+      if (error.parsed) {
+        console.error(
+          `[Image Run ${requestId}] Validated payload:`,
+          JSON.stringify(error.parsed, null, 2),
+        );
+      }
       console.error(
         `[Image Run ${requestId}] Detailed:\n${error.toDetailedMessage()}`,
       );
@@ -97,6 +110,7 @@ export async function POST(request: Request) {
         {
           error: error.message,
           stage: error.stage,
+          schemaName: error.schemaName,
           missingFields: error.missingFields,
           validationIssues: error.validationIssues,
           receivedKeys: error.receivedKeys,

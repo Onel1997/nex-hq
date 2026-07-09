@@ -8,6 +8,11 @@ import {
   getBrainContextAssembler,
 } from "@/brain/context/assembler-impl";
 import { buildPromptContext } from "@/brain/context/prompt-builder";
+import { loadBusinessProfile } from "@/lib/business/load-profile";
+import { formatCeoCommerceSignals } from "@/lib/commerce/department-signals";
+import { loadMilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
+import { loadHistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
+import type { ProductKnowledge } from "@/lib/shopify/types";
 import { estimateTokens } from "@/brain/client/utils";
 import type { BrainRecord } from "@/brain/types";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
@@ -170,7 +175,22 @@ export async function retrieveCeoKnowledge(input: {
     throw new CeoKnowledgeError(dict.ceo.errors.noKnowledge);
   }
 
-  const promptContext = buildPromptContext(slices, locale);
+  const baseline = await loadMilaeneCommerceBaseline();
+  const { knowledge, productKnowledge: shopifyKnowledge, marketPrintIntelligence } =
+    baseline;
+  const historicalIntelligence = await loadHistoricalIntelligence(knowledge);
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+  const promptContext =
+    buildPromptContext(
+      slices,
+      locale,
+      shopifyKnowledge,
+      businessProfile,
+      historicalIntelligence,
+      marketPrintIntelligence,
+    ) +
+    "\n\n" +
+    formatCeoCommerceSignals(baseline);
   const reportTitles = extractReportTitles(slices);
 
   const brainContext: BrainAgentContext = {

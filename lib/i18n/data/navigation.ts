@@ -25,10 +25,10 @@ export function getMainNav(locale: Locale): NavItem[] {
 
   return [
     { title: navigation.dashboard, href: "/", icon: NAV_ICONS.dashboard },
-    { title: navigation.agents, href: "/agents", icon: NAV_ICONS.agents },
-    { title: navigation.brain, href: "/brain", icon: NAV_ICONS.brain },
-    { title: navigation.tasks, href: "/tasks", icon: NAV_ICONS.tasks },
-    { title: navigation.reports, href: "/reports", icon: NAV_ICONS.reports },
+    { title: navigation.agents, href: "/facility/agents", icon: NAV_ICONS.agents },
+    { title: navigation.brain, href: "/facility/knowledge", icon: NAV_ICONS.brain },
+    { title: navigation.tasks, href: "/facility/missions", icon: NAV_ICONS.tasks },
+    { title: navigation.reports, href: "/facility/reports", icon: NAV_ICONS.reports },
   ];
 }
 

@@ -301,6 +301,73 @@ export class SupabaseBrainClient {
     return this.archiveRecord(domain, id, archivedBy);
   }
 
+  /** Audit trail entry for human report review actions. */
+  async logReportReviewEvent(params: {
+    workspaceId: string;
+    recordId: string;
+    actor: BrainActor;
+    eventType: "report.approved" | "report.rejected" | "report.revision_requested";
+    payload: Record<string, unknown>;
+  }): Promise<string> {
+    return this.publishEvent({
+      workspaceId: params.workspaceId,
+      eventType: params.eventType,
+      domain: "reports",
+      recordId: params.recordId,
+      actor: params.actor,
+      payload: params.payload,
+    });
+  }
+
+  /** Audit trail entry for CEO final report synthesis. */
+  async logCeoFinalReportEvent(params: {
+    workspaceId: string;
+    recordId?: string;
+    actor: BrainActor;
+    eventType:
+      | "ceo.final_report.started"
+      | "ceo.final_report.generated"
+      | "ceo.final_report.completed";
+    payload: Record<string, unknown>;
+  }): Promise<string> {
+    return this.publishEvent({
+      workspaceId: params.workspaceId,
+      eventType: params.eventType,
+      domain: "reports",
+      recordId: params.recordId,
+      actor: params.actor,
+      payload: params.payload,
+    });
+  }
+
+  /** Audit trail entry for task lifecycle actions. */
+  async logTaskEvent(params: {
+    workspaceId: string;
+    recordId: string;
+    actor: BrainActor;
+    eventType:
+      | "task.created"
+      | "task.updated"
+      | "task.assigned"
+      | "task.status_changed"
+      | "task.completed"
+      | "task.deleted"
+      | "task.execution.started"
+      | "task.execution.completed"
+      | "task.execution.failed"
+      | "task.review.completed";
+    payload: Record<string, unknown>;
+  }): Promise<string> {
+    return this.publishEvent({
+      workspaceId: params.workspaceId,
+      eventType: params.eventType,
+      domain: "tasks",
+      recordId: params.recordId,
+      actor: params.actor,
+      payload: params.payload,
+    });
+  }
+
   async search(): Promise<never> {
     throw new Error(
       "Vector semantic search is not implemented yet. Use searchRecords() for keyword search.",
@@ -351,6 +418,8 @@ export class SupabaseBrainClient {
       "draft",
       "pending_review",
       "approved",
+      "rejected",
+      "revision_requested",
     ];
 
     if (options.includeArchived) statuses.push("archived");

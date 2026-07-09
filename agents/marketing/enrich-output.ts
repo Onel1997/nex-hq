@@ -117,9 +117,9 @@ function defaultEmailPhases(title: string) {
     {
       phase: "Post-Drop",
       subject: `${title} — Sell-through Story`,
-      objective: "Social Proof und Restock-Signal",
+      objective: "Social Proof und Capsule-Story",
       content: ensureMinLength(
-        "Post-Drop-Update mit Sell-through, Community-Shoutouts und Next-Drop-Tease.",
+        "Post-Drop-Update mit Sell-through, Community-Shoutouts und Next-Capsule-Tease.",
         30,
         "E-Mail",
       ),

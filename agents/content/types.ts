@@ -70,6 +70,7 @@ export interface ContentRunInput {
   brief: string;
   workspaceId: string;
   workspaceName: string;
+  originTaskId?: string;
 }
 
 export interface ContentRunResult {

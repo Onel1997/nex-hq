@@ -3,31 +3,40 @@
  * Run: npx tsx agents/image/verify-openai-images.ts
  */
 import {
-  buildOpenAiImageRequest,
-  generateOpenAiImage,
-  OPENAI_IMAGE_MODEL,
-} from "./providers/openai-images-provider";
+  buildOpenAiGenerationPayload,
+  getOpenAiImageModel,
+  IMAGE_GENERATION,
+  stripUnknownOpenAiImagePayloadFields,
+} from "@/lib/image/image-generation-config";
+import { generateOpenAiImage } from "./providers/openai-images-provider";
 
 function assertPayload() {
-  const payload = buildOpenAiImageRequest({
-    prompt: "Test prompt for verification",
-    dimensions: "1920x1080",
-    assetType: "hero_banner",
-  });
+  const payload = stripUnknownOpenAiImagePayloadFields(
+    buildOpenAiGenerationPayload("Test prompt for verification", "1920x1080"),
+  );
 
   const issues: string[] = [];
 
   if ("response_format" in payload) {
     issues.push("payload must not include response_format");
   }
-  if (payload.model !== OPENAI_IMAGE_MODEL) {
-    issues.push(`expected model ${OPENAI_IMAGE_MODEL}, got ${payload.model}`);
+  if ("generationMode" in payload) {
+    issues.push("payload must not include generationMode");
   }
-  if (payload.size !== "1536x1024") {
-    issues.push(`expected landscape size 1536x1024, got ${payload.size}`);
+  if ("mode" in payload) {
+    issues.push("payload must not include mode");
   }
-  if (payload.output_format !== "png") {
-    issues.push(`expected output_format png, got ${payload.output_format}`);
+  if (payload.model !== getOpenAiImageModel()) {
+    issues.push(`expected model ${getOpenAiImageModel()}, got ${payload.model}`);
+  }
+  if (IMAGE_GENERATION.mode === "production" && payload.size !== "1536x1024") {
+    issues.push(`expected landscape size 1536x1024 in production, got ${payload.size}`);
+  }
+  if (IMAGE_GENERATION.mode === "draft" && payload.size !== "1024x1024") {
+    issues.push(`expected draft size 1024x1024, got ${payload.size}`);
+  }
+  if (payload.output_format !== IMAGE_GENERATION[IMAGE_GENERATION.mode].outputFormat) {
+    issues.push(`expected output_format ${IMAGE_GENERATION[IMAGE_GENERATION.mode].outputFormat}, got ${payload.output_format}`);
   }
 
   console.log("=== OpenAI Images Request Payload ===");

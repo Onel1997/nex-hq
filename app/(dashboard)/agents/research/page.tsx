@@ -1,30 +1,16 @@
 import type { Metadata } from "next";
-import { ResearchInterface } from "@/components/research/research-interface";
-import { ActiveWorkspaceBadge } from "@/components/shared/active-workspace-badge";
-import { CommandSurface } from "@/components/shared/command-surface";
-import { PageHeader } from "@/components/shared/page-header";
-import { AgentStatusBadge } from "@/components/shared/agent-status-badge";
+import { ResearchStudioV3 } from "@/components/research/v3";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import "@/app/research-studio-v3.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 
 export const metadata: Metadata = {
-  title: dict.research.page.title,
+  title: "Research Studio",
+  description: dict.research.page.description,
 };
 
 export default function ResearchAgentPage() {
-  return (
-    <CommandSurface>
-      <PageHeader
-        title={dict.research.page.title}
-        description={dict.research.page.description}
-      >
-        <ActiveWorkspaceBadge />
-        <AgentStatusBadge status="active" showPulse />
-      </PageHeader>
-
-      <ResearchInterface />
-    </CommandSurface>
-  );
+  return <ResearchStudioV3 />;
 }

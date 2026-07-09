@@ -9,6 +9,7 @@ import type {
   BrainContextSlice,
 } from "./assembly";
 import { buildPromptContext } from "./prompt-builder";
+import { loadBusinessContext } from "@/lib/business/load-business-context";
 
 /** Domains loaded for CEO Agent context assembly. */
 export const CEO_CONTEXT_DOMAINS: BrainDomain[] = [
@@ -17,6 +18,7 @@ export const CEO_CONTEXT_DOMAINS: BrainDomain[] = [
   "brand_rules",
   "decisions",
   "reports",
+  "tasks",
   "competitor_intelligence",
   "design_memory",
   "marketing_memory",
@@ -34,8 +36,10 @@ const STATUS_SORT_ORDER: Record<BrainRecordStatus, number> = {
   approved: 0,
   pending_review: 1,
   draft: 2,
-  archived: 3,
-  superseded: 4,
+  revision_requested: 3,
+  rejected: 4,
+  archived: 5,
+  superseded: 6,
 };
 
 /** Per-domain record caps to keep prompt size reasonable. */
@@ -45,6 +49,7 @@ export const CEO_DOMAIN_LIMITS: Partial<Record<BrainDomain, number>> = {
   brand_rules: 3,
   decisions: 5,
   reports: 8,
+  tasks: 10,
   competitor_intelligence: 6,
   design_memory: 4,
   marketing_memory: 4,
@@ -127,7 +132,17 @@ export class SupabaseBrainContextAssembler implements BrainContextAssembler {
       }
     }
 
-    const promptContext = buildPromptContext(slices, request.locale);
+    const { profile: businessProfile, marketPrint } = await loadBusinessContext(
+      request.workspaceId,
+    );
+    const promptContext = buildPromptContext(
+      slices,
+      request.locale,
+      undefined,
+      businessProfile,
+      null,
+      marketPrint.intelligence,
+    );
     const sourceRecordIds = slices.flatMap((s) =>
       s.records.map((r) => r.id),
     );

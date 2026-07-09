@@ -21,6 +21,7 @@ export { getMainNav, getSecondaryNav, getPageTitle } from "./navigation";
 export {
   getCeoPriorityLabels,
   getCeoReportTypeLabel,
+  getCeoFinalReportTypeLabel,
   getDesignReportTypeLabel,
   getMarketingReportTypeLabel,
   getShopifyReportTypeLabel,
@@ -32,7 +33,6 @@ export {
   getResearchReportTypeLabels,
 } from "./reports";
 export {
-  getMockTasks,
   getTaskStatusLabels,
   TASK_STATUS_ORDER,
 } from "./tasks";

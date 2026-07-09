@@ -1,21 +1,35 @@
 import { z } from "zod";
-import { buildV2ImageOutput, type EnrichImageOptions } from "./enrich-packages";
+import { buildV3ImageOutput, type EnrichStudioOptions } from "./enrich-studio";
 import { imageOutputSchema, type ImageOutput } from "./types";
 
-export interface ParseImageOutputOptions extends EnrichImageOptions {}
+/** Zod schemas involved when createProductionPackage validates via /api/image/run. */
+export const IMAGE_VALIDATION_SCHEMAS = {
+  root: "imageOutputSchema",
+  nested: [
+    "imageMoodboardSchema",
+    "imagePaletteSchema",
+    "imageStudioAssetSchema",
+    "imageAiPromptsSchema",
+    "imageLookbookShotSchema",
+  ],
+} as const;
+
+const ROOT_VALIDATION_SCHEMA = IMAGE_VALIDATION_SCHEMAS.root;
+
+export interface ParseImageOutputOptions extends EnrichStudioOptions {}
 
 export const EXPECTED_IMAGE_SCHEMA = {
   title: "string (required)",
   reportType: '"image-project" (required)',
-  schemaVersion: '"2.0" (required)',
+  schemaVersion: '"3.0" (required)',
   projectName: "string (required)",
+  collectionName: "string (required)",
+  visualDirection: "string min 80 chars",
   moodboard: "{ visualDirection, aestheticKeywords, colorSystem, materialReferences, photographyStyle }",
   palette: "{ primary, secondary, accent, background, text } — Name + HEX",
-  corePackage:
-    "{ id, title, type, package: core, dimensions, platform, prompt }[] (7–16)",
-  advancedPackage:
-    "{ id, title, type, package: advanced, dimensions, prompt }[] (0–32)",
-  campaignShots: "{ shotName, shotType, location, styling, purpose }[] (12–24)",
+  productionAssets:
+    "{ assetType, productName, collection, color, material, location, lighting, photographyStyle, cameraStyle, prompt, priority }[] (18–48)",
+  lookbookShots: "{ shotName, models, location, outfitProducts, styling, purpose }[] (4–12)",
   confidence: "number 0–1 (required)",
   sourceReportTitles: "string[] (required, min 1)",
   fullProject: "string (required, min 600 chars, Markdown)",
@@ -29,10 +43,13 @@ export class ImageParseError extends Error {
   readonly expectedSchema: typeof EXPECTED_IMAGE_SCHEMA;
   readonly receivedKeys?: string[];
   readonly missingFields?: string[];
+  readonly schemaName?: string;
   readonly validationIssues?: Array<{
+    field: string;
     path: string;
     expected: string;
     received: unknown;
+    receivedLabel: string;
     message: string;
   }>;
 
@@ -43,6 +60,7 @@ export class ImageParseError extends Error {
     strippedJson?: string;
     parsed?: unknown;
     missingFields?: string[];
+    schemaName?: string;
     validationIssues?: ImageParseError["validationIssues"];
   }) {
     super(params.message);
@@ -57,6 +75,7 @@ export class ImageParseError extends Error {
         ? Object.keys(params.parsed as Record<string, unknown>)
         : undefined;
     this.missingFields = params.missingFields;
+    this.schemaName = params.schemaName;
     this.validationIssues = params.validationIssues;
   }
 
@@ -67,6 +86,7 @@ export class ImageParseError extends Error {
       expectedSchema: this.expectedSchema,
       receivedKeys: this.receivedKeys,
       missingFields: this.missingFields,
+      schemaName: this.schemaName,
       validationIssues: this.validationIssues,
       rawResponseLength: this.rawResponse?.length,
       rawResponsePreview: this.rawResponse?.slice(0, 4000),
@@ -94,11 +114,20 @@ export class ImageParseError extends Error {
       lines.push("", `Missing fields: [${this.missingFields.join(", ")}]`);
     }
 
+    if (this.schemaName) {
+      lines.push("", `Schema: ${this.schemaName}`);
+    }
+
     if (this.validationIssues?.length) {
       lines.push("", "Validation mismatches:");
       for (const issue of this.validationIssues) {
         lines.push(
-          `  - ${issue.path}: ${issue.message} (expected: ${issue.expected}, received: ${JSON.stringify(issue.received)})`,
+          `  ❌ ${issue.path}`,
+          `     Field: ${issue.field}`,
+          `     Expected: ${issue.expected}`,
+          `     Received: ${issue.receivedLabel}`,
+          `     Path: ${issue.path}`,
+          `     Message: ${issue.message}`,
         );
       }
     }
@@ -119,11 +148,12 @@ const REQUIRED_TOP_LEVEL_FIELDS = [
   "title",
   "reportType",
   "projectName",
+  "collectionName",
+  "visualDirection",
   "moodboard",
   "palette",
-  "corePackage",
-  "advancedPackage",
-  "campaignShots",
+  "productionAssets",
+  "lookbookShots",
   "confidence",
   "sourceReportTitles",
   "fullProject",
@@ -142,11 +172,64 @@ function stripJsonFences(raw: string): string {
   return text.trim();
 }
 
+function formatReceivedValue(value: unknown): string {
+  if (value === undefined) return "undefined";
+  if (value === null) return "null";
+  if (typeof value === "string") {
+    return value.length > 160
+      ? `"${value.slice(0, 160)}…" (${value.length} chars)`
+      : JSON.stringify(value);
+  }
+  try {
+    const serialized = JSON.stringify(value);
+    return serialized.length > 200 ? `${serialized.slice(0, 200)}…` : serialized;
+  } catch {
+    return String(value);
+  }
+}
+
+function zodExpectedLabel(issue: z.ZodIssue): string {
+  if ("expected" in issue && issue.expected !== undefined) {
+    return String(issue.expected);
+  }
+
+  switch (issue.code) {
+    case "too_small":
+      return `min ${String(issue.minimum)}`;
+    case "too_big":
+      return `max ${String(issue.maximum)}`;
+    case "invalid_value":
+      return issue.message;
+    case "custom":
+      return issue.message;
+    default:
+      return issue.message || issue.code;
+  }
+}
+
+function zodReceivedLabel(issue: z.ZodIssue, atPath: unknown): string {
+  if ("received" in issue && issue.received !== undefined) {
+    return issue.received === null ? "null" : String(issue.received);
+  }
+  return formatReceivedValue(atPath);
+}
+
 function zodIssueToDetail(
   issue: z.ZodIssue,
   data: unknown,
-): { path: string; expected: string; received: unknown; message: string } {
+): {
+  field: string;
+  path: string;
+  expected: string;
+  received: unknown;
+  receivedLabel: string;
+  message: string;
+} {
   const path = issue.path.length ? issue.path.join(".") : "(root)";
+  const field =
+    issue.path.length > 0
+      ? String(issue.path[issue.path.length - 1])
+      : "(root)";
   let received: unknown = data;
 
   for (const segment of issue.path) {
@@ -159,11 +242,34 @@ function zodIssueToDetail(
   }
 
   return {
+    field,
     path,
-    expected: issue.code,
+    expected: zodExpectedLabel(issue),
     received,
+    receivedLabel: zodReceivedLabel(issue, received),
     message: issue.message,
   };
+}
+
+function logValidationDiagnostics(params: {
+  schemaName: string;
+  issues: NonNullable<ImageParseError["validationIssues"]>;
+}): void {
+  console.error(
+    `[Image Parse] ${params.schemaName} failed with ${params.issues.length} issue(s):`,
+  );
+  for (const issue of params.issues) {
+    console.error(
+      [
+        `❌ ${issue.path}`,
+        `   Field: ${issue.field}`,
+        `   Expected: ${issue.expected}`,
+        `   Received: ${issue.receivedLabel}`,
+        `   Path: ${issue.path}`,
+        `   Message: ${issue.message}`,
+      ].join("\n"),
+    );
+  }
 }
 
 function findMissingRequiredFields(parsed: Record<string, unknown>): string[] {
@@ -190,6 +296,10 @@ function normalizeImagePayload(
 
   const aliasMap: Record<string, string> = {
     project_name: "projectName",
+    collection_name: "collectionName",
+    visual_direction: "visualDirection",
+    production_assets: "productionAssets",
+    lookbook_shots: "lookbookShots",
     core_package: "corePackage",
     advanced_package: "advancedPackage",
     campaign_shots: "campaignShots",
@@ -227,27 +337,53 @@ function validateImagePayload(
   context: { rawResponse: string; strippedJson: string },
   options?: ParseImageOutputOptions,
 ): ImageOutput {
-  const v2Payload = buildV2ImageOutput(parsed, options);
-  const result = imageOutputSchema.safeParse(v2Payload);
+  const v3Payload = buildV3ImageOutput(parsed, options);
+
+  console.info(`[Image Parse] Validating ${ROOT_VALIDATION_SCHEMA}`);
+  console.info(
+    `[Image Parse] Nested schemas: ${IMAGE_VALIDATION_SCHEMAS.nested.join(", ")}`,
+  );
+  console.info(
+    `[Image Parse] Payload before ${ROOT_VALIDATION_SCHEMA}.safeParse():`,
+    JSON.stringify(v3Payload, null, 2),
+  );
+
+  const result = imageOutputSchema.safeParse(v3Payload);
 
   if (result.success) {
     return result.data;
   }
 
-  console.error("IMAGE PROJECT VALIDATION ERRORS", result.error.flatten());
-
-  const missingFields = findMissingRequiredFields(v2Payload);
+  const missingFields = findMissingRequiredFields(v3Payload);
   const validationIssues = result.error.issues.map((issue) =>
-    zodIssueToDetail(issue, v2Payload),
+    zodIssueToDetail(issue, v3Payload),
   );
 
+  logValidationDiagnostics({
+    schemaName: ROOT_VALIDATION_SCHEMA,
+    issues: validationIssues,
+  });
+
+  console.error(
+    `[Image Parse] ${ROOT_VALIDATION_SCHEMA} flatten:`,
+    result.error.flatten(),
+  );
+
+  const issueSummary = validationIssues
+    .map(
+      (issue) =>
+        `❌ ${issue.path}\n   Expected: ${issue.expected}\n   Received: ${issue.receivedLabel}`,
+    )
+    .join("\n\n");
+
   throw new ImageParseError({
-    message: `Schema validation failed with ${result.error.issues.length} issue(s)`,
+    message: `${ROOT_VALIDATION_SCHEMA} validation failed with ${result.error.issues.length} issue(s)\n\n${issueSummary}`,
     stage: "validation",
     rawResponse: context.rawResponse,
     strippedJson: context.strippedJson,
-    parsed: v2Payload,
+    parsed: v3Payload,
     missingFields,
+    schemaName: ROOT_VALIDATION_SCHEMA,
     validationIssues,
   });
 }

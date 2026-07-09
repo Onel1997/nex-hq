@@ -5,12 +5,14 @@ import { ResearchParseError } from "@/agents/research/parse-output";
 import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { resolveOriginTaskId } from "@/lib/tasks/resolve-origin-task";
 import { isSupabaseConfigured } from "@/lib/supabase/admin";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 
 const researchRequestSchema = z.object({
   request: z.string().min(3).max(4000),
+  taskId: z.string().uuid().optional(),
 });
 
 export async function POST(request: Request) {
@@ -55,6 +57,11 @@ export async function POST(request: Request) {
 
     const { workspace } = await ensureWorkspaceBrainSeeded();
 
+    let originTaskId: string | undefined;
+    if (parsed.data.taskId) {
+      originTaskId = await resolveOriginTaskId(parsed.data.taskId);
+    }
+
     console.info(`[Research Run ${requestId}] Workspace resolved`, {
       workspaceId: workspace.id,
       workspaceName: workspace.name,
@@ -65,6 +72,7 @@ export async function POST(request: Request) {
       request: parsed.data.request,
       workspaceId: workspace.id,
       workspaceName: workspace.name,
+      originTaskId,
     });
 
     console.info(`[Research Run ${requestId}] Success`, {
@@ -108,6 +116,19 @@ export async function POST(request: Request) {
       stack: error instanceof Error ? error.stack : undefined,
     });
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[Research API] UNHANDLED ROUTE ERROR", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Unknown research error",
+        stage: "route_unhandled",
+        details:
+          process.env.NODE_ENV === "development" ? String(error) : undefined,
+      },
+      { status: 500 },
+    );
   }
 }

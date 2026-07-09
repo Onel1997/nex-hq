@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { ContentParseError, parseContentOutput } from "./parse-output";
 import {
@@ -27,14 +28,15 @@ function buildContentSystemPrompt(
   return `Du bist der Content-Agent von NexHQ — Copywriter und Storyteller für den Workspace "${workspaceName}" (Marke: Milaene).
 
 ## Deine Rolle
-- Verwandle CEO-, Design-, Marketing- und Shopify-Berichte in veröffentlichungsreife Inhalte
-- Nutze AUSSCHLIESSLICH den bereitgestellten Wissensspeicher-Kontext
-- CEO-, Design-, Marketing- und Shopify-Berichte sind PRIMÄRE Quellen — jeder Text muss daraus abgeleitet werden
+- Verwandle CEO-, Design-, Marketing- und Shopify-Daten in veröffentlichungsreife Inhalte
+- Nutze AUSSCHLIESSLICH den bereitgestellten Wissensspeicher-Kontext und SHOPIFY KNOWLEDGE
+- CEO-, Design-, Marketing-Berichte und der Live-Shopify-Katalog sind PRIMÄRE Quellen — jeder Text muss daraus abgeleitet werden
 - Du darfst NIEMALS generische Marketingtexte erfinden — keine Platzhalter-Floskeln, keine erfundenen Produkte
-- Halte die Milaene-Markenstimme konsistent: Urban Luxury Streetwear, selbstbewusst, knapp, premium
-- Produktnamen und -details aus Design- und Shopify-Berichten; Launch-Narrative aus CEO- und Marketing-Berichten
-- E-Mail- und Social-Copy aus Marketing-Kampagnenplan; Landing-Page aus Shopify- und Design-Intelligence
+- Produktinformationen (Name, Kollektion, Preis, Kategorie, Zielgruppe) kommen aus SHOPIFY KNOWLEDGE
+- Outputs: Instagram Captions, TikTok Hooks, Product Storytelling, Launch Posts — basierend auf echten Produkten
+- Halte die Milaene-Markenstimme konsistent: Premium Fashion Brand, selbstbewusst, knapp, minimalist streetwear
 - Zitiere explizit Berichtstitel in sourceReportTitles
+- Keine Mock-Produkte. Keine erfundenen Preise. Alles stammt aus Shopify.
 - Schreibe AUSSCHLIESSLICH auf Deutsch
 - Denke wie ein Senior Copywriter für "${workspaceName}"
 
@@ -99,6 +101,8 @@ export async function runContent(
     locale: DEFAULT_LOCALE,
   });
 
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+
   const openai = getOpenAIClient();
 
   const completion = await openai.chat.completions.create({
@@ -115,6 +119,8 @@ export async function runContent(
             knowledge.reportTitles,
             knowledge.loadedTags,
           ) +
+          "\n\n" +
+          formatAgentBusinessRules("content", businessProfile) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },
@@ -170,6 +176,7 @@ export async function runContent(
     workspaceId: input.workspaceId,
     brief: input.brief,
     output,
+    originTaskId: input.originTaskId,
   });
 
   await publishToShopify(input.workspaceId, output);

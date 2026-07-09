@@ -3,6 +3,11 @@ import {
   generateImageAsset,
   ImageProviderNotConfiguredError,
 } from "@/agents/image/generate";
+import {
+  ImageOpenAiQuotaExceededError,
+  OPENAI_QUOTA_ERROR_CODE,
+} from "@/agents/image/generation-errors";
+import { getOpenAiImageModel } from "@/lib/image/image-generation-config";
 import { imageGenerateRequestSchema } from "@/agents/image/types-generation";
 import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
@@ -61,6 +66,26 @@ export async function POST(request: Request) {
           providerConfigured: false,
         },
         { status: 503 },
+      );
+    }
+
+    if (error instanceof ImageOpenAiQuotaExceededError) {
+      console.error(`[Image Generate ${requestId}] OpenAI quota exceeded`, {
+        model: error.model ?? getOpenAiImageModel(),
+        requestId: error.requestId,
+        routeRequestId: requestId,
+        responseBody: error.responseBody,
+        message: error.message,
+      });
+
+      return NextResponse.json(
+        {
+          error: error.message,
+          code: OPENAI_QUOTA_ERROR_CODE,
+          requestId: error.requestId,
+          model: error.model ?? getOpenAiImageModel(),
+        },
+        { status: 429 },
       );
     }
 

@@ -13,6 +13,7 @@ import type {
   BrainMarketingKpi,
   BrainShopifyProduct,
   CeoReportType,
+  CeoFinalReportType,
   CeoStepPriority,
   ContentReportType,
   DesignReportType,
@@ -22,6 +23,8 @@ import type {
   ShopifyReportType,
 } from "@/brain/domains/reports";
 import type { ImageProjectView } from "@/lib/reports/image-project";
+import type { ReportsCenterDesignResearch } from "@/lib/facility/reports-center-types";
+import type { ReportAgentTab, ReportSource } from "@/lib/reports/report-source";
 import type { AgentId } from "@/lib/constants/agents";
 
 export interface ReportNextStep {
@@ -39,7 +42,13 @@ export type ReportCategory =
   | "image"
   | "operations";
 
-export type ReportReviewStatus = "draft" | "submitted" | "approved" | "archived";
+export type ReportReviewStatus =
+  | "draft"
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "revision_requested"
+  | "archived";
 
 export interface ReportListItem {
   id: string;
@@ -52,10 +61,12 @@ export interface ReportListItem {
   confidence: number;
   createdAt: string;
   drop?: string;
+  originTaskId?: string;
   highlights?: string[];
   reportType?:
     | ResearchReportType
     | CeoReportType
+    | CeoFinalReportType
     | DesignReportType
     | MarketingReportType
     | ShopifyReportType
@@ -68,15 +79,42 @@ export interface ReportListItem {
   risks?: string[];
   nextSteps?: ReportNextStep[];
   sourceReportTitles?: string[];
+  /** Intelligence layer classification for Reports Center. */
+  source?: ReportSource;
+  agentTab?: ReportAgentTab;
   designReport?: {
+    schemaVersion?: "2.0" | "1.0";
     collectionName: string;
+    season?: string;
+    theme?: string;
+    story?: string;
     collectionStory: string;
+    targetAudience?: string;
     colorPalette: BrainDesignColor[];
     silhouettes: string[];
+    fits?: string[];
+    products?: Array<{
+      name: string;
+      category: string;
+      fit: string;
+      material: string;
+      color: string;
+      details: string;
+      pricePosition: string;
+      priority: "hero" | "core" | "support";
+      description?: string;
+    }>;
     productLineup: BrainDesignProduct[];
     heroProducts: BrainDesignHeroProduct[];
     materials: string[];
+    stylingDirection?: string;
     designDirection: string;
+    visualKeywords?: string[];
+    mockupIdeas?: string[];
+    campaignIdeas?: string[];
+    photographyStyle?: string;
+    imagePrompts?: string[];
+    moodDescription?: string;
     launchRecommendations: string[];
     sourceReportTitles?: string[];
   };
@@ -116,6 +154,43 @@ export interface ReportListItem {
     sourceReportTitles?: string[];
   };
   imageProject?: ImageProjectView;
+  ceoFinalReport?: {
+    executiveSummary: string;
+    keyFindings: string[];
+    opportunities: string[];
+    risks: string[];
+    recommendedActions: ReportNextStep[];
+    launchStrategy: string;
+    nextMilestones: string[];
+    ceoVerdict: string;
+    completionScore: number;
+    founderGoal: string;
+    parentGoalTaskId: string;
+    sourceTaskIds: string[];
+    researchReports: Array<{
+      reportId: string;
+      brainRecordId: string;
+      title: string;
+      taskId: string;
+      agentId: AgentId;
+    }>;
+    designReports: Array<{
+      reportId: string;
+      brainRecordId: string;
+      title: string;
+      taskId: string;
+      agentId: AgentId;
+    }>;
+    marketingReports: Array<{
+      reportId: string;
+      brainRecordId: string;
+      title: string;
+      taskId: string;
+      agentId: AgentId;
+    }>;
+  };
+  /** Structured Research HQ design concepts for Reports Center / Design Studio handoff. */
+  designResearch?: ReportsCenterDesignResearch;
 }
 
 export const REPORT_CATEGORY_LABELS: Record<ReportCategory, string> = {
@@ -136,7 +211,7 @@ export const MOCK_REPORTS: ReportListItem[] = [
       "Competitive analysis of 12 major drops in Q2. Corteiz led with scarcity-driven sell-through; average drop window compressed to 48 hours.",
     category: "research",
     agentId: "research",
-    status: "submitted",
+      status: "pending_review",
     confidence: 0.89,
     createdAt: "2026-06-07T14:00:00Z",
     drop: "SS26 Capsule",
@@ -170,7 +245,7 @@ export const MOCK_REPORTS: ReportListItem[] = [
       "Concept A: obsidian base, signal green wordmark, concrete texture overlay. Aligns with design rules.",
     category: "design",
     agentId: "designer",
-    status: "submitted",
+      status: "pending_review",
     confidence: 0.91,
     createdAt: "2026-06-06T16:45:00Z",
     drop: "SS26 Capsule",
@@ -220,7 +295,7 @@ export const MOCK_REPORTS: ReportListItem[] = [
       "4-email VIP sequence drafted. Open rate target 40%+. Copy follows brand voice rules from Brain.",
     category: "marketing",
     agentId: "marketing",
-    status: "submitted",
+      status: "pending_review",
     confidence: 0.86,
     createdAt: "2026-06-07T08:30:00Z",
     drop: "SS26 Capsule",

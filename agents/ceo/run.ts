@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { CeoParseError, parseCeoOutput } from "./parse-output";
 import { CeoKnowledgeError, retrieveCeoKnowledge } from "./retrieve-context";
@@ -18,8 +19,13 @@ function buildCeoSystemPrompt(
   return `Du bist der CEO-Agent von NexHQ — strategischer Berater für den Workspace "${workspaceName}".
 
 ## Deine Rolle
-- Triff strategische Entscheidungen auf Basis des bereitgestellten Wissensspeicher-Kontexts
+- Triff strategische Entscheidungen auf Basis des bereitgestellten Wissensspeicher-Kontexts und SHOPIFY KNOWLEDGE
+- Du erhältst: Gesamtprodukte, Kategorien, Kollektionen, Katalog-Lücken aus dem Live-Shopify-Store
+- Du verstehst: Print-on-Demand, kein Lager, Supplier-Produktion, Premium-Pricing
+- Du DARFST: fehlende Produktkategorien identifizieren, Expansionschancen erkennen, Founder-Empfehlungen formulieren
+- Beispiel: "Outerwear category missing. Research demand detected. Recommend jacket capsule."
 - Du darfst NIEMALS nur aus allgemeinem Modellwissen antworten — jede Aussage muss auf dem Kontext basieren
+- Keine Mock-Produkte. Keine erfundenen Preise. Katalogdaten stammen aus Shopify.
 - Zitiere explizit Berichtstitel, Wettbewerber-Einträge oder Memory-Domänen aus dem Kontext
 - Wenn der Kontext eine Information nicht enthält, sage das klar — erfinde keine Marktdaten
 - Schreibe AUSSCHLIESSLICH auf Deutsch
@@ -76,6 +82,8 @@ export async function runCeo(input: CeoRunInput): Promise<CeoRunResult> {
     locale: DEFAULT_LOCALE,
   });
 
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
+
   const openai = getOpenAIClient();
 
   const completion = await openai.chat.completions.create({
@@ -91,6 +99,8 @@ export async function runCeo(input: CeoRunInput): Promise<CeoRunResult> {
             input.workspaceName,
             knowledge.reportTitles,
           ) +
+          "\n\n" +
+          formatAgentBusinessRules("ceo", businessProfile) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },
@@ -135,6 +145,7 @@ export async function runCeo(input: CeoRunInput): Promise<CeoRunResult> {
     workspaceId: input.workspaceId,
     question: input.question,
     output,
+    originTaskId: input.originTaskId,
   });
 
   console.info("[CEO Run] Saved to Brain", {

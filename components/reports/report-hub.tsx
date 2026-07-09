@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getAgentCatalog,
   getCeoPriorityLabels,
+  getCeoFinalReportTypeLabel,
   getCeoReportTypeLabel,
   getDesignReportTypeLabel,
   getMarketingReportTypeLabel,
@@ -21,6 +22,7 @@ import type {
 } from "@/brain/domains/reports";
 import { useDictionary, useLocale, useT, useWorkspace } from "@/lib/i18n";
 import { ImageProjectCard } from "@/components/reports/image-project-card";
+import { ReportReviewActions } from "@/components/reports/report-review-actions";
 import { SectionHeading } from "@/components/shared/section-heading";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -82,8 +84,10 @@ const PRIORITY_STYLES: Record<CeoStepPriority, string> = {
 
 const STATUS_STYLES: Record<ReportListItem["status"], string> = {
   draft: "bg-muted text-muted-foreground",
-  submitted: "bg-primary/10 text-primary",
-  approved: "bg-primary/15 text-primary",
+  pending_review: "bg-amber-500/10 text-amber-800 dark:text-amber-300",
+  approved: "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
+  rejected: "bg-destructive/10 text-destructive",
+  revision_requested: "bg-orange-500/10 text-orange-800 dark:text-orange-300",
   archived: "bg-muted text-muted-foreground",
 };
 
@@ -125,6 +129,7 @@ function ReportCard({
   statusLabel,
   reportTypeLabels,
   ceoReportTypeLabel,
+  ceoFinalReportTypeLabel,
   designReportTypeLabel,
   marketingReportTypeLabel,
   shopifyReportTypeLabel,
@@ -133,6 +138,8 @@ function ReportCard({
   priorityLabels,
   sectionLabels,
   onDeleteProject,
+  onReviewComplete,
+  onReviewError,
 }: {
   report: ReportListItem;
   categoryLabel: string;
@@ -140,6 +147,7 @@ function ReportCard({
   statusLabel: string;
   reportTypeLabels: Record<ResearchReportType, string>;
   ceoReportTypeLabel: string;
+  ceoFinalReportTypeLabel: string;
   designReportTypeLabel: string;
   marketingReportTypeLabel: string;
   shopifyReportTypeLabel: string;
@@ -213,8 +221,11 @@ function ReportCard({
     fluxPrompt: string;
   };
   onDeleteProject?: (brainRecordId: string) => void;
+  onReviewComplete?: () => void | Promise<void>;
+  onReviewError?: (message: string) => void;
 }) {
   const CategoryIcon = CATEGORY_ICONS[report.category];
+  const isCeoFinalReport = report.reportType === "ceo-final-report";
   const isCeoReport = report.reportType === "ceo-report";
   const isDesignReport = report.reportType === "design-report";
   const isMarketingReport = report.reportType === "marketing-report";
@@ -226,6 +237,7 @@ function ReportCard({
   const researchReportType =
     report.reportType &&
     report.reportType !== "ceo-report" &&
+    report.reportType !== "ceo-final-report" &&
     report.reportType !== "design-report" &&
     report.reportType !== "marketing-report" &&
     report.reportType !== "shopify-report" &&
@@ -252,6 +264,8 @@ function ReportCard({
         agentName={agentName}
         statusLabel={statusLabel}
         onDelete={onDeleteProject}
+        onReviewComplete={onReviewComplete}
+        onReviewError={onReviewError}
       />
     );
   }
@@ -271,7 +285,9 @@ function ReportCard({
                     variant="outline"
                     className={cn(
                       "font-normal",
-                      isCeoReport
+                      isCeoFinalReport
+                        ? CEO_REPORT_STYLE
+                        : isCeoReport
                         ? CEO_REPORT_STYLE
                         : isDesignReport
                           ? DESIGN_REPORT_STYLE
@@ -288,7 +304,9 @@ function ReportCard({
                               : undefined,
                     )}
                   >
-                    {isCeoReport
+                    {isCeoFinalReport
+                      ? ceoFinalReportTypeLabel
+                      : isCeoReport
                       ? ceoReportTypeLabel
                       : isDesignReport
                         ? designReportTypeLabel
@@ -595,14 +613,39 @@ function ReportCard({
               <ReportSection label={sectionLabels.collectionName}>
                 <p className="text-base font-medium text-foreground">
                   {design.collectionName}
+                  {design.season ? (
+                    <span className="text-sm font-normal text-muted-foreground">
+                      {" "}
+                      · {design.season}
+                    </span>
+                  ) : null}
                 </p>
+                {design.theme ? (
+                  <p className="mt-1 text-sm text-muted-foreground">{design.theme}</p>
+                ) : null}
               </ReportSection>
 
               <ReportSection label={sectionLabels.collectionStory}>
                 <p className="text-base leading-relaxed text-muted-foreground">
-                  {design.collectionStory}
+                  {design.story ?? design.collectionStory}
                 </p>
               </ReportSection>
+
+              {design.targetAudience ? (
+                <ReportSection label="Target Audience">
+                  <p className="text-base leading-relaxed text-muted-foreground">
+                    {design.targetAudience}
+                  </p>
+                </ReportSection>
+              ) : null}
+
+              {design.moodDescription ? (
+                <ReportSection label="Mood">
+                  <p className="text-base leading-relaxed text-muted-foreground">
+                    {design.moodDescription}
+                  </p>
+                </ReportSection>
+              ) : null}
 
               {design.colorPalette.length > 0 && (
                 <ReportSection label={sectionLabels.colorPalette}>
@@ -630,10 +673,20 @@ function ReportCard({
                 </ReportSection>
               )}
 
-              {design.productLineup.length > 0 && (
+              {(design.products?.length ?? design.productLineup.length) > 0 && (
                 <ReportSection label={sectionLabels.productLineup}>
                   <ul className="space-y-3">
-                    {design.productLineup.map((product) => (
+                    {(design.products ??
+                      design.productLineup.map((p) => ({
+                        name: p.name,
+                        category: p.category,
+                        fit: "—",
+                        material: "—",
+                        color: "—",
+                        details: p.description,
+                        pricePosition: "—",
+                        priority: "core" as const,
+                      }))).map((product) => (
                       <li
                         key={product.name}
                         className="rounded-xl border border-border bg-muted/20 p-4"
@@ -641,17 +694,47 @@ function ReportCard({
                         <p className="font-medium text-foreground">
                           {product.name}{" "}
                           <span className="text-sm font-normal text-muted-foreground">
-                            · {product.category}
+                            · {product.category} · {product.priority}
                           </span>
                         </p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {product.fit} · {product.material} · {product.color} ·{" "}
+                          {product.pricePosition}
+                        </p>
                         <p className="mt-1 text-base text-muted-foreground">
-                          {product.description}
+                          {product.details}
                         </p>
                       </li>
                     ))}
                   </ul>
                 </ReportSection>
               )}
+
+              {design.visualKeywords && design.visualKeywords.length > 0 && (
+                <ReportSection label="Visual Keywords">
+                  <BulletList items={design.visualKeywords} />
+                </ReportSection>
+              )}
+
+              {design.mockupIdeas && design.mockupIdeas.length > 0 && (
+                <ReportSection label="Mockup Ideas">
+                  <BulletList items={design.mockupIdeas} />
+                </ReportSection>
+              )}
+
+              {design.imagePrompts && design.imagePrompts.length > 0 && (
+                <ReportSection label="Image Prompts">
+                  <BulletList items={design.imagePrompts} />
+                </ReportSection>
+              )}
+
+              {design.photographyStyle ? (
+                <ReportSection label="Photography Style">
+                  <p className="text-base leading-relaxed text-muted-foreground">
+                    {design.photographyStyle}
+                  </p>
+                </ReportSection>
+              ) : null}
 
               {design.heroProducts.length > 0 && (
                 <ReportSection label={sectionLabels.heroProducts}>
@@ -682,13 +765,13 @@ function ReportCard({
 
               <ReportSection label={sectionLabels.designDirection}>
                 <p className="text-base leading-relaxed text-muted-foreground">
-                  {design.designDirection}
+                  {design.stylingDirection ?? design.designDirection}
                 </p>
               </ReportSection>
 
-              {design.launchRecommendations.length > 0 && (
+              {(design.campaignIdeas ?? design.launchRecommendations).length > 0 && (
                 <ReportSection label={sectionLabels.launchRecommendations}>
-                  <BulletList items={design.launchRecommendations} />
+                  <BulletList items={design.campaignIdeas ?? design.launchRecommendations} />
                 </ReportSection>
               )}
             </>
@@ -800,6 +883,16 @@ function ReportCard({
               </span>
             </div>
           </div>
+
+          {onReviewComplete && (
+            <ReportReviewActions
+              brainRecordId={report.brainRecordId ?? report.id}
+              status={report.status}
+              onReviewComplete={onReviewComplete}
+              onError={onReviewError}
+              className="border-t border-border pt-4"
+            />
+          )}
         </div>
       </div>
     </div>
@@ -814,6 +907,7 @@ function ReportList({
   emptyLabel,
   reportTypeLabels,
   ceoReportTypeLabel,
+  ceoFinalReportTypeLabel,
   designReportTypeLabel,
   marketingReportTypeLabel,
   shopifyReportTypeLabel,
@@ -822,6 +916,8 @@ function ReportList({
   priorityLabels,
   sectionLabels,
   onDeleteProject,
+  onReviewComplete,
+  onReviewError,
 }: {
   reports: ReportListItem[];
   categoryLabels: ReturnType<typeof getReportCategoryLabels>;
@@ -830,6 +926,7 @@ function ReportList({
   emptyLabel: string;
   reportTypeLabels: Record<ResearchReportType, string>;
   ceoReportTypeLabel: string;
+  ceoFinalReportTypeLabel: string;
   designReportTypeLabel: string;
   marketingReportTypeLabel: string;
   shopifyReportTypeLabel: string;
@@ -903,6 +1000,8 @@ function ReportList({
     fluxPrompt: string;
   };
   onDeleteProject?: (brainRecordId: string) => void;
+  onReviewComplete?: () => void | Promise<void>;
+  onReviewError?: (message: string) => void;
 }) {
   if (reports.length === 0) {
     return (
@@ -923,6 +1022,7 @@ function ReportList({
           statusLabel={getStatusLabel(report.status)}
           reportTypeLabels={reportTypeLabels}
           ceoReportTypeLabel={ceoReportTypeLabel}
+          ceoFinalReportTypeLabel={ceoFinalReportTypeLabel}
           designReportTypeLabel={designReportTypeLabel}
           marketingReportTypeLabel={marketingReportTypeLabel}
           shopifyReportTypeLabel={shopifyReportTypeLabel}
@@ -931,6 +1031,8 @@ function ReportList({
           priorityLabels={priorityLabels}
           sectionLabels={sectionLabels}
           onDeleteProject={onDeleteProject}
+          onReviewComplete={onReviewComplete}
+          onReviewError={onReviewError}
         />
       ))}
     </div>
@@ -949,6 +1051,7 @@ export function ReportHub() {
   const categoryLabels = getReportCategoryLabels(locale);
   const reportTypeLabels = getResearchReportTypeLabels(locale);
   const ceoReportTypeLabel = getCeoReportTypeLabel(locale);
+  const ceoFinalReportTypeLabel = getCeoFinalReportTypeLabel(locale);
   const designReportTypeLabel = getDesignReportTypeLabel(locale);
   const marketingReportTypeLabel = getMarketingReportTypeLabel(locale);
   const shopifyReportTypeLabel = getShopifyReportTypeLabel(locale);
@@ -1000,6 +1103,10 @@ export function ReportHub() {
     },
     [loadReports, t],
   );
+
+  const handleReviewError = useCallback((message: string) => {
+    setError(message);
+  }, []);
 
   useEffect(() => {
     loadReports();
@@ -1080,6 +1187,7 @@ export function ReportHub() {
                 emptyLabel={reportsCopy.hub.empty}
                 reportTypeLabels={reportTypeLabels}
                 ceoReportTypeLabel={ceoReportTypeLabel}
+          ceoFinalReportTypeLabel={ceoFinalReportTypeLabel}
                 designReportTypeLabel={designReportTypeLabel}
                 marketingReportTypeLabel={marketingReportTypeLabel}
                 shopifyReportTypeLabel={shopifyReportTypeLabel}
@@ -1088,6 +1196,8 @@ export function ReportHub() {
                 priorityLabels={priorityLabels}
                 sectionLabels={sectionLabels}
                 onDeleteProject={handleDeleteProject}
+                onReviewComplete={loadReports}
+                onReviewError={handleReviewError}
               />
             </TabsContent>
           ))}

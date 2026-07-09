@@ -20,6 +20,8 @@ function statusLabel(
   t: ReturnType<typeof useT>,
 ) {
   switch (status) {
+    case "pending":
+      return "Pending";
     case "ready":
       return t("image.interface.statusReady");
     case "generating":
@@ -71,10 +73,7 @@ export function CompactAssetCard({
         ...asset,
         status: data.asset.status,
         imageUrl: data.asset.imageUrl,
-        storagePath: data.asset.storagePath,
-        provider: data.asset.provider,
         createdAt: data.asset.createdAt,
-        message: data.asset.message,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("image.errors.unexpected"));
@@ -90,9 +89,12 @@ export function CompactAssetCard({
     <li className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="font-medium text-foreground">{asset.title}</p>
+          <p className="font-medium text-foreground">
+            {asset.title ?? asset.productName}
+          </p>
           <p className="text-xs text-muted-foreground">
-            {asset.dimensions}
+            {asset.productName} · {asset.assetType}
+            {asset.dimensions ? ` · ${asset.dimensions}` : ""}
             {asset.platform ? ` · ${asset.platform}` : ""}
           </p>
         </div>

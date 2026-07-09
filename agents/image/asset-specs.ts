@@ -1,8 +1,8 @@
-import type { NormalizedImageAsset } from "./normalized";
+import type { LegacyNormalizedImageAsset } from "./legacy-v2";
 
 export interface ImageAssetSpec {
   id: string;
-  type: NormalizedImageAsset["type"];
+  type: LegacyNormalizedImageAsset["type"];
   title: string;
   dimensions: string;
   platform: string;
@@ -126,7 +126,9 @@ export function findAssetSpec(id: string): ImageAssetSpec | undefined {
   );
 }
 
-export function assetDedupKey(asset: Pick<NormalizedImageAsset, "type" | "variant">): string {
+export function assetDedupKey(
+  asset: Pick<LegacyNormalizedImageAsset, "type" | "variant">,
+): string {
   if (asset.variant) return `${asset.type}:${asset.variant}`;
   return asset.type;
 }

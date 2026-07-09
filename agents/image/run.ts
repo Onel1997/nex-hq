@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { formatAgentBusinessRules, loadBusinessProfile } from "@/lib/business";
 import { getOpenAIClient } from "@/lib/openai/client";
 import { ImageParseError, parseImageOutput } from "./parse-output";
 import {
@@ -8,6 +9,7 @@ import {
 } from "./retrieve-context";
 import { saveImageToBrain } from "./save";
 import type { ImageRunInput, ImageRunResult } from "./types";
+import { STUDIO_SPECS_BY_CATEGORY } from "./studio-specs";
 
 function buildImageSystemPrompt(
   workspaceName: string,
@@ -22,27 +24,55 @@ function buildImageSystemPrompt(
       ? availableReportTitles.map((t) => `  - ${t}`).join("\n")
       : "  (keine Berichte im Kontext)";
 
-  return `Du bist der Image-Agent von NexHQ — AI Creative Director für den Workspace "${workspaceName}".
+  const categoryBrief = Object.entries(STUDIO_SPECS_BY_CATEGORY)
+    .map(([category, specs]) => {
+      const types = [...new Set(specs.map((s) => s.assetType))].join(", ");
+      return `  - ${category}: ${specs.length} assets (${types})`;
+    })
+    .join("\n");
+
+  return `Du bist der Image-Agent von NexHQ — Milaenes Creative Studio für den Workspace "${workspaceName}".
 
 ## Deine Rolle
-- Erzeuge ein fokussiertes Creative Production Project (Schema V2)
-- Nutze AUSSCHLIESSLICH den bereitgestellten Wissensspeicher-Kontext
-- CEO-, Design-, Content- und Marketing-Berichte sind PRIMÄRE Quellen
-- Keine duplizierten Asset-Typen — jeder Asset-Typ nur einmal in der passenden Package
-- Prompts müssen wie Art Direction von einem Creative Director klingen, nicht wie generische AI-Prompts
+Du bist KEIN Prompt-Generator. Du bist:
+- Fashion Photographer
+- Creative Studio Director
+- Campaign Production Lead
 
-## Prompt-Qualität (PFLICHT)
-Jeder prompt (midjourney, openai, flux) muss professionelle Art Direction enthalten:
-- Kameratyp (z. B. 35mm full-frame, medium format)
-- Objektiv (z. B. 50mm f/1.4, 85mm portrait)
-- Komposition (three-quarter, wide environmental, flat lay overhead)
-- Lichtsetup (soft overcast urban, controlled studio key, golden hour rim)
-- Color Grading (obsidian/concrete palette, signal green accent)
-- Styling Direction (structured streetwear, premium materials)
-- Environment (concrete architecture, urban rooftop, studio cyclorama)
-- Mood (urban luxury, scarcity drop, editorial confidence)
-- Photography References (Tyrone LeBon, Mert Alas, SSENSE campaign aesthetic)
-Mindestens 80 Zeichen pro Prompt.
+Du planst eine echte Fashion-Produktion basierend auf:
+- Design Agent Creative Brief (Kollektion, Theme, Story, Produkte, Farben, Materialien, Visual Keywords, Fotografie-Stil, Image Prompts, Campaign Ideas)
+- Live Shopify Katalog (echte Produkte, Kategorien, Farben, Kollektionen, Preise)
+- CEO-, Content- und Marketing-Intelligence
+
+## REAL PRODUCT RULES (PFLICHT)
+- Erfinde KEINE Produkte, Kategorien oder Farben
+- productName, color, material MÜSSEN aus SHOPIFY KNOWLEDGE oder Design Brief stammen
+- Jeder productionAsset referenziert ein echtes Milaene Produkt
+- Keine Mock-Produkte. Keine erfundenen Preise.
+
+## OUTPUT TYPES (Schema V3 — productionAssets)
+${categoryBrief}
+
+## ASSET STRUCTURE (jedes productionAsset)
+- assetType, productName, collection, color, material
+- location, lighting, photographyStyle, cameraStyle
+- prompt { midjourney, openai, flux } — mindestens 80 Zeichen, Art-Direction-Qualität
+- priority: hero | core | support
+- status: pending (bis generiert)
+
+## PROMPT QUALITY — Fashion Production Team
+Jeder Prompt liest sich wie ein Shot Brief vom Creative Director:
+- Produkt: echter Name aus Shopify (z.B. "Faith Oversized Tee")
+- Material: echter Stoff (z.B. "Cream cotton")
+- Kollektion: echte Collection (z.B. "Love Story collection")
+- Kamera: 35mm full-frame / medium format, Objektiv, Blende
+- Licht: Studio key/fill, overcast urban, golden hour rim
+- Location: Studio cyclorama, urban rooftop, concrete architecture
+- Mood: editorial streetwear, urban luxury, scarcity drop
+- Visual quality bar: premium fashion brands, realistic commercial photography
+- Campaigns müssen Premium Streetwear Positionierung widerspiegeln — editorial, urban luxury
+
+Beispiel: "Faith Oversized Tee · Cream cotton · Love Story collection · Editorial streetwear campaign · 35mm full-frame 50mm f/1.4 · soft studio key with urban rim light · concrete rooftop at dusk"
 
 ## Geladene Intelligence-Typen
 ${loadedTags.map((t) => `  - ${t}`).join("\n") || "  (keine)"}
@@ -50,71 +80,43 @@ ${loadedTags.map((t) => `  - ${t}`).join("\n") || "  (keine)"}
 ## Verfügbare Berichte
 ${reportList}
 
-## Kollektions-Identität (EINZIGE Quelle — aus CEO/Design-Berichten)
-- collectionName: "${collectionName}" (NIEMALS ändern, keine zweite Kampagne erfinden)
+## Kollektions-Identität (EINZIGE Quelle)
+- collectionName: "${collectionName}" (NIEMALS ändern)
 - campaignName: "${campaignName}"
 - projectName: "${projectName}"
-- Jeder Asset-Titel: "${collectionName} — {Asset Type}" (z. B. "${collectionName} — Hero Banner")
-- VERBOTEN als Namen: Drop, Summer Collection, Collection, Project, Milaene Creative Production
 
-## Ausgabeformat (STRIKT JSON, schemaVersion "2.0")
+## Ausgabeformat (STRIKT JSON, schemaVersion "3.0")
 - reportType: "image-project"
-- KEIN Markdown, KEINE Code-Fences
+- KEIN Markdown außerhalb von fullProject
 
-### CORE PACKAGE (Pflicht — genau 8 Assets, keine Duplikate)
-corePackage[] mit package: "core":
-1. hero_banner — Hero Banner (id: core-hero-banner)
-2. product_mockup — Product Mockup (variant: hero_product, id: core-mockup-hero_product)
-3. product_mockup — Flat Lay (variant: flat_lay, id: core-mockup-flat_lay)
-4. product_mockup — Lifestyle Mockup (variant: lifestyle, id: core-mockup-lifestyle)
-5. campaign_key_visual — Campaign Key Visual (id: core-campaign-key-visual)
-6. instagram_carousel — Instagram Carousel (id: core-instagram-carousel)
-7. reels_concept — Reels Concept (id: core-reels-concept)
-8. tiktok_concept — TikTok Concept (id: core-tiktok-concept)
+Pflichtfelder:
+- title, projectName, collectionName
+- visualDirection (min 80 Zeichen — Creative Studio Gesamtrichtung)
+- moodboard { visualDirection, aestheticKeywords, colorSystem, materialReferences, photographyStyle }
+- palette { primary, secondary, accent, background, text } — Name + HEX
+- productionAssets[] (min 18, max 48) — alle 5 Output-Kategorien abdecken
+- lookbookShots[] (min 4) — models, location, outfitProducts (echte Produktnamen), styling, purpose
+- confidence, sourceReportTitles[], fullProject (Markdown min 600 Zeichen)
 
-### ADVANCED PACKAGE (Sekundär — genau 5 Assets, gleiche collectionName)
-advancedPackage[] mit package: "advanced" — erweitert dieselbe Kollektion, keine zweite Kampagne:
-1. landing_section — Landing Hero (id: advanced-landing-hero, variant: hero)
-2. landing_section — Landing Product Grid (id: advanced-landing-product-grid, variant: product_grid)
-3. instagram_grid — Instagram Grid (id: advanced-instagram-grid)
-4. campaign_visual — Paid Social Visual (id: advanced-campaign-social)
-5. launch_teaser — Launch Teaser (id: advanced-launch-teaser)
-
-### Weitere Pflichtfelder
-- moodboard (OBJEKT — niemals String):
-  {
-    "visualDirection": "string min 80 Zeichen",
-    "aestheticKeywords": ["string", ...], // 3–12
-    "colorSystem": ["Name #HEX", ...], // 2–8
-    "materialReferences": ["string", ...], // 2–8
-    "photographyStyle": "string min 40 Zeichen"
-  }
-- palette (OBJEKT — niemals Array):
-  {
-    "primary": "Name #HEX",
-    "secondary": "Name #HEX",
-    "accent": "Name #HEX",
-    "background": "Name #HEX",
-    "text": "Name #HEX"
-  }
-- campaignShots[] (min 12, max 24), confidence (0–1), sourceReportTitles[] (min 1), fullProject (Markdown min 600 Zeichen)
-
-### VERBOTEN (Legacy V1 — nicht ausgeben)
-- heroBanner, productMockups, campaignVisuals, landingAssets, instagramGrid, reelsConcepts, tiktokConcepts
-- moodboard als String, palette als Array
-
-### Asset-Objekt
+Jedes productionAsset:
 {
-  "id": "core-hero-banner",
-  "title": "string",
-  "type": "hero_banner|product_mockup|campaign_key_visual|...",
-  "package": "core|advanced",
-  "dimensions": "1920x1080",
-  "platform": "website|instagram|tiktok|...",
-  "variant": "optional subtype",
-  "purpose": "string",
+  "id": "prod-studio-hero",
+  "assetType": "studio_shot",
+  "outputCategory": "product_photography",
+  "productName": "string (Shopify)",
+  "collection": "${collectionName}",
+  "color": "string (Shopify/Design)",
+  "material": "string (Shopify/Design)",
+  "location": "string",
+  "lighting": "string",
+  "photographyStyle": "string",
+  "cameraStyle": "string",
   "prompt": { "midjourney": "...", "openai": "...", "flux": "..." },
-  "status": "ready"
+  "priority": "hero|core|support",
+  "status": "pending",
+  "title": "${collectionName} — Hero Studio Shot",
+  "platform": "ecommerce",
+  "dimensions": "2048x2048"
 }`;
 }
 
@@ -129,6 +131,8 @@ export async function runImage(
     workspaceName: input.workspaceName,
     locale: DEFAULT_LOCALE,
   });
+
+  const businessProfile = await loadBusinessProfile(input.workspaceId);
 
   const openai = getOpenAIClient();
 
@@ -149,6 +153,24 @@ export async function runImage(
             knowledge.collectionIdentity.campaignName,
             knowledge.collectionIdentity.projectName,
           ) +
+          (knowledge.designCreativeBrief
+            ? "\n\n## Design Agent — Creative Brief (PRIMÄRE QUELLE)\n\n" +
+              knowledge.designCreativeBrief +
+              (knowledge.designImageInputs?.imagePrompts.length
+                ? "\n\n### Design Image Prompts\n" +
+                  knowledge.designImageInputs.imagePrompts
+                    .map((p) => `- ${p}`)
+                    .join("\n")
+                : "") +
+              (knowledge.designImageInputs?.visualKeywords.length
+                ? "\n\n### Visual Keywords\n" +
+                  knowledge.designImageInputs.visualKeywords
+                    .map((k) => `- ${k}`)
+                    .join("\n")
+                : "")
+            : "") +
+          "\n\n" +
+          formatAgentBusinessRules("image", businessProfile) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },
@@ -169,6 +191,9 @@ export async function runImage(
   try {
     output = parseImageOutput(raw, {
       collectionIdentity: knowledge.collectionIdentity,
+      shopifyKnowledge: knowledge.shopifyKnowledge,
+      photographyStyle: knowledge.designImageInputs?.stylingDirection,
+      visualKeywords: knowledge.designImageInputs?.visualKeywords,
     });
   } catch (error) {
     if (error instanceof ImageParseError) {
@@ -182,6 +207,7 @@ export async function runImage(
     workspaceId: input.workspaceId,
     brief: input.brief,
     output,
+    originTaskId: input.originTaskId,
   });
 
   return {
@@ -189,12 +215,13 @@ export async function runImage(
     reportRecordId: saved.reportRecordId,
     title: output.title,
     projectName: output.projectName,
+    collectionName: output.collectionName,
     schemaVersion: output.schemaVersion,
+    visualDirection: output.visualDirection,
     moodboard: output.moodboard,
     palette: output.palette,
-    corePackage: output.corePackage,
-    advancedPackage: output.advancedPackage,
-    campaignShots: output.campaignShots,
+    productionAssets: output.productionAssets,
+    lookbookShots: output.lookbookShots,
     confidence: output.confidence,
     sourceReportTitles: output.sourceReportTitles,
     contextRecordCount: knowledge.brainContext.sourceRecordIds.length,

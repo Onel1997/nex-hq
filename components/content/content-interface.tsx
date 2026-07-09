@@ -406,7 +406,7 @@ export function ContentInterface() {
               </span>
             </div>
             <Link
-              href="/reports"
+              href="/facility/reports"
               className="inline-flex items-center gap-2 text-base text-primary hover:underline"
             >
               {t("content.interface.viewReports")}

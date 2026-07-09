@@ -64,6 +64,7 @@ export interface MarketingRunInput {
   brief: string;
   workspaceId: string;
   workspaceName: string;
+  originTaskId?: string;
 }
 
 export interface MarketingRunResult {
