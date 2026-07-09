@@ -4,4 +4,5 @@ export type {
   ReasoningLayer,
   ReasoningResult,
 } from "./interfaces";
-export { REASONING_LAYER_VERSION } from "./interfaces";
+export { RESEARCH_REASONING_VERSION } from "./interfaces";
+export { computeResearchReasoning, REASONING_LAYER_VERSION } from "./engine";

@@ -1,8 +1,9 @@
+import { evaluateResearchIntelligence } from "../evaluation";
 import { assembleIntelligenceBundle } from "../intelligence/bundle";
 import type { NormalizationContext } from "../normalization/context";
 import type { ProviderIntelligenceEnvelope } from "../normalization/envelope";
 import { createNormalizerRegistry, type NormalizerRegistry } from "../normalization/registry";
-import type { UnifiedResearchIntelligence } from "../types";
+import type { RecommendationIntelligence, ResearchReasoningIntelligence, UnifiedResearchIntelligence } from "../types";
 import { createFusionEngine, type FusionEngine } from "./engine";
 import type { FusionEngineConfig } from "./types";
 
@@ -17,6 +18,8 @@ export interface PipelineRunInput {
 
 export interface PipelineRunResult {
   intelligence: UnifiedResearchIntelligence;
+  reasoning: ResearchReasoningIntelligence;
+  recommendations: RecommendationIntelligence;
   bundleProviderCount: number;
   bundleSignalCount: number;
 }
@@ -26,7 +29,8 @@ export interface PipelineRunResult {
  *
  * Provider envelopes → Normalization → Intelligence bundle → Fusion
  *
- * Reasoning and Recommendation layers are NOT invoked in Phase 5.0.
+ * Phase 5.1: confidence scoring and reasoning.
+ * Phase 5.2: recommendations applied after evaluation.
  */
 export class ResearchIntelligencePipeline {
   private readonly normalizers: NormalizerRegistry;
@@ -65,10 +69,17 @@ export class ResearchIntelligencePipeline {
 
     const normalized = this.normalizers.normalizeMany(input.envelopes, context);
     const bundle = assembleIntelligenceBundle(normalized);
-    const intelligence = this.fusion.fuse(normalized, { generatedAt });
+    const fused = this.fusion.fuse(normalized, { generatedAt });
+    const evaluated = evaluateResearchIntelligence(fused, {
+      workspaceId: context.workspaceId,
+      locale: context.locale,
+      generatedAt,
+    });
 
     return {
-      intelligence,
+      intelligence: evaluated.intelligence,
+      reasoning: evaluated.reasoning,
+      recommendations: evaluated.recommendations,
       bundleProviderCount: bundle.providerCount,
       bundleSignalCount: bundle.signalCount,
     };

@@ -1,11 +1,10 @@
-import type { UnifiedResearchIntelligence } from "../types";
 import type { RecommendationIntelligence } from "../types/recommendation";
+import type { ResearchReasoningIntelligence } from "../types/reasoning";
+import type { UnifiedResearchIntelligence } from "../types";
+import { generateRecommendations } from "./engine";
 
 /**
- * Recommendation engine contract — Phase 5.2+.
- *
- * Consumes fused (+ optionally reasoned) intelligence and produces
- * actionable recommendations for downstream Studios. Not implemented in Phase 5.0.
+ * Recommendation engine contract — Phase 5.2.
  */
 export interface RecommendationContext {
   workspaceId?: string;
@@ -16,9 +15,24 @@ export interface RecommendationContext {
 export interface RecommendationEngine {
   recommend(
     intelligence: UnifiedResearchIntelligence,
+    reasoning: ResearchReasoningIntelligence,
     context: RecommendationContext,
   ): RecommendationIntelligence;
 }
 
-/** Stub — recommendations not generated in Phase 5.0. */
-export const RECOMMENDATION_ENGINE_VERSION = "5.0.0-stub";
+export const RECOMMENDATION_ENGINE_VERSION = "5.2.0";
+
+export const defaultRecommendationEngine: RecommendationEngine = {
+  recommend(intelligence, reasoning, context) {
+    return generateRecommendations({
+      intelligence,
+      reasoning,
+      generatedAt: context.generatedAt,
+    });
+  },
+};
+
+export {
+  enrichIntelligenceWithRecommendations,
+  generateRecommendations,
+} from "./engine";

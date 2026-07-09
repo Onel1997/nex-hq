@@ -48,20 +48,41 @@ export type {
 } from "./brand";
 
 export type {
+  ConfidenceEvidence,
   ConfidenceFactor,
   ConfidenceIntelligence,
+  ConfidenceScore,
+  ConfidenceScoreId,
   ConfidenceTier,
   DomainConfidence,
 } from "./confidence";
-export { emptyConfidenceIntelligence } from "./confidence";
+export { CONFIDENCE_SCORE_IDS, emptyConfidenceIntelligence } from "./confidence";
+
+export type {
+  BrandFitReasoning,
+  ResearchReasoningIntelligence,
+  RiskReasoning,
+  ScoreEvidenceSummary,
+  SourceReasoning,
+} from "./reasoning";
+export {
+  emptyResearchReasoningIntelligence,
+  RESEARCH_REASONING_VERSION,
+} from "./reasoning";
 
 export type {
   RecommendationAudience,
+  RecommendationEvidence,
   RecommendationIntelligence,
   RecommendationPriority,
+  RecommendationSourceSupport,
+  RecommendationType,
   ResearchRecommendation,
 } from "./recommendation";
-export { emptyRecommendationIntelligence } from "./recommendation";
+export {
+  emptyRecommendationIntelligence,
+  RECOMMENDATION_ENGINE_MODEL_VERSION,
+} from "./recommendation";
 
 export type { FusionManifest, UnifiedResearchIntelligence } from "./unified";
 export { UNIFIED_INTELLIGENCE_VERSION } from "./unified";

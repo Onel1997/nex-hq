@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   parseResearchApiError,
   parseResearchApiResponse,
+  parseFusionReportResponse,
   RESEARCH_RUN_STEPS,
-  type ResearchResult,
+  type ResearchResultV3,
   type ResearchRunError,
   type ResearchRunPhase,
 } from "./types";
@@ -16,7 +17,7 @@ export function useResearchRun() {
   const [request, setRequest] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ResearchRunError | null>(null);
-  const [result, setResult] = useState<ResearchResult | null>(null);
+  const [result, setResult] = useState<ResearchResultV3 | null>(null);
   const [phase, setPhase] = useState<ResearchRunPhase>("idle");
   const phaseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepIndexRef = useRef(0);
@@ -67,7 +68,19 @@ export function useResearchRun() {
         }
 
         setPhase("complete");
-        setResult(parseResearchApiResponse(data));
+        const parsed = parseResearchApiResponse(data);
+        let fusionReport = null;
+        try {
+          const fusionRes = await fetch(
+            `/api/research/fusion-report?title=${encodeURIComponent(parsed.title)}&refresh=1`,
+            { cache: "no-store" },
+          );
+          const fusionData = (await fusionRes.json()) as Record<string, unknown>;
+          fusionReport = parseFusionReportResponse(fusionData);
+        } catch {
+          fusionReport = null;
+        }
+        setResult({ ...parsed, fusionReport });
         setRequest("");
       } catch (err) {
         setPhase("error");

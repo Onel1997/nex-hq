@@ -3,7 +3,7 @@ import type { FusionManifest, UnifiedResearchIntelligence } from "../types";
 export const FUSION_ENGINE_VERSION = "5.0.0";
 
 export interface FusionEngineConfig {
-  /** Reserved for Phase 5.1+ provider weighting — not used in Phase 5.0. */
+  /** Enables weighted signal ranking in downstream recommendation layer. */
   enableWeighting?: boolean;
 }
 

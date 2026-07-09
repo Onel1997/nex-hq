@@ -6,6 +6,12 @@ export type {
 } from "@/components/research/v2/types";
 export { parseResearchApiResponse } from "@/components/research/v2/types";
 
+export type { ResearchStudioReport } from "@/lib/research-intelligence/report";
+
+export type ResearchResultV3 = import("@/components/research/v2/types").ResearchResult & {
+  fusionReport?: import("@/lib/research-intelligence/report").ResearchStudioReport | null;
+};
+
 export type ResearchRunPhase =
   | "idle"
   | "connecting"
@@ -97,4 +103,11 @@ export function parseResearchApiError(
     stage: typeof data.stage === "string" ? data.stage : undefined,
     sourceErrors: sourceErrors.length > 0 ? sourceErrors : undefined,
   };
+}
+
+export function parseFusionReportResponse(
+  data: Record<string, unknown>,
+): import("@/lib/research-intelligence/report").ResearchStudioReport | null {
+  if (!data.ok || !data.report || typeof data.report !== "object") return null;
+  return data.report as import("@/lib/research-intelligence/report").ResearchStudioReport;
 }

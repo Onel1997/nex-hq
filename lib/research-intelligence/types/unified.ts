@@ -33,13 +33,11 @@ export interface UnifiedResearchIntelligence {
   commercial: CommercialIntelligence;
   brand: BrandIntelligence;
   /**
-   * Slot reserved for Phase 5.1+ confidence scoring.
-   * Not computed in Phase 5.0.
+   * Computed in Phase 5.1 by the deterministic confidence engine.
    */
   confidence: ConfidenceIntelligence;
   /**
-   * Slot reserved for Phase 5.2+ recommendation engine.
-   * Not generated in Phase 5.0.
+   * Computed in Phase 5.2 by the deterministic recommendation engine.
    */
   recommendations: RecommendationIntelligence;
 }

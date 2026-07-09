@@ -1,3 +1,4 @@
+import { evaluateResearchIntelligence } from "../evaluation";
 import { buildContributionManifest } from "../normalization/interfaces";
 import type { NormalizedProviderIntelligence } from "../normalization/interfaces";
 import {
@@ -38,8 +39,8 @@ function buildManifest(
  * Accepts ONLY normalized intelligence — never raw provider payloads,
  * never provider-specific branches, never adapter imports.
  *
- * Phase 5.0: structural assembly only (concatenation + dedupe).
- * Scoring, weighting, and ranking deferred to Phase 5.1+.
+ * Phase 5.0: structural assembly (concatenation + dedupe).
+ * Confidence scoring is applied by the evaluation layer after fusion.
  */
 export class FusionEngine {
   constructor(private readonly config: FusionEngineConfig = {}) {}
@@ -78,5 +79,6 @@ export function fuseNormalizedIntelligence(
   normalized: NormalizedProviderIntelligence[],
   generatedAt: string = new Date().toISOString(),
 ): UnifiedResearchIntelligence {
-  return createFusionEngine().fuse(normalized, { generatedAt });
+  const fused = createFusionEngine().fuse(normalized, { generatedAt });
+  return evaluateResearchIntelligence(fused, { generatedAt }).intelligence;
 }

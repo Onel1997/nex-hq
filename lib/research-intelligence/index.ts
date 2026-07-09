@@ -1,14 +1,10 @@
 /**
- * Research Intelligence — AI Fashion Research Director foundation (Phase 5.0).
+ * Research Intelligence — AI Fashion Research Director (Phase 5.0–5.2).
  *
  * Architecture:
- *   Provider Layer → Normalization → Intelligence → Fusion → Reasoning → Recommendation → Report
+ *   Provider Layer → Normalization → Intelligence → Fusion → Evaluation → Reasoning → Recommendation → Report
  *
- * Phase 5.0 delivers normalization contracts, standard models, intelligence assembly,
- * and the provider-agnostic Fusion Engine producing UnifiedResearchIntelligence.
- *
- * Scoring, reasoning, confidence computation, and recommendation generation
- * are intentionally deferred to later phases.
+ * Phase 5.2 delivers deterministic recommendations and weighted fusion ranking.
  */
 
 // Standard models & unified output
@@ -19,10 +15,13 @@ export * from "./models";
 export * from "./normalization";
 export * from "./intelligence";
 export * from "./fusion";
+export * from "./confidence";
+export * from "./evaluation";
 
-// Future layer contracts (stubs only in Phase 5.0)
+// Reasoning + recommendation + report layers
 export * from "./reasoning";
 export * from "./recommendation";
+export * from "./report";
 
 // Pipeline convenience
 export {
