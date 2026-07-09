@@ -3,6 +3,20 @@
 import type { ResearchRunError } from "./types";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 
+function formatReceived(value: unknown): string {
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  if (typeof value === "string") {
+    return value.length > 120 ? `${value.slice(0, 120)}…` : value;
+  }
+  try {
+    const json = JSON.stringify(value);
+    return json.length > 120 ? `${json.slice(0, 120)}…` : json;
+  } catch {
+    return String(value);
+  }
+}
+
 interface ResearchStudioErrorProps {
   error: ResearchRunError;
   onRetry: () => void;
@@ -31,6 +45,41 @@ export function ResearchStudioError({
         </div>
 
         <p className="rs3-error-message">{error.message}</p>
+
+        {error.missingFields && error.missingFields.length > 0 ? (
+          <div className="rs3-error-sources">
+            <p className="rs3-error-sources-label">Missing required fields</p>
+            <ul>
+              {error.missingFields.map((field) => (
+                <li key={field}>{field}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {error.validationIssues && error.validationIssues.length > 0 ? (
+          <div className="rs3-error-validation">
+            <p className="rs3-error-sources-label">
+              Validation issues ({error.validationIssues.length})
+            </p>
+            <ul>
+              {error.validationIssues.map((issue) => (
+                <li key={`${issue.path}-${issue.message}`}>
+                  <span className="rs3-error-validation-path">{issue.path}</span>
+                  <span className="rs3-error-validation-message">
+                    {issue.message}
+                  </span>
+                  <span className="rs3-error-validation-meta">
+                    Expected: {issue.expected}
+                    {issue.received !== undefined
+                      ? ` · Received: ${formatReceived(issue.received)}`
+                      : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {error.sourceErrors && error.sourceErrors.length > 0 ? (
           <div className="rs3-error-sources">

@@ -13,9 +13,40 @@ import {
 } from "./types";
 
 const STEP_INTERVAL_MS = 1400;
+const RESEARCH_RUN_TIMEOUT_MS = 180_000;
+const FUSION_REPORT_TIMEOUT_MS = 120_000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new Error(
+        `Request timed out after ${Math.round(timeoutMs / 1000)} seconds`,
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function useResearchRun() {
@@ -28,6 +59,11 @@ export function useResearchRun() {
   const [result, setResult] = useState<ResearchResultV3 | null>(null);
   const [phase, setPhase] = useState<ResearchRunPhase>("idle");
   const runIdRef = useRef(0);
+  const activeLoadingRunRef = useRef(0);
+
+  const cancelRunAnimation = useCallback(() => {
+    runIdRef.current += 1;
+  }, []);
 
   const animateSteps = useCallback(async (runId: number) => {
     setPhase(RESEARCH_RUN_STEPS[0]?.id ?? "engine");
@@ -40,9 +76,10 @@ export function useResearchRun() {
   }, []);
 
   const fetchFusionReport = useCallback(async (title: string) => {
-    const fusionRes = await fetch(
+    const fusionRes = await fetchWithTimeout(
       `/api/research/fusion-report?title=${encodeURIComponent(title)}&refresh=1`,
       { cache: "no-store" },
+      FUSION_REPORT_TIMEOUT_MS,
     );
     const fusionData = (await fusionRes.json()) as Record<string, unknown>;
 
@@ -62,6 +99,13 @@ export function useResearchRun() {
     return fusionReport;
   }, []);
 
+  const finishLoadingRun = useCallback((runId: number) => {
+    if (activeLoadingRunRef.current === runId) {
+      activeLoadingRunRef.current = 0;
+      setIsLoading(false);
+    }
+  }, []);
+
   const runResearch = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
@@ -69,6 +113,7 @@ export function useResearchRun() {
 
       const runId = runIdRef.current + 1;
       runIdRef.current = runId;
+      activeLoadingRunRef.current = runId;
 
       setIsLoading(true);
       setError(null);
@@ -79,18 +124,33 @@ export function useResearchRun() {
       const animation = animateSteps(runId);
 
       try {
-        const res = await fetch("/api/research/run", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ request: trimmed }),
-        });
+        const res = await fetchWithTimeout(
+          "/api/research/run",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ request: trimmed }),
+          },
+          RESEARCH_RUN_TIMEOUT_MS,
+        );
 
         const data = (await res.json()) as Record<string, unknown>;
 
         if (!res.ok) {
-          runIdRef.current += 1;
+          cancelRunAnimation();
+          const parsedError = parseResearchApiError(data);
+          console.error("[Research Studio] Research API error", {
+            status: res.status,
+            stage: parsedError.stage,
+            missingFields: parsedError.missingFields,
+            validationIssues: parsedError.validationIssues,
+            response: data,
+          });
+          if (parsedError.validationIssues?.length) {
+            console.table(parsedError.validationIssues);
+          }
           setPhase("error");
-          setError(parseResearchApiError(data));
+          setError(parsedError);
           return;
         }
 
@@ -114,7 +174,7 @@ export function useResearchRun() {
         setResult({ ...parsed, fusionReport });
         setFusionError(nextFusionError);
       } catch (err) {
-        runIdRef.current += 1;
+        cancelRunAnimation();
         setPhase("error");
         if (err && typeof err === "object" && "message" in err) {
           setError(err as ResearchRunError);
@@ -124,16 +184,22 @@ export function useResearchRun() {
           });
         }
       } finally {
-        if (runIdRef.current === runId) {
-          setIsLoading(false);
-        }
+        finishLoadingRun(runId);
       }
     },
-    [animateSteps, fetchFusionReport, isLoading],
+    [
+      animateSteps,
+      cancelRunAnimation,
+      fetchFusionReport,
+      finishLoadingRun,
+      isLoading,
+    ],
   );
 
   const reset = useCallback(() => {
-    runIdRef.current += 1;
+    cancelRunAnimation();
+    activeLoadingRunRef.current = 0;
+    setIsLoading(false);
     setResult(null);
     setError(null);
     setFusionError(null);
@@ -141,7 +207,7 @@ export function useResearchRun() {
     setPhase("idle");
     setRequest("");
     setLastPrompt("");
-  }, []);
+  }, [cancelRunAnimation]);
 
   const retry = useCallback(() => {
     const prompt = lastPrompt.trim();
@@ -177,9 +243,10 @@ export function useResearchRun() {
 
   useEffect(() => {
     return () => {
-      runIdRef.current += 1;
+      cancelRunAnimation();
+      activeLoadingRunRef.current = 0;
     };
-  }, []);
+  }, [cancelRunAnimation]);
 
   return {
     request,

@@ -71,6 +71,19 @@ const AUTH_CONFIG: Record<ProviderId, AuthConfig> = {
 export function getProviderAuthStatus(id: ProviderId): ProviderAuthStatus {
   const config = AUTH_CONFIG[id];
   const missingKeys = config.envKeys.filter((key) => !process.env[key]?.trim());
+
+  if (id === "google_trends" && missingKeys.length > 0) {
+    const aliasConfigured = Boolean(process.env.SERPAPI_API_KEY?.trim());
+    if (aliasConfigured) {
+      return {
+        configured: true,
+        method: config.method,
+        envKeys: config.envKeys,
+        missingKeys: [],
+      };
+    }
+  }
+
   return {
     configured: missingKeys.length === 0,
     method: config.method,

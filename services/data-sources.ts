@@ -111,7 +111,10 @@ export const RESEARCH_DATA_SOURCES: DataSourceConnector[] = [
 export function isLiveConnector(id: DataSourceId): boolean {
   switch (id) {
     case "google_trends":
-      return Boolean(process.env.GOOGLE_TRENDS_API_KEY);
+      return Boolean(
+        process.env.GOOGLE_TRENDS_API_KEY?.trim() ||
+          process.env.SERPAPI_API_KEY?.trim(),
+      );
     case "reddit":
       return Boolean(
         process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET,

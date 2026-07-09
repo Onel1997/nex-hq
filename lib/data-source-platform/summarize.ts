@@ -65,9 +65,14 @@ export function summarizeGoogleTrends(
 
   if (mode === "simulated") {
     summary.push("Static estimates — not live Google Trends data");
-  } else if (topKeyword) {
+  } else {
+    if (topKeyword) {
+      summary.push(
+        `Top: ${topKeyword.keyword} ${topKeyword.change >= 0 ? "+" : ""}${topKeyword.change}% · ${topKeyword.seasonality}`,
+      );
+    }
     summary.push(
-      `Top: ${topKeyword.keyword} ${topKeyword.change >= 0 ? "+" : ""}${topKeyword.change}% · ${topKeyword.seasonality}`,
+      `Demand ${data.demandScore}/100 · direction ${data.trendDirection} · ${data.relatedQueries.length} related queries`,
     );
   }
 

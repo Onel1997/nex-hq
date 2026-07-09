@@ -91,6 +91,12 @@ export async function POST(request: Request) {
       const detailedError = error.toDetailedMessage();
       console.error(`[Research Run ${requestId}] Parse error`, error.toLogPayload());
       console.error(`[Research Run ${requestId}] Detailed:\n${detailedError}`);
+      if (error.validationIssues?.length) {
+        console.error(
+          `[Research Run ${requestId}] Validation issues (${error.validationIssues.length})`,
+          JSON.stringify(error.validationIssues, null, 2),
+        );
+      }
 
       return NextResponse.json(
         {

@@ -2212,6 +2212,54 @@ body:has(.rs3) {
   overflow-wrap: anywhere;
 }
 
+.rs3-error-validation {
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.65rem;
+  border: 1px solid oklch(0.55 0.12 25 / 0.15);
+  background: oklch(0.55 0.12 25 / 0.06);
+}
+
+.rs3-error-validation ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.rs3-error-validation li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid oklch(0.28 0.02 275 / 0.22);
+}
+
+.rs3-error-validation li:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.rs3-error-validation-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.6875rem;
+  color: var(--rs3-text);
+}
+
+.rs3-error-validation-message {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: oklch(0.78 0.08 25);
+}
+
+.rs3-error-validation-meta {
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--rs3-text-faint);
+}
+
 .rs3-error-actions {
   display: flex;
   flex-wrap: wrap;

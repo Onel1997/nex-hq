@@ -204,6 +204,20 @@ const ADOPTION_LEVEL_ALIASES: Record<string, string> = {
   ruecklaeufig: "declining",
 };
 
+const RELEVANCE_ALIASES: Record<string, "high" | "medium" | "low"> = {
+  high: "high",
+  hoch: "high",
+  medium: "medium",
+  mittel: "medium",
+  low: "low",
+  niedrig: "low",
+};
+
+function normalizeRelevance(value: unknown): "high" | "medium" | "low" | undefined {
+  if (typeof value !== "string") return undefined;
+  return RELEVANCE_ALIASES[value.toLowerCase().trim()];
+}
+
 /** Strip markdown code fences and surrounding whitespace from model output. */
 export function stripMarkdownJsonFences(raw: string): string {
   let text = raw.trim();
@@ -239,10 +253,42 @@ function zodIssueToDetail(
 
   return {
     path,
-    expected: issue.code,
+    expected: formatZodExpected(issue),
     received,
     message: issue.message,
   };
+}
+
+function formatZodExpected(issue: z.ZodIssue): string {
+  if (issue.code === "invalid_type" && "expected" in issue) {
+    return `expected ${String(issue.expected)}`;
+  }
+  if (issue.code === "too_small" && "minimum" in issue) {
+    return `minimum ${String(issue.minimum)}`;
+  }
+  if (issue.code === "too_big" && "maximum" in issue) {
+    return `maximum ${String(issue.maximum)}`;
+  }
+  if (issue.code === "invalid_value" && "values" in issue) {
+    const values = (issue as { values?: unknown[] }).values;
+    if (Array.isArray(values)) {
+      return `one of: ${values.map(String).join(" | ")}`;
+    }
+  }
+  return issue.code;
+}
+
+function buildValidationErrorMessage(
+  issueCount: number,
+  issues: Array<{ path: string; message: string }>,
+): string {
+  const preview = issues
+    .slice(0, 5)
+    .map((issue) => `${issue.path}: ${issue.message}`)
+    .join("; ");
+  const suffix =
+    issueCount > 5 ? ` (+${issueCount - 5} more — see validationIssues)` : "";
+  return `Schema validation failed with ${issueCount} issue(s) — ${preview}${suffix}`;
 }
 
 function findMissingRequiredFields(parsed: Record<string, unknown>): string[] {
@@ -512,6 +558,20 @@ export function normalizeResearchPayload(
           competitor.tier = mappedTier;
         }
         return competitor;
+      });
+    }
+    if (Array.isArray(ci.marketSignals)) {
+      ci.marketSignals = ci.marketSignals.map((entry) => {
+        if (!entry || typeof entry !== "object") return entry;
+        const signal = { ...(entry as Record<string, unknown>) };
+        const mapped = normalizeRelevance(signal.relevance);
+        if (mapped && mapped !== signal.relevance) {
+          adjustments.push(
+            `normalized market signal relevance: ${String(signal.relevance)} → ${mapped}`,
+          );
+          signal.relevance = mapped;
+        }
+        return signal;
       });
     }
     normalized.competitorIntelligence = ci;
@@ -1212,12 +1272,15 @@ function validateDesignResearchPayload(
   logFinalValidationIssue(result.error.issues, parsed);
   logValidationIssues(result.error.issues, parsed, "Design schema validation issues");
 
-  const validationIssues = result.error.issues.slice(0, 5).map((issue) =>
+  const validationIssues = result.error.issues.map((issue) =>
     zodIssueToDetail(issue, parsed),
   );
 
   throw new ResearchParseError({
-    message: `Design schema validation failed with ${result.error.issues.length} issue(s)`,
+    message: buildValidationErrorMessage(
+      result.error.issues.length,
+      validationIssues,
+    ),
     stage: "validation",
     rawResponse: context.rawResponse,
     strippedJson: context.strippedJson,
@@ -1261,26 +1324,23 @@ function logValidationIssues(
   parsed: Record<string, unknown>,
   label: string,
 ): void {
-  const topIssues = issues.slice(0, 5);
-  const details = topIssues.map((issue) => ({
+  const details = issues.map((issue) => ({
     path: issue.path.join(".") || "(root)",
     code: issue.code,
     message: issue.message,
-    expected: "expected" in issue ? issue.expected : undefined,
+    expected: formatZodExpected(issue),
+    received: zodIssueToDetail(issue, parsed).received,
   }));
 
   console.error(`[Research Run] ${label}`, {
     issueCount: issues.length,
     issues: details,
-    zodIssues: topIssues,
-    parsedPreview: JSON.stringify(parsed, null, 2).slice(0, 4000),
   });
 
-  if (issues.length > 5) {
-    console.error(
-      `[Research Run] ${label} — ${issues.length - 5} additional issue(s) omitted from log`,
-    );
-  }
+  console.error(
+    `[Research Run] ${label} — full issue list`,
+    JSON.stringify(details, null, 2),
+  );
 }
 
 function isOptionalNestedRoot(path: string): boolean {
@@ -1343,6 +1403,22 @@ function validateResearchPayload(
   }
 
   logValidationIssues(result.error.issues, parsed, "Schema validation issues");
+
+  const repairAdjustments = enrichResearchPayload(parsed);
+  if (repairAdjustments.length > 0) {
+    console.info("[Research Run] Retrying validation after schema repair", {
+      adjustments: repairAdjustments,
+    });
+    result = researchOutputSchema.safeParse(parsed);
+    if (result.success) {
+      return result.data;
+    }
+    logValidationIssues(
+      result.error.issues,
+      parsed,
+      "Schema validation issues after repair pass",
+    );
+  }
 
   if (hasCompetitorReportIssues(result.error.issues, parsed.reportType)) {
     const partial =
@@ -1419,7 +1495,10 @@ function validateResearchPayload(
         "Schema validation failed after stripping optional blocks",
       );
       throw new ResearchParseError({
-        message: `Schema validation failed with ${result.error.issues.length} issue(s) after stripping optional blocks`,
+        message: buildValidationErrorMessage(
+          result.error.issues.length,
+          validationIssues,
+        ),
         stage: "validation",
         rawResponse: context.rawResponse,
         strippedJson: context.strippedJson,
@@ -1454,7 +1533,10 @@ function validateResearchPayload(
   );
 
   throw new ResearchParseError({
-    message: `Schema validation failed with ${result.error.issues.length} issue(s)`,
+    message: buildValidationErrorMessage(
+      result.error.issues.length,
+      validationIssues,
+    ),
     stage: "validation",
     rawResponse: context.rawResponse,
     strippedJson: context.strippedJson,

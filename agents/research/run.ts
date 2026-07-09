@@ -477,6 +477,16 @@ export async function runResearch(
     parsed = parseResearchOutput(raw, { detailMode });
     console.log("[Research] After parse", { kind: parsed.kind });
   } catch (error) {
+    if (error instanceof ResearchParseError) {
+      console.error("[Research Run] Parse failed", error.toLogPayload());
+      if (error.validationIssues?.length) {
+        console.error(
+          `[Research Run] Validation issues (${error.validationIssues.length})`,
+          JSON.stringify(error.validationIssues, null, 2),
+        );
+      }
+    }
+
     const shouldRetry =
       error instanceof ResearchParseError ||
       (error instanceof Error && error.message === "Incomplete JSON response");

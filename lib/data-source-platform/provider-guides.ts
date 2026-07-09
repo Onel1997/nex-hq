@@ -37,12 +37,12 @@ export const PROVIDER_SETUP_GUIDES: Record<ProviderId, ProviderSetupGuide> = {
       "Keyword trend growth, related rising queries, regional interest (DE), and seasonal movement via SerpAPI Google Trends.",
     steps: [
       "Create a SerpAPI account at serpapi.com and copy your API key.",
-      "Set GOOGLE_TRENDS_API_KEY in .env.local (this is a SerpAPI key, not a Google Cloud API key).",
+      "Set GOOGLE_TRENDS_API_KEY in .env.local (SerpAPI key — SERPAPI_API_KEY is also accepted as an alias).",
       "Restart the dev server, then run Health and Test.",
       "Live mode scans up to 10 streetwear keywords plus top Shopify product titles when Shopify is connected.",
     ],
     simulatedWhen:
-      "Without GOOGLE_TRENDS_API_KEY, or if SerpAPI fails, keyword demand/change values are static estimates — not live Google data. UI will show Simulated.",
+      "Without GOOGLE_TRENDS_API_KEY the provider stays Coming Soon with static estimates. Invalid keys show Offline/Auth error. Live SerpAPI responses produce connected keyword, related-query, demand, seasonality, and direction signals for the Fusion Report.",
     requiredEnvKeys: ["GOOGLE_TRENDS_API_KEY"],
     docsUrl: "https://serpapi.com/google-trends-api",
   },

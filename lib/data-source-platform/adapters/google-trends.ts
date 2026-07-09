@@ -87,7 +87,7 @@ export const googleTrendsAdapter: DataProviderAdapter<GoogleTrendsData> = {
       return {
         healthy: false,
         message:
-          "Simulated — GOOGLE_TRENDS_API_KEY not set (SerpAPI required for live trends)",
+          "Coming soon — GOOGLE_TRENDS_API_KEY not set (SerpAPI key required for live trends)",
         checkedAt: new Date().toISOString(),
       };
     }
@@ -98,7 +98,9 @@ export const googleTrendsAdapter: DataProviderAdapter<GoogleTrendsData> = {
       latencyMs: ping.latencyMs || Date.now() - started,
       message: ping.ok
         ? ping.message
-        : `Simulated fallback likely — ${ping.message}`,
+        : ping.message.toLowerCase().includes("api key")
+          ? `Invalid API key — ${ping.message}`
+          : `Offline — ${ping.message}`,
       checkedAt: new Date().toISOString(),
     };
   },
@@ -118,24 +120,25 @@ export const googleTrendsAdapter: DataProviderAdapter<GoogleTrendsData> = {
         region: DEFAULT_REGION,
       });
       const result = buildResult(intel.data, intel.mode, {
+        status: intel.providerStatus,
+        error: intel.error,
         simulatedReason: intel.simulatedReason,
       });
       setCachedProviderResult("google_trends", result);
       return result;
     } catch (error) {
-      return buildResult(
-        {
-          keywords: [],
-          topRising: [],
-          seasonalityNote: "Unavailable",
-        },
-        "simulated",
-        {
-          error: error instanceof Error ? error.message : "Sync failed",
-          simulatedReason: "Sync error — no live Google Trends data available",
-          status: "offline",
-        },
-      );
+      const baseline = await loadKeywordBaseline();
+      const fallback = await scanGoogleTrends({
+        baseline,
+        region: DEFAULT_REGION,
+      });
+      return buildResult(fallback.data, fallback.mode, {
+        status: "offline",
+        error: error instanceof Error ? error.message : "Sync failed",
+        simulatedReason:
+          fallback.simulatedReason ??
+          "Sync error — static keyword estimates in use",
+      });
     }
   },
 };
@@ -156,16 +159,19 @@ export async function testGoogleTrendsProvider(): Promise<{
       ok: false,
       mode: "simulated",
       message:
-        "Simulated — set GOOGLE_TRENDS_API_KEY (SerpAPI) for live keyword trends",
+        "Coming soon — set GOOGLE_TRENDS_API_KEY (SerpAPI key) for live keyword trends",
     };
   }
 
   const ping = await pingGoogleTrendsLive(DEFAULT_REGION);
   if (!ping.ok) {
+    const authFailure = ping.message.toLowerCase().includes("api key");
     return {
       ok: false,
       mode: "simulated",
-      message: `Live API unreachable — ${ping.message}`,
+      message: authFailure
+        ? `Invalid API key — ${ping.message}`
+        : `Offline — ${ping.message}`,
     };
   }
 
@@ -176,7 +182,7 @@ export async function testGoogleTrendsProvider(): Promise<{
     mode: intel.mode,
     message:
       intel.mode === "live"
-        ? `Live · ${intel.data.keywords.length} keywords · ${intel.data.topRising.length} rising queries`
-        : intel.simulatedReason ?? "Returned simulated fallback",
+        ? `Live · ${intel.data.keywords.length} keywords · ${intel.data.topRising.length} rising · ${intel.data.relatedQueries.length} related`
+        : intel.error ?? intel.simulatedReason ?? "Returned simulated fallback",
   };
 }

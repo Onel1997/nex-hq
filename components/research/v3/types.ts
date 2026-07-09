@@ -41,6 +41,13 @@ export interface ResearchRunError {
   message: string;
   stage?: string;
   sourceErrors?: string[];
+  missingFields?: string[];
+  validationIssues?: Array<{
+    path: string;
+    expected: string;
+    received: unknown;
+    message: string;
+  }>;
 }
 
 export interface FusionReportError {
@@ -100,11 +107,44 @@ export function parseResearchApiError(
     }
   }
 
+  const validationIssues = parseValidationIssues(data.validationIssues);
+  const missingFields = Array.isArray(data.missingFields)
+    ? data.missingFields.map(String)
+    : undefined;
+
   return {
     message,
     stage: typeof data.stage === "string" ? data.stage : undefined,
     sourceErrors: sourceErrors.length > 0 ? sourceErrors : undefined,
+    missingFields,
+    validationIssues,
   };
+}
+
+function parseValidationIssues(
+  value: unknown,
+): ResearchRunError["validationIssues"] {
+  if (!Array.isArray(value)) return undefined;
+
+  const issues = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const issue = entry as Record<string, unknown>;
+      const path = typeof issue.path === "string" ? issue.path : "(root)";
+      const message =
+        typeof issue.message === "string" ? issue.message : "Invalid value";
+      const expected =
+        typeof issue.expected === "string" ? issue.expected : "schema constraint";
+      return {
+        path,
+        message,
+        expected,
+        received: issue.received,
+      };
+    })
+    .filter((issue): issue is NonNullable<typeof issue> => issue !== null);
+
+  return issues.length > 0 ? issues : undefined;
 }
 
 export function parseFusionReportResponse(

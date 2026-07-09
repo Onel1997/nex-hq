@@ -1,6 +1,8 @@
 import type { MilaeneCommerceBaseline } from "@/lib/commerce/milaene-commerce-baseline";
+import type { ProviderConnectionStatus } from "@/lib/data-source-platform/types";
 import {
   fetchLiveGoogleTrends,
+  GoogleTrendsApiError,
   isGoogleTrendsLiveConfigured,
 } from "./clients/google-trends-client";
 import {
@@ -21,7 +23,16 @@ export interface GoogleTrendKeyword {
 export interface GoogleTrendsData {
   keywords: GoogleTrendKeyword[];
   topRising: string[];
+  relatedQueries: string[];
   seasonalityNote: string;
+  demandScore: number;
+  trendDirection: "up" | "down" | "stable";
+}
+
+export interface GoogleTrendsScanResult
+  extends SourceIntelligence<GoogleTrendsData> {
+  providerStatus: ProviderConnectionStatus;
+  error?: string;
 }
 
 const STREETWEAR_KEYWORDS = [
@@ -37,16 +48,62 @@ const STREETWEAR_KEYWORDS = [
 ];
 
 function toSignals(data: GoogleTrendsData): IntelligenceSignal[] {
-  return data.keywords.slice(0, 8).map((k) => ({
-    id: `gt-${k.keyword.replace(/\s+/g, "-")}`,
+  const keywordSignals = data.keywords.slice(0, 8).map((keyword) => ({
+    id: `gt-${keyword.keyword.replace(/\s+/g, "-")}`,
     category: "trend" as const,
     source: "google_trends" as const,
-    label: k.keyword,
-    message: `${k.keyword}: Nachfrage ${k.demand}/100, ${k.change >= 0 ? "+" : ""}${k.change}% · ${k.seasonality} · ${k.region}`,
-    score: k.demand,
-    direction: k.change >= 0 ? ("up" as const) : ("down" as const),
-    tags: ["keyword", k.seasonality, k.region],
+    label: keyword.keyword,
+    message: `${keyword.keyword}: Nachfrage ${keyword.demand}/100, ${keyword.change >= 0 ? "+" : ""}${keyword.change}% · ${keyword.seasonality} · ${keyword.region}`,
+    score: keyword.demand,
+    direction: keyword.change >= 0 ? ("up" as const) : ("down" as const),
+    tags: ["keyword", keyword.seasonality, keyword.region],
   }));
+
+  const relatedSignals = data.relatedQueries.slice(0, 4).map((query) => ({
+    id: `gt-related-${query.replace(/\s+/g, "-")}`,
+    category: "trend" as const,
+    source: "google_trends" as const,
+    label: query,
+    message: `Related query: ${query}`,
+    score: Math.max(40, data.demandScore - 5),
+    direction: data.trendDirection,
+    tags: ["related-query", "rising"],
+  }));
+
+  const aggregateSignals: IntelligenceSignal[] = [
+    {
+      id: "gt-demand-score",
+      category: "trend",
+      source: "google_trends",
+      label: "Search demand score",
+      message: `Regional search demand score ${data.demandScore}/100`,
+      score: data.demandScore,
+      direction: data.trendDirection,
+      tags: ["demand-score", "aggregate"],
+    },
+    {
+      id: "gt-seasonality",
+      category: "trend",
+      source: "google_trends",
+      label: "Seasonality",
+      message: data.seasonalityNote,
+      score: data.demandScore,
+      direction: data.trendDirection,
+      tags: ["seasonality"],
+    },
+    {
+      id: "gt-trend-direction",
+      category: "trend",
+      source: "google_trends",
+      label: "Trend direction",
+      message: `Overall keyword direction: ${data.trendDirection}`,
+      score: data.demandScore,
+      direction: data.trendDirection,
+      tags: ["trend-direction"],
+    },
+  ];
+
+  return [...keywordSignals, ...relatedSignals, ...aggregateSignals];
 }
 
 function buildFromBaseline(
@@ -57,7 +114,7 @@ function buildFromBaseline(
 
   if (baseline?.commerceIntelligence.topUnits[0]) {
     const top = baseline.commerceIntelligence.topUnits[0].title.toLowerCase();
-    if (!dynamicKeywords.some((k) => top.includes(k.keyword.split(" ")[0]))) {
+    if (!dynamicKeywords.some((keyword) => top.includes(keyword.keyword.split(" ")[0]))) {
       dynamicKeywords.unshift({
         keyword: top,
         demand: 78,
@@ -67,23 +124,38 @@ function buildFromBaseline(
     }
   }
 
+  const keywords = dynamicKeywords.map((keyword) => ({ ...keyword, region }));
+  const topRising = keywords
+    .filter((keyword) => keyword.change > 0)
+    .sort((a, b) => b.change - a.change)
+    .slice(0, 4)
+    .map((keyword) => keyword.keyword);
+
+  const demandScore = Math.round(
+    keywords.reduce((sum, keyword) => sum + keyword.demand, 0) /
+      Math.max(1, keywords.length),
+  );
+
   return {
-    keywords: dynamicKeywords.map((k) => ({ ...k, region })),
-    topRising: dynamicKeywords
-      .filter((k) => k.change > 0)
-      .sort((a, b) => b.change - a.change)
-      .slice(0, 4)
-      .map((k) => k.keyword),
+    keywords,
+    topRising,
+    relatedQueries: topRising.slice(0, 4),
     seasonalityNote:
       "SS26: Earth tones und oversized Silhouetten steigen · AW25 Layering stabil",
+    demandScore,
+    trendDirection: "up",
   };
 }
 
 function buildResult(
   data: GoogleTrendsData,
   mode: "live" | "simulated",
-  simulatedReason?: string,
-): SourceIntelligence<GoogleTrendsData> {
+  providerStatus: ProviderConnectionStatus,
+  options: {
+    simulatedReason?: string;
+    error?: string;
+  } = {},
+): GoogleTrendsScanResult {
   const rawSignals = toSignals(data);
   const confidence = computeConfidence({
     mode,
@@ -104,18 +176,17 @@ function buildResult(
     loadedAt: new Date().toISOString(),
     signals,
     data,
-    simulatedReason,
+    simulatedReason: options.simulatedReason,
+    providerStatus,
+    error: options.error,
     scores: {
       ...scores,
-      demandScore: Math.round(
-        data.keywords.reduce((sum, k) => sum + k.demand, 0) /
-          Math.max(1, data.keywords.length),
-      ),
+      demandScore: data.demandScore,
       trendScore: Math.round(
         data.keywords
-          .filter((k) => k.seasonality === "rising" || k.change > 0)
-          .reduce((sum, k) => sum + k.change, 0) /
-          Math.max(1, data.keywords.filter((k) => k.change > 0).length || 1),
+          .filter((keyword) => keyword.seasonality === "rising" || keyword.change > 0)
+          .reduce((sum, keyword) => sum + keyword.change, 0) /
+          Math.max(1, data.keywords.filter((keyword) => keyword.change > 0).length || 1),
       ),
     },
   };
@@ -128,33 +199,56 @@ export interface GoogleTrendsInput extends ConnectorInput {
 /** Scan Google Trends for demand, seasonality and keyword signals. */
 export async function scanGoogleTrends(
   input: GoogleTrendsInput = {},
-): Promise<SourceIntelligence<GoogleTrendsData>> {
+): Promise<GoogleTrendsScanResult> {
   const region = input.region ?? "DE";
   const extraKeywords =
     input.baseline?.commerceIntelligence.topUnits
       .slice(0, 2)
-      .map((u) => u.title.toLowerCase()) ?? [];
+      .map((unit) => unit.title.toLowerCase()) ?? [];
+  const baselineData = buildFromBaseline(input.baseline ?? null, region);
 
-  if (isGoogleTrendsLiveConfigured()) {
-    try {
-      const data = await fetchLiveGoogleTrends(region, extraKeywords);
-      return buildResult(data, "live");
-    } catch (error) {
-      const reason =
-        error instanceof Error
-          ? `SerpAPI failed (${error.message}) — using static keyword estimates`
-          : "SerpAPI failed — using static keyword estimates";
-      return buildResult(
-        buildFromBaseline(input.baseline ?? null, region),
-        "simulated",
-        reason,
-      );
-    }
+  if (!isGoogleTrendsLiveConfigured()) {
+    return buildResult(
+      baselineData,
+      "simulated",
+      "disconnected",
+      {
+        simulatedReason:
+          "GOOGLE_TRENDS_API_KEY not set — static streetwear keyword estimates, not live Google Trends",
+      },
+    );
   }
 
-  return buildResult(
-    buildFromBaseline(input.baseline ?? null, region),
-    "simulated",
-    "GOOGLE_TRENDS_API_KEY not set — static streetwear keyword estimates, not live Google Trends",
-  );
+  try {
+    const data = await fetchLiveGoogleTrends(region, extraKeywords);
+    return buildResult(data, "live", "connected");
+  } catch (error) {
+    if (error instanceof GoogleTrendsApiError) {
+      if (error.kind === "auth_error") {
+        return buildResult(baselineData, "simulated", "authentication_error", {
+          error: error.message,
+          simulatedReason:
+            "Invalid GOOGLE_TRENDS_API_KEY — using static keyword estimates until credentials are fixed",
+        });
+      }
+
+      if (error.kind === "missing_key") {
+        return buildResult(baselineData, "simulated", "disconnected", {
+          simulatedReason: error.message,
+        });
+      }
+
+      return buildResult(baselineData, "simulated", "offline", {
+        error: error.message,
+        simulatedReason: `SerpAPI failed (${error.message}) — using static keyword estimates`,
+      });
+    }
+
+    const message =
+      error instanceof Error ? error.message : "SerpAPI request failed";
+    return buildResult(baselineData, "simulated", "offline", {
+      error: message,
+      simulatedReason: `SerpAPI failed (${message}) — using static keyword estimates`,
+    });
+  }
 }

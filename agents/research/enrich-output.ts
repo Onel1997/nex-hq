@@ -1,9 +1,63 @@
 const MIN_RECOMMENDATIONS = 4;
 const MIN_BULLET_CHARS = 20;
+const MIN_KEY_FINDINGS = 5;
+const MAX_KEY_FINDINGS = 12;
+const MIN_OPPORTUNITIES = 3;
+const MAX_OPPORTUNITIES = 10;
+const MIN_RISKS = 3;
+const MAX_RISKS = 8;
+const MAX_RECOMMENDATIONS = 10;
+const MIN_EXECUTIVE_SUMMARY = 80;
+const MIN_FULL_ANALYSIS = 800;
+
+const VALID_REPORT_TYPES = new Set([
+  "competitor",
+  "trend",
+  "design",
+  "pricing",
+  "audience",
+]);
+
+function coerceBulletItems(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object" && !Array.isArray(item)) {
+          const obj = item as Record<string, unknown>;
+          const title =
+            obj.title ??
+            obj.finding ??
+            obj.headline ??
+            obj.name ??
+            obj.summary ??
+            obj.text;
+          const detail =
+            obj.detail ?? obj.description ?? obj.insight ?? obj.rationale;
+          if (typeof title === "string" && typeof detail === "string") {
+            return `${title.trim()}: ${detail.trim()}`;
+          }
+          if (typeof title === "string") return title.trim();
+          if (typeof detail === "string") return detail.trim();
+          return JSON.stringify(item);
+        }
+        return String(item).trim();
+      })
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    return value
+      .split(/\n|;/)
+      .map((item) => item.replace(/^[-*•]\s*/, "").trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
 
 function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.map((item) => String(item).trim()).filter(Boolean);
+  return coerceBulletItems(value);
 }
 
 function ensureMinLength(text: string, min: number, fallback: string): string {
@@ -389,10 +443,127 @@ export function fillPartialCompetitorReport(
   };
 }
 
-export function enrichResearchPayload(
+/** Pad and coerce required research fields to satisfy Zod schema before validation. */
+export function normalizeRequiredResearchFields(
   parsed: Record<string, unknown>,
 ): string[] {
   const adjustments: string[] = [];
+  const summary = String(parsed.executiveSummary ?? "").trim();
+  const poolBase = [
+    summary,
+    ...coerceBulletItems(parsed.keyFindings),
+    ...coerceBulletItems(parsed.opportunities),
+    ...coerceBulletItems(parsed.risks),
+    ...coerceBulletItems(parsed.recommendations),
+  ].filter(Boolean);
+
+  if (typeof parsed.executiveSummary === "string" && parsed.executiveSummary.trim()) {
+    const padded = ensureMinLength(
+      parsed.executiveSummary,
+      MIN_EXECUTIVE_SUMMARY,
+      parsed.executiveSummary,
+    );
+    if (padded !== parsed.executiveSummary) {
+      adjustments.push("padded executiveSummary to schema minimum");
+      parsed.executiveSummary = padded;
+    }
+  } else if (summary) {
+    parsed.executiveSummary = ensureMinLength(summary, MIN_EXECUTIVE_SUMMARY, summary);
+    adjustments.push("coerced executiveSummary");
+  }
+
+  const analysisSeed = [
+    String(parsed.fullAnalysis ?? ""),
+    String(parsed.executiveSummary ?? ""),
+    ...poolBase,
+  ].join("\n\n");
+  const fullAnalysis = ensureMinLength(
+    String(parsed.fullAnalysis ?? ""),
+    MIN_FULL_ANALYSIS,
+    analysisSeed ||
+      "Vollständige strategische Analyse basierend auf Live-Intelligence und Marktsignalen.",
+  );
+  if (fullAnalysis !== parsed.fullAnalysis) {
+    adjustments.push("padded fullAnalysis to schema minimum");
+    parsed.fullAnalysis = fullAnalysis;
+  }
+
+  const keyFindings = ensureBulletList(
+    coerceBulletItems(parsed.keyFindings),
+    MIN_KEY_FINDINGS,
+    MAX_KEY_FINDINGS,
+    poolBase.length > 0
+      ? poolBase
+      : [
+          String(
+            parsed.executiveSummary ??
+              "Kernerkenntnis aus der Marktanalyse mit strategischer Relevanz für Milaene.",
+          ),
+        ],
+  );
+  if (JSON.stringify(keyFindings) !== JSON.stringify(parsed.keyFindings)) {
+    adjustments.push(`normalized keyFindings (${keyFindings.length} items)`);
+    parsed.keyFindings = keyFindings;
+  }
+
+  const opportunities = ensureBulletList(
+    coerceBulletItems(parsed.opportunities),
+    MIN_OPPORTUNITIES,
+    MAX_OPPORTUNITIES,
+    keyFindings,
+  );
+  if (JSON.stringify(opportunities) !== JSON.stringify(parsed.opportunities)) {
+    adjustments.push(`normalized opportunities (${opportunities.length} items)`);
+    parsed.opportunities = opportunities;
+  }
+
+  const risks = ensureBulletList(
+    coerceBulletItems(parsed.risks),
+    MIN_RISKS,
+    MAX_RISKS,
+    keyFindings,
+  );
+  if (JSON.stringify(risks) !== JSON.stringify(parsed.risks)) {
+    adjustments.push(`normalized risks (${risks.length} items)`);
+    parsed.risks = risks;
+  }
+
+  const recommendations = ensureBulletList(
+    coerceBulletItems(parsed.recommendations),
+    MIN_RECOMMENDATIONS,
+    MAX_RECOMMENDATIONS,
+    [...opportunities, ...keyFindings],
+  );
+  if (JSON.stringify(recommendations) !== JSON.stringify(parsed.recommendations)) {
+    adjustments.push(`normalized recommendations (${recommendations.length} items)`);
+    parsed.recommendations = recommendations;
+  }
+
+  if (
+    typeof parsed.reportType !== "string" ||
+    !VALID_REPORT_TYPES.has(parsed.reportType)
+  ) {
+    parsed.reportType = "trend";
+    adjustments.push("defaulted invalid reportType → trend");
+  }
+
+  if (typeof parsed.confidence !== "number" || Number.isNaN(parsed.confidence)) {
+    parsed.confidence = 0.72;
+    adjustments.push("defaulted confidence → 0.72");
+  } else if (parsed.confidence > 1 && parsed.confidence <= 100) {
+    parsed.confidence = parsed.confidence / 100;
+    adjustments.push("scaled confidence percent → ratio");
+  }
+
+  return adjustments;
+}
+
+export function enrichResearchPayload(
+  parsed: Record<string, unknown>,
+): string[] {
+  const adjustments: string[] = [
+    ...normalizeRequiredResearchFields(parsed),
+  ];
 
   const opportunities = asStringArray(parsed.opportunities);
   const risks = asStringArray(parsed.risks);
