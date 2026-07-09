@@ -41,7 +41,7 @@ body:has(.rs3) {
   --rs3-radius-xl: 1.75rem;
   --rs3-sidebar-w: 16.5rem;
   --rs3-sidebar-collapsed: 3.5rem;
-  --rs3-right-w: 20.5rem;
+  --rs3-right-w: 18.75rem;
   --rs3-topbar-h: 3.25rem;
 
   position: relative;
@@ -633,6 +633,12 @@ body:has(.rs3) {
   color: var(--rs3-live);
   background: oklch(0.55 0.12 155 / 0.12);
   border-color: oklch(0.55 0.12 155 / 0.22);
+}
+
+.rs3-source-status-simulated {
+  color: oklch(0.78 0.12 85);
+  background: oklch(0.62 0.1 85 / 0.12);
+  border-color: oklch(0.62 0.1 85 / 0.22);
 }
 
 .rs3-source-status-dot {
@@ -2531,7 +2537,7 @@ body:has(.rs3) {
 
 @media (min-width: 1100px) and (max-width: 1512px) {
   .rs3 {
-    --rs3-right-w: 19.5rem;
+    --rs3-right-w: 18.75rem;
   }
 
   .rs3-sources-list {
@@ -2541,7 +2547,7 @@ body:has(.rs3) {
 
 @media (min-width: 1513px) {
   .rs3 {
-    --rs3-right-w: 21rem;
+    --rs3-right-w: 20rem;
   }
 }
 

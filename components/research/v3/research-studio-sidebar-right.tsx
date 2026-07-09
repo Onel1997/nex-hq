@@ -38,6 +38,64 @@ function SourceMark({ name, color }: { name: string; color: string }) {
   );
 }
 
+function resolveStatusPill(provider: ProviderSnapshot): {
+  short: string;
+  label: string;
+  className: string;
+} {
+  if (provider.status === "disconnected") {
+    return {
+      short: "Soon",
+      label: "Coming Soon",
+      className: "rs3-source-status-soon",
+    };
+  }
+  if (provider.status === "authentication_error") {
+    return {
+      short: "Auth",
+      label: "Auth Error",
+      className: "rs3-source-status-error",
+    };
+  }
+  if (
+    provider.mode === "simulated" &&
+    provider.status !== "offline" &&
+    provider.status !== "rate_limited"
+  ) {
+    return {
+      short: "Sim",
+      label: "Simulated",
+      className: "rs3-source-status-simulated",
+    };
+  }
+  if (provider.status === "connected" && provider.mode === "live") {
+    return {
+      short: "Live",
+      label: "Live",
+      className: "rs3-source-status-live",
+    };
+  }
+  if (provider.status === "syncing") {
+    return {
+      short: "Sync",
+      label: "Syncing",
+      className: "rs3-source-status-syncing",
+    };
+  }
+  if (provider.status === "rate_limited") {
+    return {
+      short: "Limit",
+      label: "Rate Limited",
+      className: "rs3-source-status-warn",
+    };
+  }
+  return {
+    short: "Offline",
+    label: "Offline",
+    className: "rs3-source-status-offline",
+  };
+}
+
 function statusLabel(status: ProviderSnapshot["status"]): string {
   switch (status) {
     case "connected":
@@ -52,40 +110,6 @@ function statusLabel(status: ProviderSnapshot["status"]): string {
       return "Offline";
     case "disconnected":
       return "Coming Soon";
-  }
-}
-
-function statusShort(status: ProviderSnapshot["status"]): string {
-  switch (status) {
-    case "connected":
-      return "Live";
-    case "syncing":
-      return "Sync";
-    case "authentication_error":
-      return "Auth";
-    case "rate_limited":
-      return "Limit";
-    case "offline":
-      return "Off";
-    case "disconnected":
-      return "Soon";
-  }
-}
-
-function statusClass(status: ProviderSnapshot["status"]): string {
-  switch (status) {
-    case "connected":
-      return "rs3-source-status-live";
-    case "syncing":
-      return "rs3-source-status-syncing";
-    case "authentication_error":
-      return "rs3-source-status-error";
-    case "rate_limited":
-      return "rs3-source-status-warn";
-    case "offline":
-      return "rs3-source-status-offline";
-    case "disconnected":
-      return "rs3-source-status-soon";
   }
 }
 
@@ -183,7 +207,9 @@ export function ResearchStudioSidebarRight({
           </div>
         ) : null}
 
-        {providers.map((source, index) => (
+        {providers.map((source, index) => {
+          const statusPill = resolveStatusPill(source);
+          return (
           <div
             key={source.id}
             className={cn(
@@ -216,13 +242,13 @@ export function ResearchStudioSidebarRight({
                     <span
                       className={cn(
                         "rs3-source-status-pill",
-                        statusClass(source.status),
+                        statusPill.className,
                       )}
-                      title={statusLabel(source.status)}
+                      title={statusPill.label}
                     >
                       <span className="rs3-source-status-dot" aria-hidden />
                       <span className="rs3-source-status-text">
-                        {statusShort(source.status)}
+                        {statusPill.short}
                       </span>
                     </span>
                   </div>
@@ -289,7 +315,8 @@ export function ResearchStudioSidebarRight({
               </div>
             )}
           </div>
-        ))}
+        );
+        })}
       </div>
     </aside>
   );
