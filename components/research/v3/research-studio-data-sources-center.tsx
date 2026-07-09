@@ -7,7 +7,7 @@ import {
   authMethodLabel,
   displayStatusLabel,
   formatCacheAge,
-  PROVIDER_DISPLAY_ORDER,
+  groupProvidersBySection,
   resolveDisplayStatus,
   type ProviderDisplayStatus,
 } from "./data-sources-center-utils";
@@ -16,9 +16,13 @@ import { cn } from "@/lib/utils";
 import {
   Activity,
   AlertCircle,
+  BookOpen,
   CheckCircle2,
   ChevronDown,
+  Clock3,
   Database,
+  FileText,
+  KeyRound,
   Loader2,
   PlugZap,
   RefreshCw,
@@ -89,166 +93,218 @@ function ProviderCard({
   feedback: ActionFeedback | null;
   onAction: (action: ProviderAction) => void;
 }) {
-  const [debugOpen, setDebugOpen] = useState(false);
+  const [developerOpen, setDeveloperOpen] = useState(false);
   const displayStatus = resolveDisplayStatus(provider.status, provider.mode);
   const comingSoon = displayStatus === "coming_soon";
   const guide = provider.setupGuide;
+  const requiredKeys = guide?.requiredEnvKeys ?? provider.auth.envKeys;
   const missingKeys = provider.auth.missingKeys;
 
   return (
     <article className={cn("rs3-dsc-card", comingSoon && "rs3-dsc-card-soon")}>
-      <div className="rs3-dsc-card-header">
-        <div className="rs3-dsc-card-identity">
-          <SourceMark name={provider.name} color={provider.brandColor} />
-          <div>
-            <h3 className="rs3-dsc-card-name">{provider.name}</h3>
-            <p className="rs3-dsc-card-version">API {provider.apiVersion}</p>
+      <div className="rs3-dsc-card-body">
+        <div className="rs3-dsc-card-header">
+          <div className="rs3-dsc-card-identity">
+            <SourceMark name={provider.name} color={provider.brandColor} />
+            <div>
+              <h3 className="rs3-dsc-card-name">{provider.name}</h3>
+              <p className="rs3-dsc-card-version">API {provider.apiVersion}</p>
+            </div>
+          </div>
+          <span className={cn("rs3-dsc-status", statusClass(displayStatus))}>
+            {displayStatus !== "coming_soon" ? (
+              <span className="rs3-dsc-status-dot" />
+            ) : null}
+            {displayStatusLabel(displayStatus)}
+          </span>
+        </div>
+
+        {provider.mode === "simulated" && provider.simulatedReason ? (
+          <div className="rs3-dsc-simulated-banner">
+            <AlertCircle className="size-3.5 shrink-0" />
+            <span>{provider.simulatedReason}</span>
+          </div>
+        ) : null}
+
+        {guide ? (
+          <>
+            <div className="rs3-dsc-block">
+              <p className="rs3-dsc-block-label">Description</p>
+              <p className="rs3-dsc-block-copy">{guide.purpose}</p>
+            </div>
+
+            {guide.limitations.length > 0 ? (
+              <div className="rs3-dsc-block rs3-dsc-block-limitations">
+                <p className="rs3-dsc-block-label">Current limitations</p>
+                <ul className="rs3-dsc-bullet-list">
+                  {guide.limitations.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {guide.notes.length > 0 ? (
+              <div className="rs3-dsc-block rs3-dsc-block-notes">
+                <p className="rs3-dsc-block-label">Notes</p>
+                <ul className="rs3-dsc-bullet-list">
+                  {guide.notes.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            <div className="rs3-dsc-debug">
+              <button
+                type="button"
+                className="rs3-dsc-debug-toggle"
+                onClick={() => setDeveloperOpen((open) => !open)}
+                aria-expanded={developerOpen}
+              >
+                <KeyRound className="size-3.5 shrink-0" />
+                <span>Developer setup</span>
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 transition-transform",
+                    developerOpen && "rotate-180",
+                  )}
+                />
+              </button>
+              {developerOpen ? (
+                <div className="rs3-dsc-debug-panel">
+                  <p className="rs3-dsc-debug-label">Credential requirements</p>
+                  {requiredKeys.length > 0 ? (
+                    <ul className="rs3-dsc-env-list">
+                      {requiredKeys.map((key) => {
+                        const missing = missingKeys.includes(key);
+                        return (
+                          <li
+                            key={key}
+                            className={cn(missing && "rs3-dsc-env-missing")}
+                          >
+                            <code>{key}</code>
+                            <span>{missing ? "Missing" : "Configured"}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="rs3-dsc-debug-hint">
+                      No credentials required for this provider.
+                    </p>
+                  )}
+
+                  {guide.steps.length > 0 ? (
+                    <>
+                      <p className="rs3-dsc-debug-label">Setup steps</p>
+                      <ol className="rs3-dsc-setup-steps">
+                        {guide.steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ol>
+                    </>
+                  ) : null}
+
+                  <p className="rs3-dsc-debug-hint">
+                    Environment variable values are never shown here. Add keys to
+                    .env.local and restart the dev server.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+
+            {guide.docsUrl ? (
+              <a
+                href={guide.docsUrl}
+                className="rs3-dsc-setup-docs"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <BookOpen className="size-3.5" />
+                Documentation
+              </a>
+            ) : null}
+          </>
+        ) : null}
+
+        <div className="rs3-dsc-metrics">
+          <div className="rs3-dsc-metric">
+            <span className="rs3-dsc-metric-label">Authentication method</span>
+            <span className="rs3-dsc-metric-value">
+              {authMethodLabel(provider.auth.method)}
+            </span>
+          </div>
+          <div className="rs3-dsc-metric">
+            <span className="rs3-dsc-metric-label">API configured</span>
+            <span
+              className={cn(
+                "rs3-dsc-metric-value",
+                provider.auth.configured
+                  ? "rs3-dsc-metric-yes"
+                  : "rs3-dsc-metric-no",
+              )}
+            >
+              {provider.auth.configured ? "Yes" : "No"}
+            </span>
+          </div>
+          <div className="rs3-dsc-metric">
+            <span className="rs3-dsc-metric-label">Last sync</span>
+            <span className="rs3-dsc-metric-value">
+              {formatRelativeSync(provider.lastSync)}
+            </span>
+          </div>
+          <div className="rs3-dsc-metric">
+            <span className="rs3-dsc-metric-label">Cache status</span>
+            <span className="rs3-dsc-metric-value">
+              {formatCacheAge(provider.cacheAgeMs, provider.fromCache)}
+            </span>
           </div>
         </div>
-        <span className={cn("rs3-dsc-status", statusClass(displayStatus))}>
-          {displayStatus !== "coming_soon" ? (
-            <span className="rs3-dsc-status-dot" />
-          ) : null}
-          {displayStatusLabel(displayStatus)}
-        </span>
-      </div>
 
-      {provider.mode === "simulated" && provider.simulatedReason ? (
-        <div className="rs3-dsc-simulated-banner">
-          <AlertCircle className="size-3.5 shrink-0" />
-          <span>{provider.simulatedReason}</span>
-        </div>
-      ) : null}
-
-      {guide ? (
-        <div className="rs3-dsc-setup">
-          <p className="rs3-dsc-setup-purpose">{guide.purpose}</p>
-          <ol className="rs3-dsc-setup-steps">
-            {guide.steps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-          {guide.docsUrl ? (
-            <a
-              href={guide.docsUrl}
-              className="rs3-dsc-setup-docs"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Documentation →
-            </a>
-          ) : null}
-          <p className="rs3-dsc-setup-simulated-note">{guide.simulatedWhen}</p>
-        </div>
-      ) : null}
-
-      <div className="rs3-dsc-metrics">
-        <div className="rs3-dsc-metric">
-          <span className="rs3-dsc-metric-label">API configured</span>
-          <span
+        {provider.health ? (
+          <div
             className={cn(
-              "rs3-dsc-metric-value",
-              provider.auth.configured
-                ? "rs3-dsc-metric-yes"
-                : "rs3-dsc-metric-no",
+              "rs3-dsc-health",
+              provider.health.healthy ? "rs3-dsc-health-ok" : "rs3-dsc-health-bad",
             )}
           >
-            {provider.auth.configured ? "Yes" : "No"}
-          </span>
-        </div>
-        <div className="rs3-dsc-metric">
-          <span className="rs3-dsc-metric-label">Auth method</span>
-          <span className="rs3-dsc-metric-value">
-            {authMethodLabel(provider.auth.method)}
-          </span>
-        </div>
-        <div className="rs3-dsc-metric">
-          <span className="rs3-dsc-metric-label">Last sync</span>
-          <span className="rs3-dsc-metric-value">
-            {formatRelativeSync(provider.lastSync)}
-          </span>
-        </div>
-        <div className="rs3-dsc-metric">
-          <span className="rs3-dsc-metric-label">Cache</span>
-          <span className="rs3-dsc-metric-value">
-            {formatCacheAge(provider.cacheAgeMs, provider.fromCache)}
-          </span>
-        </div>
-      </div>
+            <Activity className="size-3.5 shrink-0" />
+            <span>
+              {provider.health.message ??
+                (provider.health.healthy ? "Healthy" : "Unhealthy")}
+              {provider.health.latencyMs != null
+                ? ` · ${provider.health.latencyMs}ms`
+                : ""}
+            </span>
+          </div>
+        ) : null}
 
-      {provider.health ? (
-        <div
-          className={cn(
-            "rs3-dsc-health",
-            provider.health.healthy ? "rs3-dsc-health-ok" : "rs3-dsc-health-bad",
-          )}
-        >
-          <Activity className="size-3.5 shrink-0" />
-          <span>
-            {provider.health.message ??
-              (provider.health.healthy ? "Healthy" : "Unhealthy")}
-            {provider.health.latencyMs != null
-              ? ` · ${provider.health.latencyMs}ms`
-              : ""}
-          </span>
-        </div>
-      ) : null}
-
-      {provider.error ? (
-        <div className="rs3-dsc-error">
-          <AlertCircle className="size-3.5 shrink-0" />
-          <span>{provider.error}</span>
-        </div>
-      ) : null}
-
-      {!provider.auth.configured && missingKeys.length > 0 ? (
-        <div className="rs3-dsc-debug">
-          <button
-            type="button"
-            className="rs3-dsc-debug-toggle"
-            onClick={() => setDebugOpen((open) => !open)}
-            aria-expanded={debugOpen}
-          >
-            <ChevronDown
-              className={cn("size-3.5 transition-transform", debugOpen && "rotate-180")}
-            />
-            Developer setup
-          </button>
-          {debugOpen ? (
-            <div className="rs3-dsc-debug-panel">
-              <p className="rs3-dsc-debug-label">Missing environment variables</p>
-              <ul>
-                {missingKeys.map((key) => (
-                  <li key={key}>
-                    <code>{key}</code>
-                  </li>
-                ))}
-              </ul>
-              <p className="rs3-dsc-debug-hint">
-                Add these to .env.local — values are never shown here.
-              </p>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {feedback ? (
-        <div
-          className={cn(
-            "rs3-dsc-feedback",
-            feedback.type === "success" && "rs3-dsc-feedback-success",
-            feedback.type === "error" && "rs3-dsc-feedback-error",
-            feedback.type === "info" && "rs3-dsc-feedback-info",
-          )}
-        >
-          {feedback.type === "success" ? (
-            <CheckCircle2 className="size-3.5 shrink-0" />
-          ) : (
+        {provider.error ? (
+          <div className="rs3-dsc-error">
             <AlertCircle className="size-3.5 shrink-0" />
-          )}
-          <span>{feedback.message}</span>
-        </div>
-      ) : null}
+            <span>{provider.error}</span>
+          </div>
+        ) : null}
+
+        {feedback ? (
+          <div
+            className={cn(
+              "rs3-dsc-feedback",
+              feedback.type === "success" && "rs3-dsc-feedback-success",
+              feedback.type === "error" && "rs3-dsc-feedback-error",
+              feedback.type === "info" && "rs3-dsc-feedback-info",
+            )}
+          >
+            {feedback.type === "success" ? (
+              <CheckCircle2 className="size-3.5 shrink-0" />
+            ) : (
+              <AlertCircle className="size-3.5 shrink-0" />
+            )}
+            <span>{feedback.message}</span>
+          </div>
+        ) : null}
+      </div>
 
       <div className="rs3-dsc-actions">
         <button
@@ -301,6 +357,47 @@ function ProviderCard({
   );
 }
 
+function ProviderSection({
+  title,
+  subtitle,
+  providers,
+  busyId,
+  feedbackMap,
+  onAction,
+}: {
+  title: string;
+  subtitle: string;
+  providers: ProviderSettingsEntry[];
+  busyId: string | null;
+  feedbackMap: Record<string, ActionFeedback>;
+  onAction: (id: string, action: ProviderAction) => void;
+}) {
+  if (providers.length === 0) return null;
+
+  return (
+    <section className="rs3-dsc-section">
+      <header className="rs3-dsc-section-head">
+        <div>
+          <h3 className="rs3-dsc-section-title">{title}</h3>
+          <p className="rs3-dsc-section-subtitle">{subtitle}</p>
+        </div>
+        <span className="rs3-dsc-section-count">{providers.length} sources</span>
+      </header>
+      <div className="rs3-dsc-grid">
+        {providers.map((provider) => (
+          <ProviderCard
+            key={provider.id}
+            provider={provider}
+            busy={busyId === provider.id}
+            feedback={feedbackMap[provider.id] ?? null}
+            onAction={(action) => onAction(provider.id, action)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function ResearchStudioDataSourcesCenter({
   open,
   onClose,
@@ -330,14 +427,9 @@ export function ResearchStudioDataSourcesCenter({
     }
   }, [open]);
 
-  const sortedProviders = useMemo(() => {
-    if (!settings) return [];
-    const order = new Map(
-      PROVIDER_DISPLAY_ORDER.map((id, index) => [id, index]),
-    );
-    return [...settings.providers].sort(
-      (a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99),
-    );
+  const groupedProviders = useMemo(() => {
+    if (!settings) return { connected: [], planned: [] };
+    return groupProvidersBySection(settings.providers);
   }, [settings]);
 
   const handleAction = useCallback(
@@ -429,7 +521,7 @@ export function ResearchStudioDataSourcesCenter({
               <p className="rs3-dsc-eyebrow">Research Studio</p>
               <h2 className="rs3-dsc-title">Data Sources Center</h2>
               <p className="rs3-dsc-subtitle">
-                Manage live intelligence connections for Milaene
+                Central intelligence integration hub for NexHQ
               </p>
             </div>
           </div>
@@ -441,7 +533,7 @@ export function ResearchStudioDataSourcesCenter({
               disabled={loading}
             >
               <RefreshCw className={cn("size-4", loading && "animate-spin")} />
-              Sync all
+              Sync All
             </button>
             <button
               type="button"
@@ -480,29 +572,50 @@ export function ResearchStudioDataSourcesCenter({
               </span>
               <span className="rs3-dsc-summary-label">Coming Soon</span>
             </div>
+            <div className="rs3-dsc-summary-stat rs3-dsc-summary-live">
+              <span className="rs3-dsc-summary-value">{settings.liveCount}</span>
+              <span className="rs3-dsc-summary-label">Live Sources</span>
+            </div>
+            <div className="rs3-dsc-summary-stat rs3-dsc-summary-sync">
+              <span className="rs3-dsc-summary-value rs3-dsc-summary-sync-value">
+                <Clock3 className="size-3.5" />
+                {formatRelativeSync(settings.loadedAt)}
+              </span>
+              <span className="rs3-dsc-summary-label">Last Sync</span>
+            </div>
           </div>
         ) : null}
 
-        {loading && !settings ? (
-          <div className="rs3-dsc-loading">
-            <Loader2 className="size-5 animate-spin" />
-            <span>Loading data sources…</span>
-          </div>
-        ) : (
-          <div className="rs3-dsc-grid">
-            {sortedProviders.map((provider) => (
-              <ProviderCard
-                key={provider.id}
-                provider={provider}
-                busy={busyId === provider.id}
-                feedback={feedbackMap[provider.id] ?? null}
-                onAction={(action) => void handleAction(provider.id, action)}
+        <div className="rs3-dsc-content">
+          {loading && !settings ? (
+            <div className="rs3-dsc-loading">
+              <Loader2 className="size-5 animate-spin" />
+              <span>Loading data sources…</span>
+            </div>
+          ) : (
+            <>
+              <ProviderSection
+                title="Connected"
+                subtitle="Production live providers currently supported in Research Studio."
+                providers={groupedProviders.connected}
+                busyId={busyId}
+                feedbackMap={feedbackMap}
+                onAction={handleAction}
               />
-            ))}
-          </div>
-        )}
+              <ProviderSection
+                title="Planned integrations"
+                subtitle="Extended intelligence providers — configure credentials to activate live mode."
+                providers={groupedProviders.planned}
+                busyId={busyId}
+                feedbackMap={feedbackMap}
+                onAction={handleAction}
+              />
+            </>
+          )}
+        </div>
 
         <footer className="rs3-dsc-footer">
+          <FileText className="size-3.5 shrink-0 opacity-50" />
           <p>
             Credentials are stored in environment variables — values are never
             shown here. Configure keys in your deployment settings.

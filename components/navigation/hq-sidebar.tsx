@@ -10,14 +10,44 @@ import {
   type HqSidebarSectionId,
   type SidebarNavItem,
 } from "@/lib/navigation/hq-navigation";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, type CSSProperties } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 
 const SIDEBAR_COLLAPSE_KEY = "nexhq-hq-sidebar-collapsed";
 const SIDEBAR_SECTIONS_KEY = "nexhq-hq-sidebar-sections";
+
+function CollapsedTooltip({
+  label,
+  collapsed,
+  children,
+}: {
+  label: string;
+  collapsed: boolean;
+  children: ReactNode;
+}) {
+  if (!collapsed) return <>{children}</>;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="hq-sidebar-tooltip-anchor">{children}</span>
+        }
+      />
+      <TooltipContent side="right" sideOffset={10} className="hq-sidebar-tooltip">
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 function SidebarNavLink({
   item,
@@ -32,7 +62,7 @@ function SidebarNavLink({
   const active = isSidebarNavItemActive(pathname, item);
   const accent = active ? (item.accent ?? "var(--hq-accent)") : undefined;
 
-  return (
+  const link = (
     <Link
       href={item.href}
       className={cn("hq-sidebar-item", active && "hq-sidebar-item-active")}
@@ -41,7 +71,6 @@ function SidebarNavLink({
           ? ({ "--hq-item-accent": accent } as CSSProperties)
           : undefined
       }
-      title={collapsed ? item.label : undefined}
     >
       <span
         className="hq-sidebar-item-icon"
@@ -50,8 +79,14 @@ function SidebarNavLink({
         <Icon className="size-4" strokeWidth={1.75} />
       </span>
       <span className="hq-sidebar-item-label">{item.label}</span>
-      {active ? <span className="hq-sidebar-item-active-bar" aria-hidden /> : null}
+      <span className="hq-sidebar-item-active-bar" aria-hidden />
     </Link>
+  );
+
+  return (
+    <CollapsedTooltip label={item.label} collapsed={collapsed}>
+      {link}
+    </CollapsedTooltip>
   );
 }
 
@@ -103,7 +138,7 @@ export function HqSidebar() {
 
       <div className="hq-sidebar-sections">
         {HQ_SIDEBAR_SECTIONS.map((section) => {
-          const expanded = collapsed ? false : sections[section.id];
+          const expanded = collapsed ? true : sections[section.id];
           const sectionActive = activeSection === section.id;
 
           return (
@@ -114,37 +149,41 @@ export function HqSidebar() {
                 sectionActive && "hq-sidebar-section-active",
               )}
             >
-              <button
-                type="button"
-                className="hq-sidebar-section-toggle"
-                onClick={() => toggleSection(section.id as HqSidebarSectionId)}
-                aria-expanded={expanded}
-                title={collapsed ? section.label : undefined}
-              >
-                <ChevronDown
-                  className={cn(
-                    "hq-sidebar-section-chevron size-3.5",
-                    expanded && "is-open",
-                  )}
-                  aria-hidden
-                />
-                <span className="hq-sidebar-section-label">{section.label}</span>
-              </button>
+              <CollapsedTooltip label={section.label} collapsed={collapsed}>
+                <button
+                  type="button"
+                  className="hq-sidebar-section-toggle"
+                  onClick={() => toggleSection(section.id as HqSidebarSectionId)}
+                  aria-expanded={expanded}
+                  disabled={collapsed}
+                >
+                  <ChevronDown
+                    className={cn(
+                      "hq-sidebar-section-chevron size-3.5",
+                      expanded && "is-open",
+                    )}
+                    aria-hidden
+                  />
+                  <span className="hq-sidebar-section-label">{section.label}</span>
+                </button>
+              </CollapsedTooltip>
 
               <div
                 className={cn(
                   "hq-sidebar-section-items",
-                  (expanded || collapsed) && "is-expanded",
+                  expanded && "is-expanded",
                 )}
               >
-                {section.items.map((item) => (
-                  <SidebarNavLink
-                    key={item.id}
-                    item={item}
-                    pathname={pathname}
-                    collapsed={collapsed}
-                  />
-                ))}
+                <div className="hq-sidebar-section-items-inner">
+                  {section.items.map((item) => (
+                    <SidebarNavLink
+                      key={item.id}
+                      item={item}
+                      pathname={pathname}
+                      collapsed={collapsed}
+                    />
+                  ))}
+                </div>
               </div>
             </section>
           );

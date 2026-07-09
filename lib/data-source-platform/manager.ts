@@ -14,7 +14,7 @@ import { testShopifyProvider } from "./adapters/shopify";
 import { testTikTokProvider } from "./adapters/tiktok";
 import { testYouTubeProvider } from "./adapters/youtube";
 import { clearProviderCache } from "./cache";
-import { getProviderSetupGuide } from "./provider-guides";
+import { getProviderSetupGuide, partitionGuideSteps } from "./provider-guides";
 import type {
   DataSourcePlatformSnapshot,
   DataSourceSettingsSnapshot,
@@ -162,6 +162,7 @@ export class DataSourceManager {
     const providers = results.map((result) => {
       const adapter = getProviderAdapter(result.id)!;
       const guide = getProviderSetupGuide(result.id);
+      const { setupSteps, limitations, notes } = partitionGuideSteps(guide);
       return {
         id: result.id,
         name: adapter.label,
@@ -180,9 +181,12 @@ export class DataSourceManager {
         simulatedReason: result.simulatedReason,
         setupGuide: {
           purpose: guide.purpose,
-          steps: guide.steps,
+          steps: setupSteps,
           simulatedWhen: guide.simulatedWhen,
           docsUrl: guide.docsUrl,
+          requiredEnvKeys: guide.requiredEnvKeys,
+          limitations,
+          notes,
         },
       };
     });
@@ -200,6 +204,12 @@ export class DataSourceManager {
       else offlineCount++;
     }
 
+    const liveCount = providers.filter(
+      (provider) =>
+        provider.mode === "live" &&
+        resolveDisplayStatus(provider.status, provider.mode) === "connected",
+    ).length;
+
     return {
       loadedAt: new Date().toISOString(),
       providers,
@@ -207,6 +217,7 @@ export class DataSourceManager {
       simulatedCount,
       offlineCount,
       comingSoonCount,
+      liveCount,
     };
   }
 

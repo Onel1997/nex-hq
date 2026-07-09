@@ -110,6 +110,9 @@ export interface ProviderSettingsEntry {
     steps: string[];
     simulatedWhen: string;
     docsUrl?: string;
+    requiredEnvKeys: string[];
+    limitations: string[];
+    notes: string[];
   };
 }
 
@@ -120,6 +123,7 @@ export interface DataSourceSettingsSnapshot {
   simulatedCount: number;
   offlineCount: number;
   comingSoonCount: number;
+  liveCount: number;
 }
 
 export interface DataProviderAdapter<T = unknown> {

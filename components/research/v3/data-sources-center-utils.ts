@@ -10,20 +10,30 @@ export type ProviderDisplayStatus =
   | "offline"
   | "coming_soon";
 
-export const PROVIDER_DISPLAY_ORDER: ProviderId[] = [
+/** Live providers with production integrations. */
+export const CONNECTED_PROVIDER_IDS: ProviderId[] = [
   "shopify",
+  "fashion_news",
+];
+
+/** Planned / extended intelligence providers. */
+export const PLANNED_PROVIDER_IDS: ProviderId[] = [
   "tiktok",
   "pinterest",
   "google_trends",
-  "etsy",
   "amazon",
+  "etsy",
   "reddit",
   "youtube",
-  "depop",
   "stockx",
   "grailed",
   "instagram",
-  "fashion_news",
+  "depop",
+];
+
+export const PROVIDER_DISPLAY_ORDER: ProviderId[] = [
+  ...CONNECTED_PROVIDER_IDS,
+  ...PLANNED_PROVIDER_IDS,
 ];
 
 export function resolveDisplayStatus(
@@ -80,4 +90,24 @@ export function authMethodLabel(
     case "none":
       return "Not required";
   }
+}
+
+export function groupProvidersBySection<T extends { id: ProviderId }>(
+  providers: T[],
+): { connected: T[]; planned: T[] } {
+  const order = new Map(
+    PROVIDER_DISPLAY_ORDER.map((id, index) => [id, index]),
+  );
+  const sorted = [...providers].sort(
+    (a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99),
+  );
+
+  return {
+    connected: sorted.filter((provider) =>
+      CONNECTED_PROVIDER_IDS.includes(provider.id),
+    ),
+    planned: sorted.filter((provider) =>
+      PLANNED_PROVIDER_IDS.includes(provider.id),
+    ),
+  };
 }

@@ -225,3 +225,31 @@ export const PROVIDER_SETUP_GUIDES: Record<ProviderId, ProviderSetupGuide> = {
 export function getProviderSetupGuide(id: ProviderId): ProviderSetupGuide {
   return PROVIDER_SETUP_GUIDES[id];
 }
+
+export function partitionGuideSteps(guide: ProviderSetupGuide): {
+  setupSteps: string[];
+  limitations: string[];
+  notes: string[];
+} {
+  const setupSteps: string[] = [];
+  const limitations: string[] = [];
+  const notes: string[] = [];
+
+  for (const step of guide.steps) {
+    if (/^limitation:/i.test(step)) {
+      limitations.push(step.replace(/^limitation:\s*/i, ""));
+      continue;
+    }
+    if (/^note:/i.test(step)) {
+      notes.push(step.replace(/^note:\s*/i, ""));
+      continue;
+    }
+    setupSteps.push(step);
+  }
+
+  if (guide.simulatedWhen) {
+    notes.push(guide.simulatedWhen);
+  }
+
+  return { setupSteps, limitations, notes };
+}
