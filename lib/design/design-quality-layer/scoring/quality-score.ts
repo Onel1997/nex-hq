@@ -67,7 +67,12 @@ export function scoreDesignQuality(
     commercialStrength,
     printReadiness,
     kittlBenchmarkScore,
-    passed: overall >= QUALITY_PASS_THRESHOLD && kittlBenchmarkScore >= QUALITY_PASS_THRESHOLD,
+    passed:
+      overall >= QUALITY_PASS_THRESHOLD &&
+      kittlBenchmarkScore >= QUALITY_PASS_THRESHOLD &&
+      typographyQuality >= QUALITY_PASS_THRESHOLD &&
+      compositionQuality >= QUALITY_PASS_THRESHOLD &&
+      printReadiness >= 95,
     issues,
     recommendations,
   };

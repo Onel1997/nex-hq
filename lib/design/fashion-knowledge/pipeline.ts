@@ -81,11 +81,12 @@ export function runFashionKnowledgePipeline(
 ): FashionKnowledgePipelineResult {
   const maxIterations = input.maxIterations ?? MAX_CREATIVE_ITERATIONS;
   const query = buildFashionKnowledgeQuery(input.brief, input.concept, input.designDirection);
-  const baseDecision = decideFromFashionKnowledge(query);
+  const seedBase = query.seed + (input.seedOffset ?? 0) * 97;
+  const baseDecision = decideFromFashionKnowledge({ ...query, seed: seedBase });
   const candidates: FashionKnowledgeCandidate[] = [];
 
   for (let i = 1; i <= maxIterations; i += 1) {
-    const seed = query.seed + i * 137;
+    const seed = seedBase + i * 137;
     const candidate = evaluateCandidate(input, input.engine, i, seed);
     candidates.push(candidate);
 

@@ -1,4 +1,5 @@
 import type { CompositionTemplate, CompositionTemplateContext, CompositionTemplateId } from "../types";
+import type { LayoutSystemId } from "@/lib/design/fashion-knowledge/types";
 import { abstractPerimeterTemplate } from "./abstract-perimeter";
 import { editorialBackPrintTemplate } from "./editorial-back-print";
 import { luxuryBadgeTemplate } from "./luxury-badge";
@@ -17,9 +18,36 @@ export const COMPOSITION_TEMPLATES: CompositionTemplate[] = [
   oversizedCenterBackTemplate,
 ];
 
+const LAYOUT_SYSTEM_TO_TEMPLATE: Record<LayoutSystemId, CompositionTemplateId> = {
+  "spine-layout": "spine-typography",
+  "editorial-layout": "editorial-back-print",
+  "oversized-center": "oversized-center-back",
+  "corner-composition": "minimal-front-chest",
+  "luxury-badge": "luxury-badge",
+  "bottom-label": "vintage-label",
+  "top-heavy": "editorial-back-print",
+  "diagonal-composition": "abstract-perimeter",
+  "negative-space-layout": "minimal-front-chest",
+  "split-composition": "editorial-back-print",
+  "grid-composition": "editorial-back-print",
+  "floating-composition": "luxury-badge",
+};
+
+export function resolveTemplateIdFromPattern(
+  layoutSystemId: LayoutSystemId,
+): CompositionTemplateId {
+  return LAYOUT_SYSTEM_TO_TEMPLATE[layoutSystemId] ?? "editorial-back-print";
+}
+
 export function selectCompositionTemplate(
   ctx: CompositionTemplateContext,
 ): CompositionTemplate {
+  const preferredId = ctx.preferredTemplateId;
+  if (preferredId) {
+    const preferred = COMPOSITION_TEMPLATES.find((t) => t.id === preferredId);
+    if (preferred) return preferred;
+  }
+
   const scored = COMPOSITION_TEMPLATES.map((template) => ({
     template,
     score: template.matches(ctx) + (ctx.attempt > 1 ? alternateBoost(template.id, ctx.attempt) : 0),

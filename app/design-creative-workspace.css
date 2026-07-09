@@ -1043,7 +1043,7 @@
 
 .cw-studio-stage {
   flex: 1 1 auto;
-  min-height: min(90vh, calc(100vh - 6rem));
+  min-height: 28rem;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -1065,20 +1065,19 @@
 
 .cw-workspace-core {
   flex: 11 1 0;
-  min-height: 0;
+  min-height: 28rem;
   min-width: 0;
   max-width: 100%;
   width: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .cw-canvas-section {
-  flex: 1;
-  min-height: 100%;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 24rem;
   min-width: 0;
   max-width: 100%;
   width: 100%;
@@ -1089,7 +1088,7 @@
   border: var(--cw-card-border);
   background: linear-gradient(180deg, rgb(13 17 23 / 0.98) 0%, rgb(9 11 15 / 1) 100%);
   box-shadow: var(--cw-card-shadow), inset 0 1px 0 rgb(255 255 255 / 0.05);
-  overflow: hidden;
+  overflow: visible;
 }
 
 @keyframes cw-canvas-appear {
@@ -2793,7 +2792,7 @@
   }
 
   .cw-studio-stage {
-    min-height: min(76vh, calc(100vh - 9rem));
+    min-height: 24rem;
   }
 
   .cw-studio-split {
@@ -2802,6 +2801,7 @@
 
   .cw-workspace-core {
     flex: 1 1 auto;
+    min-height: 22rem;
   }
 
   .cw-inspector:not(.cw-inspector-collapsed) {
@@ -2812,8 +2812,7 @@
   }
 
   .cw-canvas-section {
-    min-height: min(76vh, calc(100vh - 10rem));
-    height: min(76vh, calc(100vh - 10rem));
+    min-height: 22rem;
   }
 
   .cw-timeline-span {

@@ -6,51 +6,77 @@ import {
   parseResearchApiResponse,
   parseFusionReportResponse,
   RESEARCH_RUN_STEPS,
+  type FusionReportError,
   type ResearchResultV3,
   type ResearchRunError,
   type ResearchRunPhase,
 } from "./types";
 
-const STEP_INTERVAL_MS = 2600;
+const STEP_INTERVAL_MS = 1400;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export function useResearchRun() {
   const [request, setRequest] = useState("");
+  const [lastPrompt, setLastPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ResearchRunError | null>(null);
+  const [fusionError, setFusionError] = useState<FusionReportError | null>(null);
+  const [fusionRetrying, setFusionRetrying] = useState(false);
   const [result, setResult] = useState<ResearchResultV3 | null>(null);
   const [phase, setPhase] = useState<ResearchRunPhase>("idle");
-  const phaseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const stepIndexRef = useRef(0);
+  const runIdRef = useRef(0);
 
-  const clearPhaseTimer = useCallback(() => {
-    if (phaseTimerRef.current) {
-      clearInterval(phaseTimerRef.current);
-      phaseTimerRef.current = null;
+  const animateSteps = useCallback(async (runId: number) => {
+    setPhase(RESEARCH_RUN_STEPS[0]?.id ?? "engine");
+
+    for (let index = 1; index < RESEARCH_RUN_STEPS.length; index += 1) {
+      await sleep(STEP_INTERVAL_MS);
+      if (runIdRef.current !== runId) return;
+      setPhase(RESEARCH_RUN_STEPS[index].id);
     }
   }, []);
 
-  const startPhaseAnimation = useCallback(() => {
-    clearPhaseTimer();
-    stepIndexRef.current = 0;
-    setPhase(RESEARCH_RUN_STEPS[0]?.id ?? "connecting");
+  const fetchFusionReport = useCallback(async (title: string) => {
+    const fusionRes = await fetch(
+      `/api/research/fusion-report?title=${encodeURIComponent(title)}&refresh=1`,
+      { cache: "no-store" },
+    );
+    const fusionData = (await fusionRes.json()) as Record<string, unknown>;
 
-    phaseTimerRef.current = setInterval(() => {
-      stepIndexRef.current += 1;
-      if (stepIndexRef.current < RESEARCH_RUN_STEPS.length) {
-        setPhase(RESEARCH_RUN_STEPS[stepIndexRef.current].id);
-      }
-    }, STEP_INTERVAL_MS);
-  }, [clearPhaseTimer]);
+    if (!fusionRes.ok || !fusionData.ok) {
+      const message =
+        typeof fusionData.error === "string"
+          ? fusionData.error
+          : "Fusion report unavailable";
+      throw new Error(message);
+    }
+
+    const fusionReport = parseFusionReportResponse(fusionData);
+    if (!fusionReport) {
+      throw new Error("Fusion report unavailable");
+    }
+
+    return fusionReport;
+  }, []);
 
   const runResearch = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || isLoading) return;
 
+      const runId = runIdRef.current + 1;
+      runIdRef.current = runId;
+
       setIsLoading(true);
       setError(null);
+      setFusionError(null);
       setResult(null);
-      startPhaseAnimation();
+      setLastPrompt(trimmed);
+
+      const animation = animateSteps(runId);
 
       try {
         const res = await fetch("/api/research/run", {
@@ -62,27 +88,33 @@ export function useResearchRun() {
         const data = (await res.json()) as Record<string, unknown>;
 
         if (!res.ok) {
+          runIdRef.current += 1;
           setPhase("error");
           setError(parseResearchApiError(data));
           return;
         }
 
-        setPhase("complete");
         const parsed = parseResearchApiResponse(data);
-        let fusionReport = null;
+        let fusionReport: ResearchResultV3["fusionReport"] = null;
+        let nextFusionError: FusionReportError | null = null;
+
         try {
-          const fusionRes = await fetch(
-            `/api/research/fusion-report?title=${encodeURIComponent(parsed.title)}&refresh=1`,
-            { cache: "no-store" },
-          );
-          const fusionData = (await fusionRes.json()) as Record<string, unknown>;
-          fusionReport = parseFusionReportResponse(fusionData);
-        } catch {
-          fusionReport = null;
+          fusionReport = await fetchFusionReport(parsed.title);
+        } catch (err) {
+          nextFusionError = {
+            message:
+              err instanceof Error ? err.message : "Fusion report unavailable",
+          };
         }
+
+        await animation;
+        if (runIdRef.current !== runId) return;
+
+        setPhase("complete");
         setResult({ ...parsed, fusionReport });
-        setRequest("");
+        setFusionError(nextFusionError);
       } catch (err) {
+        runIdRef.current += 1;
         setPhase("error");
         if (err && typeof err === "object" && "message" in err) {
           setError(err as ResearchRunError);
@@ -92,41 +124,75 @@ export function useResearchRun() {
           });
         }
       } finally {
-        clearPhaseTimer();
-        setIsLoading(false);
+        if (runIdRef.current === runId) {
+          setIsLoading(false);
+        }
       }
     },
-    [clearPhaseTimer, isLoading, startPhaseAnimation],
+    [animateSteps, fetchFusionReport, isLoading],
   );
 
   const reset = useCallback(() => {
+    runIdRef.current += 1;
     setResult(null);
     setError(null);
+    setFusionError(null);
+    setFusionRetrying(false);
     setPhase("idle");
+    setRequest("");
+    setLastPrompt("");
   }, []);
 
   const retry = useCallback(() => {
-    const prompt = request.trim();
+    const prompt = lastPrompt.trim();
     if (!prompt) {
       reset();
       return;
     }
     void runResearch(prompt);
-  }, [request, reset, runResearch]);
+  }, [lastPrompt, reset, runResearch]);
+
+  const retryFusionReport = useCallback(async () => {
+    const title = result?.title;
+    if (!title || fusionRetrying) return;
+
+    setFusionRetrying(true);
+    setFusionError(null);
+
+    try {
+      const fusionReport = await fetchFusionReport(title);
+      setResult((current) =>
+        current ? { ...current, fusionReport } : current,
+      );
+      setFusionError(null);
+    } catch (err) {
+      setFusionError({
+        message:
+          err instanceof Error ? err.message : "Fusion report unavailable",
+      });
+    } finally {
+      setFusionRetrying(false);
+    }
+  }, [fetchFusionReport, fusionRetrying, result?.title]);
 
   useEffect(() => {
-    return () => clearPhaseTimer();
-  }, [clearPhaseTimer]);
+    return () => {
+      runIdRef.current += 1;
+    };
+  }, []);
 
   return {
     request,
     setRequest,
     isLoading,
     error,
+    fusionError,
+    fusionRetrying,
     result,
     phase,
     runResearch,
     reset,
     retry,
+    retryFusionReport,
   };
 }

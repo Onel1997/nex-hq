@@ -14,14 +14,13 @@ export type ResearchResultV3 = import("@/components/research/v2/types").Research
 
 export type ResearchRunPhase =
   | "idle"
-  | "connecting"
-  | "collecting"
-  | "analyzing"
-  | "competitors"
-  | "opportunities"
-  | "generating"
-  | "saving"
-  | "handoff"
+  | "engine"
+  | "syncing"
+  | "normalizing"
+  | "fusing"
+  | "scoring"
+  | "recommendations"
+  | "building"
   | "complete"
   | "error";
 
@@ -29,20 +28,23 @@ export const RESEARCH_RUN_STEPS: Array<{
   id: ResearchRunPhase;
   label: string;
 }> = [
-  { id: "connecting", label: "Connecting sources" },
-  { id: "collecting", label: "Collecting live signals" },
-  { id: "analyzing", label: "Analyzing market" },
-  { id: "competitors", label: "Comparing competitors" },
-  { id: "opportunities", label: "Building opportunities" },
-  { id: "generating", label: "Generating report" },
-  { id: "saving", label: "Saving to Brain" },
-  { id: "handoff", label: "Preparing handoff" },
+  { id: "engine", label: "Running research engine" },
+  { id: "syncing", label: "Syncing data sources" },
+  { id: "normalizing", label: "Normalizing signals" },
+  { id: "fusing", label: "Fusing intelligence" },
+  { id: "scoring", label: "Scoring confidence" },
+  { id: "recommendations", label: "Generating recommendations" },
+  { id: "building", label: "Building report" },
 ];
 
 export interface ResearchRunError {
   message: string;
   stage?: string;
   sourceErrors?: string[];
+}
+
+export interface FusionReportError {
+  message: string;
 }
 
 export function parseResearchApiError(

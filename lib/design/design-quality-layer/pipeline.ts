@@ -1,9 +1,9 @@
 import type { FashionDesignEngineResult } from "@/lib/design/fashion-design-engine/types";
 import { adjustCompositionForQuality } from "./adjust";
 import { renderPremiumGraphicSystems, countGraphicElements } from "./graphics/premium-graphics";
-import { validateDesignRules } from "./rules/design-rules";
+import { validateDesignRules, hasBlockingViolations } from "./rules/design-rules";
 import { scoreDesignQuality } from "./scoring/quality-score";
-import { selectCompositionTemplate } from "./templates/registry";
+import { selectCompositionTemplate, resolveTemplateIdFromPattern } from "./templates/registry";
 import type {
   DesignQualityLayerInput,
   DesignQualityLayerResult,
@@ -51,7 +51,15 @@ export function runDesignQualityLayer(
   while (attempts < maxAttempts) {
     attempts += 1;
 
-    template = selectCompositionTemplate({ engine, attempt: attempts });
+    const preferredTemplateId = input.fashionKnowledge
+      ? resolveTemplateIdFromPattern(input.fashionKnowledge.selectedPattern.layoutSystemId)
+      : undefined;
+
+    template = selectCompositionTemplate({
+      engine,
+      attempt: attempts,
+      preferredTemplateId,
+    });
     applied = template.apply({ engine, attempt: attempts });
 
     const layerInput: DesignQualityLayerInput = {
@@ -69,7 +77,14 @@ export function runDesignQualityLayer(
     const graphicCount = countGraphicElements(applied.graphicSpec) + 6;
     qualityScore = scoreDesignQuality(layerInput, violations, graphicCount);
 
-    if (qualityScore.passed && qualityScore.overall >= QUALITY_PASS_THRESHOLD) {
+    if (
+      qualityScore.passed &&
+      qualityScore.overall >= QUALITY_PASS_THRESHOLD &&
+      qualityScore.typographyQuality >= QUALITY_PASS_THRESHOLD &&
+      qualityScore.compositionQuality >= QUALITY_PASS_THRESHOLD &&
+      qualityScore.printReadiness >= 95 &&
+      !hasBlockingViolations(violations)
+    ) {
       break;
     }
 

@@ -25,11 +25,14 @@ export function ResearchStudioV3() {
     setRequest,
     isLoading,
     error: runError,
+    fusionError,
+    fusionRetrying,
     result,
     phase,
     runResearch,
     reset,
     retry,
+    retryFusionReport,
   } = useResearchRun();
 
   const {
@@ -127,10 +130,14 @@ export function ResearchStudioV3() {
               onSubmit={handleSubmit}
               isLoading={isLoading}
               error={runError}
+              fusionError={fusionError}
+              fusionRetrying={fusionRetrying}
               phase={phase}
               result={result}
+              providers={providers}
               onReset={reset}
               onRetry={retry}
+              onRetryFusion={() => void retryFusionReport()}
               onSelectMission={handleSelectMission}
             />
           </div>

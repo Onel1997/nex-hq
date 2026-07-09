@@ -2863,3 +2863,175 @@ body:has(.rs3) {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Phase 5.4: Fusion workflow + run coverage ── */
+
+.rs3-fusion-warning {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--rs3-radius);
+  border: 1px solid oklch(0.7 0.12 75 / 0.28);
+  background: oklch(0.62 0.12 75 / 0.08);
+}
+
+.rs3-fusion-warning-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: oklch(0.82 0.08 75);
+}
+
+.rs3-fusion-warning-copy strong {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.rs3-fusion-warning-copy p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: oklch(0.75 0.06 75);
+}
+
+.rs3-result-legacy-fallback {
+  margin-top: 0.5rem;
+  border: 1px solid var(--rs3-border-subtle);
+  border-radius: var(--rs3-radius);
+  background: oklch(0.11 0.013 275 / 0.55);
+}
+
+.rs3-result-legacy-fallback summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--rs3-text-muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.rs3-result-legacy-fallback summary::-webkit-details-marker {
+  display: none;
+}
+
+.rs3-result-legacy-fallback[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.rs3-result-legacy-fallback .rs3-result-sections {
+  padding: 0 0.9rem 0.9rem;
+  margin-bottom: 0;
+}
+
+.rs3-result-sections-compact .rs3-result-section {
+  padding: 0.75rem 0.85rem;
+}
+
+.rs3-run-coverage {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--rs3-border-subtle);
+  border-radius: var(--rs3-radius);
+  background: oklch(0.115 0.014 275 / 0.65);
+}
+
+.rs3-run-coverage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.rs3-run-coverage-head h3 {
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-run-coverage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.rs3-run-coverage-summary .rs3-run-coverage-live {
+  color: var(--rs3-live);
+}
+
+.rs3-run-coverage-summary .rs3-run-coverage-sim {
+  color: var(--rs3-text-muted);
+}
+
+.rs3-run-coverage-summary .rs3-run-coverage-offline {
+  color: oklch(0.7 0.06 25);
+}
+
+.rs3-run-coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.45rem;
+}
+
+.rs3-run-coverage-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--rs3-border-subtle);
+  background: oklch(0.1 0.012 275 / 0.7);
+}
+
+.rs3-run-coverage-name {
+  font-size: 0.75rem;
+  color: var(--rs3-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rs3-run-coverage-mode {
+  flex-shrink: 0;
+  padding: 0.12rem 0.38rem;
+  border-radius: 999px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rs3-run-coverage-mode.rs3-run-coverage-live {
+  color: var(--rs3-live);
+  background: oklch(0.55 0.12 155 / 0.12);
+}
+
+.rs3-run-coverage-mode.rs3-run-coverage-sim {
+  color: var(--rs3-text-faint);
+  background: oklch(0.2 0.015 275);
+}
+
+.rs3-run-coverage-mode.rs3-run-coverage-offline {
+  color: oklch(0.72 0.06 25);
+  background: oklch(0.55 0.1 25 / 0.1);
+}
+

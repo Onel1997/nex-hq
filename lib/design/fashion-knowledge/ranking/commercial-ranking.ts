@@ -2,7 +2,7 @@ import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { DesignConcept } from "@/lib/design/ai-designer/types";
 import type { FashionDesignEngineResult } from "@/lib/design/fashion-design-engine/types";
 import type { CommercialDesignRanking } from "../types";
-import { COMMERCIAL_EXPORT_THRESHOLD } from "../types";
+import { COMMERCIAL_EXPORT_THRESHOLD, meetsExportScoreThresholds } from "../types";
 
 export interface CommercialRankingInput {
   brief: DesignStudioBrief;
@@ -55,7 +55,19 @@ export function scoreCommercialDesignRanking(
     commercial,
     brandDna,
     overall,
-    exportApproved: overall >= COMMERCIAL_EXPORT_THRESHOLD,
+    exportApproved: meetsExportScoreThresholds({
+      typography,
+      composition,
+      fashion,
+      originality,
+      luxury,
+      printability,
+      commercial,
+      brandDna,
+      overall,
+      exportApproved: false,
+      explanations,
+    }),
     explanations,
   };
 }

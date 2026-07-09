@@ -27,7 +27,7 @@ export function ResearchStudioRunning({ phase }: ResearchStudioRunningProps) {
           <div>
             <h2 className="rs3-run-title">Research in progress</h2>
             <p className="rs3-run-subtitle">
-              Live intelligence is flowing into your report.
+              Fusing live intelligence into your report.
             </p>
           </div>
         </div>

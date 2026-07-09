@@ -7,6 +7,7 @@ import { getGraphicSystem } from "../knowledge/graphic-systems";
 import { TYPOGRAPHY_KNOWLEDGE } from "../knowledge/typography";
 import { FASHION_PSYCHOLOGY } from "../knowledge/fashion-psychology";
 import { COMMERCIAL_FASHION_RULES } from "../knowledge/commercial-rules";
+import { applyPatternLayoutToEngine } from "../apply-pattern-layout";
 import { selectDesignPattern, selectDesignPatternVariant } from "../design-library";
 import type { DesignPatternTemplate, FashionKnowledgeDecision, FashionKnowledgeQuery } from "../types";
 
@@ -126,7 +127,7 @@ export function applyFashionKnowledgeToEngine(
     applied.compositionSpec.score + Math.round((pattern.commercialScore - 85) * 0.3),
   );
 
-  return applied;
+  return applyPatternLayoutToEngine(applied, pattern);
 }
 
 export function getPatternForIteration(

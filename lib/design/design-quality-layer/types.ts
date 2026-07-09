@@ -5,10 +5,11 @@ import type {
   LayoutSpec,
   TypographySpec,
 } from "@/lib/design/fashion-design-engine/types";
+import type { FashionKnowledgePipelineResult } from "@/lib/design/fashion-knowledge/types";
 
 export const DESIGN_QUALITY_LAYER_VERSION = "1.0.0";
-export const QUALITY_PASS_THRESHOLD = 80;
-export const MAX_QUALITY_ATTEMPTS = 3;
+export const QUALITY_PASS_THRESHOLD = 90;
+export const MAX_QUALITY_ATTEMPTS = 20;
 
 export type CompositionTemplateId =
   | "spine-typography"
@@ -37,6 +38,7 @@ export interface DesignQualityLayerInput {
   engine: FashionDesignEngineResult;
   generationMode?: "draft" | "production";
   maxAttempts?: number;
+  fashionKnowledge?: FashionKnowledgePipelineResult;
 }
 
 export interface DesignQualityLayerResult {
@@ -58,6 +60,7 @@ export interface DesignQualityLayerResult {
 export interface CompositionTemplateContext {
   engine: FashionDesignEngineResult;
   attempt: number;
+  preferredTemplateId?: CompositionTemplateId;
 }
 
 export interface CompositionTemplate {
