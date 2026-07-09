@@ -1,9 +1,6 @@
 import { AGENT_IDS, type AgentId } from "@/lib/constants/agents";
 import { getAgentColor } from "@/lib/facility/facility-theme";
-import {
-  FACILITY_ROUTES,
-  FACILITY_WINGS,
-} from "@/lib/facility/facility-routes";
+import { FACILITY_ROUTES } from "@/lib/facility/facility-routes";
 import {
   AGENT_STUDIO_NAMES,
   AGENT_WORKSPACE_ROUTES,
@@ -14,10 +11,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
-  Bot,
   Brain,
-  Building2,
-  ClipboardList,
   Crown,
   FileText,
   Home,
@@ -32,30 +26,21 @@ import {
   BookOpen,
 } from "lucide-react";
 
-export type HqSectionId =
-  | "facility"
-  | "agents"
-  | "missions"
-  | "reports"
-  | "knowledge"
-  | "settings";
+export type HqSidebarSectionId = "facility" | "agents" | "settings";
 
-export const HQ_SECTION_LABELS: Record<HqSectionId, string> = {
-  facility: "Facility",
-  agents: "Agents",
-  missions: "Mission Control",
-  reports: "Reports",
-  knowledge: "Knowledge Vault",
-  settings: "Settings",
-};
-
-export interface ContextNavItem {
+export interface SidebarNavItem {
   id: string;
   href: string;
   label: string;
   icon: LucideIcon;
   accent?: string;
   isActive?: (pathname: string) => boolean;
+}
+
+export interface HqSidebarSection {
+  id: HqSidebarSectionId;
+  label: string;
+  items: SidebarNavItem[];
 }
 
 const AGENT_ICONS: Record<AgentId, LucideIcon> = {
@@ -70,167 +55,126 @@ const AGENT_ICONS: Record<AgentId, LucideIcon> = {
 
 const COMMERCE_LAB_COLOR = "#F97316";
 
-export function resolveHqSection(pathname: string): HqSectionId {
-  if (pathname.startsWith(FACILITY_ROUTES.settings)) return "settings";
-  if (
-    pathname.startsWith(FACILITY_ROUTES.missions) ||
-    pathname.startsWith("/tasks")
-  ) {
-    return "missions";
-  }
-  if (
-    pathname.startsWith(FACILITY_ROUTES.reports) ||
-    pathname.startsWith("/reports")
-  ) {
-    return "reports";
-  }
-  if (
-    pathname.startsWith(FACILITY_ROUTES.knowledge) ||
-    pathname.startsWith(FACILITY_ROUTES.brain) ||
-    pathname.startsWith("/brain")
-  ) {
-    return "knowledge";
-  }
-  if (
-    pathname.startsWith(FACILITY_ROUTES.agents) ||
-    pathname.startsWith("/agents")
-  ) {
-    return "agents";
+const FACILITY_ITEMS: SidebarNavItem[] = [
+  {
+    id: "command-center",
+    href: FACILITY_ROUTES.home,
+    label: "Command Center",
+    icon: Home,
+    isActive: (pathname) => pathname === "/",
+  },
+  {
+    id: "mission-control",
+    href: FACILITY_ROUTES.missions,
+    label: "Mission Control",
+    icon: Target,
+    isActive: (pathname) =>
+      pathname.startsWith(FACILITY_ROUTES.missions) ||
+      pathname.startsWith("/tasks"),
+  },
+  {
+    id: "reports-center",
+    href: FACILITY_ROUTES.reports,
+    label: "Reports Center",
+    icon: FileText,
+    isActive: (pathname) =>
+      pathname.startsWith(FACILITY_ROUTES.reports) ||
+      pathname.startsWith("/reports"),
+  },
+  {
+    id: "knowledge-vault",
+    href: FACILITY_ROUTES.knowledge,
+    label: "Knowledge Vault",
+    icon: BookOpen,
+    isActive: (pathname) => pathname.startsWith(FACILITY_ROUTES.knowledge),
+  },
+  {
+    id: "brain-core",
+    href: FACILITY_ROUTES.brain,
+    label: "Brain Core",
+    icon: Brain,
+    isActive: (pathname) =>
+      pathname.startsWith(FACILITY_ROUTES.brain) ||
+      pathname.startsWith("/brain"),
+  },
+  {
+    id: "analytics-chamber",
+    href: FACILITY_ROUTES.analytics,
+    label: "Analytics Chamber",
+    icon: BarChart3,
+    isActive: (pathname) => pathname.startsWith(FACILITY_ROUTES.analytics),
+  },
+];
+
+const AGENT_ITEMS: SidebarNavItem[] = [
+  ...AGENT_IDS.map((id) => ({
+    id,
+    href: AGENT_WORKSPACE_ROUTES[id],
+    label: AGENT_STUDIO_NAMES[id],
+    icon: AGENT_ICONS[id],
+    accent: getAgentColor(id),
+    isActive: (pathname: string) =>
+      pathname === AGENT_WORKSPACE_ROUTES[id] ||
+      pathname.startsWith(`${AGENT_WORKSPACE_ROUTES[id]}/`),
+  })),
+  {
+    id: "commerce",
+    href: COMMERCE_LAB_ROUTE,
+    label: "Commerce Lab",
+    icon: BarChart3,
+    accent: COMMERCE_LAB_COLOR,
+    isActive: (pathname: string) => isCommerceLabPath(pathname),
+  },
+];
+
+const SETTINGS_ITEMS: SidebarNavItem[] = [
+  {
+    id: "settings-general",
+    href: FACILITY_ROUTES.settings,
+    label: "General",
+    icon: Settings,
+    isActive: (pathname: string) => pathname.startsWith(FACILITY_ROUTES.settings),
+  },
+];
+
+export const HQ_SIDEBAR_SECTIONS: HqSidebarSection[] = [
+  { id: "facility", label: "Facility", items: FACILITY_ITEMS },
+  { id: "agents", label: "AI Agents", items: AGENT_ITEMS },
+  { id: "settings", label: "Settings", items: SETTINGS_ITEMS },
+];
+
+export const HQ_SIDEBAR_SECTION_DEFAULTS: Record<HqSidebarSectionId, boolean> = {
+  facility: true,
+  agents: true,
+  settings: false,
+};
+
+export function isSidebarNavItemActive(
+  pathname: string,
+  item: SidebarNavItem,
+): boolean {
+  if (item.isActive) return item.isActive(pathname);
+  if (item.href === "/") return pathname === "/";
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
+}
+
+export function resolveActiveSidebarSection(
+  pathname: string,
+): HqSidebarSectionId {
+  for (const section of HQ_SIDEBAR_SECTIONS) {
+    if (section.items.some((item) => isSidebarNavItemActive(pathname, item))) {
+      return section.id;
+    }
   }
   return "facility";
 }
 
-export function getContextNavItems(section: HqSectionId): ContextNavItem[] {
-  switch (section) {
-    case "agents":
-      return [
-        ...AGENT_IDS.map((id) => ({
-          id,
-          href: AGENT_WORKSPACE_ROUTES[id],
-          label: AGENT_STUDIO_NAMES[id],
-          icon: AGENT_ICONS[id],
-          accent: getAgentColor(id),
-          isActive: (pathname: string) =>
-            pathname === AGENT_WORKSPACE_ROUTES[id] ||
-            pathname.startsWith(`${AGENT_WORKSPACE_ROUTES[id]}/`),
-        })),
-        {
-          id: "commerce",
-          href: COMMERCE_LAB_ROUTE,
-          label: "Commerce Lab",
-          icon: BarChart3,
-          accent: COMMERCE_LAB_COLOR,
-          isActive: (pathname: string) => isCommerceLabPath(pathname),
-        },
-      ];
-    case "missions":
-      return [
-        {
-          id: "missions",
-          href: FACILITY_ROUTES.missions,
-          label: "Mission Control",
-          icon: Target,
-          isActive: (pathname: string) =>
-            pathname.startsWith(FACILITY_ROUTES.missions) ||
-            pathname.startsWith("/tasks"),
-        },
-        {
-          id: "tasks",
-          href: FACILITY_ROUTES.tasks,
-          label: "Task Queue",
-          icon: ClipboardList,
-          isActive: (pathname: string) => pathname.startsWith("/tasks"),
-        },
-      ];
-    case "reports":
-      return [
-        {
-          id: "reports-center",
-          href: FACILITY_ROUTES.reports,
-          label: "Reports Center",
-          icon: FileText,
-          isActive: (pathname: string) =>
-            pathname.startsWith(FACILITY_ROUTES.reports) ||
-            pathname.startsWith("/reports"),
-        },
-      ];
-    case "knowledge":
-      return [
-        {
-          id: "knowledge-vault",
-          href: FACILITY_ROUTES.knowledge,
-          label: "Knowledge Vault",
-          icon: BookOpen,
-          isActive: (pathname: string) =>
-            pathname.startsWith(FACILITY_ROUTES.knowledge),
-        },
-        {
-          id: "brain-core",
-          href: FACILITY_ROUTES.brain,
-          label: "Brain Core",
-          icon: Brain,
-          isActive: (pathname: string) =>
-            pathname.startsWith(FACILITY_ROUTES.brain) ||
-            pathname.startsWith("/brain"),
-        },
-      ];
-    case "settings":
-      return [
-        {
-          id: "settings",
-          href: FACILITY_ROUTES.settings,
-          label: "General",
-          icon: Settings,
-          isActive: (pathname: string) =>
-            pathname.startsWith(FACILITY_ROUTES.settings),
-        },
-      ];
-    case "facility":
-    default:
-      return [
-        {
-          id: "overview",
-          href: FACILITY_ROUTES.home,
-          label: "Command Center",
-          icon: Home,
-          isActive: (pathname: string) => pathname === "/",
-        },
-        ...FACILITY_WINGS.filter((wing) => wing.href != null).map((wing) => ({
-          id: wing.id,
-          href: wing.href!,
-          label: wing.label,
-          icon: wingIcon(wing.id),
-          isActive: (pathname: string) =>
-            pathname === wing.href || pathname.startsWith(`${wing.href}/`),
-        })),
-      ];
-  }
-}
-
-function wingIcon(
-  id: (typeof FACILITY_WINGS)[number]["id"],
-): LucideIcon {
-  const map: Record<(typeof FACILITY_WINGS)[number]["id"], LucideIcon> = {
-    agents: Bot,
-    "mission-control": Target,
-    reports: FileText,
-    knowledge: BookOpen,
-    "brain-core": Brain,
-    analytics: BarChart3,
-  };
-  return map[id];
-}
-
-export function resolveContextNavActiveItem(
+export function resolveActiveSidebarItem(
   pathname: string,
-  items: ContextNavItem[],
-): ContextNavItem | null {
-  for (const item of items) {
-    if (item.isActive?.(pathname)) return item;
-  }
-  for (const item of items) {
-    if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
-      return item;
+): SidebarNavItem | null {
+  for (const section of HQ_SIDEBAR_SECTIONS) {
+    for (const item of section.items) {
+      if (isSidebarNavItemActive(pathname, item)) return item;
     }
   }
   return null;
@@ -243,29 +187,8 @@ export function resolveAgentNavActiveId(
   return getAgentFromWorkspacePath(pathname);
 }
 
-/** Level 1 rail — icon mapping aligned with HQ sections */
-export const HQ_RAIL_ITEMS = [
-  { id: "facility" as const, href: FACILITY_ROUTES.home, icon: Building2, label: "Facility" },
-  { id: "agents" as const, href: FACILITY_ROUTES.agents, icon: Bot, label: "Agents" },
-  { id: "missions" as const, href: FACILITY_ROUTES.missions, icon: Target, label: "Mission Control" },
-  { id: "reports" as const, href: FACILITY_ROUTES.reports, icon: FileText, label: "Reports" },
-  { id: "knowledge" as const, href: FACILITY_ROUTES.knowledge, icon: BookOpen, label: "Knowledge Vault" },
-  { id: "settings" as const, href: FACILITY_ROUTES.settings, icon: Settings, label: "Settings" },
-] as const;
+/** @deprecated Use HQ_SIDEBAR_SECTIONS */
+export type HqSectionId = HqSidebarSectionId | "missions" | "reports" | "knowledge";
 
-export function isHqRailItemActive(
-  item: (typeof HQ_RAIL_ITEMS)[number],
-  pathname: string,
-): boolean {
-  const section = resolveHqSection(pathname);
-  return item.id === section;
-}
-
-/** Agent Wing dashboard — hide level-2 nav; cards replace the agent list. */
-export function isAgentWingOverviewPath(pathname: string): boolean {
-  return pathname === FACILITY_ROUTES.agents;
-}
-
-export function shouldShowContextSidebar(pathname: string): boolean {
-  return !isAgentWingOverviewPath(pathname);
-}
+/** @deprecated Use SidebarNavItem */
+export type ContextNavItem = SidebarNavItem;

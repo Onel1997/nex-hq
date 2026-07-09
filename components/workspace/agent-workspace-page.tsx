@@ -1,6 +1,5 @@
 "use client";
 
-import { ResearchContextPanel } from "@/components/research/research-context-panel";
 import { ResearchIntelligenceFeed } from "@/components/research/research-intelligence-feed";
 import { AgentStudio } from "@/components/workspace/agent-studio";
 import { useWorkspaceContext } from "@/components/workspace/use-workspace-context";
@@ -15,13 +14,13 @@ interface AgentWorkspacePageProps {
 }
 
 function ResearchWorkspaceShell({ children }: { children: ReactNode }) {
-  const { data, loading } = useWorkspaceContext("research");
+  const { data } = useWorkspaceContext("research");
 
   return (
     <WorkspaceShell
       agentId="research"
       className="research-hq-shell"
-      contextPanel={<ResearchContextPanel data={data} loading={loading} />}
+      hideContextPanel
       timeline={<ResearchIntelligenceFeed data={data} />}
     >
       <AgentStudio agentId="research" header={children} hideSections />

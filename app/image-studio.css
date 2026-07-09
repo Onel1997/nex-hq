@@ -332,30 +332,50 @@ body:has(.image-studio-shell) {
 
 .is-body {
   display: grid;
-  grid-template-columns: var(--is-sidebar-w) minmax(0, 1fr) var(--is-inspector-w);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
 }
 
-@media (max-width: 1280px) {
-  .is-body { grid-template-columns: var(--is-sidebar-w) minmax(0, 1fr); }
-  .is-inspector { display: none; }
-}
-
-@media (max-width: 768px) {
-  .is-body { grid-template-columns: 1fr; }
-  .is-sidebar { display: none; }
-}
-
-/* ── Sidebar: mission asset cards ── */
-
 .is-sidebar {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--is-border-soft);
+  border-right: none;
+  border-bottom: 1px solid var(--is-border-soft);
   background: rgb(12 15 20 / 0.65);
-  overflow-y: auto;
+  max-height: 220px;
+  overflow: hidden;
+}
+
+.is-sidebar .is-asset-list {
+  display: flex;
+  flex-direction: row;
+  gap: 0.55rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.is-inspector {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--is-border-soft);
+  max-height: min(42vh, 420px);
+  overflow: auto;
+}
+
+@media (max-width: 1280px) {
+  .is-inspector {
+    display: flex;
+  }
+}
+
+@media (max-width: 768px) {
+  .is-sidebar {
+    max-height: 180px;
+  }
 }
 
 .is-sidebar-header {

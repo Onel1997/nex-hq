@@ -59,14 +59,83 @@ body:has(.dsv2-root) {
   overflow: hidden;
 }
 
+.dsv2-workspace-single {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .dsv2-center {
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--dsv2-bg);
-  border-left: 1px solid var(--dsv2-border);
+  border-left: none;
   border-right: 1px solid var(--dsv2-border);
+}
+
+.dsv2-section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--dsv2-border);
+  background: var(--dsv2-surface);
+}
+
+.dsv2-section-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.38rem 0.62rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dsv2-text-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.dsv2-section-tab:hover:not(:disabled) {
+  color: var(--dsv2-text);
+  background: rgb(255 255 255 / 0.04);
+}
+
+.dsv2-section-tab.is-active {
+  color: var(--dsv2-text);
+  border-color: rgb(99 227 227 / 0.22);
+  background: rgb(99 227 227 / 0.08);
+}
+
+.dsv2-section-tab.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dsv2-section-tab-badge {
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  background: rgb(255 255 255 / 0.06);
+}
+
+.dsv2-section-tab-soon {
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.dsv2-section-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.85rem;
 }
 
 /* ── Left sidebar ── */

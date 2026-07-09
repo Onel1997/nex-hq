@@ -1,23 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useWorkspace } from "@/lib/i18n";
 import { ResearchStudioAtmosphere } from "./research-studio-atmosphere";
 import { ResearchStudioDataSourcesCenter } from "./research-studio-data-sources-center";
 import { ResearchStudioWorkspace } from "./research-studio-workspace";
 import { useResearchRun } from "./use-research-run";
-import { ResearchStudioSidebarLeft } from "./research-studio-sidebar-left";
-import { ResearchStudioSidebarRight } from "./research-studio-sidebar-right";
 import { useDataSources } from "./use-data-sources";
 import { ChevronRight, Database, Home, Sparkles } from "lucide-react";
 
-const MOBILE_BREAKPOINT = 1100;
-
 export function ResearchStudioV3() {
   const workspace = useWorkspace();
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
   const [dataSourcesOpen, setDataSourcesOpen] = useState(false);
 
   const {
@@ -38,29 +32,11 @@ export function ResearchStudioV3() {
   const {
     snapshot,
     settings,
-    loading: sourcesLoading,
-    refreshing,
     settingsLoading,
-    error: sourcesError,
-    refreshAll,
-    refreshProvider,
     openDataSourcesCenter,
     refreshDataSourcesCenter,
     runProviderAction,
   } = useDataSources();
-
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
-    const apply = () => {
-      if (mq.matches) {
-        setLeftCollapsed(true);
-        setRightCollapsed(true);
-      }
-    };
-    apply();
-    mq.addEventListener("change", apply);
-    return () => mq.removeEventListener("change", apply);
-  }, []);
 
   const handleSelectMission = useCallback(
     (prompt: string) => {
@@ -117,12 +93,7 @@ export function ResearchStudioV3() {
       </header>
 
       <div className="rs3-body">
-        <ResearchStudioSidebarLeft
-          collapsed={leftCollapsed}
-          onToggleCollapse={() => setLeftCollapsed((v) => !v)}
-        />
-
-        <main className="rs3-main">
+        <main className="rs3-main rs3-main-full">
           <div className="rs3-main-scroll">
             <ResearchStudioWorkspace
               request={request}
@@ -142,18 +113,6 @@ export function ResearchStudioV3() {
             />
           </div>
         </main>
-
-        <ResearchStudioSidebarRight
-          collapsed={rightCollapsed}
-          onToggleCollapse={() => setRightCollapsed((v) => !v)}
-          providers={providers}
-          loading={sourcesLoading}
-          refreshing={refreshing}
-          error={sourcesError}
-          onRefreshAll={() => void refreshAll()}
-          onRefreshProvider={(id) => void refreshProvider(id)}
-          onOpenDataSources={() => void handleOpenDataSources()}
-        />
       </div>
 
       <ResearchStudioDataSourcesCenter

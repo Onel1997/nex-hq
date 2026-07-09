@@ -1,6 +1,5 @@
 "use client";
 
-import { CommerceLabSidebar } from "@/components/commerce/commerce-lab-sidebar";
 import { useCommerceLab } from "@/components/commerce/use-commerce-lab";
 import type {
   CommerceLabCategoryRow,
@@ -103,10 +102,6 @@ export function CommerceLabCenter() {
               <CommerceLabDashboard data={data} />
             ) : null}
           </main>
-
-          {data ? (
-            <CommerceLabSidebar data={data} />
-          ) : null}
         </div>
       </div>
     </div>
