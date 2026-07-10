@@ -1,3 +1,5 @@
+import { researchStudio } from "./research-studio";
+
 export const research = {
   page: {
     title: "Research-Agent",
@@ -344,4 +346,5 @@ export const research = {
     invalidRequest: "Ungültige Anfrage",
     unexpected: "Ein unerwarteter Fehler ist aufgetreten",
   },
+  studio: researchStudio,
 } as const;

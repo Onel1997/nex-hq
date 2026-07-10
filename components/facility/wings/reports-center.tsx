@@ -9,6 +9,9 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FacilityDepartmentShell } from "@/components/facility/facility-department-shell";
+import { useDictionary } from "@/lib/i18n";
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/get-dictionary";
 import type {
   ReportsCenterAgentTab,
   ReportsCenterDesignConceptSummary,
@@ -34,14 +37,6 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-const STATUS_LABELS: Record<ReportsCenterReport["status"], string> = {
-  approved: "Approved",
-  pending_review: "Review",
-  draft: "Draft",
-  archived: "Archived",
-  classified: "Classified",
-};
-
 const AGENT_TAB_ICONS: Record<
   ReportsCenterAgentTab,
   React.ComponentType<{ className?: string }>
@@ -55,13 +50,16 @@ const AGENT_TAB_ICONS: Record<
 
 export function ReportsCenter() {
   const { data, loading, error, refresh } = useReportsCenter();
+  const { facility } = useDictionary();
+  const rc = facility.reportsCenter;
+  const shared = facility.shared;
 
   return (
     <FacilityDepartmentShell
       wingId="reports"
-      title="Reports Center"
+      title={rc.title}
       icon={FileText}
-      subtitle="Milaene intelligence layer — live agent output only by default"
+      subtitle={rc.subtitle}
       className="rc-shell"
       headerActions={
         <button
@@ -75,20 +73,20 @@ export function ReportsCenter() {
           ) : (
             <RefreshCw className="size-3.5" />
           )}
-          Sync Reports
+          {shared.syncReports}
         </button>
       }
     >
       {loading && !data ? (
         <div className="rc-loading">
           <Loader2 className="size-8 animate-spin text-[var(--rc-accent)]" />
-          <p>Opening briefing room…</p>
+          <p>{rc.openingBriefing}</p>
         </div>
       ) : error ? (
         <div className="rc-error">
           <p>{error}</p>
           <button type="button" onClick={() => void refresh()}>
-            Retry
+            {shared.retry}
           </button>
         </div>
       ) : data ? (
@@ -99,6 +97,8 @@ export function ReportsCenter() {
 }
 
 function ReportsBriefingRoom({ data }: { data: ReportsCenterPayload }) {
+  const { facility } = useDictionary();
+  const rc = facility.reportsCenter;
   const [agentTab, setAgentTab] = useState<ReportsCenterAgentTab | "all">("all");
   const [sourceFilter, setSourceFilter] = useState<ReportsCenterSource | "all">("live");
   const [showLegacyArchive, setShowLegacyArchive] = useState(false);
@@ -126,7 +126,7 @@ function ReportsBriefingRoom({ data }: { data: ReportsCenterPayload }) {
       <CommandBar bar={data.commandBar} />
 
       <div className="rc-filter-row">
-        <div className="rc-type-bar" role="tablist" aria-label="Agent tabs">
+        <div className="rc-type-bar" role="tablist" aria-label={rc.agentTabsAria}>
           {data.agentTabs.map((tab) => (
             <button
               key={tab.id}
@@ -147,7 +147,7 @@ function ReportsBriefingRoom({ data }: { data: ReportsCenterPayload }) {
           ))}
         </div>
 
-        <div className="rc-source-bar" role="tablist" aria-label="Source filters">
+        <div className="rc-source-bar" role="tablist" aria-label={rc.sourceFiltersAria}>
           {data.sourceFilters.map((filter) => (
             <button
               key={filter.id}
@@ -180,13 +180,11 @@ function ReportsBriefingRoom({ data }: { data: ReportsCenterPayload }) {
           }}
         >
           <Archive className="size-3.5" />
-          Archive Legacy Reports
+          {rc.archiveLegacy}
           <span>{data.legacyArchive.length}</span>
         </button>
         {sourceFilter === "live" && !showLegacyArchive ? (
-          <p className="rc-archive-hint">
-            Showing live intelligence only — seed, demo and legacy hidden.
-          </p>
+          <p className="rc-archive-hint">{rc.liveOnlyHint}</p>
         ) : null}
       </div>
 
@@ -198,29 +196,34 @@ function ReportsBriefingRoom({ data }: { data: ReportsCenterPayload }) {
               onBack={() => setSelected(null)}
             />
           ) : (
-            <section className="rc-reports-section" aria-label="Reports">
+            <section className="rc-reports-section" aria-label={rc.reportsSectionAria}>
               <header className="rc-section-header">
                 <FileText className="size-4" />
                 <h2>
                   {showLegacyArchive
-                    ? "Legacy Archive"
+                    ? rc.legacyArchive
                     : sourceFilter === "live"
-                      ? "Live Intelligence"
-                      : `${REPORT_SOURCE_LABELS[sourceFilter as ReportsCenterSource] ?? "All"} Reports`}
+                      ? rc.liveIntelligence
+                      : sourceFilter === "all"
+                        ? rc.allReports
+                        : `${REPORT_SOURCE_LABELS[sourceFilter as ReportsCenterSource] ?? rc.filterAll} ${rc.reportsSectionAria}`}
                 </h2>
-                <span>{filtered.length} reports</span>
+                <span>{rc.reportsCount.replace("{count}", String(filtered.length))}</span>
               </header>
 
               {filtered.length === 0 ? (
                 <div className="rc-empty">
-                  <p>No live reports in this view.</p>
+                  <p>{rc.noLiveReports}</p>
                   {data.legacyArchive.length > 0 ? (
                     <button
                       type="button"
                       className="rc-archive-link"
                       onClick={() => setShowLegacyArchive(true)}
                     >
-                      Browse {data.legacyArchive.length} archived reports
+                      {rc.browseArchived.replace(
+                        "{count}",
+                        String(data.legacyArchive.length),
+                      )}
                     </button>
                   ) : null}
                 </div>
@@ -249,11 +252,13 @@ function ReportsBriefingRoom({ data }: { data: ReportsCenterPayload }) {
 }
 
 function CommandBar({ bar }: { bar: ReportsCenterPayload["commandBar"] }) {
+  const { facility } = useDictionary();
+  const rc = facility.reportsCenter;
   const items = [
-    { label: "Live Reports", value: bar.liveReports, glow: true },
-    { label: "Approved", value: bar.approved },
-    { label: "Pending Review", value: bar.pendingReview, alert: bar.pendingReview > 0 },
-    { label: "Legacy Archived", value: bar.legacyArchived, muted: true },
+    { label: rc.liveReports, value: bar.liveReports, glow: true },
+    { label: rc.approved, value: bar.approved },
+    { label: rc.pendingReview, value: bar.pendingReview, alert: bar.pendingReview > 0 },
+    { label: rc.legacyArchived, value: bar.legacyArchived, muted: true },
   ];
 
   return (
@@ -283,6 +288,9 @@ function ReportCard({
   report: ReportsCenterReport;
   onSelect: () => void;
 }) {
+  const { facility } = useDictionary();
+  const statusLabels = facility.shared.reportStatus;
+  const rc = facility.reportsCenter;
   const Icon = AGENT_TAB_ICONS[report.agentTab];
 
   return (
@@ -307,7 +315,7 @@ function ReportCard({
 
       <footer className="rc-card-footer">
         <span className={cn("rc-card-status", `rc-status-${report.status}`)}>
-          {STATUS_LABELS[report.status]}
+          {statusLabels[report.status]}
         </span>
         <span>{report.agent}</span>
         <span>{Math.round(report.confidence * 100)}%</span>
@@ -323,7 +331,7 @@ function ReportCard({
       {report.tags.length > 0 || report.designResearch?.designCount ? (
         <div className="rc-card-tags">
           {report.designResearch?.designCount ? (
-            <span>{report.designResearch.designCount} designs</span>
+            <span>{rc.designsCount.replace("{count}", String(report.designResearch.designCount))}</span>
           ) : null}
           {report.tags.map((tag) => (
             <span key={tag}>{tag}</span>
@@ -341,6 +349,9 @@ function ReportPreview({
   report: ReportsCenterReport;
   onBack: () => void;
 }) {
+  const { facility } = useDictionary();
+  const rc = facility.reportsCenter;
+  const statusLabels = facility.shared.reportStatus;
   const Icon = AGENT_TAB_ICONS[report.agentTab];
   const designResearch = report.designResearch;
   const hasStructuredDesign =
@@ -377,7 +388,7 @@ function ReportPreview({
     <article className="rc-preview">
       <button type="button" className="rc-preview-back" onClick={onBack}>
         <ArrowLeft className="size-3.5" />
-        Back to reports
+        Zurück zu Berichten
       </button>
 
       <header className="rc-preview-header">
@@ -392,7 +403,7 @@ function ReportPreview({
                 {REPORT_SOURCE_LABELS[report.source]}
               </span>
               <span className={cn("rc-card-status", `rc-status-${report.status}`)}>
-                {STATUS_LABELS[report.status]}
+                {statusLabels[report.status]}
               </span>
             </div>
             <h2>{displayTitle}</h2>
@@ -415,8 +426,8 @@ function ReportPreview({
           <div className="rc-preview-header-actions">
             <DesignStudioHandoffButton
               reportId={report.reportId}
-              label="Send to Design Studio"
-              openLabel="Open in Design Studio"
+              label={rc.sendToDesignStudio}
+              openLabel={rc.openInDesignStudio}
               variant="primary"
               navigateOnSuccess
             />
@@ -440,11 +451,11 @@ function ReportPreview({
           />
         ) : (
           <>
-            <PreviewSection title="Executive Summary">
+            <PreviewSection title={rc.executiveSummary}>
               <p>{report.preview.executiveSummary}</p>
             </PreviewSection>
 
-            <PreviewSection title="Key Findings">
+            <PreviewSection title={rc.keyFindings}>
               <ul>
                 {report.preview.keyFindings.map((finding) => (
                   <li key={finding}>{finding}</li>
@@ -452,7 +463,7 @@ function ReportPreview({
               </ul>
             </PreviewSection>
 
-            <PreviewSection title="Recommendations">
+            <PreviewSection title={rc.recommendations}>
               <ul>
                 {report.preview.recommendations.map((rec) => (
                   <li key={rec}>{rec}</li>
@@ -461,7 +472,7 @@ function ReportPreview({
             </PreviewSection>
 
             <div className="rc-preview-columns">
-              <PreviewSection title="Linked Missions">
+              <PreviewSection title={rc.linkedMissions}>
                 {report.preview.linkedMissions.length > 0 ? (
                   <ul className="rc-linked-list">
                     {report.preview.linkedMissions.map((mission) => (
@@ -472,11 +483,11 @@ function ReportPreview({
                     ))}
                   </ul>
                 ) : (
-                  <p className="rc-preview-muted">No linked missions</p>
+                  <p className="rc-preview-muted">{rc.noLinkedMissions}</p>
                 )}
               </PreviewSection>
 
-              <PreviewSection title="Connected Departments">
+              <PreviewSection title={rc.connectedDepartments}>
                 <div className="rc-dept-chips">
                   {report.preview.connectedDepartments.map((dept) => (
                     <span key={dept}>{dept}</span>
@@ -518,20 +529,22 @@ function DesignResearchPreview({
   designResearch: ReportsCenterDesignResearch;
   displayTitle: string;
 }) {
+  const { facility } = useDictionary();
+  const rc = facility.reportsCenter;
   const collection = designResearch.collection;
   const collectionLabel = collection?.name?.trim() || displayTitle;
 
   return (
-    <section className="rc-design-research" aria-label="Design collection">
+    <section className="rc-design-research" aria-label={rc.designCollection}>
       <header className="rc-design-research-header">
         <div>
-          <h3>Design Collection</h3>
+          <h3>{rc.designCollection}</h3>
           <p className="rc-design-collection-name">{collectionLabel}</p>
         </div>
         <DesignStudioHandoffButton
           reportId={reportId}
           mode="all"
-          label="Send full collection to Design Studio"
+          label={rc.sendFullCollection}
           variant="collection"
         />
       </header>
@@ -592,6 +605,8 @@ function DesignConceptCard({
   reportId: string;
   design: ReportsCenterDesignConceptSummary;
 }) {
+  const { facility } = useDictionary();
+  const rc = facility.reportsCenter;
   return (
     <article
       className={cn("rc-design-card", design.isHero && "rc-design-card-hero")}
@@ -602,55 +617,55 @@ function DesignConceptCard({
           <p className="rc-design-card-meta">
             <code>{design.designId}</code>
             <span>{design.collectionRole}</span>
-            {design.isHero ? <span className="rc-design-hero-badge">Hero</span> : null}
+            {design.isHero ? <span className="rc-design-hero-badge">{rc.heroBadge}</span> : null}
           </p>
         </div>
         <DesignStudioHandoffButton
           reportId={reportId}
           designId={design.designId}
-          label="Send to Design Studio"
+          label={rc.sendToDesignStudio}
           variant="design"
         />
       </header>
 
       <dl className="rc-design-spec-grid">
         <div>
-          <dt>Product</dt>
+          <dt>{rc.specProduct}</dt>
           <dd>{design.product}</dd>
         </div>
         <div>
-          <dt>Color</dt>
+          <dt>{rc.specColor}</dt>
           <dd>{design.color}</dd>
         </div>
         <div>
-          <dt>Print area</dt>
+          <dt>{rc.specPrintArea}</dt>
           <dd>{design.printArea}</dd>
         </div>
         <div>
-          <dt>Placement</dt>
+          <dt>{rc.specPlacement}</dt>
           <dd>{design.placement}</dd>
         </div>
         <div>
-          <dt>Dimensions</dt>
+          <dt>{rc.specDimensions}</dt>
           <dd>{design.dimensions}</dd>
         </div>
         <div>
-          <dt>Production</dt>
+          <dt>{rc.specProduction}</dt>
           <dd>{design.productionMethod}</dd>
         </div>
         <div>
-          <dt>DNA score</dt>
+          <dt>{rc.specDnaScore}</dt>
           <dd>{design.dnaScore}%</dd>
         </div>
         {design.commercialScore != null ? (
           <div>
-            <dt>Commercial score</dt>
+            <dt>{rc.specCommercialScore}</dt>
             <dd>{design.commercialScore}%</dd>
           </div>
         ) : null}
         {design.campaignPotential ? (
           <div>
-            <dt>Campaign potential</dt>
+            <dt>{rc.specCampaignPotential}</dt>
             <dd className="rc-design-capitalize">{design.campaignPotential}</dd>
           </div>
         ) : null}
@@ -664,7 +679,7 @@ function DesignStudioHandoffButton({
   designId,
   mode,
   label,
-  openLabel = "Open in Design Studio",
+  openLabel,
   variant = "design",
   navigateOnSuccess = false,
 }: {
@@ -677,6 +692,10 @@ function DesignStudioHandoffButton({
   navigateOnSuccess?: boolean;
 }) {
   const router = useRouter();
+  const { facility } = useDictionary();
+  const shared = facility.shared;
+  const rc = facility.reportsCenter;
+  const resolvedOpenLabel = openLabel ?? rc.openInDesignStudio;
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -690,11 +709,11 @@ function DesignStudioHandoffButton({
       reportId,
       existingMission: mission,
       buttonRendered: true,
-      buttonLabel: mission ? openLabel : label,
+      buttonLabel: mission ? resolvedOpenLabel : label,
     });
-  }, [reportId, openLabel, label]);
+  }, [reportId, resolvedOpenLabel, label]);
 
-  const buttonLabel = existingMission ? openLabel : label;
+  const buttonLabel = existingMission ? resolvedOpenLabel : label;
 
   const handleClick = async () => {
     if (existingMission && navigateOnSuccess) {
@@ -733,7 +752,7 @@ function DesignStudioHandoffButton({
       };
 
       if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? "Design Studio handoff failed");
+        throw new Error(data.error ?? shared.designStudioHandoffFailed);
       }
 
       if (mode === "all") {
@@ -752,7 +771,9 @@ function DesignStudioHandoffButton({
             }),
           );
         }
-        setMessage(`Sent ${count} design brief${count === 1 ? "" : "s"} to Design Studio`);
+        setMessage(
+          shared.sentCountDesignBriefs.replace("{count}", String(count)),
+        );
       } else {
         if (data.brief && data.reportId && data.reportTitle) {
           saveDesignMission(
@@ -768,8 +789,8 @@ function DesignStudioHandoffButton({
         }
         setMessage(
           data.brief?.title
-            ? `Sent "${data.brief.title}" to Design Studio`
-            : "Sent to Design Studio",
+            ? shared.sentDesignBriefNamed.replace("{title}", data.brief.title)
+            : shared.sentToDesignStudio,
         );
       }
 
@@ -778,7 +799,9 @@ function DesignStudioHandoffButton({
         return;
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Design Studio handoff failed");
+      setError(
+        err instanceof Error ? err.message : shared.designStudioHandoffFailed,
+      );
     } finally {
       setLoading(false);
     }
@@ -802,7 +825,7 @@ function DesignStudioHandoffButton({
           ) : (
             <Palette className="size-3.5" />
           )}
-          {loading ? "Sending to Design Studio..." : buttonLabel}
+          {loading ? shared.sendingToDesignStudio : buttonLabel}
           {!loading ? <ArrowRight className="size-3.5" /> : null}
         </button>
         {message && !navigateOnSuccess ? (
@@ -841,11 +864,13 @@ function ActivityPanel({
 }: {
   feed: ReportsCenterPayload["activityFeed"];
 }) {
+  const { facility } = useDictionary();
+  const rc = facility.reportsCenter;
   return (
     <section className="rc-panel rc-activity">
       <header className="rc-panel-header">
         <TrendingUp className="size-4" />
-        <h2>Activity Feed</h2>
+        <h2>{rc.activityFeed}</h2>
       </header>
       <ul className="rc-activity-list">
         {feed.map((item) => (
@@ -869,17 +894,19 @@ function ActivityPanel({
 }
 
 function ExportPanel({ modules }: { modules: string[] }) {
+  const { facility } = useDictionary();
+  const rc = facility.reportsCenter;
   return (
     <section className="rc-panel rc-export">
       <header className="rc-panel-header">
         <FileText className="size-4" />
-        <h2>Export Module</h2>
+        <h2>{rc.exportModule}</h2>
       </header>
       <ul className="rc-export-list">
         {modules.map((module) => (
           <li key={module}>
             <span>{module}</span>
-            <span className="rc-export-soon">Coming online</span>
+            <span className="rc-export-soon">{rc.comingOnline}</span>
           </li>
         ))}
       </ul>
@@ -898,10 +925,14 @@ function useReportsCenter() {
     try {
       const res = await fetch("/api/facility/reports");
       const body = (await res.json()) as ReportsCenterPayload & { error?: string };
-      if (!res.ok) throw new Error(body.error ?? "Failed to load Reports Center");
+      if (!res.ok) throw new Error(body.error ?? getDictionary(DEFAULT_LOCALE).facility.reportsCenter.failedToLoad);
       setData(body);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load Reports Center");
+      setError(
+        err instanceof Error
+          ? err.message
+          : getDictionary(DEFAULT_LOCALE).facility.reportsCenter.failedToLoad,
+      );
       setData(null);
     } finally {
       setLoading(false);

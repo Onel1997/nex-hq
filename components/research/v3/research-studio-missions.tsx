@@ -1,6 +1,7 @@
 "use client";
 
-import { QUICK_MISSIONS } from "./missions";
+import { useLocale, useDictionary } from "@/lib/i18n";
+import { getQuickMissions } from "@/lib/i18n/data/research-studio";
 import { cn } from "@/lib/utils";
 
 interface ResearchStudioMissionsProps {
@@ -12,17 +13,19 @@ export function ResearchStudioMissions({
   onSelect,
   disabled = false,
 }: ResearchStudioMissionsProps) {
+  const locale = useLocale();
+  const { research } = useDictionary();
+  const missions = getQuickMissions(locale);
+
   return (
-    <section className="rs3-missions" aria-label="Quick missions">
+    <section className="rs3-missions" aria-label={research.studio.missions.ariaLabel}>
       <div className="rs3-missions-header">
-        <h2 className="rs3-missions-title">Quick Missions</h2>
-        <p className="rs3-missions-subtitle">
-          One tap to prefill your research command
-        </p>
+        <h2 className="rs3-missions-title">{research.studio.missions.title}</h2>
+        <p className="rs3-missions-subtitle">{research.studio.missions.subtitle}</p>
       </div>
 
       <div className="rs3-missions-grid">
-        {QUICK_MISSIONS.map((mission) => {
+        {missions.map((mission) => {
           const Icon = mission.icon;
           return (
             <button

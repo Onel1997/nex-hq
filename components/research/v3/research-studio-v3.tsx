@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useWorkspace } from "@/lib/i18n";
+import { useDictionary, useWorkspace } from "@/lib/i18n";
 import { ResearchStudioAtmosphere } from "./research-studio-atmosphere";
 import { ResearchStudioDataSourcesCenter } from "./research-studio-data-sources-center";
 import { ResearchStudioSidebarRight } from "./research-studio-sidebar-right";
@@ -15,6 +15,8 @@ const MOBILE_BREAKPOINT = 1100;
 
 export function ResearchStudioV3() {
   const workspace = useWorkspace();
+  const { research, agents } = useDictionary();
+  const topbar = research.studio.topbar;
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [dataSourcesOpen, setDataSourcesOpen] = useState(false);
 
@@ -83,21 +85,23 @@ export function ResearchStudioV3() {
       <ResearchStudioAtmosphere />
 
       <header className="rs3-topbar">
-        <nav className="rs3-breadcrumb" aria-label="Breadcrumb">
+        <nav className="rs3-breadcrumb" aria-label={topbar.breadcrumbAria}>
           <Link href="/" className="rs3-breadcrumb-link">
             <Home className="size-3.5" />
-            <span>Facility</span>
+            <span>{topbar.facility}</span>
           </Link>
           <ChevronRight className="size-3.5 opacity-35" aria-hidden />
-          <span className="rs3-breadcrumb-current">Research Studio</span>
+          <span className="rs3-breadcrumb-current">{agents.studioNames.research}</span>
         </nav>
 
         <div className="rs3-topbar-meta">
           <span className="rs3-topbar-badge">
             <Sparkles className="size-3" />
             {snapshot
-              ? `${snapshot.liveCount} live · ${snapshot.connectedCount} connected`
-              : "Live Intelligence"}
+              ? topbar.liveConnected
+                  .replace("{live}", String(snapshot.liveCount))
+                  .replace("{count}", String(snapshot.connectedCount))
+              : topbar.liveIntelligence}
           </span>
           <button
             type="button"
@@ -105,7 +109,7 @@ export function ResearchStudioV3() {
             onClick={() => void handleOpenDataSources()}
           >
             <Database className="size-3.5" />
-            Data Sources
+            {topbar.dataSources}
           </button>
           <span className="rs3-topbar-workspace">{workspace.name}</span>
         </div>

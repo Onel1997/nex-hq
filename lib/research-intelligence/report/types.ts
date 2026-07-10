@@ -1,9 +1,44 @@
 /**
- * Research Studio report model — Phase 5.3.
- * Presentation layer over UnifiedResearchIntelligence + reasoning + recommendations.
+ * Research Studio report model — Phase 5.6.
+ * Presentation layer over UnifiedResearchIntelligence + reasoning + brand intelligence + creative brief.
  */
 
-export const RESEARCH_STUDIO_REPORT_VERSION = "5.3.0";
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/get-dictionary";
+
+export const RESEARCH_STUDIO_REPORT_VERSION = "5.6.0";
+
+export type PrioritySignal = "develop" | "watch" | "reject";
+
+export interface ReportPrioritizedOpportunity {
+  id: string;
+  trend: string;
+  brandFit: number;
+  trendScore: number;
+  commercialPotential: number;
+  whyRecommended: string;
+  nextStep: string;
+  sourceKeys: string[];
+  prioritySignal: PrioritySignal;
+  productHint: string | null;
+  designDirection: string | null;
+}
+
+export interface ReportExecutiveNarrative {
+  whatFound: string;
+  whyInteresting: string;
+  milaeneFit: string;
+  shouldAct: string;
+  fullText: string;
+}
+
+export interface ReportSourceTrustEntry {
+  sourceKey: string;
+  label: string;
+  stars: number;
+  connected: boolean;
+  statusLabel: string;
+}
 
 export interface ReportScoreBlock {
   id: string;
@@ -75,6 +110,82 @@ export interface ReportActionCard {
   suggestedNextStep: string;
 }
 
+export type {
+  BrandFitDimension,
+  BrandIntelligenceSection,
+  LaunchPriority,
+  ScoredOpportunity,
+} from "../brand-intelligence/types";
+
+export interface ReportScoredOpportunity {
+  id: string;
+  title: string;
+  trendScore: number;
+  brandFit: number;
+  brandFitTier: string;
+  commercialPotential: number;
+  competition: number;
+  longevity: number;
+  originality: number;
+  manufacturingDifficulty: number;
+  launchPriority: string;
+  matches: string[];
+  conflicts: string[];
+  adjustments: string[];
+  reasons: string[];
+  sourceKeys: string[];
+  rejected: boolean;
+  rejectionReasons: string[];
+}
+
+export type {
+  CreativeBriefScores,
+  ResearchCreativeBrief,
+} from "../creative-brief/types";
+
+export interface ReportCreativeBrief {
+  conceptName: string;
+  executiveSummary: string;
+  businessCase: string;
+  scores: {
+    trendScore: number;
+    brandFit: number;
+    commercialPotential: number;
+    competition: number;
+    longevity: number;
+    originality: number;
+  };
+  targetAudience: string[];
+  recommendedProduct: string;
+  alternativeProducts: string[];
+  recommendedPlacement: string[];
+  typographyDirection: string[];
+  graphicDirection: string[];
+  colorPalette: string[];
+  materialRecommendation: string[];
+  printTechnique: string[];
+  productionNotes: string;
+  avoid: string[];
+  researchEvidence: string[];
+  nextStep: string;
+  anchorOpportunityTitle: string | null;
+}
+
+export interface ReportBrandIntelligence {
+  brandFitScore: number;
+  brandFitTier: string;
+  brandFitTierLabel: string;
+  reasons: string[];
+  matches: string[];
+  conflicts: string[];
+  recommendedAdjustments: string[];
+  dimensionBreakdown: Array<{ id: string; label: string; score: number; rationale: string }>;
+  topOpportunities: ReportScoredOpportunity[];
+  rejectedOpportunities: ReportScoredOpportunity[];
+  summary: string;
+  shopifyCatalogLoaded: boolean;
+}
+
 export interface ResearchStudioReport {
   version: typeof RESEARCH_STUDIO_REPORT_VERSION;
   generatedAt: string;
@@ -84,6 +195,9 @@ export interface ResearchStudioReport {
   intelligenceWeak: boolean;
   caveats: string[];
   executiveSummary: string | null;
+  executiveNarrative: ReportExecutiveNarrative | null;
+  prioritizedOpportunities: ReportPrioritizedOpportunity[];
+  sourceTrust: ReportSourceTrustEntry[];
   trendConfidence: ReportScoreBlock | null;
   commercialConfidence: ReportScoreBlock | null;
   sourceAgreement: ReportScoreBlock | null;
@@ -97,6 +211,8 @@ export interface ResearchStudioReport {
   graphicThemeDirection: ReportRecommendationCard | null;
   riskWarnings: ReportRiskCard[];
   suggestedNextActions: ReportActionCard[];
+  brandIntelligence: ReportBrandIntelligence | null;
+  creativeBrief: ReportCreativeBrief | null;
 }
 
 export function emptyResearchStudioReport(
@@ -105,12 +221,15 @@ export function emptyResearchStudioReport(
   return {
     version: RESEARCH_STUDIO_REPORT_VERSION,
     generatedAt,
-    title: "Research Intelligence Report",
+    title: getDictionary(DEFAULT_LOCALE).intelligence.report.titleDefault,
     overallConfidence: 0,
     overallTier: "low",
     intelligenceWeak: true,
-    caveats: ["No fused intelligence available."],
+    caveats: [getDictionary(DEFAULT_LOCALE).intelligence.confidence.noProvidersBaseline],
     executiveSummary: null,
+    executiveNarrative: null,
+    prioritizedOpportunities: [],
+    sourceTrust: [],
     trendConfidence: null,
     commercialConfidence: null,
     sourceAgreement: null,
@@ -124,5 +243,7 @@ export function emptyResearchStudioReport(
     graphicThemeDirection: null,
     riskWarnings: [],
     suggestedNextActions: [],
+    brandIntelligence: null,
+    creativeBrief: null,
   };
 }

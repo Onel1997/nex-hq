@@ -27,6 +27,12 @@ import {
   RULE_THRESHOLDS,
   typographyDirectionForTerms,
 } from "./rules";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import {
+  formatIntelligenceTemplate,
+  getIntelligenceCopy,
+  tierLabel,
+} from "../copy";
 
 export const RECOMMENDATION_ENGINE_VERSION = RECOMMENDATION_ENGINE_MODEL_VERSION;
 
@@ -65,33 +71,48 @@ function makeRecommendation(
   };
 }
 
-function buildResearchActions(ctx: RecommendationRuleContext): ResearchRecommendation[] {
-  const actions = missingSourceActions(ctx);
+function buildResearchActions(
+  ctx: RecommendationRuleContext,
+  locale: Locale = DEFAULT_LOCALE,
+): ResearchRecommendation[] {
+  const copy = getIntelligenceCopy(locale);
+  const actions = missingSourceActions(ctx, locale);
   const confidence = Math.min(ctx.confidence.overallScore, 45);
   const why = isWeakIntelligence(ctx)
-    ? `Overall confidence is ${ctx.confidence.overall} (${ctx.confidence.overallScore}/100) — evidence is too thin for strong creative or commercial action.`
-    : "Targeted source gaps remain — strengthen validation before committing to direction.";
+    ? formatIntelligenceTemplate(copy.recommendations.expandWhyWeak, {
+        tier: tierLabel(ctx.confidence.overall, locale),
+        score: ctx.confidence.overallScore,
+      })
+    : copy.recommendations.expandWhyGaps;
 
   const items: ResearchRecommendation[] = [
     makeRecommendation({
       id: recId("next_research_action", "expand-research"),
-      title: "Expand research coverage before creative commitment",
+      title: copy.recommendations.expandCoverage,
       type: "next_research_action",
       priority: "explore",
       confidence,
       why,
       evidence: [
-        evidence("ev-research-weak-overall", `Overall confidence ${ctx.confidence.overallScore}/100`, {
-          scoreId: "source_diversity",
-        }),
-        evidence("ev-research-providers", `${ctx.intelligence.manifest.providerCount} providers fused`),
+        evidence(
+          "ev-research-weak-overall",
+          formatIntelligenceTemplate(copy.recommendations.overallConfidenceEvidence, {
+            score: ctx.confidence.overallScore,
+          }),
+          { scoreId: "source_diversity" },
+        ),
+        evidence(
+          "ev-research-providers",
+          formatIntelligenceTemplate(copy.recommendations.providersFused, {
+            count: ctx.intelligence.manifest.providerCount,
+          }),
+        ),
       ],
       sourceSupport: buildSourceSupport(
         ctx.intelligence.manifest.contributions.map((item) => String(item.sourceKey)),
       ),
       risks: ctx.reasoning.risks.map((risk) => risk.label),
-      suggestedNextStep:
-        actions[0] ?? "Add at least three source types (commercial, social, search) before acting.",
+      suggestedNextStep: actions[0] ?? copy.recommendations.expandNextStep,
       audiences: ["research", "ceo"],
       tags: ["research-gap", "coverage"],
       sourceDomains: ["signal", "trend"],
@@ -107,12 +128,16 @@ function buildResearchActions(ctx: RecommendationRuleContext): ResearchRecommend
         type: "next_research_action",
         priority: "explore",
         confidence: Math.min(ctx.confidence.scores.source_diversity.score, 40),
-        why: "Source diversity or agreement scores indicate validation gaps.",
+        why: copy.recommendations.sourceGapWhy,
         evidence: [
           evidence(`ev-source-gap-${index}`, action),
-          evidence("ev-source-diversity", `Source diversity ${ctx.confidence.scores.source_diversity.score}/100`, {
-            scoreId: "source_diversity",
-          }),
+          evidence(
+            "ev-source-diversity",
+            formatIntelligenceTemplate(copy.recommendations.sourceDiversityEvidence, {
+              score: ctx.confidence.scores.source_diversity.score,
+            }),
+            { scoreId: "source_diversity" },
+          ),
         ],
         sourceSupport: buildSourceSupport(
           ctx.intelligence.manifest.contributions.map((item) => String(item.sourceKey)),
@@ -131,6 +156,7 @@ function buildResearchActions(ctx: RecommendationRuleContext): ResearchRecommend
 }
 
 function buildDesignDirections(ctx: RecommendationRuleContext): ResearchRecommendation[] {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   const trendScore = ctx.confidence.scores.trend_confidence.score;
   const brandScore = ctx.confidence.scores.brand_fit_confidence.score;
   if (trendScore < RULE_THRESHOLDS.minTrendForDesign) return [];
@@ -152,17 +178,24 @@ function buildDesignDirections(ctx: RecommendationRuleContext): ResearchRecommen
 
     return makeRecommendation({
       id: recId("design_direction", label),
-      title: `Explore "${label}" as a design direction`,
+      title: formatIntelligenceTemplate(copy.exploreDesign, { label }),
       type: "design_direction",
       priority: derivePriority(adjustedConfidence, "design_direction", ctx),
       confidence: Math.max(0, adjustedConfidence),
-      why: `Weighted fusion ranks "${label}" highly (${ranked.weightedScore}/100) with ${ctx.confidence.scores.trend_confidence.tier} trend confidence and ${ctx.reasoning.brandFit.summary}`,
+      why: formatIntelligenceTemplate(copy.designWhy, { label }),
       evidence: [
-        evidence(`ev-design-cluster-${index}`, `Trend cluster "${label}" weighted score ${ranked.weightedScore}`, {
-          sourceKey: ranked.sourceKey,
-          signalId: ranked.item.observations[0]?.id,
-          scoreId: "trend_confidence",
-        }),
+        evidence(
+          `ev-design-cluster-${index}`,
+          formatIntelligenceTemplate(copy.trendClusterScore, {
+            label,
+            score: ranked.weightedScore,
+          }),
+          {
+            sourceKey: ranked.sourceKey,
+            signalId: ranked.item.observations[0]?.id,
+            scoreId: "trend_confidence",
+          },
+        ),
         evidence(`ev-design-trend-score`, ctx.confidence.scores.trend_confidence.rationale, {
           scoreId: "trend_confidence",
         }),
@@ -176,8 +209,8 @@ function buildDesignDirections(ctx: RecommendationRuleContext): ResearchRecommen
         .map((risk) => `${risk.label}: ${risk.reason}`),
       suggestedNextStep:
         adjustedConfidence >= RULE_THRESHOLDS.moderateOverall
-          ? `Brief Design Studio on "${label}" with brand-fit guardrails from aligned signals: ${ctx.reasoning.brandFit.alignedSignals.slice(0, 3).join(", ") || "none yet"}.`
-          : `Monitor "${label}" and gather confirming sources before briefing Design Studio.`,
+          ? formatIntelligenceTemplate(copy.designNextStrong, { label })
+          : formatIntelligenceTemplate(copy.designNextWeak, { label }),
       audiences: ["design", "research"],
       tags: [ranked.item.subjectType, "design-direction"],
       sourceDomains: ["trend", "brand"],
@@ -187,6 +220,7 @@ function buildDesignDirections(ctx: RecommendationRuleContext): ResearchRecommen
 }
 
 function buildProductOpportunities(ctx: RecommendationRuleContext): ResearchRecommendation[] {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   const commercialScore = ctx.confidence.scores.commercial_confidence.score;
   if (commercialScore < RULE_THRESHOLDS.minCommercialForProduct) return [];
 
@@ -207,7 +241,11 @@ function buildProductOpportunities(ctx: RecommendationRuleContext): ResearchReco
         type: "product_opportunity",
         priority: derivePriority(confidence, "product_opportunity", ctx),
         confidence,
-        why: `${opportunity.rationale} Commercial confidence is ${ctx.confidence.scores.commercial_confidence.tier} (${commercialScore}/100).`,
+        why: formatIntelligenceTemplate(copy.productCommercialWhy, {
+          rationale: opportunity.rationale,
+          tier: ctx.confidence.scores.commercial_confidence.tier,
+          score: commercialScore,
+        }),
         evidence: [
           evidence(`ev-product-opp-${index}`, opportunity.rationale, {
             sourceKey,
@@ -223,8 +261,8 @@ function buildProductOpportunities(ctx: RecommendationRuleContext): ResearchReco
           : [],
         suggestedNextStep:
           confidence >= RULE_THRESHOLDS.strongOverall
-            ? "Validate SKU economics in Commerce Lab and cross-check Shopify inventory fit."
-            : "Monitor sell-through proxies and wait for stronger commercial confirmation.",
+            ? copy.productValidateSku
+            : copy.productMonitor,
         audiences: ["commerce", "ceo"],
         tags: [...opportunity.tags, "product"],
         sourceDomains: ["commercial"],
@@ -246,11 +284,15 @@ function buildProductOpportunities(ctx: RecommendationRuleContext): ResearchReco
     items.push(
       makeRecommendation({
         id: recId("product_opportunity", ranked.item.label),
-        title: `Product signal: ${ranked.item.label}`,
+        title: formatIntelligenceTemplate(copy.productSignalTitle, { label: ranked.item.label }),
         type: "product_opportunity",
         priority: derivePriority(confidence, "product_opportunity", ctx),
         confidence,
-        why: `Weighted commerce signal (${ranked.weightedScore}/100) from ${ranked.sourceKey}: ${ranked.item.headline}`,
+        why: formatIntelligenceTemplate(copy.productSignalWhy, {
+          score: ranked.weightedScore,
+          source: ranked.sourceKey,
+          headline: ranked.item.headline,
+        }),
         evidence: [
           evidence(`ev-product-signal-${index}`, ranked.item.headline, {
             sourceKey: ranked.sourceKey,
@@ -260,7 +302,7 @@ function buildProductOpportunities(ctx: RecommendationRuleContext): ResearchReco
         ],
         sourceSupport: buildSourceSupport([ranked.sourceKey]),
         risks: [],
-        suggestedNextStep: "Cross-reference with Shopify catalog overlap before assortment action.",
+        suggestedNextStep: copy.productCrossRef,
         audiences: ["commerce"],
         tags: ["commerce-signal"],
         sourceDomains: ["commercial", "signal"],
@@ -317,7 +359,7 @@ function buildCollectionConcepts(ctx: RecommendationRuleContext): ResearchRecomm
       risks: ctx.reasoning.brandFit.misalignedSignals.map((signal) => `Misaligned cue: ${signal}`),
       suggestedNextStep: ctx.reasoning.brandFit.fits
         ? "Draft a capsule brief tying silhouette, color, and graphic restraint to Milaene DNA."
-        : "Reconcile misaligned signals before expanding beyond a test capsule.",
+        : getIntelligenceCopy(DEFAULT_LOCALE).recommendations.reconcileBeforeCapsule,
       audiences: ["design", "ceo"],
       tags: ["collection", "capsule"],
       sourceDomains: ["trend", "brand"],
@@ -548,13 +590,20 @@ function buildRiskWarnings(ctx: RecommendationRuleContext): ResearchRecommendati
 }
 
 function buildSummary(items: ResearchRecommendation[], ctx: RecommendationRuleContext): string {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   if (!hasActionableData(ctx)) {
-    return "No actionable recommendations — expand research sources before directing studios.";
+    return copy.summaryEmpty;
   }
   const act = items.filter((item) => item.priority === "act").length;
   const monitor = items.filter((item) => item.priority === "monitor").length;
   const explore = items.filter((item) => item.priority === "explore").length;
-  return `${items.length} recommendations generated (${act} act, ${monitor} monitor, ${explore} explore) at ${ctx.confidence.overall} overall confidence.`;
+  return formatIntelligenceTemplate(copy.summaryGenerated, {
+    count: items.length,
+    act,
+    monitor,
+    explore,
+    tier: tierLabel(ctx.confidence.overall, DEFAULT_LOCALE),
+  });
 }
 
 export function generateRecommendations(input: RecommendationInput): RecommendationIntelligence {
@@ -568,7 +617,8 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
   };
 
   if (!hasActionableData(ctx)) {
-    const weakItems = buildResearchActions(ctx);
+    const weakItems = buildResearchActions(ctx, DEFAULT_LOCALE);
+    const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
     return {
       version: RECOMMENDATION_ENGINE_MODEL_VERSION,
       items: weakItems,
@@ -576,7 +626,7 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
       summary: buildSummary(weakItems, ctx),
       caveats: [
         ...ctx.confidence.caveats,
-        "Insufficient fused data — recommendations default to research expansion.",
+        copy.caveatInsufficient,
       ],
     };
   }
@@ -584,7 +634,7 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
   const items: ResearchRecommendation[] = [];
 
   if (isWeakIntelligence(ctx)) {
-    items.push(...buildResearchActions(ctx));
+    items.push(...buildResearchActions(ctx, DEFAULT_LOCALE));
   }
 
   items.push(
@@ -599,12 +649,13 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
   );
 
   if (items.filter((item) => item.type !== "risk_warning").length === 0) {
-    items.push(...buildResearchActions(ctx));
+    items.push(...buildResearchActions(ctx, DEFAULT_LOCALE));
   }
 
   const deduped = dedupeRecommendations(items);
   const sorted = deduped.sort((a, b) => b.confidence - a.confidence);
 
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   return {
     version: RECOMMENDATION_ENGINE_MODEL_VERSION,
     items: sorted,
@@ -613,7 +664,7 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
     caveats: [
       ...ctx.confidence.caveats,
       ...ctx.reasoning.caveats,
-      "Recommendations are deterministic scoring outputs — not final business decisions.",
+      copy.caveatDeterministic,
     ],
   };
 }

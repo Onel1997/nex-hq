@@ -7,15 +7,52 @@ import {
 import { MockModeBadge } from "@/components/design/mock-mode-badge";
 import { useStudioMockMode } from "@/hooks/use-studio-mock-mode";
 import { buildMockDesignMission } from "@/lib/design/studio-mock-data";
-import { useDesignMission } from "@/lib/design/design-mission-store";
+import {
+  buildDesignMissionFromHandoff,
+  useDesignMission,
+} from "@/lib/design/design-mission-store";
+import {
+  loadFusionCreativeBriefHandoff,
+} from "@/lib/research-intelligence/creative-brief/handoff-store";
+import {
+  buildDesignStudioBriefFromFusion,
+} from "@/lib/research-intelligence/creative-brief/fusion-handoff";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import { Home, Palette, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { useEffect } from "react";
 
 export function DesignStudioCenter() {
   const { mission, hydrated, patchMission, setMission } = useDesignMission();
   const { mockMode, probing } = useStudioMockMode();
+
+  useEffect(() => {
+    if (!hydrated || mission) return;
+    const pending = loadFusionCreativeBriefHandoff();
+    if (!pending?.brief) return;
+    const studioBrief = buildDesignStudioBriefFromFusion(pending.brief);
+    const reportId = `fusion-${pending.brief.generatedAt}`;
+    setMission(
+      buildDesignMissionFromHandoff({
+        reportId,
+        reportTitle: pending.brief.conceptName,
+        collectionName: pending.brief.conceptName,
+        intelligenceContext: {
+          sourceType: "research-studio-fusion",
+          sourceReportId: reportId,
+          reportTitle: pending.brief.conceptName,
+          executiveSummary: pending.brief.executiveSummary,
+          keyFindings: pending.brief.researchEvidence,
+          recommendations: [pending.brief.nextStep],
+          connectedDepartments: ["research", "design"],
+          productName: pending.brief.recommendedProduct,
+          collectionName: pending.brief.conceptName,
+        },
+        brief: studioBrief,
+      }),
+    );
+  }, [hydrated, mission, setMission]);
 
   const startDemoMission = () => {
     setMission(buildMockDesignMission());

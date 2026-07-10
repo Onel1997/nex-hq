@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProviderSnapshot } from "./data-source-types";
+import { useDictionary } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export type RunSourceMode = "live" | "simulated" | "offline";
@@ -13,17 +14,6 @@ export function resolveRunSourceMode(provider: ProviderSnapshot): RunSourceMode 
     return "simulated";
   }
   return "offline";
-}
-
-function modeLabel(mode: RunSourceMode): string {
-  switch (mode) {
-    case "live":
-      return "Live";
-    case "simulated":
-      return "Simulated";
-    case "offline":
-      return "Offline";
-  }
 }
 
 function modeClass(mode: RunSourceMode): string {
@@ -44,6 +34,9 @@ interface ResearchStudioRunCoverageProps {
 export function ResearchStudioRunCoverage({
   providers,
 }: ResearchStudioRunCoverageProps) {
+  const { research } = useDictionary();
+  const coverage = research.studio.coverage;
+
   if (providers.length === 0) return null;
 
   const counts = providers.reduce(
@@ -55,14 +48,31 @@ export function ResearchStudioRunCoverage({
     { live: 0, simulated: 0, offline: 0 },
   );
 
+  const modeLabel = (mode: RunSourceMode): string => {
+    switch (mode) {
+      case "live":
+        return coverage.liveMode;
+      case "simulated":
+        return coverage.simulatedMode;
+      case "offline":
+        return coverage.offlineMode;
+    }
+  };
+
   return (
-    <section className="rs3-run-coverage" aria-label="Source coverage for this run">
+    <section className="rs3-run-coverage" aria-label={coverage.ariaLabel}>
       <header className="rs3-run-coverage-head">
-        <h3>Run Source Coverage</h3>
+        <h3>{coverage.title}</h3>
         <div className="rs3-run-coverage-summary">
-          <span className="rs3-run-coverage-live">{counts.live} live</span>
-          <span className="rs3-run-coverage-sim">{counts.simulated} simulated</span>
-          <span className="rs3-run-coverage-offline">{counts.offline} offline</span>
+          <span className="rs3-run-coverage-live">
+            {coverage.summaryLive.replace("{count}", String(counts.live))}
+          </span>
+          <span className="rs3-run-coverage-sim">
+            {coverage.summarySim.replace("{count}", String(counts.simulated))}
+          </span>
+          <span className="rs3-run-coverage-offline">
+            {coverage.summaryOffline.replace("{count}", String(counts.offline))}
+          </span>
         </div>
       </header>
       <div className="rs3-run-coverage-grid">

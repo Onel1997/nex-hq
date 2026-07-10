@@ -2,9 +2,10 @@
 
 import { usePersistedCollapse } from "@/hooks/use-persisted-collapse";
 import { usePersistedSections } from "@/hooks/use-persisted-sections";
+import { useLocale, useT } from "@/lib/i18n";
 import {
+  getHqSidebarSections,
   HQ_SIDEBAR_SECTION_DEFAULTS,
-  HQ_SIDEBAR_SECTIONS,
   isSidebarNavItemActive,
   resolveActiveSidebarSection,
   type HqSidebarSectionId,
@@ -92,6 +93,9 @@ function SidebarNavLink({
 
 export function HqSidebar() {
   const pathname = usePathname();
+  const locale = useLocale();
+  const t = useT();
+  const hqNav = getHqSidebarSections(locale);
   const { collapsed, setCollapsed, hydrated } = usePersistedCollapse(
     SIDEBAR_COLLAPSE_KEY,
     false,
@@ -99,7 +103,7 @@ export function HqSidebar() {
   const { sections, toggleSection, expandSection, hydrated: sectionsHydrated } =
     usePersistedSections(SIDEBAR_SECTIONS_KEY, HQ_SIDEBAR_SECTION_DEFAULTS);
 
-  const activeSection = resolveActiveSidebarSection(pathname);
+  const activeSection = resolveActiveSidebarSection(pathname, locale);
 
   useEffect(() => {
     expandSection(activeSection);
@@ -114,7 +118,7 @@ export function HqSidebar() {
         collapsed && "is-collapsed",
         (!hydrated || !sectionsHydrated) && "is-hydrating",
       )}
-      aria-label="NexHQ navigation"
+      aria-label={t("hqNavigation.navAriaLabel")}
     >
       <div className="hq-sidebar-header">
         <Link href="/" className="hq-sidebar-logo" title="NexHQ">
@@ -125,8 +129,8 @@ export function HqSidebar() {
           type="button"
           className="hq-sidebar-collapse"
           onClick={() => setCollapsed((value) => !value)}
-          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-          title={collapsed ? "Expand" : "Collapse"}
+          aria-label={collapsed ? t("hqNavigation.expandNav") : t("hqNavigation.collapseNav")}
+          title={collapsed ? t("hqNavigation.expand") : t("hqNavigation.collapse")}
         >
           {collapsed ? (
             <ChevronRight className="size-3.5" />
@@ -137,7 +141,7 @@ export function HqSidebar() {
       </div>
 
       <div className="hq-sidebar-sections">
-        {HQ_SIDEBAR_SECTIONS.map((section) => {
+        {hqNav.map((section) => {
           const expanded = collapsed ? true : sections[section.id];
           const sectionActive = activeSection === section.id;
 

@@ -1,6 +1,9 @@
 import "server-only";
 
 import { DataSourceManager } from "@/lib/data-source-platform/manager";
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import { runBrandIntelligenceEngine } from "../brand-intelligence";
+import { runCreativeBriefEngine } from "../creative-brief";
 import { runResearchIntelligencePipeline } from "../fusion/pipeline";
 import { buildResearchReport } from "./build-report";
 import { syncResultsToEnvelopes } from "./envelopes";
@@ -26,13 +29,29 @@ export async function loadResearchStudioReport(
     envelopes,
     context: {
       workspaceId: options.workspaceId,
+      locale: DEFAULT_LOCALE,
       generatedAt,
     },
   });
 
-  return buildResearchReport({
+  const brandResult = await runBrandIntelligenceEngine({
     intelligence: pipeline.intelligence,
     reasoning: pipeline.reasoning,
+    generatedAt,
+  });
+
+  const briefResult = runCreativeBriefEngine({
+    intelligence: brandResult.intelligence,
+    reasoning: pipeline.reasoning,
+    brandIntelligence: brandResult.brandIntelligence,
+    generatedAt,
+  });
+
+  return buildResearchReport({
+    intelligence: brandResult.intelligence,
+    reasoning: pipeline.reasoning,
+    brandIntelligence: brandResult.brandIntelligence,
+    creativeBrief: briefResult.creativeBrief,
     title: options.title,
   });
 }

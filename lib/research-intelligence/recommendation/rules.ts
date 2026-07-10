@@ -2,6 +2,8 @@ import type { ConfidenceIntelligence, ConfidenceScoreId } from "../types/confide
 import type { ResearchReasoningIntelligence } from "../types/reasoning";
 import type { RecommendationPriority, RecommendationType } from "../types/recommendation";
 import type { UnifiedResearchIntelligence } from "../types/unified";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import { getIntelligenceCopy } from "../copy";
 
 export const RULE_THRESHOLDS = {
   weakOverall: 35,
@@ -81,72 +83,79 @@ export function blendScores(
 }
 
 export function typographyDirectionForTerms(terms: string[]): string | null {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).typography;
   const joined = terms.join(" ").toLowerCase();
   if (/minimal|quiet|luxury|restraint|understated/.test(joined)) {
-    return "Refined grotesk with generous tracking — quiet confidence, minimal hierarchy";
+    return copy.minimalGrotesk;
   }
   if (/archive|heritage|vintage|classic/.test(joined)) {
-    return "Editorial serif paired with restrained sans — archive luxury tone";
+    return copy.archiveSerif;
   }
   if (/streetwear|urban|bold|graphic/.test(joined)) {
-    return "Condensed bold sans for headlines with clean body grotesk";
+    return copy.condensedSans;
   }
   if (/craft|artisan|elevated/.test(joined)) {
-    return "Humanist serif with subtle contrast — craft-forward editorial";
+    return copy.humanistSerif;
   }
   return null;
 }
 
 export function graphicThemeForTerms(terms: string[]): string {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).graphic;
   const joined = terms.join(" ").toLowerCase();
   if (/emblem|symbol|logo|monogram/.test(joined)) {
-    return "Micro-emblem and restrained symbol language";
+    return copy.emblem;
   }
   if (/archive|heritage|vintage/.test(joined)) {
-    return "Archive graphic marks with distressed texture restraint";
+    return copy.archive;
   }
   if (/minimal|quiet|understated/.test(joined)) {
-    return "Negative-space graphic restraint — single focal mark";
+    return copy.minimal;
   }
   if (/streetwear|urban|graphic/.test(joined)) {
-    return "Bold placement graphics with controlled density";
+    return copy.streetwear;
   }
-  return "Abstract texture-led graphic system with brand-fit moderation";
+  return copy.abstract;
 }
 
 export function launchTimingNarrative(ctx: RecommendationRuleContext): string {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).launch;
   const seasonality = ctx.confidence.scores.seasonality.score;
   const readiness = ctx.confidence.scores.launch_readiness.score;
   const longevity = ctx.confidence.scores.longevity.score;
 
   if (seasonality >= 65 && readiness >= 65) {
-    return "Seasonal demand and launch readiness align — window supports a near-term drop.";
+    return copy.aligned;
   }
   if (seasonality >= 50 && longevity >= 55) {
-    return "Seasonal framing is present with durable longevity — plan a phased launch across the season.";
+    return copy.phased;
   }
   if (seasonality < 40) {
-    return "Seasonality signal is weak — defer hard launch timing until demand seasonality clarifies.";
+    return copy.weakSeason;
   }
-  return "Launch timing is provisional — monitor seasonal signals before committing to a calendar date.";
+  return copy.provisional;
 }
 
-export function missingSourceActions(ctx: RecommendationRuleContext): string[] {
+export function missingSourceActions(
+  ctx: RecommendationRuleContext,
+  locale: Locale = DEFAULT_LOCALE,
+): string[] {
+  const copy = getIntelligenceCopy(locale);
   const present = new Set(
     ctx.intelligence.manifest.contributions.map((item) => String(item.sourceKey)),
   );
   const actions: string[] = [];
   if (!present.has("shopify")) {
-    actions.push("Connect Shopify for commercial truth baseline.");
+    actions.push(copy.recommendations.connectShopify);
   }
   if (!present.has("google_trends")) {
-    actions.push("Enable Google Trends for search-demand validation.");
+    actions.push(copy.recommendations.enableGoogleTrends);
   }
   if (!present.has("tiktok") && !present.has("pinterest")) {
-    actions.push("Add TikTok or Pinterest for social momentum coverage.");
+    actions.push(copy.recommendations.addSocialSources);
   }
   if (ctx.confidence.scores.source_agreement.score < RULE_THRESHOLDS.lowSourceAgreement) {
-    actions.push("Reconcile conflicting sources on shared trend terms before acting.");
+    actions.push(copy.recommendations.reconcileSources);
   }
   return actions;
 }

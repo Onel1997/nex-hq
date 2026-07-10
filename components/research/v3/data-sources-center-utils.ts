@@ -3,6 +3,8 @@ import type {
   ProviderDataMode,
   ProviderId,
 } from "@/lib/data-source-platform/types";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/get-dictionary";
 
 export type ProviderDisplayStatus =
   | "connected"
@@ -52,43 +54,45 @@ export function resolveDisplayStatus(
   return "offline";
 }
 
-export function displayStatusLabel(status: ProviderDisplayStatus): string {
-  switch (status) {
-    case "connected":
-      return "Connected";
-    case "simulated":
-      return "Simulated";
-    case "offline":
-      return "Offline";
-    case "coming_soon":
-      return "Coming Soon";
-  }
+export function displayStatusLabel(
+  status: ProviderDisplayStatus,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const labels = getDictionary(locale).research.studio.dataSources.displayStatus;
+  return labels[status];
 }
 
-export function formatCacheAge(cacheAgeMs: number | null, fromCache: boolean): string {
-  if (!fromCache || cacheAgeMs == null) return "Fresh";
+export function formatCacheAge(
+  cacheAgeMs: number | null,
+  fromCache: boolean,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const ds = getDictionary(locale).research.studio.dataSources;
+  if (!fromCache || cacheAgeMs == null) return ds.cacheFresh;
   const seconds = Math.round(cacheAgeMs / 1000);
-  if (seconds < 60) return `${seconds}s cached`;
+  if (seconds < 60) return ds.cacheSeconds.replace("{seconds}", String(seconds));
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m cached`;
+  if (minutes < 60) return ds.cacheMinutes.replace("{minutes}", String(minutes));
   const hours = Math.round(minutes / 60);
-  return `${hours}h cached`;
+  return ds.cacheHours.replace("{hours}", String(hours));
 }
 
 export function authMethodLabel(
   method: "oauth" | "api_key" | "client_credentials" | "rss" | "none",
+  locale: Locale = DEFAULT_LOCALE,
 ): string {
+  const ds = getDictionary(locale).research.studio.dataSources;
   switch (method) {
     case "oauth":
-      return "OAuth";
+      return ds.oauth;
     case "api_key":
-      return "API Key";
+      return ds.apiKey;
     case "client_credentials":
-      return "Client Credentials";
+      return ds.clientCredentials;
     case "rss":
-      return "RSS Feed";
+      return ds.rssFeed;
     case "none":
-      return "Not required";
+      return ds.notRequired;
   }
 }
 

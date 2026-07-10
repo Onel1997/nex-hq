@@ -1,3 +1,4 @@
+import type { Locale } from "@/lib/i18n/config";
 import type { ConfidenceIntelligence } from "../types/confidence";
 import type { ResearchReasoningIntelligence } from "../types/reasoning";
 import { RESEARCH_REASONING_VERSION } from "../types/reasoning";
@@ -11,7 +12,7 @@ import type { UnifiedResearchIntelligence } from "../types";
  */
 export interface ReasoningContext {
   workspaceId?: string;
-  locale?: string;
+  locale?: Locale;
   generatedAt: string;
 }
 

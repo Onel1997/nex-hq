@@ -142,4 +142,14 @@ export const agents = {
       ],
     },
   },
+  studioNames: {
+    ceo: "CEO Command",
+    research: "Research Studio",
+    designer: "Design Studio",
+    content: "Content Studio",
+    image: "Image Studio",
+    marketing: "Marketing Center",
+    shopify: "Shopify Operations",
+  },
+  commerceLab: "Commerce Lab",
 } as const;

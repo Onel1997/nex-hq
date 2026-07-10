@@ -3077,6 +3077,408 @@ body:has(.rs3) {
   margin-top: 0.35rem;
 }
 
+/* ── Phase 2: Brand Intelligence ── */
+
+.rs3-fusion-section-brand {
+  border-color: oklch(0.55 0.1 295 / 0.32);
+  background: linear-gradient(
+    165deg,
+    oklch(0.14 0.022 295 / 0.55) 0%,
+    oklch(0.12 0.018 275 / 0.45) 100%
+  );
+}
+
+.rs3-fusion-brand-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rs3-border-subtle);
+}
+
+.rs3-fusion-brand-score-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.rs3-fusion-brand-label {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-fusion-brand-tier {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: oklch(0.72 0.08 295);
+}
+
+.rs3-fusion-brand-shopify {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rs3-live);
+}
+
+.rs3-fusion-brand-block {
+  margin-bottom: 1rem;
+}
+
+.rs3-fusion-brand-block h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-fusion-brand-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.rs3-fusion-brand-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.rs3-fusion-brand-tag {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+.rs3-fusion-brand-tag-match {
+  color: oklch(0.75 0.08 155);
+  background: oklch(0.55 0.12 155 / 0.12);
+  border: 1px solid oklch(0.55 0.12 155 / 0.2);
+}
+
+.rs3-fusion-brand-tag-conflict {
+  color: oklch(0.78 0.1 35);
+  background: oklch(0.55 0.12 35 / 0.12);
+  border: 1px solid oklch(0.55 0.12 35 / 0.2);
+}
+
+.rs3-fusion-brand-dimensions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+
+.rs3-fusion-brand-dimension {
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--rs3-border-subtle);
+  background: oklch(0.1 0.012 275 / 0.65);
+}
+
+.rs3-fusion-brand-dimension-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--rs3-text-muted);
+}
+
+.rs3-fusion-brand-dimension p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-fusion-brand-opp-card {
+  border-color: oklch(0.55 0.1 295 / 0.22);
+}
+
+.rs3-fusion-brand-opp-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-fusion-launch-priority {
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rs3-fusion-launch-a {
+  color: oklch(0.78 0.1 155);
+  background: oklch(0.55 0.12 155 / 0.15);
+  border: 1px solid oklch(0.55 0.12 155 / 0.25);
+}
+
+.rs3-fusion-launch-b {
+  color: oklch(0.78 0.08 295);
+  background: oklch(0.55 0.1 295 / 0.15);
+  border: 1px solid oklch(0.55 0.1 295 / 0.25);
+}
+
+.rs3-fusion-launch-c {
+  color: oklch(0.75 0.06 75);
+  background: oklch(0.62 0.1 75 / 0.12);
+  border: 1px solid oklch(0.62 0.1 75 / 0.22);
+}
+
+.rs3-fusion-launch-d {
+  color: oklch(0.72 0.08 25);
+  background: oklch(0.55 0.1 25 / 0.12);
+  border: 1px solid oklch(0.55 0.1 25 / 0.22);
+}
+
+.rs3-fusion-brand-rejected {
+  padding-top: 0.85rem;
+  border-top: 1px solid oklch(0.55 0.1 25 / 0.2);
+}
+
+.rs3-fusion-brand-reject-card {
+  border-color: oklch(0.55 0.1 25 / 0.28);
+  background: oklch(0.12 0.02 25 / 0.12);
+}
+
+.rs3-fusion-brand-reject-badge {
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: oklch(0.78 0.1 25);
+  background: oklch(0.55 0.12 25 / 0.15);
+  border: 1px solid oklch(0.55 0.12 25 / 0.25);
+}
+
+/* ── Phase 3: Creative Brief ── */
+
+.rs3-fusion-section-brief {
+  border-color: oklch(0.55 0.1 155 / 0.3);
+  background: linear-gradient(
+    165deg,
+    oklch(0.13 0.02 155 / 0.22) 0%,
+    oklch(0.12 0.018 275 / 0.48) 100%
+  );
+}
+
+.rs3-brief-hero {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rs3-border-subtle);
+}
+
+.rs3-brief-eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-brief-concept-name {
+  margin: 0;
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-size: clamp(1.35rem, 2.5vw, 1.85rem);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rs3-text);
+}
+
+.rs3-brief-anchor {
+  margin: 0.45rem 0 0;
+  font-size: 0.75rem;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-brief-block {
+  margin-bottom: 0.95rem;
+}
+
+.rs3-brief-block h5 {
+  margin: 0 0 0.4rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-brief-block p {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--rs3-text-muted);
+}
+
+.rs3-brief-highlight {
+  margin: 0 0 0.65rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--rs3-text);
+}
+
+.rs3-brief-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.85rem;
+}
+
+.rs3-brief-score-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.rs3-brief-score-item {
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--rs3-border-subtle);
+  background: oklch(0.1 0.012 275 / 0.65);
+}
+
+.rs3-brief-score-label {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-brief-score-item strong {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--rs3-text);
+}
+
+.rs3-brief-list {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--rs3-text-muted);
+}
+
+.rs3-brief-list li + li {
+  margin-top: 0.2rem;
+}
+
+.rs3-brief-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.rs3-brief-tag {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--rs3-text-muted);
+  background: oklch(0.14 0.015 275 / 0.8);
+  border: 1px solid var(--rs3-border-subtle);
+}
+
+.rs3-brief-tag-evidence {
+  color: oklch(0.75 0.08 295);
+  border-color: oklch(0.55 0.1 295 / 0.22);
+}
+
+.rs3-brief-tag-avoid {
+  color: oklch(0.78 0.1 25);
+  border-color: oklch(0.55 0.1 25 / 0.22);
+  background: oklch(0.12 0.02 25 / 0.12);
+}
+
+.rs3-brief-avoid {
+  padding-top: 0.15rem;
+}
+
+.rs3-brief-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rs3-border-subtle);
+}
+
+.rs3-brief-next-label {
+  margin: 0 0 0.15rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-brief-next-value {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--rs3-text-muted);
+}
+
+.rs3-brief-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid oklch(0.55 0.12 155 / 0.35);
+  background: oklch(0.55 0.12 155 / 0.14);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: oklch(0.82 0.08 155);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.rs3-brief-cta:hover:not(:disabled) {
+  background: oklch(0.55 0.12 155 / 0.22);
+  border-color: oklch(0.55 0.12 155 / 0.45);
+}
+
+.rs3-brief-cta:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 @media (max-width: 720px) {
   .rs3-fusion-hero {
     padding: 1.25rem 1rem;
@@ -3258,5 +3660,197 @@ body:has(.rs3) {
 .rs3-run-coverage-mode.rs3-run-coverage-offline {
   color: oklch(0.72 0.06 25);
   background: oklch(0.55 0.1 25 / 0.1);
+}
+
+/* v3.1 premium fusion polish */
+.rs3-fusion-report {
+  gap: 2rem;
+}
+
+.rs3-fusion-hero {
+  padding: 2.25rem 2rem 2rem;
+}
+
+.rs3-fusion-title {
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.rs3-fusion-section {
+  gap: 1.25rem;
+  padding: 0;
+}
+
+.rs3-fusion-section-head h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.rs3-fusion-lead,
+.rs3-fusion-body,
+.rs3-fusion-narrative-block p {
+  font-size: 1rem;
+  line-height: 1.65;
+  max-width: 68ch;
+}
+
+.rs3-fusion-narrative {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.rs3-fusion-narrative-block h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-fusion-narrative-block p {
+  margin: 0;
+}
+
+.rs3-fusion-collapsible {
+  border: 1px solid oklch(0.28 0.02 275 / 0.35);
+  border-radius: calc(var(--rs3-radius) + 2px);
+  padding: 0.25rem 1rem 0.75rem;
+  background: oklch(0.12 0.015 275 / 0.35);
+}
+
+.rs3-fusion-collapsible-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rs3-fusion-collapsible-head {
+  margin: 0;
+}
+
+.rs3-fusion-collapsible-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--rs3-text-faint);
+  font-size: 0.75rem;
+}
+
+.rs3-fusion-collapsible-chevron {
+  transition: transform 0.2s ease;
+}
+
+.rs3-fusion-collapsible-chevron-open {
+  transform: rotate(180deg);
+}
+
+.rs3-fusion-priority-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.rs3-fusion-priority-card {
+  padding: 1.35rem 1.25rem;
+  border-radius: calc(var(--rs3-radius) + 2px);
+  border: 1px solid oklch(0.55 0.1 295 / 0.18);
+  background: oklch(0.14 0.018 285 / 0.55);
+}
+
+.rs3-fusion-priority-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.rs3-fusion-priority-card-head h4 {
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+
+.rs3-fusion-ampel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  background: oklch(0.18 0.02 275 / 0.6);
+  border: 1px solid oklch(0.35 0.02 275 / 0.4);
+}
+
+.rs3-fusion-priority-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.rs3-fusion-priority-metrics dt {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rs3-text-faint);
+}
+
+.rs3-fusion-priority-metrics dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.rs3-fusion-priority-why {
+  margin: 0 0 0.75rem;
+  line-height: 1.6;
+}
+
+.rs3-fusion-trust-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+
+.rs3-fusion-trust-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--rs3-radius);
+  border: 1px solid oklch(0.35 0.02 275 / 0.35);
+  background: oklch(0.13 0.015 275 / 0.45);
+}
+
+.rs3-fusion-trust-card-off {
+  opacity: 0.55;
+}
+
+.rs3-fusion-trust-stars {
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  color: oklch(0.78 0.12 85);
+}
+
+.rs3-fusion-evidence {
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.rs3-fusion-score-card .rs3-fusion-evidence {
+  display: none;
 }
 

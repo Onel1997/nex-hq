@@ -1,3 +1,4 @@
+import type { Locale } from "@/lib/i18n/config";
 import { computeConfidenceIntelligence } from "../confidence/engine";
 import { generateRecommendations } from "../recommendation/engine";
 import { computeResearchReasoning } from "../reasoning/engine";
@@ -10,7 +11,7 @@ export const EVALUATION_LAYER_VERSION = "5.2.0";
 
 export interface EvaluationContext {
   workspaceId?: string;
-  locale?: string;
+  locale?: Locale;
   generatedAt: string;
 }
 

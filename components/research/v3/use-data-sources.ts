@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDictionary } from "@/lib/i18n";
 import type {
   DataSourcePlatformSnapshot,
   DataSourceSettingsSnapshot,
@@ -25,6 +26,8 @@ interface ProviderActionResult {
 
 export function useDataSources(options: UseDataSourcesOptions = {}) {
   const { autoRefresh = true } = options;
+  const { research } = useDictionary();
+  const studioErrors = research.studio.error;
   const [snapshot, setSnapshot] = useState<DataSourcePlatformSnapshot | null>(
     null,
   );
@@ -45,14 +48,14 @@ export function useDataSources(options: UseDataSourcesOptions = {}) {
       const data = await res.json();
       if (!mounted.current) return;
       if (!data.ok) {
-        setError(data.error ?? "Failed to load sources");
+        setError(data.error ?? studioErrors.failedLoadSources);
         return;
       }
       setSnapshot(data.snapshot);
       setError(null);
     } catch (err) {
       if (!mounted.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load sources");
+      setError(err instanceof Error ? err.message : studioErrors.failedLoadSources);
     }
   }, []);
 
@@ -81,11 +84,11 @@ export function useDataSources(options: UseDataSourcesOptions = {}) {
         setError(null);
         await loadSettings(true);
       } else {
-        setError(data.error ?? "Refresh failed");
+        setError(data.error ?? studioErrors.refreshFailed);
       }
     } catch (err) {
       if (!mounted.current) return;
-      setError(err instanceof Error ? err.message : "Refresh failed");
+      setError(err instanceof Error ? err.message : studioErrors.refreshFailed);
     } finally {
       if (mounted.current) setRefreshing(false);
     }

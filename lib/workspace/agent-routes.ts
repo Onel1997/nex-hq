@@ -1,5 +1,7 @@
 import type { AgentId } from "@/lib/constants/agents";
 import { AGENT_CATALOG } from "@/lib/constants/agents";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/get-dictionary";
 
 /** Route slug per agent — designer maps to /agents/design */
 export const AGENT_WORKSPACE_ROUTES: Record<AgentId, string> = {
@@ -21,6 +23,8 @@ export const AGENT_STUDIO_NAMES: Record<AgentId, string> = {
   marketing: "Marketing Center",
   shopify: "Shopify Operations",
 };
+
+export const COMMERCE_LAB_ROUTE = "/agents/commerce";
 
 export interface StudioSection {
   id: string;
@@ -85,8 +89,8 @@ export function getAgentWorkspaceRoute(agentId: AgentId): string {
   return AGENT_WORKSPACE_ROUTES[agentId];
 }
 
-export function getAgentStudioName(agentId: AgentId): string {
-  return AGENT_STUDIO_NAMES[agentId];
+export function getAgentStudioName(agentId: AgentId, locale: Locale = DEFAULT_LOCALE): string {
+  return getDictionary(locale).agents.studioNames[agentId];
 }
 
 export function getAgentFromWorkspacePath(pathname: string): AgentId | null {
@@ -97,8 +101,6 @@ export function getAgentFromWorkspacePath(pathname: string): AgentId | null {
   }
   return null;
 }
-
-export const COMMERCE_LAB_ROUTE = "/agents/commerce";
 
 export function isCommerceLabPath(pathname: string): boolean {
   return pathname === COMMERCE_LAB_ROUTE || pathname.startsWith(`${COMMERCE_LAB_ROUTE}/`);

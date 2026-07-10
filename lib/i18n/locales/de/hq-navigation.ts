@@ -1,0 +1,18 @@
+export const hqNavigation = {
+  facility: "Facility",
+  agents: "KI-Agenten",
+  settings: "Einstellungen",
+  general: "Allgemein",
+  commandCenter: "Kommandozentrale",
+  missionControl: "Missionskontrolle",
+  reportsCenter: "Berichte-Zentrale",
+  knowledgeVault: "Wissensarchiv",
+  brainCore: "Brain-Kern",
+  analyticsChamber: "Analytics-Kammer",
+  commerceLab: "Commerce Lab",
+  expandNav: "Navigation erweitern",
+  collapseNav: "Navigation einklappen",
+  expand: "Erweitern",
+  collapse: "Einklappen",
+  navAriaLabel: "NexHQ-Navigation",
+} as const;

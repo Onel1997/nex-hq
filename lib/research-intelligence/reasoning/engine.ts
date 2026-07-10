@@ -2,8 +2,14 @@ import { MILAENE_BRAND_PROFILE, termConflictsBrandFit, termMatchesBrandFit } fro
 import { directionsAgree, normalizeTerm, uniqueTerms } from "../confidence/scoring-utils";
 import {
   getSourceWeightProfile,
-  roleLabel,
 } from "../confidence/source-weights";
+import {
+  formatIntelligenceTemplate,
+  getIntelligenceCopy,
+  roleLabelLocalized,
+  tierLabel,
+} from "../copy";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import type { ConfidenceIntelligence, ConfidenceScoreId } from "../types/confidence";
 import type { UnifiedResearchIntelligence } from "../types/unified";
 import type {
@@ -19,20 +25,22 @@ export const REASONING_LAYER_VERSION = RESEARCH_REASONING_VERSION;
 
 export interface ReasoningContext {
   workspaceId?: string;
-  locale?: string;
+  locale?: Locale;
   generatedAt: string;
 }
 
 function buildTrendSignificance(
   intelligence: UnifiedResearchIntelligence,
   confidence: ConfidenceIntelligence,
+  locale: Locale = DEFAULT_LOCALE,
 ): string[] {
+  const copy = getIntelligenceCopy(locale);
   const lines: string[] = [];
   const rising = intelligence.trends.rising.length + intelligence.trends.emerging.length;
   const declining = intelligence.trends.declining.length;
 
   if (rising === 0 && intelligence.signals.length === 0) {
-    return ["No trend landscape detected — intelligence feed is empty."];
+    return [copy.reasoning.emptyTrendLandscape];
   }
 
   if (rising > 0) {
@@ -42,30 +50,45 @@ function buildTrendSignificance(
     ]
       .slice(0, 3)
       .map((cluster) => cluster.label);
+    const terms =
+      topRising.length > 0 ? `: ${topRising.join(", ")}` : "";
     lines.push(
-      `${rising} rising or emerging trend cluster(s) indicate directional momentum${topRising.length ? `: ${topRising.join(", ")}` : ""}.`,
+      formatIntelligenceTemplate(copy.reasoning.risingClusters, {
+        count: rising,
+        terms,
+      }),
     );
   }
 
   if (confidence.scores.trend_confidence.score >= 65) {
     lines.push(
-      `Trend confidence is ${confidence.scores.trend_confidence.tier} (${confidence.scores.trend_confidence.score}/100) — multiple sources reinforce the same directional shift.`,
+      formatIntelligenceTemplate(copy.reasoning.trendConfidenceHigh, {
+        tier: tierLabel(confidence.scores.trend_confidence.tier, locale),
+        score: confidence.scores.trend_confidence.score,
+      }),
     );
   } else if (confidence.scores.trend_confidence.score > 0) {
     lines.push(
-      `Trend confidence is ${confidence.scores.trend_confidence.tier} (${confidence.scores.trend_confidence.score}/100) — momentum exists but cross-source reinforcement is partial.`,
+      formatIntelligenceTemplate(copy.reasoning.trendConfidencePartial, {
+        tier: tierLabel(confidence.scores.trend_confidence.tier, locale),
+        score: confidence.scores.trend_confidence.score,
+      }),
     );
   }
 
   if (declining > rising) {
     lines.push(
-      `Declining clusters (${declining}) outnumber rising signals — the trend landscape may be rotating away from these themes.`,
+      formatIntelligenceTemplate(copy.reasoning.decliningDominant, {
+        declining,
+      }),
     );
   }
 
   if (intelligence.trends.opportunities.length > 0) {
     lines.push(
-      `Opportunity terms surfaced: ${intelligence.trends.opportunities.slice(0, 5).join(", ")}.`,
+      formatIntelligenceTemplate(copy.reasoning.opportunityTerms, {
+        terms: intelligence.trends.opportunities.slice(0, 5).join(", "),
+      }),
     );
   }
 
@@ -93,7 +116,9 @@ function buildSourceReasoning(
   intelligence: UnifiedResearchIntelligence,
   confidence: ConfidenceIntelligence,
   mode: "confirming" | "disagreeing",
+  locale: Locale = DEFAULT_LOCALE,
 ): SourceReasoning[] {
+  const copy = getIntelligenceCopy(locale);
   const termDirections = collectTermDirections(intelligence);
   const bySource = new Map<string, { supports: string[]; contradicts: string[]; evidenceIds: string[] }>();
 
@@ -141,12 +166,24 @@ function buildSourceReasoning(
     if (mode === "confirming" && terms.length === 0 && bucket.evidenceIds.length === 0) continue;
 
     const unique = uniqueTerms(terms);
+    const role = roleLabelLocalized(profile.role, locale);
     const summary =
       mode === "confirming"
         ? unique.length > 0
-          ? `${profile.label} confirms momentum on ${unique.slice(0, 4).join(", ")} as ${roleLabel(profile.role)}.`
-          : `${profile.label} contributes ${bucket.evidenceIds.length} supporting signal(s) as ${roleLabel(profile.role)}.`
-        : `${profile.label} diverges on ${unique.slice(0, 4).join(", ")} — directional conflict with peer sources.`;
+          ? formatIntelligenceTemplate(copy.reasoning.sourceConfirms, {
+              provider: profile.label,
+              terms: unique.slice(0, 4).join(", "),
+              role,
+            })
+          : formatIntelligenceTemplate(copy.reasoning.sourceContributes, {
+              provider: profile.label,
+              count: bucket.evidenceIds.length,
+              role,
+            })
+        : formatIntelligenceTemplate(copy.reasoning.sourceDiverges, {
+            provider: profile.label,
+            terms: unique.slice(0, 4).join(", "),
+          });
 
     if (mode === "disagreeing" && unique.length === 0) continue;
 
@@ -166,7 +203,11 @@ function buildSourceReasoning(
       results.push({
         sourceKey,
         role: profile.role,
-        summary: `${profile.label} contributed ${contribution.signalCount} signal(s) as ${roleLabel(profile.role)}.`,
+        summary: formatIntelligenceTemplate(copy.reasoning.sourceContributed, {
+          provider: profile.label,
+          count: contribution.signalCount,
+          role: roleLabelLocalized(profile.role, locale),
+        }),
         evidenceIds: intelligence.signals
           .filter((signal) => String(signal.provenance.sourceKey) === sourceKey)
           .map((signal) => signal.id)
@@ -179,13 +220,17 @@ function buildSourceReasoning(
   return results.sort((a, b) => b.weight - a.weight);
 }
 
-function buildRisks(confidence: ConfidenceIntelligence): RiskReasoning[] {
+function buildRisks(
+  confidence: ConfidenceIntelligence,
+  locale: Locale = DEFAULT_LOCALE,
+): RiskReasoning[] {
+  const copy = getIntelligenceCopy(locale);
   const risks: RiskReasoning[] = [];
 
   if (confidence.scores.saturation_risk.score >= 60) {
     risks.push({
       id: "saturation",
-      label: "Market saturation",
+      label: copy.risks.marketSaturation,
       severity: confidence.scores.saturation_risk.score >= 80 ? "high" : "medium",
       reason: confidence.scores.saturation_risk.rationale,
       relatedScoreIds: ["saturation_risk"],
@@ -195,7 +240,7 @@ function buildRisks(confidence: ConfidenceIntelligence): RiskReasoning[] {
   if (confidence.scores.source_agreement.score < 45) {
     risks.push({
       id: "source-disagreement",
-      label: "Source disagreement",
+      label: copy.risks.sourceDisagreement,
       severity: confidence.scores.source_agreement.score < 25 ? "high" : "medium",
       reason: confidence.scores.source_agreement.rationale,
       relatedScoreIds: ["source_agreement"],
@@ -205,7 +250,7 @@ function buildRisks(confidence: ConfidenceIntelligence): RiskReasoning[] {
   if (confidence.scores.brand_fit_confidence.score < 40) {
     risks.push({
       id: "brand-misfit",
-      label: "Milaene brand misalignment",
+      label: copy.risks.brandMisalignment,
       severity: confidence.scores.brand_fit_confidence.score < 20 ? "high" : "medium",
       reason: confidence.scores.brand_fit_confidence.rationale,
       relatedScoreIds: ["brand_fit_confidence"],
@@ -215,7 +260,7 @@ function buildRisks(confidence: ConfidenceIntelligence): RiskReasoning[] {
   if (confidence.scores.commercial_confidence.score < 35) {
     risks.push({
       id: "weak-commercial",
-      label: "Weak commercial validation",
+      label: copy.risks.weakCommercial,
       severity: "medium",
       reason: confidence.scores.commercial_confidence.rationale,
       relatedScoreIds: ["commercial_confidence"],
@@ -225,7 +270,7 @@ function buildRisks(confidence: ConfidenceIntelligence): RiskReasoning[] {
   if (confidence.scores.longevity.score < 35) {
     risks.push({
       id: "short-lived",
-      label: "Short-lived trend risk",
+      label: copy.risks.shortLivedTrend,
       severity: "low",
       reason: confidence.scores.longevity.rationale,
       relatedScoreIds: ["longevity"],
@@ -238,7 +283,9 @@ function buildRisks(confidence: ConfidenceIntelligence): RiskReasoning[] {
 function buildBrandFitReasoning(
   intelligence: UnifiedResearchIntelligence,
   confidence: ConfidenceIntelligence,
+  locale: Locale = DEFAULT_LOCALE,
 ): BrandFitReasoning {
+  const copy = getIntelligenceCopy(locale);
   const candidateTerms = uniqueTerms([
     ...intelligence.signals.map((signal) => signal.label),
     ...intelligence.brand.culturalSignals,
@@ -252,11 +299,18 @@ function buildBrandFitReasoning(
 
   let summary: string;
   if (candidateTerms.length === 0) {
-    summary = "Insufficient intelligence to assess Milaene brand fit.";
+    summary = copy.reasoning.brandFitInsufficient;
   } else if (fits) {
-    summary = `Trend landscape aligns with ${MILAENE_BRAND_PROFILE.name}'s quiet luxury and archive streetwear DNA — ${alignedSignals.length} reinforcing cue(s) detected.`;
+    summary = formatIntelligenceTemplate(copy.reasoning.brandFitAligned, {
+      brand: MILAENE_BRAND_PROFILE.name,
+      count: alignedSignals.length,
+    });
   } else {
-    summary = `Trend landscape shows tension with ${MILAENE_BRAND_PROFILE.name} positioning — ${misalignedSignals.length} misaligned cue(s) vs ${alignedSignals.length} aligned.`;
+    summary = formatIntelligenceTemplate(copy.reasoning.brandFitTension, {
+      brand: MILAENE_BRAND_PROFILE.name,
+      misaligned: misalignedSignals.length,
+      aligned: alignedSignals.length,
+    });
   }
 
   return {
@@ -292,33 +346,51 @@ function buildNarratives(
   brandFit: BrandFitReasoning,
   confirming: SourceReasoning[],
   risks: RiskReasoning[],
+  locale: Locale = DEFAULT_LOCALE,
 ): string[] {
+  const copy = getIntelligenceCopy(locale);
   const narratives: string[] = [];
 
   if (intelligence.manifest.providerCount === 0) {
-    return ["Research Director evaluation complete — no provider data to reason over."];
+    return [copy.reasoning.noProviders];
   }
 
   narratives.push(
-    `Fused intelligence from ${intelligence.manifest.providerCount} provider(s) yields ${confidence.overall} overall confidence (${confidence.overallScore}/100).`,
+    formatIntelligenceTemplate(copy.reasoning.fusedSummary, {
+      providers: intelligence.manifest.providerCount,
+      tier: tierLabel(confidence.overall, locale),
+      score: confidence.overallScore,
+    }),
   );
 
   if (confirming.length > 0) {
     narratives.push(
-      `Strongest confirming sources: ${confirming.slice(0, 3).map((item) => item.summary.split(" as ")[0]).join("; ")}.`,
+      formatIntelligenceTemplate(copy.reasoning.confirmingSources, {
+        summaries: confirming
+          .slice(0, 3)
+          .map((item) => item.summary)
+          .join("; "),
+      }),
     );
   }
 
   narratives.push(brandFit.summary);
 
   if (risks.length > 0) {
-    narratives.push(`Key risks: ${risks.map((risk) => risk.label).join(", ")}.`);
+    narratives.push(
+      formatIntelligenceTemplate(copy.reasoning.keyRisks, {
+        risks: risks.map((risk) => risk.label).join(", "),
+      }),
+    );
   } else {
-    narratives.push("No elevated risk flags in the current scoring pass.");
+    narratives.push(copy.reasoning.noElevatedRisks);
   }
 
   narratives.push(
-    `Launch readiness scored at ${confidence.scores.launch_readiness.score}/100 (${confidence.scores.launch_readiness.tier}) — scoring only, not a go-to-market recommendation.`,
+    formatIntelligenceTemplate(copy.reasoning.launchReadinessNote, {
+      score: confidence.scores.launch_readiness.score,
+      tier: tierLabel(confidence.scores.launch_readiness.tier, locale),
+    }),
   );
 
   return narratives;
@@ -329,17 +401,21 @@ export function computeResearchReasoning(
   confidence: ConfidenceIntelligence,
   context: ReasoningContext,
 ): ResearchReasoningIntelligence {
-  const confirmingSources = buildSourceReasoning(intelligence, confidence, "confirming");
-  const disagreeingSources = buildSourceReasoning(intelligence, confidence, "disagreeing");
-  const brandFit = buildBrandFitReasoning(intelligence, confidence);
-  const risks = buildRisks(confidence);
-  const trendSignificance = buildTrendSignificance(intelligence, confidence);
+  const locale = context.locale ?? DEFAULT_LOCALE;
+  const copy = getIntelligenceCopy(locale);
+  const confirmingSources = buildSourceReasoning(intelligence, confidence, "confirming", locale);
+  const disagreeingSources = buildSourceReasoning(intelligence, confidence, "disagreeing", locale);
+  const brandFit = buildBrandFitReasoning(intelligence, confidence, locale);
+  const risks = buildRisks(confidence, locale);
+  const trendSignificance = buildTrendSignificance(intelligence, confidence, locale);
   const scoreEvidence = buildScoreEvidence(confidence);
 
   const caveats = [...confidence.caveats];
   if (disagreeingSources.length > 0) {
     caveats.push(
-      `${disagreeingSources.length} source(s) show directional disagreement — review disagreeingSources for detail.`,
+      formatIntelligenceTemplate(copy.confidence.disagreeingSources, {
+        count: String(disagreeingSources.length),
+      }),
     );
   }
 
@@ -358,6 +434,7 @@ export function computeResearchReasoning(
       brandFit,
       confirmingSources,
       risks,
+      locale,
     ),
     caveats,
   };

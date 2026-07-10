@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import { summarizeDesignConcepts } from "@/agents/research/design-concept";
 import { reportHasVisibleSections } from "@/lib/research-intelligence/report";
+import { useDictionary } from "@/lib/i18n";
 import type { ProviderSnapshot } from "./data-source-types";
 import type { FusionReportError, ResearchResultV3 } from "./types";
 import { ResearchStudioFusionReport } from "./research-studio-fusion-report";
@@ -39,6 +40,8 @@ function LegacyResearchSections({
   result: ResearchResultV3;
   compact?: boolean;
 }) {
+  const { research } = useDictionary();
+  const resultLabels = research.studio.result;
   const isDesign = result.outputKind === "design";
   const brief = result.designBrief;
 
@@ -63,7 +66,12 @@ function LegacyResearchSections({
     result.outputKind === "research"
       ? (result.recommendations ?? [])
       : result.designs?.length
-        ? [`${result.designs.length} design concepts ready for creative development.`]
+        ? [
+            resultLabels.designConceptsReady.replace(
+              "{count}",
+              String(result.designs.length),
+            ),
+          ]
         : [];
 
   return (
@@ -74,7 +82,10 @@ function LegacyResearchSections({
           <div className="rs3-result-meta">
             {result.confidence != null ? (
               <span className="rs3-result-chip rs3-result-chip-confidence">
-                {confidencePercent(result.confidence)}% confidence
+                {resultLabels.confidence.replace(
+                  "{percent}",
+                  String(confidencePercent(result.confidence)),
+                )}
               </span>
             ) : null}
           </div>
@@ -83,14 +94,14 @@ function LegacyResearchSections({
 
       {executiveSummary ? (
         <section className="rs3-result-section">
-          <h3>Executive Summary</h3>
+          <h3>{resultLabels.executiveSummary}</h3>
           <p>{executiveSummary}</p>
         </section>
       ) : null}
 
       {keyFindings.length > 0 ? (
         <section className="rs3-result-section">
-          <h3>Key Findings</h3>
+          <h3>{resultLabels.keyFindings}</h3>
           <ul>
             {keyFindings.map((item, index) => (
               <li key={`${item}-${index}`}>{item}</li>
@@ -101,7 +112,7 @@ function LegacyResearchSections({
 
       {opportunities.length > 0 ? (
         <section className="rs3-result-section">
-          <h3>Opportunities</h3>
+          <h3>{resultLabels.opportunities}</h3>
           <ul>
             {opportunities.map((item, index) => (
               <li key={`${item}-${index}`}>{item}</li>
@@ -112,7 +123,7 @@ function LegacyResearchSections({
 
       {recommendations.length > 0 ? (
         <section className="rs3-result-section rs3-result-section-accent">
-          <h3>Recommendations</h3>
+          <h3>{resultLabels.recommendations}</h3>
           <ul>
             {recommendations.map((item, index) => (
               <li key={`${item}-${index}`}>{item}</li>
@@ -123,7 +134,7 @@ function LegacyResearchSections({
 
       {isDesign && result.designs && result.designs.length > 0 ? (
         <section className="rs3-result-section">
-          <h3>Design Concepts</h3>
+          <h3>{resultLabels.designConcepts}</h3>
           <ul>
             {result.designs.slice(0, 5).map((design) => (
               <li key={design.designId}>{design.title}</li>
@@ -143,6 +154,8 @@ export function ResearchStudioResult({
   onRetryFusion,
   onNewResearch,
 }: ResearchStudioResultProps) {
+  const { research } = useDictionary();
+  const resultLabels = research.studio.result;
   const [approving, setApproving] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -162,7 +175,7 @@ export function ResearchStudioResult({
   const handleApprove = useCallback(async () => {
     const recordId = result.reportRecordId;
     if (!recordId) {
-      setActionError("Report record not available for approval.");
+      setActionError(resultLabels.approveRecordUnavailable);
       return;
     }
 
@@ -176,16 +189,18 @@ export function ResearchStudioResult({
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error ?? "Approval failed");
+        throw new Error(data.error ?? resultLabels.approvalFailed);
       }
       setApproved(true);
-      setActionMessage("Report approved.");
+      setActionMessage(resultLabels.reportApproved);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Approval failed");
+      setActionError(
+        err instanceof Error ? err.message : resultLabels.approvalFailed,
+      );
     } finally {
       setApproving(false);
     }
-  }, [result.reportRecordId]);
+  }, [result.reportRecordId, resultLabels]);
 
   return (
     <article
@@ -193,7 +208,7 @@ export function ResearchStudioResult({
     >
       <div className="rs3-result-fusion-badge">
         <CheckCircle2 className="size-4" />
-        <span>Research complete</span>
+        <span>{resultLabels.complete}</span>
       </div>
 
       {showFusionWarning ? (
@@ -201,7 +216,7 @@ export function ResearchStudioResult({
           <div className="rs3-fusion-warning-copy">
             <AlertTriangle className="size-4 shrink-0" />
             <div>
-              <strong>Fusion report unavailable</strong>
+              <strong>{resultLabels.fusionUnavailable}</strong>
               <p>{fusionError.message}</p>
             </div>
           </div>
@@ -216,7 +231,7 @@ export function ResearchStudioResult({
             ) : (
               <RotateCcw className="size-3.5" />
             )}
-            Retry fusion report
+            {resultLabels.retryFusion}
           </button>
         </div>
       ) : null}
@@ -236,7 +251,7 @@ export function ResearchStudioResult({
           }
         >
           <summary>
-            <span>Original research output</span>
+            <span>{resultLabels.originalOutput}</span>
             <ChevronDown className="size-3.5" aria-hidden />
           </summary>
           <LegacyResearchSections result={result} compact />
@@ -263,12 +278,12 @@ export function ResearchStudioResult({
           onClick={onNewResearch}
         >
           <RotateCcw className="size-3.5" />
-          New Research
+          {resultLabels.newResearch}
         </button>
 
         <Link href="/facility/reports" className="rs3-btn rs3-btn-secondary">
           <ExternalLink className="size-3.5" />
-          Open Reports Center
+          {resultLabels.openReportsCenter}
         </Link>
 
         <button
@@ -282,7 +297,7 @@ export function ResearchStudioResult({
           ) : approved ? (
             <CheckCircle2 className="size-3.5" />
           ) : null}
-          {approved ? "Approved" : "Approve Report"}
+          {approved ? resultLabels.approved : resultLabels.approveReport}
         </button>
       </footer>
     </article>

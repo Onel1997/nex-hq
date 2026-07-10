@@ -22,6 +22,8 @@ export * from "./evaluation";
 export * from "./reasoning";
 export * from "./recommendation";
 export * from "./report";
+export * from "./brand-intelligence";
+export * from "./creative-brief";
 
 // Pipeline convenience
 export {

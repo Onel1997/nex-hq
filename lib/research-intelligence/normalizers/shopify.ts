@@ -137,7 +137,7 @@ function normalizeShopify(
     opportunities: productKnowledge.categoryGaps.map((gap, index) => ({
       id: signalId(SOURCE, `gap-${index}`),
       title: gap,
-      rationale: `Catalog gap detected · ${gap}`,
+      rationale: `Lücke im Sortiment erkannt · ${gap}`,
       tags: ["catalog-gap"],
       provenance,
     })),

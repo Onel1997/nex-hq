@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FacilityDepartmentShell } from "@/components/facility/facility-department-shell";
+import { useDictionary } from "@/lib/i18n";
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/get-dictionary";
 import type {
   AgentActivityItem,
   CeoCommandInsight,
@@ -23,13 +26,15 @@ import {
 
 export function MissionControlCenter() {
   const { data, loading, error, refresh } = useMissionControl();
+  const { facility } = useDictionary();
+  const mc = facility.missionControl;
 
   return (
     <FacilityDepartmentShell
       wingId="mission-control"
-      title="Mission Control"
+      title={mc.title}
       icon={Target}
-      subtitle="Central operations room — CEO Agent coordinates all departments"
+      subtitle={mc.subtitle}
       headerActions={
         <button
           type="button"
@@ -95,12 +100,14 @@ function MissionControlDashboard({ data }: { data: MissionControlPayload }) {
 }
 
 function CommandBar({ bar }: { bar: MissionControlPayload["commandBar"] }) {
+  const { facility } = useDictionary();
+  const mc = facility.missionControl;
   const items = [
-    { label: "Active Missions", value: bar.activeMissions, glow: true },
-    { label: "Completed", value: bar.completedMissions },
-    { label: "Agents Online", value: bar.departmentsOnline, pulse: true },
-    { label: "Critical", value: bar.criticalTasks, alert: bar.criticalTasks > 0 },
-    { label: "Agent Activity", value: bar.agentActivity },
+    { label: mc.activeMissions, value: bar.activeMissions, glow: true },
+    { label: mc.completed, value: bar.completedMissions },
+    { label: mc.agentsOnline, value: bar.departmentsOnline, pulse: true },
+    { label: mc.critical, value: bar.criticalTasks, alert: bar.criticalTasks > 0 },
+    { label: mc.agentActivity, value: bar.agentActivity },
   ];
 
   return (
@@ -309,10 +316,14 @@ function useMissionControl() {
     try {
       const res = await fetch("/api/facility/missions");
       const body = (await res.json()) as MissionControlPayload & { error?: string };
-      if (!res.ok) throw new Error(body.error ?? "Failed to load Mission Control");
+      if (!res.ok) throw new Error(body.error ?? getDictionary(DEFAULT_LOCALE).facility.missionControl.failedToLoad);
       setData(body);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load Mission Control");
+      setError(
+        err instanceof Error
+          ? err.message
+          : getDictionary(DEFAULT_LOCALE).facility.missionControl.failedToLoad,
+      );
       setData(null);
     } finally {
       setLoading(false);

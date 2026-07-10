@@ -12,6 +12,7 @@ import {
   type ProviderDisplayStatus,
 } from "./data-sources-center-utils";
 import { formatRelativeSync } from "./format-sync";
+import { useDictionary, useLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
   Activity,
@@ -93,6 +94,9 @@ function ProviderCard({
   feedback: ActionFeedback | null;
   onAction: (action: ProviderAction) => void;
 }) {
+  const locale = useLocale();
+  const { research } = useDictionary();
+  const ds = research.studio.dataSources;
   const [developerOpen, setDeveloperOpen] = useState(false);
   const displayStatus = resolveDisplayStatus(provider.status, provider.mode);
   const comingSoon = displayStatus === "coming_soon";
@@ -115,7 +119,7 @@ function ProviderCard({
             {displayStatus !== "coming_soon" ? (
               <span className="rs3-dsc-status-dot" />
             ) : null}
-            {displayStatusLabel(displayStatus)}
+            {displayStatusLabel(displayStatus, locale)}
           </span>
         </div>
 
@@ -129,13 +133,13 @@ function ProviderCard({
         {guide ? (
           <>
             <div className="rs3-dsc-block">
-              <p className="rs3-dsc-block-label">Description</p>
+              <p className="rs3-dsc-block-label">{ds.description}</p>
               <p className="rs3-dsc-block-copy">{guide.purpose}</p>
             </div>
 
             {guide.limitations.length > 0 ? (
               <div className="rs3-dsc-block rs3-dsc-block-limitations">
-                <p className="rs3-dsc-block-label">Current limitations</p>
+                <p className="rs3-dsc-block-label">{ds.limitations}</p>
                 <ul className="rs3-dsc-bullet-list">
                   {guide.limitations.map((item) => (
                     <li key={item}>{item}</li>
@@ -146,7 +150,7 @@ function ProviderCard({
 
             {guide.notes.length > 0 ? (
               <div className="rs3-dsc-block rs3-dsc-block-notes">
-                <p className="rs3-dsc-block-label">Notes</p>
+                <p className="rs3-dsc-block-label">{ds.notes}</p>
                 <ul className="rs3-dsc-bullet-list">
                   {guide.notes.map((item) => (
                     <li key={item}>{item}</li>
@@ -163,7 +167,7 @@ function ProviderCard({
                 aria-expanded={developerOpen}
               >
                 <KeyRound className="size-3.5 shrink-0" />
-                <span>Developer setup</span>
+                <span>{ds.developerSetup}</span>
                 <ChevronDown
                   className={cn(
                     "size-3.5 transition-transform",
@@ -173,7 +177,7 @@ function ProviderCard({
               </button>
               {developerOpen ? (
                 <div className="rs3-dsc-debug-panel">
-                  <p className="rs3-dsc-debug-label">Credential requirements</p>
+                  <p className="rs3-dsc-debug-label">{ds.credentialRequirements}</p>
                   {requiredKeys.length > 0 ? (
                     <ul className="rs3-dsc-env-list">
                       {requiredKeys.map((key) => {
@@ -184,20 +188,18 @@ function ProviderCard({
                             className={cn(missing && "rs3-dsc-env-missing")}
                           >
                             <code>{key}</code>
-                            <span>{missing ? "Missing" : "Configured"}</span>
+                            <span>{missing ? ds.missing : ds.configured}</span>
                           </li>
                         );
                       })}
                     </ul>
                   ) : (
-                    <p className="rs3-dsc-debug-hint">
-                      No credentials required for this provider.
-                    </p>
+                    <p className="rs3-dsc-debug-hint">{ds.noCredentialsRequired}</p>
                   )}
 
                   {guide.steps.length > 0 ? (
                     <>
-                      <p className="rs3-dsc-debug-label">Setup steps</p>
+                      <p className="rs3-dsc-debug-label">{ds.setupSteps}</p>
                       <ol className="rs3-dsc-setup-steps">
                         {guide.steps.map((step) => (
                           <li key={step}>{step}</li>
@@ -206,10 +208,7 @@ function ProviderCard({
                     </>
                   ) : null}
 
-                  <p className="rs3-dsc-debug-hint">
-                    Environment variable values are never shown here. Add keys to
-                    .env.local and restart the dev server.
-                  </p>
+                  <p className="rs3-dsc-debug-hint">{ds.envHint}</p>
                 </div>
               ) : null}
             </div>
@@ -222,7 +221,7 @@ function ProviderCard({
                 rel="noopener noreferrer"
               >
                 <BookOpen className="size-3.5" />
-                Documentation
+                {ds.documentation}
               </a>
             ) : null}
           </>
@@ -230,13 +229,13 @@ function ProviderCard({
 
         <div className="rs3-dsc-metrics">
           <div className="rs3-dsc-metric">
-            <span className="rs3-dsc-metric-label">Authentication method</span>
+            <span className="rs3-dsc-metric-label">{ds.authMethod}</span>
             <span className="rs3-dsc-metric-value">
-              {authMethodLabel(provider.auth.method)}
+              {authMethodLabel(provider.auth.method, locale)}
             </span>
           </div>
           <div className="rs3-dsc-metric">
-            <span className="rs3-dsc-metric-label">API configured</span>
+            <span className="rs3-dsc-metric-label">{ds.apiConfigured}</span>
             <span
               className={cn(
                 "rs3-dsc-metric-value",
@@ -245,19 +244,19 @@ function ProviderCard({
                   : "rs3-dsc-metric-no",
               )}
             >
-              {provider.auth.configured ? "Yes" : "No"}
+              {provider.auth.configured ? ds.yes : ds.no}
             </span>
           </div>
           <div className="rs3-dsc-metric">
-            <span className="rs3-dsc-metric-label">Last sync</span>
+            <span className="rs3-dsc-metric-label">{ds.lastSync}</span>
             <span className="rs3-dsc-metric-value">
-              {formatRelativeSync(provider.lastSync)}
+              {formatRelativeSync(provider.lastSync, locale)}
             </span>
           </div>
           <div className="rs3-dsc-metric">
-            <span className="rs3-dsc-metric-label">Cache status</span>
+            <span className="rs3-dsc-metric-label">{ds.cacheStatus}</span>
             <span className="rs3-dsc-metric-value">
-              {formatCacheAge(provider.cacheAgeMs, provider.fromCache)}
+              {formatCacheAge(provider.cacheAgeMs, provider.fromCache, locale)}
             </span>
           </div>
         </div>
@@ -272,7 +271,7 @@ function ProviderCard({
             <Activity className="size-3.5 shrink-0" />
             <span>
               {provider.health.message ??
-                (provider.health.healthy ? "Healthy" : "Unhealthy")}
+                (provider.health.healthy ? ds.healthy : ds.unhealthy)}
               {provider.health.latencyMs != null
                 ? ` · ${provider.health.latencyMs}ms`
                 : ""}
@@ -314,7 +313,7 @@ function ProviderCard({
           onClick={() => onAction("health")}
         >
           {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Activity className="size-3.5" />}
-          Health
+          {ds.health}
         </button>
         <button
           type="button"
@@ -323,7 +322,7 @@ function ProviderCard({
           onClick={() => onAction("test")}
         >
           <TestTube2 className="size-3.5" />
-          Test
+          {ds.test}
         </button>
         <button
           type="button"
@@ -332,7 +331,7 @@ function ProviderCard({
           onClick={() => onAction("refresh")}
         >
           <RefreshCw className="size-3.5" />
-          Refresh
+          {ds.refresh}
         </button>
         <button
           type="button"
@@ -341,7 +340,7 @@ function ProviderCard({
           onClick={() => onAction("reconnect")}
         >
           <PlugZap className="size-3.5" />
-          Reconnect
+          {ds.reconnect}
         </button>
         <button
           type="button"
@@ -350,7 +349,7 @@ function ProviderCard({
           onClick={() => onAction("disconnect")}
         >
           <Unplug className="size-3.5" />
-          Disconnect
+          {ds.disconnect}
         </button>
       </div>
     </article>
@@ -372,6 +371,8 @@ function ProviderSection({
   feedbackMap: Record<string, ActionFeedback>;
   onAction: (id: string, action: ProviderAction) => void;
 }) {
+  const { research } = useDictionary();
+  const ds = research.studio.dataSources;
   if (providers.length === 0) return null;
 
   return (
@@ -381,7 +382,9 @@ function ProviderSection({
           <h3 className="rs3-dsc-section-title">{title}</h3>
           <p className="rs3-dsc-section-subtitle">{subtitle}</p>
         </div>
-        <span className="rs3-dsc-section-count">{providers.length} sources</span>
+        <span className="rs3-dsc-section-count">
+          {ds.sourcesCount.replace("{count}", String(providers.length))}
+        </span>
       </header>
       <div className="rs3-dsc-grid">
         {providers.map((provider) => (
@@ -406,6 +409,9 @@ export function ResearchStudioDataSourcesCenter({
   onRefreshAll,
   onAction,
 }: ResearchStudioDataSourcesCenterProps) {
+  const locale = useLocale();
+  const { research, agents } = useDictionary();
+  const ds = research.studio.dataSources;
   const [busyId, setBusyId] = useState<string | null>(null);
   const [feedbackMap, setFeedbackMap] = useState<Record<string, ActionFeedback>>(
     {},
@@ -448,7 +454,7 @@ export function ResearchStudioDataSourcesCenter({
               type: health.healthy ? "success" : "error",
               message:
                 health.message ??
-                (health.healthy ? "Health check passed" : "Health check failed"),
+                (health.healthy ? ds.healthPassed : ds.healthFailed),
             },
           }));
         } else if (action === "test") {
@@ -459,8 +465,8 @@ export function ResearchStudioDataSourcesCenter({
               message:
                 result.message ??
                 (result.ok
-                  ? "Manual test completed"
-                  : result.error ?? "Manual test failed"),
+                  ? ds.manualTestCompleted
+                  : result.error ?? ds.manualTestFailed),
             },
           }));
         } else if (action === "disconnect") {
@@ -468,7 +474,7 @@ export function ResearchStudioDataSourcesCenter({
             ...prev,
             [id]: {
               type: "info",
-              message: "Cache cleared — reconnect to sync again",
+              message: ds.cacheCleared,
             },
           }));
         } else if (action === "refresh" || action === "reconnect") {
@@ -478,22 +484,22 @@ export function ResearchStudioDataSourcesCenter({
               type: result.ok ? "success" : "error",
               message: result.ok
                 ? action === "reconnect"
-                  ? "Reconnected successfully"
-                  : "Provider refreshed"
-                : result.error ?? "Action failed",
+                  ? ds.reconnected
+                  : ds.providerRefreshed
+                : result.error ?? ds.actionFailed,
             },
           }));
         }
       } catch {
         setFeedbackMap((prev) => ({
           ...prev,
-          [id]: { type: "error", message: "Action failed" },
+          [id]: { type: "error", message: ds.actionFailed },
         }));
       } finally {
         setBusyId(null);
       }
     },
-    [onAction],
+    [onAction, ds],
   );
 
   if (!open) return null;
@@ -503,13 +509,13 @@ export function ResearchStudioDataSourcesCenter({
       className="rs3-dsc-overlay"
       role="dialog"
       aria-modal
-      aria-label="Data Sources Center"
+      aria-label={ds.ariaLabel}
     >
       <button
         type="button"
         className="rs3-dsc-backdrop"
         onClick={onClose}
-        aria-label="Close Data Sources Center"
+        aria-label={ds.close}
       />
       <div className="rs3-dsc-panel">
         <header className="rs3-dsc-header">
@@ -518,11 +524,9 @@ export function ResearchStudioDataSourcesCenter({
               <Database className="size-5" />
             </div>
             <div>
-              <p className="rs3-dsc-eyebrow">Research Studio</p>
-              <h2 className="rs3-dsc-title">Data Sources Center</h2>
-              <p className="rs3-dsc-subtitle">
-                Central intelligence integration hub for NexHQ
-              </p>
+              <p className="rs3-dsc-eyebrow">{agents.studioNames.research}</p>
+              <h2 className="rs3-dsc-title">{ds.title}</h2>
+              <p className="rs3-dsc-subtitle">{ds.subtitle}</p>
             </div>
           </div>
           <div className="rs3-dsc-header-actions">
@@ -533,13 +537,13 @@ export function ResearchStudioDataSourcesCenter({
               disabled={loading}
             >
               <RefreshCw className={cn("size-4", loading && "animate-spin")} />
-              Sync All
+              {ds.syncAll}
             </button>
             <button
               type="button"
               className="rs3-dsc-header-btn rs3-dsc-header-btn-close"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={ds.closeShort}
             >
               <X className="size-4" />
             </button>
@@ -552,36 +556,36 @@ export function ResearchStudioDataSourcesCenter({
               <span className="rs3-dsc-summary-value">
                 {settings.connectedCount}
               </span>
-              <span className="rs3-dsc-summary-label">Connected</span>
+              <span className="rs3-dsc-summary-label">{ds.summary.connected}</span>
             </div>
             <div className="rs3-dsc-summary-stat rs3-dsc-summary-simulated">
               <span className="rs3-dsc-summary-value">
                 {settings.simulatedCount}
               </span>
-              <span className="rs3-dsc-summary-label">Simulated</span>
+              <span className="rs3-dsc-summary-label">{ds.summary.simulated}</span>
             </div>
             <div className="rs3-dsc-summary-stat rs3-dsc-summary-offline">
               <span className="rs3-dsc-summary-value">
                 {settings.offlineCount}
               </span>
-              <span className="rs3-dsc-summary-label">Offline</span>
+              <span className="rs3-dsc-summary-label">{ds.summary.offline}</span>
             </div>
             <div className="rs3-dsc-summary-stat rs3-dsc-summary-soon">
               <span className="rs3-dsc-summary-value">
                 {settings.comingSoonCount}
               </span>
-              <span className="rs3-dsc-summary-label">Coming Soon</span>
+              <span className="rs3-dsc-summary-label">{ds.summary.comingSoon}</span>
             </div>
             <div className="rs3-dsc-summary-stat rs3-dsc-summary-live">
               <span className="rs3-dsc-summary-value">{settings.liveCount}</span>
-              <span className="rs3-dsc-summary-label">Live Sources</span>
+              <span className="rs3-dsc-summary-label">{ds.summary.liveSources}</span>
             </div>
             <div className="rs3-dsc-summary-stat rs3-dsc-summary-sync">
               <span className="rs3-dsc-summary-value rs3-dsc-summary-sync-value">
                 <Clock3 className="size-3.5" />
-                {formatRelativeSync(settings.loadedAt)}
+                {formatRelativeSync(settings.loadedAt, locale)}
               </span>
-              <span className="rs3-dsc-summary-label">Last Sync</span>
+              <span className="rs3-dsc-summary-label">{ds.summary.lastSync}</span>
             </div>
           </div>
         ) : null}
@@ -590,21 +594,21 @@ export function ResearchStudioDataSourcesCenter({
           {loading && !settings ? (
             <div className="rs3-dsc-loading">
               <Loader2 className="size-5 animate-spin" />
-              <span>Loading data sources…</span>
+              <span>{ds.loading}</span>
             </div>
           ) : (
             <>
               <ProviderSection
-                title="Connected"
-                subtitle="Production live providers currently supported in Research Studio."
+                title={ds.connectedTitle}
+                subtitle={ds.connectedSubtitle}
                 providers={groupedProviders.connected}
                 busyId={busyId}
                 feedbackMap={feedbackMap}
                 onAction={handleAction}
               />
               <ProviderSection
-                title="Planned integrations"
-                subtitle="Extended intelligence providers — configure credentials to activate live mode."
+                title={ds.plannedTitle}
+                subtitle={ds.plannedSubtitle}
                 providers={groupedProviders.planned}
                 busyId={busyId}
                 feedbackMap={feedbackMap}
@@ -616,10 +620,7 @@ export function ResearchStudioDataSourcesCenter({
 
         <footer className="rs3-dsc-footer">
           <FileText className="size-3.5 shrink-0 opacity-50" />
-          <p>
-            Credentials are stored in environment variables — values are never
-            shown here. Configure keys in your deployment settings.
-          </p>
+          <p>{ds.footerNote}</p>
         </footer>
       </div>
     </div>

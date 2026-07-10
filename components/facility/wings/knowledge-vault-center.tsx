@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FacilityDepartmentShell } from "@/components/facility/facility-department-shell";
+import { useDictionary } from "@/lib/i18n";
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/get-dictionary";
 import type {
   KnowledgeVaultPayload,
   KnowledgeVaultReportCard,
@@ -24,13 +27,13 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-const SEARCH_SCOPES: Array<{ id: KnowledgeVaultSearchScope; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "products", label: "Products" },
-  { id: "reports", label: "Reports" },
-  { id: "missions", label: "Missions" },
-  { id: "trends", label: "Trends" },
-  { id: "agents", label: "Agents" },
+const SEARCH_SCOPE_IDS: KnowledgeVaultSearchScope[] = [
+  "all",
+  "products",
+  "reports",
+  "missions",
+  "trends",
+  "agents",
 ];
 
 const SECTION_ICONS: Record<
@@ -44,23 +47,17 @@ const SECTION_ICONS: Record<
   agents: Brain,
 };
 
-const STATUS_LABELS: Record<KnowledgeVaultReportCard["status"], string> = {
-  approved: "Approved",
-  pending_review: "Review",
-  draft: "Draft",
-  archived: "Archived",
-  classified: "Classified",
-};
-
 export function KnowledgeVaultCenter() {
   const { data, loading, error, refresh } = useKnowledgeVault();
+  const { facility } = useDictionary();
+  const kv = facility.knowledgeVault;
 
   return (
     <FacilityDepartmentShell
       wingId="knowledge"
-      title="Knowledge Vault"
+      title={kv.title}
       icon={Archive}
-      subtitle="Classified AI archive — the central memory of Milaene HQ"
+      subtitle={kv.subtitle}
       className="kv-shell"
       headerActions={
         <button
@@ -74,20 +71,20 @@ export function KnowledgeVaultCenter() {
           ) : (
             <RefreshCw className="size-3.5" />
           )}
-          Sync Archive
+          {kv.syncArchive}
         </button>
       }
     >
       {loading && !data ? (
         <div className="kv-loading">
           <Loader2 className="size-8 animate-spin text-[var(--kv-accent)]" />
-          <p>Decrypting classified archive…</p>
+          <p>{kv.decrypting}</p>
         </div>
       ) : error ? (
         <div className="kv-error">
           <p>{error}</p>
           <button type="button" onClick={() => void refresh()}>
-            Retry
+            {facility.shared.retry}
           </button>
         </div>
       ) : data ? (
@@ -283,6 +280,13 @@ function SearchPanel({
   onQueryChange: (value: string) => void;
   onScopeChange: (value: KnowledgeVaultSearchScope) => void;
 }) {
+  const { facility } = useDictionary();
+  const scopes = facility.knowledgeVault.scopes;
+  const searchScopes = SEARCH_SCOPE_IDS.map((id) => ({
+    id,
+    label: scopes[id],
+  }));
+
   return (
     <div className="kv-search">
       <div className="kv-search-input-wrap">
@@ -290,13 +294,13 @@ function SearchPanel({
         <input
           type="search"
           className="kv-search-input"
-          placeholder="Global AI search — products, reports, missions, trends, agents…"
+          placeholder={facility.knowledgeVault.searchPlaceholder}
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
         />
       </div>
       <div className="kv-search-scopes">
-        {SEARCH_SCOPES.map((item) => (
+        {searchScopes.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -312,6 +316,8 @@ function SearchPanel({
 }
 
 function ReportCard({ report }: { report: KnowledgeVaultReportCard }) {
+  const { facility } = useDictionary();
+  const statusLabels = facility.shared.reportStatus;
   const subsectionLabel =
     report.subsection.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -322,7 +328,7 @@ function ReportCard({ report }: { report: KnowledgeVaultReportCard }) {
       <header className="kv-card-header">
         <span className="kv-card-dept">{report.department}</span>
         <span className={cn("kv-card-status", `kv-status-${report.status}`)}>
-          {STATUS_LABELS[report.status]}
+          {statusLabels[report.status]}
         </span>
       </header>
 
@@ -463,10 +469,14 @@ function useKnowledgeVault() {
     try {
       const res = await fetch("/api/facility/knowledge");
       const body = (await res.json()) as KnowledgeVaultPayload & { error?: string };
-      if (!res.ok) throw new Error(body.error ?? "Failed to load Knowledge Vault");
+      if (!res.ok) throw new Error(body.error ?? getDictionary(DEFAULT_LOCALE).facility.knowledgeVault.failedToLoad);
       setData(body);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load Knowledge Vault");
+      setError(
+        err instanceof Error
+          ? err.message
+          : getDictionary(DEFAULT_LOCALE).facility.knowledgeVault.failedToLoad,
+      );
       setData(null);
     } finally {
       setLoading(false);

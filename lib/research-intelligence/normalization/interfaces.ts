@@ -38,11 +38,20 @@ export interface NormalizerRegistration {
 export function buildContributionManifest(
   normalized: NormalizedProviderIntelligence,
 ): ProviderContributionManifest {
+  const trendSignals =
+    normalized.trends.rising.length +
+    normalized.trends.emerging.length +
+    normalized.trends.stable.length;
+  const domainSignals =
+    normalized.commercial.products.length +
+    normalized.market.demandNarratives.length +
+    normalized.brand.mentions.length;
+
   return {
     sourceKey: normalized.provenance.sourceKey,
     mode: normalized.provenance.mode,
     syncedAt: normalized.provenance.syncedAt,
-    signalCount: normalized.signals.length,
+    signalCount: Math.max(normalized.signals.length, trendSignals, domainSignals),
     sliceCount:
       normalized.signals.length +
       normalized.trends.rising.length +

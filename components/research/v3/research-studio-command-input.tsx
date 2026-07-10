@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PROMPT_PLACEHOLDERS } from "./missions";
+import { useLocale, useDictionary } from "@/lib/i18n";
+import { getPromptPlaceholders } from "@/lib/i18n/data/research-studio";
 import { cn } from "@/lib/utils";
 import {
   ArrowUp,
@@ -25,15 +26,19 @@ export function ResearchStudioCommandInput({
   onSubmit,
   disabled = false,
 }: ResearchStudioCommandInputProps) {
+  const locale = useLocale();
+  const { research } = useDictionary();
+  const copy = research.studio.command;
+  const placeholders = getPromptPlaceholders(locale);
   const [focused, setFocused] = useState(false);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setPlaceholderIndex((i) => (i + 1) % PROMPT_PLACEHOLDERS.length);
+      setPlaceholderIndex((i) => (i + 1) % placeholders.length);
     }, 4500);
     return () => clearInterval(timer);
-  }, []);
+  }, [placeholders.length]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -65,10 +70,10 @@ export function ResearchStudioCommandInput({
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={handleKeyDown}
-          placeholder={PROMPT_PLACEHOLDERS[placeholderIndex]}
+          placeholder={placeholders[placeholderIndex]}
           rows={4}
           className="rs3-command-input"
-          aria-label="Research command"
+          aria-label={copy.ariaLabel}
           disabled={disabled}
         />
         <div className="rs3-command-toolbar">
@@ -76,42 +81,42 @@ export function ResearchStudioCommandInput({
             <button
               type="button"
               className="rs3-command-action"
-              title="Voice input — Coming Soon"
+              title={copy.voiceTitle}
               disabled
             >
               <Mic className="size-4" />
-              <span>Voice</span>
-              <span className="rs3-command-soon">Soon</span>
+              <span>{copy.voice}</span>
+              <span className="rs3-command-soon">{copy.soon}</span>
             </button>
             <button
               type="button"
               className="rs3-command-action"
-              title="Moodboard upload — Coming Soon"
+              title={copy.moodboardTitle}
               disabled
             >
               <LayoutGrid className="size-4" />
-              <span>Moodboard</span>
-              <span className="rs3-command-soon">Soon</span>
+              <span>{copy.moodboard}</span>
+              <span className="rs3-command-soon">{copy.soon}</span>
             </button>
             <button
               type="button"
               className="rs3-command-action"
-              title="Reference upload — Coming Soon"
+              title={copy.referenceTitle}
               disabled
             >
               <Paperclip className="size-4" />
-              <span>Reference</span>
-              <span className="rs3-command-soon">Soon</span>
+              <span>{copy.reference}</span>
+              <span className="rs3-command-soon">{copy.soon}</span>
             </button>
             <button
               type="button"
               className="rs3-command-action"
-              title="Image upload — Coming Soon"
+              title={copy.imageTitle}
               disabled
             >
               <ImagePlus className="size-4" />
-              <span>Image</span>
-              <span className="rs3-command-soon">Soon</span>
+              <span>{copy.image}</span>
+              <span className="rs3-command-soon">{copy.soon}</span>
             </button>
           </div>
           <button
@@ -119,8 +124,8 @@ export function ResearchStudioCommandInput({
             className="rs3-command-submit"
             disabled={disabled || !value.trim()}
             onClick={handleSubmit}
-            aria-label="Launch research"
-            title="Launch research"
+            aria-label={copy.launchAria}
+            title={copy.launchTitle}
           >
             {disabled ? (
               <Loader2 className="size-4 animate-spin" />
@@ -130,9 +135,7 @@ export function ResearchStudioCommandInput({
           </button>
         </div>
       </div>
-      <p className="rs3-command-hint">
-        Enter to launch · Shift+Enter for new line
-      </p>
+      <p className="rs3-command-hint">{copy.hint}</p>
     </div>
   );
 }

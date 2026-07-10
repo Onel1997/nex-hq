@@ -1,10 +1,13 @@
 export type {
   ReportActionCard,
+  ReportBrandIntelligence,
+  ReportCreativeBrief,
   ReportInsight,
   ReportOpportunity,
   ReportRecommendationCard,
   ReportRiskCard,
   ReportScoreBlock,
+  ReportScoredOpportunity,
   ReportSourceBadge,
   ReportSourceCoverage,
   ResearchStudioReport,
@@ -15,6 +18,7 @@ export {
 } from "./types";
 
 export {
+  formatLaunchPriority,
   formatPriority,
   formatScoreTier,
   formatSeverity,

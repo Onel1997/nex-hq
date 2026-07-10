@@ -24,18 +24,7 @@ export type ResearchRunPhase =
   | "complete"
   | "error";
 
-export const RESEARCH_RUN_STEPS: Array<{
-  id: ResearchRunPhase;
-  label: string;
-}> = [
-  { id: "engine", label: "Running research engine" },
-  { id: "syncing", label: "Syncing data sources" },
-  { id: "normalizing", label: "Normalizing signals" },
-  { id: "fusing", label: "Fusing intelligence" },
-  { id: "scoring", label: "Scoring confidence" },
-  { id: "recommendations", label: "Generating recommendations" },
-  { id: "building", label: "Building report" },
-];
+export { getResearchRunSteps as RESEARCH_RUN_STEPS_FACTORY } from "@/lib/i18n/data/research-studio";
 
 export interface ResearchRunError {
   message: string;
@@ -54,11 +43,16 @@ export interface FusionReportError {
   message: string;
 }
 
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import { getStudioErrorMessages } from "@/lib/i18n/data/research-studio";
+
+const defaultErrors = getStudioErrorMessages(DEFAULT_LOCALE);
+
 export function parseResearchApiError(
   data: Record<string, unknown>,
 ): ResearchRunError {
   const message =
-    typeof data.error === "string" ? data.error : "Research failed";
+    typeof data.error === "string" ? data.error : defaultErrors.researchFailed;
   const sourceErrors: string[] = [];
 
   const pushSourceError = (value: unknown) => {
@@ -132,7 +126,7 @@ function parseValidationIssues(
       const issue = entry as Record<string, unknown>;
       const path = typeof issue.path === "string" ? issue.path : "(root)";
       const message =
-        typeof issue.message === "string" ? issue.message : "Invalid value";
+        typeof issue.message === "string" ? issue.message : defaultErrors.invalidValue;
       const expected =
         typeof issue.expected === "string" ? issue.expected : "schema constraint";
       return {

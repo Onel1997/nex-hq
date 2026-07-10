@@ -1,17 +1,34 @@
 import { rankOpportunityTerms } from "../fusion/weighted-fusion";
-import { getSourceWeightProfile, roleLabel } from "../confidence/source-weights";
+import type { BrandIntelligenceSection } from "../brand-intelligence/types";
+import type { ResearchCreativeBrief } from "../creative-brief/types";
+import { getSourceWeightProfile } from "../confidence/source-weights";
 import type { ConfidenceScoreId } from "../types/confidence";
 import type { ResearchRecommendation, RecommendationType } from "../types/recommendation";
 import type { ResearchReasoningIntelligence } from "../types/reasoning";
 import type { UnifiedResearchIntelligence } from "../types/unified";
+import {
+  buildExecutiveNarrative,
+  buildPrioritizedOpportunities,
+  buildSourceTrust,
+  humanizeInsightDetail,
+} from "./prioritize";
 import { truncateText, uniqueSourceKeys } from "./formatters";
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import {
+  formatIntelligenceTemplate,
+  getIntelligenceCopy,
+  roleLabelLocalized,
+} from "../copy";
 import type {
   ReportActionCard,
+  ReportBrandIntelligence,
+  ReportCreativeBrief,
   ReportInsight,
   ReportOpportunity,
   ReportRecommendationCard,
   ReportRiskCard,
   ReportScoreBlock,
+  ReportScoredOpportunity,
   ReportSourceCoverage,
   ResearchStudioReport,
 } from "./types";
@@ -20,16 +37,22 @@ import { RESEARCH_STUDIO_REPORT_VERSION } from "./types";
 export interface BuildResearchReportInput {
   intelligence: UnifiedResearchIntelligence;
   reasoning: ResearchReasoningIntelligence;
+  brandIntelligence?: BrandIntelligenceSection | null;
+  creativeBrief?: ResearchCreativeBrief | null;
   title?: string;
 }
 
 function scoreBlock(
   id: ConfidenceScoreId,
   intelligence: UnifiedResearchIntelligence,
+  locale = DEFAULT_LOCALE,
 ): ReportScoreBlock | null {
   const score = intelligence.confidence.scores[id];
   if (!score) return null;
   if (score.score === 0 && score.evidence.length === 0) return null;
+
+  const copy = getIntelligenceCopy(locale);
+  const directionLabels = copy.report.directionLabels;
 
   return {
     id,
@@ -37,9 +60,12 @@ function scoreBlock(
     score: score.score,
     tier: score.tier,
     rationale: score.rationale,
-    evidence: score.evidence.map(
-      (item) =>
-        `${item.label} (${item.direction}, contribution ${item.contribution})`,
+    evidence: score.evidence.map((item) =>
+      formatIntelligenceTemplate(copy.report.evidenceLine, {
+        label: item.label,
+        direction: directionLabels[item.direction] ?? item.direction,
+        contribution: item.contribution,
+      }),
     ),
   };
 }
@@ -77,7 +103,7 @@ function buildSourceCoverage(
     return {
       sourceKey: String(contribution.sourceKey),
       label: profile.label,
-      role: roleLabel(profile.role),
+      role: roleLabelLocalized(profile.role, DEFAULT_LOCALE),
       weight: profile.weight,
       signalCount: contribution.signalCount,
       mode: contribution.mode,
@@ -98,13 +124,20 @@ function buildSourceCoverage(
 function buildExecutiveSummary(
   intelligence: UnifiedResearchIntelligence,
   reasoning: ResearchReasoningIntelligence,
+  brandIntelligence: BrandIntelligenceSection | null | undefined,
   weak: boolean,
 ): string | null {
+  const narrative = buildExecutiveNarrative(
+    intelligence,
+    reasoning,
+    brandIntelligence,
+    weak,
+  );
+  if (narrative?.fullText) return narrative.fullText;
+
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE);
   if (weak) {
-    return (
-      reasoning.narratives[0] ??
-      "Intelligence coverage is limited. Expand live sources before committing to creative or commercial direction."
-    );
+    return reasoning.narratives[0] ?? copy.report.weakExecutive;
   }
 
   const parts = [
@@ -121,14 +154,16 @@ function buildKeyInsights(
   intelligence: UnifiedResearchIntelligence,
   reasoning: ResearchReasoningIntelligence,
 ): ReportInsight[] {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE);
   const insights: ReportInsight[] = [];
 
   for (const [index, line] of reasoning.trendSignificance.entries()) {
+    const sourceKeys = reasoning.confirmingSources.slice(0, 3).map((s) => s.sourceKey);
     insights.push({
       id: `insight-trend-${index}`,
-      headline: "Trend signal",
-      detail: line,
-      sourceKeys: reasoning.confirmingSources.slice(0, 3).map((s) => s.sourceKey),
+      headline: copy.insights.trendSignal,
+      detail: humanizeInsightDetail(line, sourceKeys),
+      sourceKeys,
     });
   }
 
@@ -137,7 +172,7 @@ function buildKeyInsights(
     insights.push({
       id: `insight-score-${score.scoreId}`,
       headline: score.label,
-      detail: score.rationale,
+      detail: humanizeInsightDetail(score.rationale, []),
       sourceKeys: [],
     });
   }
@@ -145,7 +180,7 @@ function buildKeyInsights(
   for (const [index, narrative] of intelligence.market.demandNarratives.slice(0, 2).entries()) {
     insights.push({
       id: `insight-market-${index}`,
-      headline: "Market demand",
+      headline: copy.insights.marketDemand,
       detail: narrative,
       sourceKeys: [],
     });
@@ -173,11 +208,15 @@ function buildTopOpportunities(
     return fromRecommendations.slice(0, 6);
   }
 
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE);
   const ranked = rankOpportunityTerms(intelligence).slice(0, 6);
   return ranked.map((term, index) => ({
     id: `opportunity-term-${index}`,
     title: term.term,
-    detail: `Weighted opportunity score ${term.weightedScore}/100 across ${term.sourceKeys.length} source(s).`,
+    detail: formatIntelligenceTemplate(copy.report.opportunityDetail, {
+      score: term.weightedScore,
+      sources: term.sourceKeys.length,
+    }),
     confidence: term.weightedScore,
     priority: term.weightedScore >= 65 ? "monitor" : "explore",
     sourceKeys: term.sourceKeys,
@@ -233,6 +272,77 @@ function buildSuggestedActions(
   return actions.slice(0, 6);
 }
 
+function mapScoredOpportunity(opp: BrandIntelligenceSection["topOpportunities"][number]): ReportScoredOpportunity {
+  return {
+    id: opp.id,
+    title: opp.title,
+    trendScore: opp.trendScore,
+    brandFit: opp.brandFit,
+    brandFitTier: opp.brandFitTier,
+    commercialPotential: opp.commercialPotential,
+    competition: opp.competition,
+    longevity: opp.longevity,
+    originality: opp.originality,
+    manufacturingDifficulty: opp.manufacturingDifficulty,
+    launchPriority: opp.launchPriority,
+    matches: opp.matches,
+    conflicts: opp.conflicts,
+    adjustments: opp.adjustments,
+    reasons: opp.reasons,
+    sourceKeys: opp.sourceKeys,
+    rejected: opp.rejected,
+    rejectionReasons: opp.rejectionReasons,
+  };
+}
+
+function mapBrandIntelligence(
+  section: BrandIntelligenceSection | null | undefined,
+): ReportBrandIntelligence | null {
+  if (!section) return null;
+
+  return {
+    brandFitScore: section.brandFitScore,
+    brandFitTier: section.brandFitTier,
+    brandFitTierLabel: section.brandFitTierLabel,
+    reasons: section.reasons,
+    matches: section.matches,
+    conflicts: section.conflicts,
+    recommendedAdjustments: section.recommendedAdjustments,
+    dimensionBreakdown: section.dimensionBreakdown,
+    topOpportunities: section.topOpportunities.map(mapScoredOpportunity),
+    rejectedOpportunities: section.rejectedOpportunities.map(mapScoredOpportunity),
+    summary: section.summary,
+    shopifyCatalogLoaded: section.shopifyLearning.loaded,
+  };
+}
+
+function mapCreativeBrief(
+  brief: ResearchCreativeBrief | null | undefined,
+): ReportCreativeBrief | null {
+  if (!brief) return null;
+
+  return {
+    conceptName: brief.conceptName,
+    executiveSummary: brief.executiveSummary,
+    businessCase: brief.businessCase,
+    scores: brief.scores,
+    targetAudience: brief.targetAudience,
+    recommendedProduct: brief.recommendedProduct,
+    alternativeProducts: brief.alternativeProducts,
+    recommendedPlacement: brief.recommendedPlacement,
+    typographyDirection: brief.typographyDirection,
+    graphicDirection: brief.graphicDirection,
+    colorPalette: brief.colorPalette,
+    materialRecommendation: brief.materialRecommendation,
+    printTechnique: brief.printTechnique,
+    productionNotes: brief.productionNotes,
+    avoid: brief.avoid,
+    researchEvidence: brief.researchEvidence,
+    nextStep: brief.nextStep,
+    anchorOpportunityTitle: brief.anchorOpportunityTitle,
+  };
+}
+
 function isWeakIntelligence(intelligence: UnifiedResearchIntelligence): boolean {
   return (
     intelligence.manifest.providerCount === 0 ||
@@ -244,11 +354,10 @@ function isWeakIntelligence(intelligence: UnifiedResearchIntelligence): boolean 
 export function buildResearchReport(input: BuildResearchReportInput): ResearchStudioReport {
   const { intelligence, reasoning } = input;
   const weak = isWeakIntelligence(intelligence);
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE);
   const title =
     input.title?.trim() ||
-    (weak
-      ? "Research Intelligence — Limited Coverage"
-      : "Research Intelligence Report");
+    (weak ? copy.report.titleLimited : copy.report.titleDefault);
 
   const designDirections = recommendationsByType(intelligence, "design_direction");
   const recommendedProducts = recommendationsByType(intelligence, "product_opportunity");
@@ -260,6 +369,25 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
   const topOpportunities = buildTopOpportunities(intelligence);
   const riskWarnings = buildRiskWarnings(intelligence, reasoning);
   const suggestedNextActions = buildSuggestedActions(intelligence);
+  const allRecommendationCards = [
+    ...designDirections,
+    ...recommendedProducts,
+    ...colorPalettes,
+    ...(typographyCards[0] ? [typographyCards[0]] : []),
+    ...(graphicCards[0] ? [graphicCards[0]] : []),
+  ];
+  const executiveNarrative = buildExecutiveNarrative(
+    intelligence,
+    reasoning,
+    input.brandIntelligence,
+    weak,
+  );
+  const prioritizedOpportunities = buildPrioritizedOpportunities(
+    intelligence,
+    input.brandIntelligence,
+    allRecommendationCards,
+  );
+  const sourceTrust = buildSourceTrust(intelligence);
 
   const report: ResearchStudioReport = {
     version: RESEARCH_STUDIO_REPORT_VERSION,
@@ -273,7 +401,15 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
       ...reasoning.caveats,
       ...intelligence.recommendations.caveats,
     ],
-    executiveSummary: buildExecutiveSummary(intelligence, reasoning, weak),
+    executiveSummary: buildExecutiveSummary(
+      intelligence,
+      reasoning,
+      input.brandIntelligence,
+      weak,
+    ),
+    executiveNarrative,
+    prioritizedOpportunities,
+    sourceTrust,
     trendConfidence: scoreBlock("trend_confidence", intelligence),
     commercialConfidence: scoreBlock("commercial_confidence", intelligence),
     sourceAgreement: scoreBlock("source_agreement", intelligence),
@@ -287,6 +423,8 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
     graphicThemeDirection: graphicCards[0] ?? null,
     riskWarnings,
     suggestedNextActions,
+    brandIntelligence: mapBrandIntelligence(input.brandIntelligence),
+    creativeBrief: mapCreativeBrief(input.creativeBrief),
   };
 
   return report;
@@ -295,6 +433,9 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
 export function reportHasVisibleSections(report: ResearchStudioReport): boolean {
   return Boolean(
     report.executiveSummary ||
+      report.executiveNarrative ||
+      report.prioritizedOpportunities.length > 0 ||
+      report.sourceTrust.length > 0 ||
       report.trendConfidence ||
       report.commercialConfidence ||
       report.sourceAgreement ||
@@ -307,6 +448,8 @@ export function reportHasVisibleSections(report: ResearchStudioReport): boolean 
       report.typographyDirection ||
       report.graphicThemeDirection ||
       report.riskWarnings.length > 0 ||
-      report.suggestedNextActions.length > 0,
+      report.suggestedNextActions.length > 0 ||
+      report.brandIntelligence !== null ||
+      report.creativeBrief !== null,
   );
 }

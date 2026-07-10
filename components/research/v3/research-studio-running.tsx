@@ -1,6 +1,8 @@
 "use client";
 
-import { RESEARCH_RUN_STEPS, type ResearchRunPhase } from "./types";
+import { useLocale, useDictionary } from "@/lib/i18n";
+import { getResearchRunSteps } from "@/lib/i18n/data/research-studio";
+import type { ResearchRunPhase } from "./types";
 import { cn } from "@/lib/utils";
 import { Check, Loader2, Sparkles } from "lucide-react";
 
@@ -8,13 +10,14 @@ interface ResearchStudioRunningProps {
   phase: ResearchRunPhase;
 }
 
-function stepIndex(phase: ResearchRunPhase): number {
-  if (phase === "idle" || phase === "complete" || phase === "error") return -1;
-  return RESEARCH_RUN_STEPS.findIndex((step) => step.id === phase);
-}
-
 export function ResearchStudioRunning({ phase }: ResearchStudioRunningProps) {
-  const activeIndex = stepIndex(phase);
+  const locale = useLocale();
+  const { research } = useDictionary();
+  const steps = getResearchRunSteps(locale);
+  const activeIndex =
+    phase === "idle" || phase === "complete" || phase === "error"
+      ? -1
+      : steps.findIndex((step) => step.id === phase);
 
   return (
     <div className="rs3-run" aria-live="polite" aria-busy="true">
@@ -25,15 +28,13 @@ export function ResearchStudioRunning({ phase }: ResearchStudioRunningProps) {
             <Sparkles className="size-4" />
           </span>
           <div>
-            <h2 className="rs3-run-title">Research in progress</h2>
-            <p className="rs3-run-subtitle">
-              Fusing live intelligence into your report.
-            </p>
+            <h2 className="rs3-run-title">{research.studio.running.title}</h2>
+            <p className="rs3-run-subtitle">{research.studio.running.subtitle}</p>
           </div>
         </div>
 
         <ol className="rs3-run-steps">
-          {RESEARCH_RUN_STEPS.map((step, index) => {
+          {steps.map((step, index) => {
             const isComplete = activeIndex > index || phase === "complete";
             const isActive = activeIndex === index && phase !== "complete";
             const isPending = activeIndex < index && phase !== "complete";

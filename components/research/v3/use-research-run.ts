@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocale } from "@/lib/i18n";
+import { getResearchRunSteps, getStudioErrorMessages } from "@/lib/i18n/data/research-studio";
 import {
   parseResearchApiError,
   parseResearchApiResponse,
   parseFusionReportResponse,
-  RESEARCH_RUN_STEPS,
   type FusionReportError,
   type ResearchResultV3,
   type ResearchRunError,
@@ -50,6 +51,8 @@ async function fetchWithTimeout(
 }
 
 export function useResearchRun() {
+  const locale = useLocale();
+  const studioErrors = getStudioErrorMessages(locale);
   const [request, setRequest] = useState("");
   const [lastPrompt, setLastPrompt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -66,14 +69,15 @@ export function useResearchRun() {
   }, []);
 
   const animateSteps = useCallback(async (runId: number) => {
-    setPhase(RESEARCH_RUN_STEPS[0]?.id ?? "engine");
+    const steps = getResearchRunSteps(locale);
+    setPhase(steps[0]?.id ?? "engine");
 
-    for (let index = 1; index < RESEARCH_RUN_STEPS.length; index += 1) {
+    for (let index = 1; index < steps.length; index += 1) {
       await sleep(STEP_INTERVAL_MS);
       if (runIdRef.current !== runId) return;
-      setPhase(RESEARCH_RUN_STEPS[index].id);
+      setPhase(steps[index].id);
     }
-  }, []);
+  }, [locale]);
 
   const fetchFusionReport = useCallback(async (title: string) => {
     const fusionRes = await fetchWithTimeout(
@@ -87,17 +91,17 @@ export function useResearchRun() {
       const message =
         typeof fusionData.error === "string"
           ? fusionData.error
-          : "Fusion report unavailable";
+          : studioErrors.fusionUnavailable;
       throw new Error(message);
     }
 
     const fusionReport = parseFusionReportResponse(fusionData);
     if (!fusionReport) {
-      throw new Error("Fusion report unavailable");
+      throw new Error(studioErrors.fusionUnavailable);
     }
 
     return fusionReport;
-  }, []);
+  }, [studioErrors.fusionUnavailable]);
 
   const finishLoadingRun = useCallback((runId: number) => {
     if (activeLoadingRunRef.current === runId) {
@@ -163,7 +167,7 @@ export function useResearchRun() {
         } catch (err) {
           nextFusionError = {
             message:
-              err instanceof Error ? err.message : "Fusion report unavailable",
+              err instanceof Error ? err.message : studioErrors.fusionUnavailable,
           };
         }
 
@@ -180,7 +184,7 @@ export function useResearchRun() {
           setError(err as ResearchRunError);
         } else {
           setError({
-            message: err instanceof Error ? err.message : "Research failed",
+            message: err instanceof Error ? err.message : studioErrors.researchFailed,
           });
         }
       } finally {
@@ -193,6 +197,8 @@ export function useResearchRun() {
       fetchFusionReport,
       finishLoadingRun,
       isLoading,
+      studioErrors.fusionUnavailable,
+      studioErrors.researchFailed,
     ],
   );
 
@@ -234,12 +240,12 @@ export function useResearchRun() {
     } catch (err) {
       setFusionError({
         message:
-          err instanceof Error ? err.message : "Fusion report unavailable",
+          err instanceof Error ? err.message : studioErrors.fusionUnavailable,
       });
     } finally {
       setFusionRetrying(false);
     }
-  }, [fetchFusionReport, fusionRetrying, result?.title]);
+  }, [fetchFusionReport, fusionRetrying, result?.title, studioErrors.fusionUnavailable]);
 
   useEffect(() => {
     return () => {

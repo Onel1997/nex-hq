@@ -1,5 +1,6 @@
 "use client";
 
+import { useDictionary } from "@/lib/i18n";
 import { ResearchStudioCommandInput } from "./research-studio-command-input";
 import { ResearchStudioMissions } from "./research-studio-missions";
 
@@ -18,15 +19,15 @@ export function ResearchStudioHero({
   onSubmit,
   disabled = false,
 }: ResearchStudioHeroProps) {
+  const { research } = useDictionary();
+  const hero = research.studio.hero;
+
   return (
     <div className="rs3-hero">
       <div className="rs3-hero-intro">
-        <p className="rs3-hero-eyebrow">AI Fashion Intelligence Command Center</p>
-        <h1 className="rs3-hero-headline">What should we discover today?</h1>
-        <p className="rs3-hero-subline">
-          The creative brain of Milaene — connected to the world&apos;s fashion
-          data.
-        </p>
+        <p className="rs3-hero-eyebrow">{hero.eyebrow}</p>
+        <h1 className="rs3-hero-headline">{hero.headline}</h1>
+        <p className="rs3-hero-subline">{hero.subline}</p>
       </div>
 
       <ResearchStudioCommandInput

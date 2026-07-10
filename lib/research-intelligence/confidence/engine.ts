@@ -1,8 +1,11 @@
 import {
-  MILAENE_BRAND_PROFILE,
-  termConflictsBrandFit,
-  termMatchesBrandFit,
-} from "./brand-profile";
+  formatIntelligenceTemplate,
+  getIntelligenceCopy,
+  roleLabelLocalized,
+  tierLabel,
+} from "../copy";
+import { localizeConfidenceIntelligence } from "../copy/localize-confidence";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import {
   clampScore,
   directionsAgree,
@@ -18,8 +21,12 @@ import {
   getSourceWeight,
   getSourceWeightProfile,
   KNOWN_SOURCE_COUNT,
-  roleLabel,
 } from "./source-weights";
+import {
+  MILAENE_BRAND_PROFILE,
+  termConflictsBrandFit,
+  termMatchesBrandFit,
+} from "./brand-profile";
 import type {
   ConfidenceEvidence,
   ConfidenceIntelligence,
@@ -48,6 +55,7 @@ interface ScoringContext {
   terms: TermObservation[];
   sourceKeys: string[];
   hasData: boolean;
+  locale: Locale;
 }
 
 function buildScoringContext(
@@ -125,6 +133,7 @@ function buildScoringContext(
     terms,
     sourceKeys,
     hasData: signals.length > 0 || intelligence.manifest.providerCount > 0,
+    locale: DEFAULT_LOCALE,
   };
 }
 
@@ -134,15 +143,15 @@ function evidenceId(scoreId: string, index: number): string {
 
 function makeScore(
   id: ConfidenceScoreId,
-  label: string,
   score: number,
   rationale: string,
   evidence: ConfidenceEvidence[],
+  locale: Locale = DEFAULT_LOCALE,
 ): ConfidenceScore {
   const clamped = clampScore(score);
   return {
     id,
-    label,
+    label: getIntelligenceCopy(locale).scores[id],
     score: clamped,
     tier: scoreToTier(clamped),
     rationale,
@@ -151,14 +160,15 @@ function makeScore(
 }
 
 function scoreTrendConfidence(ctx: ScoringContext): ConfidenceScore {
-  const { intelligence, signals, hasData } = ctx;
+  const { intelligence, signals, hasData, locale } = ctx;
+  const copy = getIntelligenceCopy(locale);
   if (!hasData) {
     return makeScore(
       "trend_confidence",
-      "Trend Confidence",
       0,
-      "No trend signals available to evaluate momentum.",
+      copy.confidence.noData,
       [],
+      locale,
     );
   }
 
@@ -221,26 +231,35 @@ function scoreTrendConfidence(ctx: ScoringContext): ConfidenceScore {
     },
   ];
 
+  const tier = tierLabel(scoreToTier(score), locale);
   return makeScore(
     "trend_confidence",
-    "Trend Confidence",
     score,
     risingCount > decliningCount
-      ? `Trend momentum is ${scoreToTier(score)} with ${risingCount} rising/emerging clusters outweighing ${decliningCount} declining clusters.`
-      : `Trend momentum is ${scoreToTier(score)} with limited rising confirmation relative to ${decliningCount} declining clusters.`,
+      ? formatIntelligenceTemplate(copy.confidence.trendMomentumRising, {
+          tier,
+          rising: risingCount,
+          declining: decliningCount,
+        })
+      : formatIntelligenceTemplate(copy.confidence.trendMomentumLimited, {
+          tier,
+          declining: decliningCount,
+        }),
     evidence,
+    locale,
   );
 }
 
 function scoreCommercialConfidence(ctx: ScoringContext): ConfidenceScore {
-  const { intelligence, hasData } = ctx;
+  const { intelligence, hasData, locale } = ctx;
+  const copy = getIntelligenceCopy(locale);
   if (!hasData) {
     return makeScore(
       "commercial_confidence",
-      "Commercial Confidence",
       0,
-      "No commercial intelligence available.",
+      copy.confidence.noCommercial,
       [],
+      locale,
     );
   }
 
@@ -308,24 +327,22 @@ function scoreCommercialConfidence(ctx: ScoringContext): ConfidenceScore {
     },
   ];
 
+  const tier = tierLabel(scoreToTier(score), locale);
   return makeScore(
     "commercial_confidence",
-    "Commercial Confidence",
     score,
     shopifySignals.length > 0
-      ? `Commercial confidence is ${scoreToTier(score)} with Shopify as the highest-weight commercial truth source.`
-      : `Commercial confidence is ${scoreToTier(score)} based on marketplace and demand proxies — Shopify truth is absent.`,
+      ? formatIntelligenceTemplate(copy.confidence.commercialWithShopify, { tier })
+      : formatIntelligenceTemplate(copy.confidence.commercialWithoutShopify, { tier }),
     evidence,
+    locale,
   );
 }
 
 function scoreBrandFitConfidence(ctx: ScoringContext): ConfidenceScore {
   const { intelligence, hasData } = ctx;
   if (!hasData) {
-    return makeScore(
-      "brand_fit_confidence",
-      "Brand Fit Confidence",
-      0,
+    return makeScore("brand_fit_confidence", 0,
       "No signals available to assess Milaene brand fit.",
       [],
     );
@@ -375,10 +392,7 @@ function scoreBrandFitConfidence(ctx: ScoringContext): ConfidenceScore {
     },
   ];
 
-  return makeScore(
-    "brand_fit_confidence",
-    "Brand Fit Confidence",
-    score,
+  return makeScore("brand_fit_confidence", score,
     conflicts.length > aligned.length
       ? `Brand fit is ${scoreToTier(score)} — misaligned novelty signals outweigh Milaene restraint cues.`
       : `Brand fit is ${scoreToTier(score)} — ${aligned.length} aligned signals support Milaene's quiet luxury and archive streetwear positioning.`,
@@ -389,10 +403,7 @@ function scoreBrandFitConfidence(ctx: ScoringContext): ConfidenceScore {
 function scoreSourceAgreement(ctx: ScoringContext): ConfidenceScore {
   const { terms, hasData } = ctx;
   if (!hasData || terms.length === 0) {
-    return makeScore(
-      "source_agreement",
-      "Source Agreement",
-      0,
+    return makeScore("source_agreement", 0,
       "Insufficient cross-source observations to measure agreement.",
       [],
     );
@@ -457,10 +468,7 @@ function scoreSourceAgreement(ctx: ScoringContext): ConfidenceScore {
     });
   }
 
-  return makeScore(
-    "source_agreement",
-    "Source Agreement",
-    score,
+  return makeScore("source_agreement", score,
     comparable > 0
       ? `Source agreement is ${scoreToTier(score)} across ${comparable} comparable cross-source pairs.`
       : "Source agreement is inferred from limited overlap — few shared terms across providers.",
@@ -471,10 +479,7 @@ function scoreSourceAgreement(ctx: ScoringContext): ConfidenceScore {
 function scoreSourceDiversity(ctx: ScoringContext): ConfidenceScore {
   const { sourceKeys, hasData } = ctx;
   if (!hasData) {
-    return makeScore(
-      "source_diversity",
-      "Source Diversity",
-      0,
+    return makeScore("source_diversity", 0,
       "No providers contributed intelligence.",
       [],
     );
@@ -489,17 +494,14 @@ function scoreSourceDiversity(ctx: ScoringContext): ConfidenceScore {
 
   const evidence: ConfidenceEvidence[] = sourceKeys.map((sourceKey, index) => ({
     id: evidenceId("source_diversity", index),
-    label: `${getSourceWeightProfile(sourceKey).label} (${roleLabel(getSourceWeightProfile(sourceKey).role)})`,
+    label: `${getSourceWeightProfile(sourceKey).label} (${roleLabelLocalized(getSourceWeightProfile(sourceKey).role, ctx.locale)})`,
     sourceKey,
     weight: getSourceWeight(sourceKey),
     contribution: clampScore(getSourceWeight(sourceKey) * 100),
     direction: "supports",
   }));
 
-  return makeScore(
-    "source_diversity",
-    "Source Diversity",
-    score,
+  return makeScore("source_diversity", score,
     `${sourceKeys.length} of ${KNOWN_SOURCE_COUNT} known sources contributed across ${roles.size} intelligence roles.`,
     evidence,
   );
@@ -508,10 +510,7 @@ function scoreSourceDiversity(ctx: ScoringContext): ConfidenceScore {
 function scoreSaturationRisk(ctx: ScoringContext): ConfidenceScore {
   const { intelligence, terms, hasData } = ctx;
   if (!hasData) {
-    return makeScore(
-      "saturation_risk",
-      "Saturation Risk",
-      0,
+    return makeScore("saturation_risk", 0,
       "No saturation signal — intelligence landscape is empty.",
       [],
     );
@@ -554,10 +553,7 @@ function scoreSaturationRisk(ctx: ScoringContext): ConfidenceScore {
     },
   ];
 
-  return makeScore(
-    "saturation_risk",
-    "Saturation Risk",
-    score,
+  return makeScore("saturation_risk", score,
     score >= 65
       ? "Saturation risk is elevated — repeated terms and stable clusters suggest the market is already crowded."
       : "Saturation risk is moderate to low — limited repetition across the fused intelligence landscape.",
@@ -568,7 +564,7 @@ function scoreSaturationRisk(ctx: ScoringContext): ConfidenceScore {
 function scoreNovelty(ctx: ScoringContext): ConfidenceScore {
   const { intelligence, hasData } = ctx;
   if (!hasData) {
-    return makeScore("novelty", "Novelty", 0, "No novelty signal available.", []);
+    return makeScore("novelty", 0, "No novelty signal available.", []);
   }
 
   const emerging = intelligence.trends.emerging.length;
@@ -580,10 +576,7 @@ function scoreNovelty(ctx: ScoringContext): ConfidenceScore {
   const saturation = scoreSaturationRisk(ctx).score;
   const score = clampScore(emergingShare * 100 * 0.7 + (100 - saturation) * 0.3);
 
-  return makeScore(
-    "novelty",
-    "Novelty",
-    score,
+  return makeScore("novelty", score,
     emerging > declining
       ? `Novelty is ${scoreToTier(score)} with ${emerging} emerging clusters ahead of ${declining} declining signals.`
       : `Novelty is ${scoreToTier(score)} — emerging signals are limited relative to established or declining patterns.`,
@@ -609,7 +602,7 @@ function scoreNovelty(ctx: ScoringContext): ConfidenceScore {
 function scoreLongevity(ctx: ScoringContext): ConfidenceScore {
   const { intelligence, hasData } = ctx;
   if (!hasData) {
-    return makeScore("longevity", "Longevity", 0, "No longevity signal available.", []);
+    return makeScore("longevity", 0, "No longevity signal available.", []);
   }
 
   const observations = [
@@ -635,10 +628,7 @@ function scoreLongevity(ctx: ScoringContext): ConfidenceScore {
 
   const score = clampScore(weightedHorizon * 0.5 + stableWeight * 0.35 - decliningPenalty * 0.15 + 15);
 
-  return makeScore(
-    "longevity",
-    "Longevity",
-    score,
+  return makeScore("longevity", score,
     `Longevity is ${scoreToTier(score)} based on structural and seasonal horizon mix with ${intelligence.trends.stable.length} stable anchors.`,
     [
       {
@@ -669,7 +659,7 @@ function scoreLongevity(ctx: ScoringContext): ConfidenceScore {
 function scoreSeasonality(ctx: ScoringContext): ConfidenceScore {
   const { intelligence, signals, hasData } = ctx;
   if (!hasData) {
-    return makeScore("seasonality", "Seasonality", 0, "No seasonality signal available.", []);
+    return makeScore("seasonality", 0, "No seasonality signal available.", []);
   }
 
   const seasonalTags = signals.filter((signal) =>
@@ -692,10 +682,7 @@ function scoreSeasonality(ctx: ScoringContext): ConfidenceScore {
   const narrativeScore = clampScore(narrativeHits.length * 20);
   const score = clampScore(tagScore * 0.4 + obsScore * 0.35 + narrativeScore * 0.25);
 
-  return makeScore(
-    "seasonality",
-    "Seasonality",
-    score,
+  return makeScore("seasonality", score,
     score >= 50
       ? `Seasonality is ${scoreToTier(score)} — seasonal tags, horizons, and demand narratives align.`
       : `Seasonality is ${scoreToTier(score)} — limited explicit seasonal framing in current intelligence.`,
@@ -727,7 +714,9 @@ function scoreSeasonality(ctx: ScoringContext): ConfidenceScore {
 
 function scoreLaunchReadiness(
   scores: Record<ConfidenceScoreId, ConfidenceScore>,
+  locale: Locale = DEFAULT_LOCALE,
 ): ConfidenceScore {
+  const copy = getIntelligenceCopy(locale);
   const saturation = scores.saturation_risk.score;
   const readiness = clampScore(
     scores.trend_confidence.score * 0.2 +
@@ -740,9 +729,10 @@ function scoreLaunchReadiness(
 
   return makeScore(
     "launch_readiness",
-    "Launch Readiness",
     readiness,
-    `Launch readiness is ${scoreToTier(readiness)} as a composite of trend, commercial, brand-fit, agreement, diversity, and saturation signals — not a final recommendation.`,
+    formatIntelligenceTemplate(copy.confidence.launchReadinessComposite, {
+      tier: tierLabel(scoreToTier(readiness), locale),
+    }),
     [
       {
         id: evidenceId("launch_readiness", 0),
@@ -773,6 +763,7 @@ function scoreLaunchReadiness(
         direction: saturation < 50 ? "supports" : "contradicts",
       },
     ],
+    locale,
   );
 }
 
@@ -840,26 +831,29 @@ function buildDomainConfidence(
 }
 
 function buildCaveats(ctx: ScoringContext, scores: Record<ConfidenceScoreId, ConfidenceScore>): string[] {
+  const copy = getIntelligenceCopy(ctx.locale);
   const caveats: string[] = [];
   if (!ctx.hasData) {
-    caveats.push("No provider intelligence fused — confidence scores are baseline zero.");
+    caveats.push(copy.confidence.noProvidersBaseline);
     return caveats;
   }
   if (ctx.sourceKeys.length < 3) {
-    caveats.push("Limited source diversity — scores rely on a narrow provider set.");
+    caveats.push(copy.confidence.limitedSourceDiversity);
   }
   if (scores.source_agreement.score < 40) {
-    caveats.push("Cross-source directional disagreement reduces interpretive certainty.");
+    caveats.push(copy.confidence.sourceDisagreement);
   }
   if (scores.saturation_risk.score >= 70) {
-    caveats.push("Elevated saturation risk — trend may already be widely adopted.");
+    caveats.push(copy.confidence.elevatedSaturation);
   }
   if (!ctx.sourceKeys.includes("shopify")) {
-    caveats.push("Shopify commercial truth is absent — commercial confidence uses proxy sources only.");
+    caveats.push(copy.confidence.shopifyAbsent);
   }
   if (ctx.intelligence.manifest.simulatedProviderCount > 0) {
     caveats.push(
-      `${ctx.intelligence.manifest.simulatedProviderCount} simulated provider(s) included — live confirmation may differ.`,
+      formatIntelligenceTemplate(copy.confidence.simulatedProviders, {
+        count: String(ctx.intelligence.manifest.simulatedProviderCount),
+      }),
     );
   }
   return caveats;
@@ -884,10 +878,13 @@ export function computeConfidenceIntelligence(
 
   const scores = {
     ...partialScores,
-    launch_readiness: scoreLaunchReadiness({
-      ...partialScores,
-      launch_readiness: makeScore("launch_readiness", "Launch Readiness", 0, "", []),
-    }),
+    launch_readiness: scoreLaunchReadiness(
+      {
+        ...partialScores,
+        launch_readiness: makeScore("launch_readiness", 0, "", [], ctx.locale),
+      },
+      ctx.locale,
+    ),
   } as Record<ConfidenceScoreId, ConfidenceScore>;
 
   const coreAverage = weightedAverage(
@@ -902,11 +899,14 @@ export function computeConfidenceIntelligence(
     coreAverage * 0.85 + scores.launch_readiness.score * 0.15 - scores.saturation_risk.score * 0.1,
   );
 
-  return {
-    overall: scoreToTier(overallScore),
-    overallScore,
-    scores,
-    domains: buildDomainConfidence(ctx, scores),
-    caveats: buildCaveats(ctx, scores),
-  };
+  return localizeConfidenceIntelligence(
+    {
+      overall: scoreToTier(overallScore),
+      overallScore,
+      scores,
+      domains: buildDomainConfidence(ctx, scores),
+      caveats: buildCaveats(ctx, scores),
+    },
+    ctx.locale,
+  );
 }

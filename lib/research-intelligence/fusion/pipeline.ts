@@ -2,7 +2,9 @@ import { evaluateResearchIntelligence } from "../evaluation";
 import { assembleIntelligenceBundle } from "../intelligence/bundle";
 import type { NormalizationContext } from "../normalization/context";
 import type { ProviderIntelligenceEnvelope } from "../normalization/envelope";
-import { createNormalizerRegistry, type NormalizerRegistry } from "../normalization/registry";
+import { createDefaultResearchNormalizerRegistry } from "../normalizers";
+import type { NormalizerRegistry } from "../normalization/registry";
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import type { RecommendationIntelligence, ResearchReasoningIntelligence, UnifiedResearchIntelligence } from "../types";
 import { createFusionEngine, type FusionEngine } from "./engine";
 import type { FusionEngineConfig } from "./types";
@@ -37,7 +39,7 @@ export class ResearchIntelligencePipeline {
   private readonly fusion: FusionEngine;
 
   constructor(
-    normalizers: NormalizerRegistry = createNormalizerRegistry(),
+    normalizers: NormalizerRegistry = createDefaultResearchNormalizerRegistry(),
     fusion: FusionEngine = createFusionEngine(),
   ) {
     this.normalizers = normalizers;
@@ -48,7 +50,7 @@ export class ResearchIntelligencePipeline {
     config: ResearchIntelligencePipelineConfig = {},
   ): ResearchIntelligencePipeline {
     return new ResearchIntelligencePipeline(
-      createNormalizerRegistry(),
+      createDefaultResearchNormalizerRegistry(),
       createFusionEngine(config.fusion),
     );
   }
@@ -61,7 +63,7 @@ export class ResearchIntelligencePipeline {
     const generatedAt = input.context?.generatedAt ?? new Date().toISOString();
     const context: NormalizationContext = {
       workspaceId: input.context?.workspaceId,
-      locale: input.context?.locale ?? "en",
+      locale: input.context?.locale ?? DEFAULT_LOCALE,
       region: input.context?.region ?? "DE",
       requestedDomains: input.context?.requestedDomains,
       generatedAt,

@@ -1,3 +1,4 @@
+import type { Locale } from "@/lib/i18n/config";
 import type { IntelligenceDomain } from "../types";
 
 /**
@@ -6,7 +7,7 @@ import type { IntelligenceDomain } from "../types";
  */
 export interface NormalizationContext {
   workspaceId?: string;
-  locale?: string;
+  locale?: Locale;
   region?: string;
   requestedDomains?: IntelligenceDomain[];
   generatedAt: string;

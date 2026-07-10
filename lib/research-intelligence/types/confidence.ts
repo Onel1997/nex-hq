@@ -2,6 +2,9 @@
  * Confidence model — Phase 5.1 deterministic scoring contracts.
  */
 
+import { DEFAULT_LOCALE } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/get-dictionary";
+
 export type ConfidenceTier = "low" | "medium" | "high" | "verified";
 
 export const CONFIDENCE_SCORE_IDS = [
@@ -61,14 +64,15 @@ export interface ConfidenceIntelligence {
 }
 
 export function emptyConfidenceIntelligence(): ConfidenceIntelligence {
+  const copy = getDictionary(DEFAULT_LOCALE).intelligence;
   const scores = {} as Record<ConfidenceScoreId, ConfidenceScore>;
   for (const id of CONFIDENCE_SCORE_IDS) {
     scores[id] = {
       id,
-      label: formatScoreLabel(id),
+      label: copy.scores[id],
       score: 0,
       tier: "low",
-      rationale: "No intelligence data available.",
+      rationale: copy.confidence.noData,
       evidence: [],
     };
   }
@@ -78,13 +82,6 @@ export function emptyConfidenceIntelligence(): ConfidenceIntelligence {
     overallScore: 0,
     scores,
     domains: [],
-    caveats: ["No provider intelligence fused — confidence scores are baseline zero."],
+    caveats: [copy.confidence.noProvidersBaseline],
   };
-}
-
-function formatScoreLabel(id: ConfidenceScoreId): string {
-  return id
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
