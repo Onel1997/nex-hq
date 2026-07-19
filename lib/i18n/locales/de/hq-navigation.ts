@@ -10,6 +10,7 @@ export const hqNavigation = {
   brainCore: "Brain-Kern",
   analyticsChamber: "Analytics-Kammer",
   commerceLab: "Commerce Lab",
+  personaStudio: "Persona Studio",
   expandNav: "Navigation erweitern",
   collapseNav: "Navigation einklappen",
   expand: "Erweitern",

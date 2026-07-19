@@ -19,6 +19,7 @@ import "./reports-center.css";
 import "./brain-core.css";
 import "./analytics-chamber.css";
 import "./image-studio.css";
+import "./persona-studio.css";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 

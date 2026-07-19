@@ -5,8 +5,10 @@ import { FACILITY_ROUTES } from "@/lib/facility/facility-routes";
 import {
   AGENT_WORKSPACE_ROUTES,
   COMMERCE_LAB_ROUTE,
+  PERSONA_STUDIO_ROUTE,
   getAgentFromWorkspacePath,
   isCommerceLabPath,
+  isPersonaStudioPath,
 } from "@/lib/workspace/agent-routes";
 import type { Locale } from "../config";
 import { getDictionary } from "../get-dictionary";
@@ -28,6 +30,7 @@ import {
   Settings,
   ShoppingBag,
   Target,
+  UserRound,
   Wand2,
   BookOpen,
 } from "lucide-react";
@@ -43,6 +46,7 @@ const AGENT_ICONS = {
 } as const satisfies Record<AgentId, typeof Crown>;
 
 const COMMERCE_LAB_COLOR = "#F97316";
+const PERSONA_STUDIO_COLOR = "#C4A574";
 
 export const HQ_SIDEBAR_SECTION_DEFAULTS: Record<HqSidebarSectionId, boolean> = {
   facility: true,
@@ -116,6 +120,14 @@ export function getHqSidebarSections(locale: Locale): HqSidebarSection[] {
         pathname.startsWith(`${AGENT_WORKSPACE_ROUTES[id]}/`),
     })),
     {
+      id: "persona",
+      href: PERSONA_STUDIO_ROUTE,
+      label: agents.personaStudio,
+      icon: UserRound,
+      accent: PERSONA_STUDIO_COLOR,
+      isActive: (pathname: string) => isPersonaStudioPath(pathname),
+    },
+    {
       id: "commerce",
       href: COMMERCE_LAB_ROUTE,
       label: agents.commerceLab,
@@ -168,7 +180,8 @@ export function resolveActiveSidebarItem(
 
 export function resolveAgentNavActiveId(
   pathname: string,
-): AgentId | "commerce" | null {
+): AgentId | "commerce" | "persona" | null {
+  if (isPersonaStudioPath(pathname)) return "persona";
   if (isCommerceLabPath(pathname)) return "commerce";
   return getAgentFromWorkspacePath(pathname);
 }

@@ -152,4 +152,5 @@ export const agents = {
     shopify: "Shopify Operations",
   },
   commerceLab: "Commerce Lab",
+  personaStudio: "Persona Studio",
 } as const;

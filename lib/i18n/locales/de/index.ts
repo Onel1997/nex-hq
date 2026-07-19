@@ -17,6 +17,7 @@ import { reports } from "./reports";
 import { research } from "./research";
 import { settings } from "./settings";
 import { tasks } from "./tasks";
+import { persona } from "./persona";
 
 export const de = {
   common,
@@ -38,6 +39,7 @@ export const de = {
   design,
   marketing,
   shopify,
+  persona,
 } as const;
 
 export type DeDictionary = typeof de;

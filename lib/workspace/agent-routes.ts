@@ -25,6 +25,7 @@ export const AGENT_STUDIO_NAMES: Record<AgentId, string> = {
 };
 
 export const COMMERCE_LAB_ROUTE = "/agents/commerce";
+export const PERSONA_STUDIO_ROUTE = "/agents/persona";
 
 export interface StudioSection {
   id: string;
@@ -106,8 +107,19 @@ export function isCommerceLabPath(pathname: string): boolean {
   return pathname === COMMERCE_LAB_ROUTE || pathname.startsWith(`${COMMERCE_LAB_ROUTE}/`);
 }
 
+export function isPersonaStudioPath(pathname: string): boolean {
+  return (
+    pathname === PERSONA_STUDIO_ROUTE ||
+    pathname.startsWith(`${PERSONA_STUDIO_ROUTE}/`)
+  );
+}
+
 export function isAgentWorkspacePath(pathname: string): boolean {
-  return getAgentFromWorkspacePath(pathname) !== null || isCommerceLabPath(pathname);
+  return (
+    getAgentFromWorkspacePath(pathname) !== null ||
+    isCommerceLabPath(pathname) ||
+    isPersonaStudioPath(pathname)
+  );
 }
 
 export function getAgentLabel(agentId: AgentId): string {
