@@ -602,7 +602,7 @@ export async function uploadReferenceAsset(
     try {
       await deletePersonaReferenceObject(uploaded.storagePath);
     } catch {
-      // ignore
+      // Compensating cleanup best-effort for duplicate upload object.
     }
     throw new PersonaDomainError(
       "Diese Datei wurde bereits hochgeladen (Checksumme).",
@@ -611,26 +611,44 @@ export async function uploadReferenceAsset(
     );
   }
 
-  const asset = await repo().createReferenceAsset(scope, {
-    persona_id: personaId,
-    asset_type: meta.asset_type,
-    storage_path: uploaded.storagePath,
-    mime_type: file.mimeType,
-    width: uploaded.width,
-    height: uploaded.height,
-    file_size_bytes: file.bytes.length,
-    checksum: uploaded.checksum,
-    status: "uploaded",
-    is_primary: false,
-    view_angle: meta.view_angle,
-    framing: meta.framing,
-    expression: meta.expression,
-    body_visibility: meta.body_visibility,
-    notes: meta.notes,
-    source_type: meta.source_type,
-    rights_confirmed: meta.rights_confirmed,
-    created_by: scope.actorId ?? null,
-  });
+  let asset;
+  try {
+    asset = await repo().createReferenceAsset(scope, {
+      persona_id: personaId,
+      asset_type: meta.asset_type,
+      storage_path: uploaded.storagePath,
+      mime_type: file.mimeType,
+      width: uploaded.width,
+      height: uploaded.height,
+      file_size_bytes: file.bytes.length,
+      checksum: uploaded.checksum,
+      status: "uploaded",
+      is_primary: false,
+      view_angle: meta.view_angle,
+      framing: meta.framing,
+      expression: meta.expression,
+      body_visibility: meta.body_visibility,
+      notes: meta.notes,
+      source_type: meta.source_type,
+      rights_confirmed: meta.rights_confirmed,
+      created_by: scope.actorId ?? null,
+    });
+  } catch (error) {
+    // Compensation: storage upload succeeded but DB insert failed — remove object.
+    try {
+      await deletePersonaReferenceObject(uploaded.storagePath);
+    } catch {
+      // best-effort cleanup
+    }
+    if (error instanceof PersonaDomainError) throw error;
+    throw new PersonaDomainError(
+      error instanceof Error
+        ? `Referenz-Metadaten konnten nicht gespeichert werden: ${error.message}`
+        : "Referenz-Metadaten konnten nicht gespeichert werden.",
+      "STORAGE_UPLOAD_FAILED",
+      { storagePath: uploaded.storagePath },
+    );
+  }
 
   try {
     await logPersonaAuditEvent({
@@ -736,12 +754,32 @@ export async function deleteReferenceAsset(
     });
   }
 
+  // Storage first — if delete fails, keep DB row and surface error (no false success).
   try {
     await deletePersonaReferenceObject(current.storage_path);
-  } catch {
-    // still remove DB row
+  } catch (error) {
+    throw new PersonaDomainError(
+      error instanceof Error
+        ? `Löschen fehlgeschlagen: ${error.message}`
+        : "Speicherobjekt konnte nicht gelöscht werden. Datenbankzeile bleibt erhalten.",
+      "STORAGE_DELETE_FAILED",
+      { storagePath: current.storage_path, assetId: id },
+    );
   }
-  await repo().deleteReferenceAsset(scope, id);
+
+  try {
+    await repo().deleteReferenceAsset(scope, id);
+  } catch (error) {
+    // Compensation note: storage object already removed; DB row orphan would remain.
+    // Surface failure — do not claim success.
+    throw new PersonaDomainError(
+      error instanceof Error
+        ? `Metadaten nach Speicherlöschung nicht entfernt: ${error.message}`
+        : "Metadaten nach Speicherlöschung nicht entfernt.",
+      "STORAGE_DELETE_FAILED",
+      { storagePath: current.storage_path, assetId: id, orphanDbRow: true },
+    );
+  }
 }
 
 export { PersonaDomainError };

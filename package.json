@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test lib/research-intelligence/**/*.test.ts lib/persona/**/*.test.ts"
+    "test": "tsx --test lib/research-intelligence/**/*.test.ts lib/persona/**/*.test.ts",
+    "test:persona-live": "PERSONA_LIVE_VERIFY=1 tsx --env-file=.env.local --test lib/persona/persona.live.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

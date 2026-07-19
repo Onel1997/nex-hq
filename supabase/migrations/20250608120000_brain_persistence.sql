@@ -128,32 +128,42 @@ ALTER TABLE public.brain_embeddings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.brain_events ENABLE ROW LEVEL SECURITY;
 
 -- Development-friendly policies (service role bypasses RLS server-side)
+DROP POLICY IF EXISTS "brain_workspaces_select" ON public.brain_workspaces;
 CREATE POLICY "brain_workspaces_select" ON public.brain_workspaces
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "brain_workspaces_insert" ON public.brain_workspaces;
 CREATE POLICY "brain_workspaces_insert" ON public.brain_workspaces
   FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "brain_workspaces_update" ON public.brain_workspaces;
 CREATE POLICY "brain_workspaces_update" ON public.brain_workspaces
   FOR UPDATE USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "brain_records_select" ON public.brain_records;
 CREATE POLICY "brain_records_select" ON public.brain_records
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "brain_records_insert" ON public.brain_records;
 CREATE POLICY "brain_records_insert" ON public.brain_records
   FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "brain_records_update" ON public.brain_records;
 CREATE POLICY "brain_records_update" ON public.brain_records
   FOR UPDATE USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "brain_embeddings_select" ON public.brain_embeddings;
 CREATE POLICY "brain_embeddings_select" ON public.brain_embeddings
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "brain_embeddings_insert" ON public.brain_embeddings;
 CREATE POLICY "brain_embeddings_insert" ON public.brain_embeddings
   FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "brain_events_select" ON public.brain_events;
 CREATE POLICY "brain_events_select" ON public.brain_events
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "brain_events_insert" ON public.brain_events;
 CREATE POLICY "brain_events_insert" ON public.brain_events
   FOR INSERT WITH CHECK (true);

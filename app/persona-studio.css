@@ -79,6 +79,41 @@
   background: transparent;
 }
 
+.ps-health-badge.ps-health-healthy {
+  border-color: rgb(90 140 110 / 0.45);
+  color: #9bc4a8;
+  background: rgb(90 140 110 / 0.12);
+}
+
+.ps-health-badge.ps-health-degraded {
+  border-color: rgb(180 140 60 / 0.5);
+  color: #d4b06a;
+  background: rgb(180 140 60 / 0.12);
+}
+
+.ps-health-badge.ps-health-unavailable {
+  border-color: rgb(160 80 70 / 0.5);
+  color: #d49a92;
+  background: rgb(160 80 70 / 0.12);
+}
+
+.ps-health-banner {
+  padding: 0.65rem 1.25rem;
+  font-size: 0.82rem;
+  border-bottom: 1px solid var(--ps-line);
+}
+
+.ps-health-banner.ps-health-degraded {
+  background: rgb(180 140 60 / 0.1);
+  color: #d4b06a;
+}
+
+.ps-health-banner.ps-health-unavailable {
+  background: rgb(160 80 70 / 0.12);
+  color: #d49a92;
+}
+
+
 .ps-body {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);

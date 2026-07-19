@@ -24,7 +24,9 @@ export function jsonError(error: unknown, fallback = dict.persona.errors.unexpec
             ? 409
             : error.code === "CONFIG"
               ? 503
-              : 400;
+              : error.code === "STORAGE_DELETE_FAILED"
+                ? 500
+                : 400;
 
     const localized =
       error.code === "CONFIG"
@@ -39,7 +41,9 @@ export function jsonError(error: unknown, fallback = dict.persona.errors.unexpec
                 ? dict.persona.errors.invalidReference
                 : error.code === "STORAGE_UPLOAD_FAILED"
                   ? dict.persona.errors.storageFailed
-                  : error.code === "WORKFLOW"
+                  : error.code === "STORAGE_DELETE_FAILED"
+                    ? dict.persona.errors.storageDeleteFailed
+                    : error.code === "WORKFLOW"
                     ? dict.persona.errors.workflow
                     : error.code === "NOT_FOUND"
                       ? dict.persona.errors.notFound

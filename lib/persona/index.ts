@@ -47,6 +47,12 @@ export type { PersonaRepository } from "./repositories/persona-repository";
 
 export * from "./services/persona-service";
 export { resolvePersonaWorkspaceScope } from "./services/workspace-scope";
+export {
+  checkPersonaStudioHealth,
+  PERSONA_SCHEMA_VERSION,
+  type PersonaHealthReport,
+  type PersonaHealthStatus,
+} from "./services/health";
 
 export {
   PERSONA_REFERENCES_BUCKET,

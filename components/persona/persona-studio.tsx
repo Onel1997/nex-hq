@@ -59,8 +59,22 @@ export function PersonaStudio() {
         <div className="ps-header-meta">
           <span className="ps-badge">Milaene Brand Cast</span>
           <span className="ps-badge ps-badge-muted">Phase 1 · Foundation</span>
+          {studio.health ? (
+            <span
+              className={`ps-badge ps-health-badge ps-health-${studio.health.status}`}
+              title={studio.health.message}
+            >
+              {studio.health.uiLabel}
+            </span>
+          ) : null}
         </div>
       </header>
+
+      {studio.health && studio.health.status !== "healthy" ? (
+        <div className={`ps-health-banner ps-health-${studio.health.status}`} role="status">
+          <p>{studio.health.message}</p>
+        </div>
+      ) : null}
 
       <div className="ps-body">
         <aside className="ps-sidebar" aria-label="Persona Studio">

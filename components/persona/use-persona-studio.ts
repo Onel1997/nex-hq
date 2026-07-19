@@ -14,6 +14,24 @@ import type {
   Pose,
 } from "@/lib/persona/domain/types";
 
+export type PersonaHealthStatus = "healthy" | "degraded" | "unavailable";
+export type PersonaHealthUiLabel =
+  | "Bereit"
+  | "Einrichtung erforderlich"
+  | "Fehler";
+
+export interface PersonaHealthReport {
+  status: PersonaHealthStatus;
+  uiLabel: PersonaHealthUiLabel;
+  message: string;
+  repositoryMode: "supabase" | "memory" | "unconfigured";
+  schemaVersion: string | null;
+  checks: Array<{ name: string; ok: boolean; detail?: string }>;
+  workspaceId: string | null;
+  memoryFallback: false;
+  checkedAt: string;
+}
+
 export type PersonaStudioSection =
   | "dashboard"
   | "personas"
@@ -29,6 +47,7 @@ interface StudioState {
   section: PersonaStudioSection;
   snapshot: PersonaStudioSnapshot | null;
   counts: PersonaStudioDashboardCounts | null;
+  health: PersonaHealthReport | null;
   selectedPersonaId: string | null;
   selectedReadiness: PersonaReadinessReport | null;
   selectedReferences: PersonaReferenceAssetView[];
@@ -54,13 +73,38 @@ export function usePersonaStudio() {
     section: "dashboard",
     snapshot: null,
     counts: null,
+    health: null,
     selectedPersonaId: null,
     selectedReadiness: null,
     selectedReferences: [],
   });
 
+  const refreshHealth = useCallback(async () => {
+    try {
+      const res = await fetch("/api/persona/health");
+      const data = (await res.json()) as PersonaHealthReport;
+      setState((prev) => ({ ...prev, health: data }));
+    } catch {
+      setState((prev) => ({
+        ...prev,
+        health: {
+          status: "unavailable",
+          uiLabel: "Fehler",
+          message: "Persona Studio Health-Check fehlgeschlagen.",
+          repositoryMode: "unconfigured",
+          schemaVersion: null,
+          checks: [],
+          workspaceId: null,
+          memoryFallback: false,
+          checkedAt: new Date().toISOString(),
+        },
+      }));
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
+    void refreshHealth();
     try {
       const res = await fetch("/api/persona");
       const data = (await res.json()) as {
@@ -84,7 +128,7 @@ export function usePersonaStudio() {
         error: error instanceof Error ? error.message : "Laden fehlgeschlagen",
       }));
     }
-  }, []);
+  }, [refreshHealth]);
 
   const loadPersonaDetail = useCallback(async (id: string) => {
     const res = await fetch(`/api/persona/${id}`);

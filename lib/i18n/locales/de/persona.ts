@@ -9,6 +9,12 @@ export const persona = {
     invalidReference: "Ungültige Referenzdatei.",
     invalidPrimary: "Ungültige Primärreferenz.",
     storageFailed: "Speicher-Upload fehlgeschlagen.",
+    storageDeleteFailed:
+      "Löschen fehlgeschlagen. Die Referenz wurde nicht entfernt.",
+    migrationRequired:
+      "Einrichtung erforderlich: Persona-Studio-Migrationen fehlen. Bitte die SQL-Migrationen anwenden.",
+    bucketMissing:
+      "Einrichtung erforderlich: Privater Storage-Bucket „persona-references“ fehlt.",
     notFound: "Eintrag nicht gefunden.",
     workflow: "Ungültiger Workflow-Schritt.",
   },
@@ -23,5 +29,8 @@ export const persona = {
     completeness: "Vollständigkeit",
     visuallyIncomplete: "Visuell unvollständig",
     visuallyComplete: "Visuell vollständig",
+    healthReady: "Bereit",
+    healthSetupRequired: "Einrichtung erforderlich",
+    healthError: "Fehler",
   },
 } as const;

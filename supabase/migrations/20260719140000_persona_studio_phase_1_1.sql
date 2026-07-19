@@ -37,6 +37,62 @@ ALTER TABLE public.persona_outfits
   ADD COLUMN IF NOT EXISTS created_by TEXT;
 
 -- ---------------------------------------------------------------------------
+-- Workspace backfill for legacy Phase 1 rows (nullable workspace_id)
+-- Uses the active Brain workspace convention: slug = 'milaene'
+-- (NEXHQ_WORKSPACE_SLUG / NEXT_PUBLIC_NEXHQ_WORKSPACE_SLUG).
+-- Creates the workspace row if Brain seed has not run yet.
+-- ---------------------------------------------------------------------------
+
+INSERT INTO public.brain_workspaces (slug, name, industry_id, active_modules, enabled_domains)
+SELECT
+  'milaene',
+  'Milaene',
+  'fashion_hq',
+  '[]'::jsonb,
+  '[]'::jsonb
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.brain_workspaces WHERE slug = 'milaene'
+);
+
+DO $$
+DECLARE
+  default_ws UUID;
+BEGIN
+  SELECT id INTO default_ws
+  FROM public.brain_workspaces
+  WHERE slug = 'milaene'
+  LIMIT 1;
+
+  IF default_ws IS NULL THEN
+    SELECT id INTO default_ws
+    FROM public.brain_workspaces
+    ORDER BY created_at ASC
+    LIMIT 1;
+  END IF;
+
+  IF default_ws IS NOT NULL THEN
+    UPDATE public.persona_personas
+      SET workspace_id = default_ws
+      WHERE workspace_id IS NULL;
+    UPDATE public.persona_locations
+      SET workspace_id = default_ws
+      WHERE workspace_id IS NULL;
+    UPDATE public.persona_camera_presets
+      SET workspace_id = default_ws
+      WHERE workspace_id IS NULL;
+    UPDATE public.persona_poses
+      SET workspace_id = default_ws
+      WHERE workspace_id IS NULL;
+    UPDATE public.persona_brand_looks
+      SET workspace_id = default_ws
+      WHERE workspace_id IS NULL;
+    UPDATE public.persona_outfits
+      SET workspace_id = default_ws
+      WHERE workspace_id IS NULL;
+  END IF;
+END $$;
+
+-- ---------------------------------------------------------------------------
 -- Reference asset library
 -- ---------------------------------------------------------------------------
 
