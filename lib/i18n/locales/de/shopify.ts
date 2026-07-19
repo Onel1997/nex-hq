@@ -1,6 +1,6 @@
 export const shopify = {
   page: {
-    title: "Shopify-Agent",
+    title: "Shopify Studio",
     description:
       "Storefront-Entwürfe auf Basis von Design- und Marketing-Berichten — Produktlistings, Kollektionen, SEO und Launch-Checkliste.",
   },

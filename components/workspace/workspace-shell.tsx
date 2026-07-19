@@ -61,7 +61,7 @@ export function WorkspaceShell({
             <nav className="workspace-breadcrumbs" aria-label="Breadcrumb">
               <Link href="/" className="workspace-breadcrumb-link">
                 <Home className="size-3.5" />
-                <span>Facility</span>
+                <span>NexHQ</span>
               </Link>
               <ChevronRight className="size-3.5 opacity-40" />
               <Link

@@ -11,6 +11,7 @@ import {
   Camera,
   CheckCircle2,
   ChevronRight,
+  Clapperboard,
   Home,
   Layers,
   Loader2,
@@ -18,12 +19,19 @@ import {
   Plus,
   Shirt,
   Sparkles,
+  UserPlus,
   UserRound,
   Users,
 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import type { Persona, PersonaStatus } from "@/lib/persona/domain/types";
+import {
+  BrandCastView,
+  CandidatesView,
+  CreationProjectsView,
+  PersonaCreatorView,
+} from "@/components/persona/persona-creator-views";
 
 const NAV: Array<{
   id: PersonaStudioSection;
@@ -31,7 +39,11 @@ const NAV: Array<{
   icon: typeof Users;
 }> = [
   { id: "dashboard", label: "Dashboard", icon: Layers },
-  { id: "personas", label: "Personas", icon: Users },
+  { id: "brand_cast", label: "Brand Cast", icon: CheckCircle2 },
+  { id: "creator", label: "Persona Creator", icon: UserPlus },
+  { id: "creation_projects", label: "Creation Projects", icon: Clapperboard },
+  { id: "candidates", label: "Candidates", icon: Users },
+  { id: "personas", label: "Reference Library", icon: UserRound },
   { id: "locations", label: "Locations", icon: MapPin },
   { id: "camera", label: "Camera", icon: Camera },
   { id: "poses", label: "Poses", icon: Aperture },
@@ -48,7 +60,7 @@ export function PersonaStudio() {
         <nav className="ps-breadcrumbs" aria-label="Breadcrumb">
           <Link href="/" className="ps-crumb">
             <Home className="size-3.5" />
-            Facility
+            NexHQ
           </Link>
           <ChevronRight className="size-3.5 opacity-40" />
           <span className="ps-crumb ps-crumb-current">
@@ -58,7 +70,7 @@ export function PersonaStudio() {
         </nav>
         <div className="ps-header-meta">
           <span className="ps-badge">Milaene Brand Cast</span>
-          <span className="ps-badge ps-badge-muted">Phase 1 · Foundation</span>
+          <span className="ps-badge ps-badge-muted">Phase 1.2 · Creator</span>
           {studio.health ? (
             <span
               className={`ps-badge ps-health-badge ps-health-${studio.health.status}`}
@@ -123,6 +135,14 @@ export function PersonaStudio() {
             </div>
           ) : studio.section === "dashboard" ? (
             <DashboardView studio={studio} />
+          ) : studio.section === "brand_cast" ? (
+            <BrandCastView studio={studio} />
+          ) : studio.section === "creator" ? (
+            <PersonaCreatorView studio={studio} />
+          ) : studio.section === "creation_projects" ? (
+            <CreationProjectsView studio={studio} />
+          ) : studio.section === "candidates" ? (
+            <CandidatesView studio={studio} />
           ) : studio.section === "personas" ? (
             <PersonasView studio={studio} />
           ) : studio.section === "locations" ? (

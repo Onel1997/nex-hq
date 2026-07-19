@@ -49,7 +49,7 @@ export function ResearchStudio() {
         <nav className="research-studio-breadcrumb" aria-label="Breadcrumb">
           <Link href="/" className="research-studio-breadcrumb-link">
             <Home className="size-3.5" />
-            <span>Facility</span>
+            <span>NexHQ</span>
           </Link>
           <ChevronRight className="size-3.5 opacity-40" aria-hidden />
           <span className="research-studio-breadcrumb-current">

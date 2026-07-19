@@ -103,6 +103,27 @@ export interface Persona {
   default_expression: string;
   default_body_proportions: string;
   default_styling_notes: string;
+  /** Phase 1.2 identity lock + lineage */
+  source_creation_project_id: string | null;
+  source_candidate_id: string | null;
+  identity_lock_status:
+    | "not_started"
+    | "collecting_references"
+    | "review"
+    | "approved"
+    | "needs_revision"
+    | "archived";
+  canonical_identity_description: string;
+  immutable_features: string;
+  flexible_features: string;
+  approved_hair_variations: string;
+  approved_expression_range: string;
+  approved_body_proportions: string;
+  approved_age_range: string;
+  default_styling: string;
+  image_identity_ready: boolean;
+  video_identity_ready: boolean;
+  intended_usage: "image" | "video" | "image_and_video";
   preferred_location_ids: string[];
   preferred_camera_preset_ids: string[];
   preferred_pose_ids: string[];
@@ -293,6 +314,20 @@ export type CreatePersonaInput = Omit<
   | "default_expression"
   | "default_body_proportions"
   | "default_styling_notes"
+  | "source_creation_project_id"
+  | "source_candidate_id"
+  | "identity_lock_status"
+  | "canonical_identity_description"
+  | "immutable_features"
+  | "flexible_features"
+  | "approved_hair_variations"
+  | "approved_expression_range"
+  | "approved_body_proportions"
+  | "approved_age_range"
+  | "default_styling"
+  | "image_identity_ready"
+  | "video_identity_ready"
+  | "intended_usage"
 > & {
   status?: PersonaStatus;
   preferred_location_ids?: string[];
@@ -313,6 +348,20 @@ export type CreatePersonaInput = Omit<
   default_expression?: string;
   default_body_proportions?: string;
   default_styling_notes?: string;
+  source_creation_project_id?: string | null;
+  source_candidate_id?: string | null;
+  identity_lock_status?: Persona["identity_lock_status"];
+  canonical_identity_description?: string;
+  immutable_features?: string;
+  flexible_features?: string;
+  approved_hair_variations?: string;
+  approved_expression_range?: string;
+  approved_body_proportions?: string;
+  approved_age_range?: string;
+  default_styling?: string;
+  image_identity_ready?: boolean;
+  video_identity_ready?: boolean;
+  intended_usage?: Persona["intended_usage"];
 };
 
 export type UpdatePersonaInput = Partial<

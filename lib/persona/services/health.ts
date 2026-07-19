@@ -14,7 +14,7 @@ import {
 } from "../storage/reference-storage";
 import { resolvePersonaWorkspaceScope } from "./workspace-scope";
 
-export const PERSONA_SCHEMA_VERSION = "20260719140000_persona_studio_phase_1_1";
+export const PERSONA_SCHEMA_VERSION = "20260719220000_persona_studio_phase_1_2_candidate_workflow";
 
 const REQUIRED_TABLES = [
   "persona_personas",
@@ -29,6 +29,11 @@ const REQUIRED_TABLES = [
   "persona_persona_poses",
   "persona_persona_brand_looks",
   "persona_persona_outfits",
+  "persona_creation_projects",
+  "persona_candidates",
+  "persona_candidate_assets",
+  "persona_identity_reviews",
+  "persona_brand_cast_requirements",
 ] as const;
 
 export type PersonaHealthStatus = "healthy" | "degraded" | "unavailable";
@@ -305,7 +310,7 @@ export async function checkPersonaStudioHealth(): Promise<PersonaHealthReport> {
     status = "degraded";
     message =
       missingTables.length > 0 || !checks.find((c) => c.name === "schema_phase_1_1")?.ok
-        ? "Einrichtung erforderlich: Persona-Studio-Migrationen fehlen. Bitte 20250719120000_persona_studio.sql und 20260719140000_persona_studio_phase_1_1.sql anwenden."
+        ? "Einrichtung erforderlich: Persona-Studio-Migrationen fehlen. Bitte 20250719120000_persona_studio.sql, 20260719140000_persona_studio_phase_1_1.sql und 20260719220000_persona_studio_phase_1_2_candidate_workflow.sql anwenden."
         : !bucket.ok
           ? "Einrichtung erforderlich: Privater Storage-Bucket „persona-references“ fehlt oder ist falsch konfiguriert."
           : "Einrichtung erforderlich: Workspace oder Schema unvollständig.";

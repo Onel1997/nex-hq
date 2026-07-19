@@ -1,14 +1,13 @@
 import type { AgentId } from "@/lib/constants/agents";
-import { AGENT_IDS } from "@/lib/constants/agents";
 import { getAgentColor } from "@/lib/facility/facility-theme";
 import { FACILITY_ROUTES } from "@/lib/facility/facility-routes";
 import {
   AGENT_WORKSPACE_ROUTES,
-  COMMERCE_LAB_ROUTE,
   PERSONA_STUDIO_ROUTE,
+  VIDEO_STUDIO_ROUTE,
   getAgentFromWorkspacePath,
-  isCommerceLabPath,
   isPersonaStudioPath,
+  isVideoStudioPath,
 } from "@/lib/workspace/agent-routes";
 import type { Locale } from "../config";
 import { getDictionary } from "../get-dictionary";
@@ -18,138 +17,152 @@ import type {
   SidebarNavItem,
 } from "@/lib/navigation/hq-navigation";
 import {
-  BarChart3,
-  Brain,
+  Clapperboard,
   Crown,
-  FileText,
   Home,
-  Megaphone,
   Palette,
-  PenLine,
   Search,
   Settings,
   ShoppingBag,
-  Target,
   UserRound,
   Wand2,
-  BookOpen,
 } from "lucide-react";
 
-const AGENT_ICONS = {
-  ceo: Crown,
-  research: Search,
-  designer: Palette,
-  content: PenLine,
-  image: Wand2,
-  marketing: Megaphone,
-  shopify: ShoppingBag,
-} as const satisfies Record<AgentId, typeof Crown>;
-
-const COMMERCE_LAB_COLOR = "#F97316";
 const PERSONA_STUDIO_COLOR = "#C4A574";
+const VIDEO_STUDIO_COLOR = "#7A8FA8";
+
+/** Primary production pipeline — order is intentional. */
+const PRIMARY_STUDIO_NAV: Array<{
+  id: string;
+  href: string;
+  labelKey:
+    | "ceo"
+    | "research"
+    | "designer"
+    | "persona"
+    | "image"
+    | "video"
+    | "shopify";
+  icon: typeof Crown;
+  accent?: string;
+  isActive: (pathname: string) => boolean;
+}> = [
+  {
+    id: "ceo",
+    href: AGENT_WORKSPACE_ROUTES.ceo,
+    labelKey: "ceo",
+    icon: Crown,
+    accent: getAgentColor("ceo"),
+    isActive: (pathname) =>
+      pathname === AGENT_WORKSPACE_ROUTES.ceo ||
+      pathname.startsWith(`${AGENT_WORKSPACE_ROUTES.ceo}/`),
+  },
+  {
+    id: "research",
+    href: AGENT_WORKSPACE_ROUTES.research,
+    labelKey: "research",
+    icon: Search,
+    accent: getAgentColor("research"),
+    isActive: (pathname) =>
+      pathname === AGENT_WORKSPACE_ROUTES.research ||
+      pathname.startsWith(`${AGENT_WORKSPACE_ROUTES.research}/`),
+  },
+  {
+    id: "designer",
+    href: AGENT_WORKSPACE_ROUTES.designer,
+    labelKey: "designer",
+    icon: Palette,
+    accent: getAgentColor("designer"),
+    isActive: (pathname) =>
+      pathname === AGENT_WORKSPACE_ROUTES.designer ||
+      pathname.startsWith(`${AGENT_WORKSPACE_ROUTES.designer}/`),
+  },
+  {
+    id: "persona",
+    href: PERSONA_STUDIO_ROUTE,
+    labelKey: "persona",
+    icon: UserRound,
+    accent: PERSONA_STUDIO_COLOR,
+    isActive: (pathname) => isPersonaStudioPath(pathname),
+  },
+  {
+    id: "image",
+    href: AGENT_WORKSPACE_ROUTES.image,
+    labelKey: "image",
+    icon: Wand2,
+    accent: getAgentColor("image"),
+    isActive: (pathname) =>
+      pathname === AGENT_WORKSPACE_ROUTES.image ||
+      pathname.startsWith(`${AGENT_WORKSPACE_ROUTES.image}/`),
+  },
+  {
+    id: "video",
+    href: VIDEO_STUDIO_ROUTE,
+    labelKey: "video",
+    icon: Clapperboard,
+    accent: VIDEO_STUDIO_COLOR,
+    isActive: (pathname) => isVideoStudioPath(pathname),
+  },
+  {
+    id: "shopify",
+    href: AGENT_WORKSPACE_ROUTES.shopify,
+    labelKey: "shopify",
+    icon: ShoppingBag,
+    accent: getAgentColor("shopify"),
+    isActive: (pathname) =>
+      pathname === AGENT_WORKSPACE_ROUTES.shopify ||
+      pathname.startsWith(`${AGENT_WORKSPACE_ROUTES.shopify}/`),
+  },
+];
 
 export const HQ_SIDEBAR_SECTION_DEFAULTS: Record<HqSidebarSectionId, boolean> = {
-  facility: true,
-  agents: true,
-  settings: false,
+  studios: true,
+  settings: true,
 };
 
 export function getHqSidebarSections(locale: Locale): HqSidebarSection[] {
   const { hqNavigation, agents } = getDictionary(locale);
 
-  const facilityItems: SidebarNavItem[] = [
+  const studioLabels: Record<(typeof PRIMARY_STUDIO_NAV)[number]["labelKey"], string> = {
+    ceo: agents.studioNames.ceo,
+    research: agents.studioNames.research,
+    designer: agents.studioNames.designer,
+    persona: agents.personaStudio,
+    image: agents.studioNames.image,
+    video: agents.videoStudio,
+    shopify: agents.studioNames.shopify,
+  };
+
+  const studioItems: SidebarNavItem[] = [
     {
-      id: "command-center",
+      id: "home",
       href: FACILITY_ROUTES.home,
-      label: hqNavigation.commandCenter,
+      label: hqNavigation.home,
       icon: Home,
       isActive: (pathname) => pathname === "/",
     },
-    {
-      id: "mission-control",
-      href: FACILITY_ROUTES.missions,
-      label: hqNavigation.missionControl,
-      icon: Target,
-      isActive: (pathname) =>
-        pathname.startsWith(FACILITY_ROUTES.missions) ||
-        pathname.startsWith("/tasks"),
-    },
-    {
-      id: "reports-center",
-      href: FACILITY_ROUTES.reports,
-      label: hqNavigation.reportsCenter,
-      icon: FileText,
-      isActive: (pathname) =>
-        pathname.startsWith(FACILITY_ROUTES.reports) ||
-        pathname.startsWith("/reports"),
-    },
-    {
-      id: "knowledge-vault",
-      href: FACILITY_ROUTES.knowledge,
-      label: hqNavigation.knowledgeVault,
-      icon: BookOpen,
-      isActive: (pathname) => pathname.startsWith(FACILITY_ROUTES.knowledge),
-    },
-    {
-      id: "brain-core",
-      href: FACILITY_ROUTES.brain,
-      label: hqNavigation.brainCore,
-      icon: Brain,
-      isActive: (pathname) =>
-        pathname.startsWith(FACILITY_ROUTES.brain) ||
-        pathname.startsWith("/brain"),
-    },
-    {
-      id: "analytics-chamber",
-      href: FACILITY_ROUTES.analytics,
-      label: hqNavigation.analyticsChamber,
-      icon: BarChart3,
-      isActive: (pathname) => pathname.startsWith(FACILITY_ROUTES.analytics),
-    },
-  ];
-
-  const agentItems: SidebarNavItem[] = [
-    ...AGENT_IDS.map((id) => ({
-      id,
-      href: AGENT_WORKSPACE_ROUTES[id],
-      label: agents.studioNames[id],
-      icon: AGENT_ICONS[id],
-      accent: getAgentColor(id),
-      isActive: (pathname: string) =>
-        pathname === AGENT_WORKSPACE_ROUTES[id] ||
-        pathname.startsWith(`${AGENT_WORKSPACE_ROUTES[id]}/`),
+    ...PRIMARY_STUDIO_NAV.map((item) => ({
+      id: item.id,
+      href: item.href,
+      label: studioLabels[item.labelKey],
+      icon: item.icon,
+      accent: item.accent,
+      isActive: item.isActive,
     })),
-    {
-      id: "persona",
-      href: PERSONA_STUDIO_ROUTE,
-      label: agents.personaStudio,
-      icon: UserRound,
-      accent: PERSONA_STUDIO_COLOR,
-      isActive: (pathname: string) => isPersonaStudioPath(pathname),
-    },
-    {
-      id: "commerce",
-      href: COMMERCE_LAB_ROUTE,
-      label: agents.commerceLab,
-      icon: BarChart3,
-      accent: COMMERCE_LAB_COLOR,
-      isActive: (pathname: string) => isCommerceLabPath(pathname),
-    },
   ];
 
   const settingsItems: SidebarNavItem[] = [
     {
       id: "settings-general",
       href: FACILITY_ROUTES.settings,
-      label: hqNavigation.general,
+      label: hqNavigation.settings,
       icon: Settings,
       isActive: (pathname: string) => pathname.startsWith(FACILITY_ROUTES.settings),
     },
   ];
 
   return [
-    { id: "facility", label: hqNavigation.facility, items: facilityItems },
-    { id: "agents", label: hqNavigation.agents, items: agentItems },
+    { id: "studios", label: hqNavigation.studios, items: studioItems },
     { id: "settings", label: hqNavigation.settings, items: settingsItems },
   ];
 }
@@ -163,7 +176,7 @@ export function resolveActiveSidebarSection(
       return section.id;
     }
   }
-  return "facility";
+  return "studios";
 }
 
 export function resolveActiveSidebarItem(
@@ -180,9 +193,12 @@ export function resolveActiveSidebarItem(
 
 export function resolveAgentNavActiveId(
   pathname: string,
-): AgentId | "commerce" | "persona" | null {
+): AgentId | "commerce" | "persona" | "video" | null {
   if (isPersonaStudioPath(pathname)) return "persona";
-  if (isCommerceLabPath(pathname)) return "commerce";
+  if (isVideoStudioPath(pathname)) return "video";
+  if (pathname === "/agents/commerce" || pathname.startsWith("/agents/commerce/")) {
+    return "commerce";
+  }
   return getAgentFromWorkspacePath(pathname);
 }
 

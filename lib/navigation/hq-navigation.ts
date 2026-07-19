@@ -9,7 +9,7 @@ import {
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import type { LucideIcon } from "lucide-react";
 
-export type HqSidebarSectionId = "facility" | "agents" | "settings";
+export type HqSidebarSectionId = "studios" | "settings";
 
 export interface SidebarNavItem {
   id: string;
@@ -40,7 +40,13 @@ export const HQ_SIDEBAR_SECTIONS: HqSidebarSection[] =
   getHqSidebarSections(DEFAULT_LOCALE);
 
 /** @deprecated Use HqSidebarSectionId */
-export type HqSectionId = HqSidebarSectionId | "missions" | "reports" | "knowledge";
+export type HqSectionId =
+  | HqSidebarSectionId
+  | "facility"
+  | "agents"
+  | "missions"
+  | "reports"
+  | "knowledge";
 
 /** @deprecated Use SidebarNavItem */
 export type ContextNavItem = SidebarNavItem;

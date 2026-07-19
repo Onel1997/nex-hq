@@ -106,7 +106,7 @@ describe("Persona Studio Phase 1.1 health + storage guards", () => {
   });
 
   it("security notes are documented for Phase 1.1", () => {
-    assert.equal(PERSONA_SECURITY_NOTES_VERSION, "phase-1.1");
+    assert.equal(PERSONA_SECURITY_NOTES_VERSION, "phase-1.2");
   });
 
   it("health check returns structured status without secrets", async () => {

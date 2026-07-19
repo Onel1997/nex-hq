@@ -17,6 +17,15 @@ export const persona = {
       "Einrichtung erforderlich: Privater Storage-Bucket „persona-references“ fehlt.",
     notFound: "Eintrag nicht gefunden.",
     workflow: "Ungültiger Workflow-Schritt.",
+    costConfirmationRequired:
+      "Kostenbestätigung erforderlich vor bezahlter Generierung.",
+    generationDisabled:
+      "Generierung ist deaktiviert. Nutzen Sie manuellen Upload oder konfigurieren Sie OPENAI_API_KEY.",
+    providerNotConfigured:
+      "Image-Provider ist nicht konfiguriert. Manueller Upload ist verfügbar.",
+    conversionFailed: "Kandidat konnte nicht in eine Persona überführt werden.",
+    duplicateSelection:
+      "Pro Creation-Projekt darf nur ein Kandidat ausgewählt werden.",
   },
   ui: {
     referenceLibrary: "Referenzbibliothek",
@@ -32,5 +41,18 @@ export const persona = {
     healthReady: "Bereit",
     healthSetupRequired: "Einrichtung erforderlich",
     healthError: "Fehler",
+    brandCast: "Brand Cast",
+    personaCreator: "Persona Creator",
+    creationProjects: "Creation Projects",
+    candidates: "Kandidaten",
+    costEstimate: "Kostenschätzung",
+    confirmCost: "Kosten bestätigen und generieren",
+    shortlist: "Shortlist",
+    selectCandidate: "Auswählen",
+    convertToPersona: "In Draft-Persona überführen",
+    identityLock: "Identity Lock",
+    immutableFeatures: "Unveränderlich",
+    flexibleFeatures: "Flexibel",
+    additionalDescription: "Zusätzliche Beschreibung",
   },
 } as const;

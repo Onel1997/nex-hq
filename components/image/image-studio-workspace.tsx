@@ -916,7 +916,7 @@ export function ImageStudioWorkspace() {
         <nav className="is-breadcrumbs" aria-label="Breadcrumb">
           <Link href="/" className="is-crumb">
             <Home className="size-3.5" />
-            Facility
+            NexHQ
           </Link>
           <span className="is-crumb-sep" aria-hidden>›</span>
           <span className="is-crumb is-crumb-current">

@@ -13,6 +13,14 @@ import type {
   PersonaStudioSnapshot,
   Pose,
 } from "@/lib/persona/domain/types";
+import type {
+  BrandCastMilestoneProgress,
+  CandidateGenerationCostEstimate,
+  CreationProjectPreset,
+  PersonaCandidate,
+  PersonaCandidateAssetView,
+  PersonaCreationProject,
+} from "@/lib/persona/domain/creation-types";
 
 export type PersonaHealthStatus = "healthy" | "degraded" | "unavailable";
 export type PersonaHealthUiLabel =
@@ -34,6 +42,10 @@ export interface PersonaHealthReport {
 
 export type PersonaStudioSection =
   | "dashboard"
+  | "brand_cast"
+  | "creator"
+  | "creation_projects"
+  | "candidates"
   | "personas"
   | "locations"
   | "camera"
@@ -51,6 +63,15 @@ interface StudioState {
   selectedPersonaId: string | null;
   selectedReadiness: PersonaReadinessReport | null;
   selectedReferences: PersonaReferenceAssetView[];
+  creationProjects: PersonaCreationProject[];
+  selectedProjectId: string | null;
+  candidates: PersonaCandidate[];
+  selectedCandidateId: string | null;
+  candidateAssets: PersonaCandidateAssetView[];
+  brandCastProgress: BrandCastMilestoneProgress | null;
+  costEstimate: CandidateGenerationCostEstimate | null;
+  presets: CreationProjectPreset[];
+  providerSetupMessage: string | null;
 }
 
 const EMPTY_COUNTS: PersonaStudioDashboardCounts = {
@@ -77,6 +98,15 @@ export function usePersonaStudio() {
     selectedPersonaId: null,
     selectedReadiness: null,
     selectedReferences: [],
+    creationProjects: [],
+    selectedProjectId: null,
+    candidates: [],
+    selectedCandidateId: null,
+    candidateAssets: [],
+    brandCastProgress: null,
+    costEstimate: null,
+    presets: [],
+    providerSetupMessage: null,
   });
 
   const refreshHealth = useCallback(async () => {
@@ -102,9 +132,43 @@ export function usePersonaStudio() {
     }
   }, []);
 
+  const refreshCreation = useCallback(async () => {
+    try {
+      const [projectsRes, brandRes, presetsRes, setupRes] = await Promise.all([
+        fetch("/api/persona/creation-projects"),
+        fetch("/api/persona/brand-cast"),
+        fetch("/api/persona/creation-projects?presets=1"),
+        fetch("/api/persona/creation-projects?setup=1"),
+      ]);
+      const projectsData = (await projectsRes.json()) as {
+        projects?: PersonaCreationProject[];
+        error?: string;
+      };
+      const brandData = (await brandRes.json()) as {
+        progress?: BrandCastMilestoneProgress;
+      };
+      const presetsData = (await presetsRes.json()) as {
+        presets?: CreationProjectPreset[];
+      };
+      const setupData = (await setupRes.json()) as {
+        setup?: { setupMessage: string | null };
+      };
+      setState((prev) => ({
+        ...prev,
+        creationProjects: projectsData.projects ?? [],
+        brandCastProgress: brandData.progress ?? null,
+        presets: presetsData.presets ?? [],
+        providerSetupMessage: setupData.setup?.setupMessage ?? null,
+      }));
+    } catch {
+      // keep existing creation state
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     void refreshHealth();
+    void refreshCreation();
     try {
       const res = await fetch("/api/persona");
       const data = (await res.json()) as {
@@ -128,7 +192,168 @@ export function usePersonaStudio() {
         error: error instanceof Error ? error.message : "Laden fehlgeschlagen",
       }));
     }
-  }, [refreshHealth]);
+  }, [refreshHealth, refreshCreation]);
+
+  const loadProject = useCallback(async (projectId: string, opts?: { openCandidates?: boolean }) => {
+    const res = await fetch(`/api/persona/creation-projects/${projectId}`);
+    const data = (await res.json()) as {
+      error?: string;
+      project?: PersonaCreationProject;
+      candidates?: PersonaCandidate[];
+    };
+    if (!res.ok) throw new Error(data.error ?? "Projekt laden fehlgeschlagen");
+    setState((prev) => ({
+      ...prev,
+      selectedProjectId: projectId,
+      candidates: data.candidates ?? [],
+      creationProjects: prev.creationProjects.map((p) =>
+        p.id === projectId && data.project ? data.project : p,
+      ),
+      section: opts?.openCandidates ? "candidates" : prev.section,
+    }));
+  }, []);
+
+  const loadCandidate = useCallback(async (candidateId: string) => {
+    const res = await fetch(`/api/persona/candidates/${candidateId}`);
+    const data = (await res.json()) as {
+      error?: string;
+      candidate?: PersonaCandidate;
+      assets?: PersonaCandidateAssetView[];
+    };
+    if (!res.ok) throw new Error(data.error ?? "Kandidat laden fehlgeschlagen");
+    setState((prev) => ({
+      ...prev,
+      selectedCandidateId: candidateId,
+      candidateAssets: data.assets ?? [],
+      candidates: prev.candidates.map((c) =>
+        c.id === candidateId && data.candidate ? data.candidate : c,
+      ),
+    }));
+  }, []);
+
+  const createProject = useCallback(
+    async (body: Record<string, unknown>) => {
+      const res = await fetch("/api/persona/creation-projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        project?: PersonaCreationProject;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Projekt erstellen fehlgeschlagen");
+      await refreshCreation();
+      if (data.project) {
+        setState((prev) => ({
+          ...prev,
+          selectedProjectId: data.project!.id,
+          section: "creation_projects",
+        }));
+      }
+      return data.project;
+    },
+    [refreshCreation],
+  );
+
+  const estimateProjectCost = useCallback(async (projectId: string) => {
+    const res = await fetch(
+      `/api/persona/creation-projects/${projectId}?estimate=1`,
+    );
+    const data = (await res.json()) as {
+      error?: string;
+      estimate?: CandidateGenerationCostEstimate;
+    };
+    if (!res.ok) throw new Error(data.error ?? "Kostenschätzung fehlgeschlagen");
+    setState((prev) => ({ ...prev, costEstimate: data.estimate ?? null }));
+    return data.estimate;
+  }, []);
+
+  const generateCandidates = useCallback(
+    async (
+      projectId: string,
+      opts: { costConfirmed: boolean; retryConfirmed?: boolean },
+    ) => {
+      const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generate", ...opts }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Generierung fehlgeschlagen");
+      await loadProject(projectId);
+      await refreshCreation();
+    },
+    [loadProject, refreshCreation],
+  );
+
+  const prepareManualCandidates = useCallback(
+    async (projectId: string) => {
+      const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "prepare_manual" }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Vorbereitung fehlgeschlagen");
+      await loadProject(projectId);
+    },
+    [loadProject],
+  );
+
+  const patchCandidate = useCallback(
+    async (candidateId: string, body: Record<string, unknown>) => {
+      const res = await fetch(`/api/persona/candidates/${candidateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Update fehlgeschlagen");
+      if (state.selectedProjectId) await loadProject(state.selectedProjectId);
+      await loadCandidate(candidateId);
+    },
+    [loadProject, loadCandidate, state.selectedProjectId],
+  );
+
+  const convertCandidate = useCallback(
+    async (candidateId: string) => {
+      const res = await fetch(`/api/persona/candidates/${candidateId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "convert" }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        persona?: Persona;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Konvertierung fehlgeschlagen");
+      await refresh();
+      if (data.persona) {
+        setState((prev) => ({
+          ...prev,
+          section: "personas",
+          selectedPersonaId: data.persona!.id,
+        }));
+      }
+      return data.persona;
+    },
+    [refresh],
+  );
+
+  const uploadCandidateAsset = useCallback(
+    async (candidateId: string, form: FormData) => {
+      const res = await fetch(`/api/persona/candidates/${candidateId}`, {
+        method: "POST",
+        body: form,
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Upload fehlgeschlagen");
+      await loadCandidate(candidateId);
+      if (state.selectedProjectId) await loadProject(state.selectedProjectId);
+    },
+    [loadCandidate, loadProject, state.selectedProjectId],
+  );
 
   const loadPersonaDetail = useCallback(async (id: string) => {
     const res = await fetch(`/api/persona/${id}`);
@@ -327,6 +552,16 @@ export function usePersonaStudio() {
     uploadReference,
     patchReference,
     removeReference,
+    refreshCreation,
+    loadProject,
+    loadCandidate,
+    createProject,
+    estimateProjectCost,
+    generateCandidates,
+    prepareManualCandidates,
+    patchCandidate,
+    convertCandidate,
+    uploadCandidateAsset,
   };
 }
 

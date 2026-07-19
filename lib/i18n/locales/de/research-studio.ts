@@ -113,7 +113,7 @@ export const researchStudio = {
     legacyFallback: "Legacy Research-Output anzeigen",
   },
   topbar: {
-    facility: "Facility",
+    facility: "NexHQ",
     researchStudio: "Research Studio",
     breadcrumbAria: "Brotkrumen-Navigation",
     liveConnected: "{live} live · {count} verbunden",

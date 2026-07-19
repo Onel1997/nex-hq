@@ -69,7 +69,7 @@ export function DesignStudioCenter() {
           <nav className="design-studio-breadcrumbs" aria-label="Breadcrumb">
             <Link href="/" className="design-studio-crumb">
               <Home className="size-3.5" />
-              Facility
+              NexHQ
             </Link>
             <ChevronRight className="size-3.5 design-studio-crumb-sep" aria-hidden />
             <span className="design-studio-crumb design-studio-crumb-current">

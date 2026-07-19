@@ -36,7 +36,7 @@ export function ShopifyOperationsCenter() {
         {loading && !data ? (
           <div className="shopify-operations-loading">
             <Loader2 className="size-8 animate-spin text-[#7cff7a]" />
-            <p>Loading Shopify Operations intelligence…</p>
+            <p>Loading Shopify Studio intelligence…</p>
           </div>
         ) : error && !data ? (
           <div className="shopify-operations-error">

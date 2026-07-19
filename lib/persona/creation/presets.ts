@@ -1,0 +1,81 @@
+/**
+ * Optional Milaene Brand Cast creation presets — templates only, never auto-submit.
+ */
+
+import type { CreationProjectPreset } from "../domain/creation-types";
+
+export const PERSONA_CREATION_PRESETS: CreationProjectPreset[] = [
+  {
+    id: "primary_male_quiet_luxury",
+    label: "Primary Male / Quiet Luxury",
+    brand_role: "primary_male",
+    gender_presentation: "Male",
+    age_range: "28-35",
+    height_range: "180-188 cm",
+    body_type: "Athletic lean",
+    skin_tone_direction: "Light to medium olive",
+    face_shape_direction: "Defined jaw, calm features",
+    hair_direction: "Dark brown, short neat",
+    facial_hair_direction: "Clean shaven or light stubble",
+    eye_direction: "Brown or hazel",
+    expression_direction: "Quiet confidence, neutral calm",
+    personality: "Reserved warmth, composed",
+    fashion_style: "Quiet luxury streetwear",
+    visual_keywords: "editorial, restrained, premium casual",
+    excluded_features: "extreme makeup, flashy jewelry, cartoonish features",
+    preferred_brand_looks: "Quiet Luxury",
+    preferred_outfits: "Black wide pants, premium basics",
+    intended_usage: "image_and_video",
+    candidate_count: 4,
+  },
+  {
+    id: "secondary_male_street_editorial",
+    label: "Secondary Male / Street Editorial",
+    brand_role: "secondary_male",
+    gender_presentation: "Male",
+    age_range: "24-32",
+    height_range: "175-185 cm",
+    body_type: "Lean athletic",
+    skin_tone_direction: "Medium to deep",
+    face_shape_direction: "Angular, distinctive",
+    hair_direction: "Textured short or cropped",
+    facial_hair_direction: "None or controlled stubble",
+    eye_direction: "Dark brown",
+    expression_direction: "Focused, street-editorial energy",
+    personality: "Understated edge",
+    fashion_style: "Street editorial",
+    visual_keywords: "urban, sharp, contemporary",
+    excluded_features: "logos, neon, exaggerated poses",
+    preferred_brand_looks: "Street Editorial",
+    preferred_outfits: "Layered neutrals, structured outerwear",
+    intended_usage: "image_and_video",
+    candidate_count: 4,
+  },
+  {
+    id: "primary_female_minimal_editorial",
+    label: "Primary Female / Minimal Editorial",
+    brand_role: "primary_female",
+    gender_presentation: "Female",
+    age_range: "25-32",
+    height_range: "170-178 cm",
+    body_type: "Athletic lean",
+    skin_tone_direction: "Light olive to medium",
+    face_shape_direction: "Soft jawline, balanced features",
+    hair_direction: "Dark brown straight or soft wave",
+    facial_hair_direction: "None",
+    eye_direction: "Hazel or brown",
+    expression_direction: "Calm, minimal editorial",
+    personality: "Quiet presence",
+    fashion_style: "Minimal editorial",
+    visual_keywords: "clean, refined, brand-forward",
+    excluded_features: "heavy glam, plastic look, over-retouching",
+    preferred_brand_looks: "Minimal Editorial",
+    preferred_outfits: "Tailored neutrals, soft structure",
+    intended_usage: "image_and_video",
+    candidate_count: 4,
+  },
+];
+
+export function getCreationPreset(id: string): CreationProjectPreset | null {
+  return PERSONA_CREATION_PRESETS.find((p) => p.id === id) ?? null;
+}

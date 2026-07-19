@@ -10,6 +10,25 @@ export {
   PERSONA_READINESS_STATES,
 } from "./domain/types";
 
+export type * from "./domain/creation-types";
+export {
+  CREATION_PROJECT_STATUSES,
+  GENERATION_STAGES,
+  PROVIDER_MODES,
+  BRAND_ROLES,
+  INTENDED_USAGES,
+  CANDIDATE_STATUSES,
+  CANDIDATE_ASSET_TYPES,
+  CANDIDATE_ASSET_STATUSES,
+  IDENTITY_LOCK_STATUSES,
+  IDENTITY_REVIEW_CHECK_KEYS,
+  STAGE_A_ASSET_TYPES,
+  STAGE_B_ASSET_TYPES,
+  DEFAULT_CANDIDATE_COUNT,
+  MAX_CANDIDATE_BATCH_SIZE,
+  MAX_DAILY_GENERATION_EUR,
+} from "./domain/creation-types";
+
 export {
   PersonaDomainError,
   PersonaStoreError,
@@ -45,6 +64,26 @@ export { MemoryPersonaRepository } from "./repositories/memory-persona-repositor
 export { SupabasePersonaRepository } from "./repositories/supabase-persona-repository";
 export type { PersonaRepository } from "./repositories/persona-repository";
 
+export {
+  createProductionCreationRepository,
+  getCreationRepository,
+  getCreationRepositoryKind,
+  setCreationRepositoryForTests,
+} from "./creation/creation-factory";
+export { MemoryCreationRepository } from "./creation/memory-creation-repository";
+export { SupabaseCreationRepository } from "./creation/supabase-creation-repository";
+export type { PersonaCreationRepository } from "./creation/creation-repository";
+export * from "./creation/creation-service";
+export { PERSONA_CREATION_PRESETS, getCreationPreset } from "./creation/presets";
+export {
+  getPersonaCandidateGenerator,
+  getProviderSetupState,
+} from "./creation/provider/registry";
+export {
+  buildPersonaCandidateStoragePath,
+  defaultCandidateRetentionUntil,
+} from "./creation/candidate-storage";
+
 export * from "./services/persona-service";
 export { resolvePersonaWorkspaceScope } from "./services/workspace-scope";
 export {
@@ -62,6 +101,7 @@ export {
   buildPersonaReferenceStoragePath,
   checksumBytes,
   createPersonaReferenceSignedUrl,
+  ensurePersonaReferencesBucket,
   extractImageDimensions,
   isPublicPermanentPersonaUrl,
 } from "./storage/reference-storage";

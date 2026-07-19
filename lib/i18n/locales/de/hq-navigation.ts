@@ -1,7 +1,11 @@
 export const hqNavigation = {
-  facility: "Facility",
-  agents: "KI-Agenten",
+  studios: "Studios",
   settings: "Einstellungen",
+  home: "Home",
+  /** @deprecated Hidden from primary nav — kept for facility department pages */
+  facility: "Facility",
+  /** @deprecated Hidden from primary nav */
+  agents: "KI-Agenten",
   general: "Allgemein",
   commandCenter: "Kommandozentrale",
   missionControl: "Missionskontrolle",
@@ -11,6 +15,7 @@ export const hqNavigation = {
   analyticsChamber: "Analytics-Kammer",
   commerceLab: "Commerce Lab",
   personaStudio: "Persona Studio",
+  videoStudio: "Video Studio",
   expandNav: "Navigation erweitern",
   collapseNav: "Navigation einklappen",
   expand: "Erweitern",
