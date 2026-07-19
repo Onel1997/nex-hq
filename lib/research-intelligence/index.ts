@@ -25,6 +25,7 @@ export * from "./report";
 export * from "./brand-intelligence";
 export * from "./creative-brief";
 export * from "./pattern-intelligence";
+export * from "./creative-research";
 
 // Pipeline convenience
 export {

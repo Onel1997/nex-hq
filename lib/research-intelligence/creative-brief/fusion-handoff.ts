@@ -128,12 +128,17 @@ export function activateFusionHandoffInDesignStudio(
         ...language.typography,
         ...language.graphicStyle,
         ...language.placement,
+        "Status: awaiting_artwork_upload — keine Designgenerierung",
       ],
       connectedDepartments: ["research", "design"],
       productName: brief.recommendedProduct,
       collectionName: brief.conceptName,
     },
     brief: studioBrief,
+    pipelineStage: "awaiting_artwork_upload",
+    timelineStage: "design",
+    versionLabel: `Creative Direction — ${brief.conceptName} (awaiting artwork upload)`,
+    versionType: "draft",
   });
 
   saveDesignMission(mission);

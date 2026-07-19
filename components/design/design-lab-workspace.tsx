@@ -52,6 +52,7 @@ import {
 
 const PIPELINE_STAGES: Array<{ id: PipelineStage; label: string }> = [
   { id: "research", label: "Research" },
+  { id: "awaiting_artwork_upload", label: "Artwork Upload" },
   { id: "design", label: "Design" },
   { id: "image", label: "Image" },
   { id: "mockup", label: "Mockup" },

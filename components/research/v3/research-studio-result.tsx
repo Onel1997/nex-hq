@@ -243,6 +243,8 @@ export function ResearchStudioResult({
       )}
 
       {showFusionPrimary ? (
+        fusionReport?.researchMode === "weekly_design_ideas" ||
+        fusionReport?.researchMode === "collection_creator" ? null : (
         <details
           className="rs3-result-legacy-fallback"
           open={legacyExpanded}
@@ -256,10 +258,14 @@ export function ResearchStudioResult({
           </summary>
           <LegacyResearchSections result={result} compact />
         </details>
+        )
       ) : null}
 
-      <ResearchStudioRunCoverage providers={providers} />
-
+      {fusionReport?.providerMode === "creative_only" ||
+      fusionReport?.researchMode === "weekly_design_ideas" ||
+      fusionReport?.researchMode === "collection_creator" ? null : (
+        <ResearchStudioRunCoverage providers={providers} />
+      )}
       {(actionMessage || actionError) && (
         <p
           className={cn(

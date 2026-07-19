@@ -7,7 +7,19 @@ import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 import type { IntelligenceEntityKind } from "../pattern-intelligence/types";
 
-export const RESEARCH_STUDIO_REPORT_VERSION = "6.0.0";
+export const RESEARCH_STUDIO_REPORT_VERSION = "7.0.0";
+/** Legacy fusion reports without creative research mode. */
+export const RESEARCH_STUDIO_REPORT_LEGACY_VERSION = "6.0.0";
+
+export type ResearchReportMode =
+  | "trend_intelligence"
+  | "weekly_design_ideas"
+  | "collection_creator";
+
+export type ResearchProviderMode =
+  | "creative_only"
+  | "shopify_assisted"
+  | "full_intelligence";
 
 export type PrioritySignal = "develop" | "watch" | "reject";
 
@@ -229,9 +241,12 @@ export interface ReportBrandIntelligence {
 }
 
 export interface ResearchStudioReport {
-  version: typeof RESEARCH_STUDIO_REPORT_VERSION;
+  version: string;
   generatedAt: string;
   title: string;
+  /** Discriminator for creative vs legacy trend reports. */
+  researchMode: ResearchReportMode;
+  providerMode: ResearchProviderMode;
   overallConfidence: number;
   overallTier: string;
   intelligenceWeak: boolean;
@@ -257,6 +272,8 @@ export interface ResearchStudioReport {
   patternIntelligence: ReportPatternIntelligence | null;
   brandLearning: ReportBrandLearning[];
   creativeBrief: ReportCreativeBrief | null;
+  /** Creative Research primary payload (v7+). */
+  creativeResearch: import("../creative-research/types").CreativeResearchReportSection | null;
 }
 
 export function emptyResearchStudioReport(
@@ -266,6 +283,8 @@ export function emptyResearchStudioReport(
     version: RESEARCH_STUDIO_REPORT_VERSION,
     generatedAt,
     title: getDictionary(DEFAULT_LOCALE).intelligence.report.titleDefault,
+    researchMode: "weekly_design_ideas",
+    providerMode: "creative_only",
     overallConfidence: 0,
     overallTier: "low",
     intelligenceWeak: true,
@@ -291,5 +310,6 @@ export function emptyResearchStudioReport(
     patternIntelligence: null,
     brandLearning: [],
     creativeBrief: null,
+    creativeResearch: null,
   };
 }

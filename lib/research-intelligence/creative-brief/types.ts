@@ -4,8 +4,9 @@
  * Does not generate artwork, images, mockups, or image-model prompts.
  */
 
-export const CREATIVE_BRIEF_VERSION = "3.0.0";
-export const CREATIVE_BRIEF_NEXT_STEP = "In Design Studio öffnen";
+export const CREATIVE_BRIEF_VERSION = "3.1.0";
+export const CREATIVE_BRIEF_NEXT_STEP =
+  "Im Design Studio vorbereiten — Artwork-Upload abwarten";
 
 export interface CreativeBriefScores {
   trendScore: number;

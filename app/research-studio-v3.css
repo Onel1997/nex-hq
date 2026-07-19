@@ -3923,3 +3923,111 @@ body:has(.rs3) {
   color: oklch(0.78 0.06 275);
 }
 
+
+/* Creative Research idea cards */
+.rs3-creative-idea-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.rs3-creative-idea-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.1rem 1.15rem;
+  border-radius: var(--rs3-radius);
+  border: 1px solid oklch(0.35 0.02 275 / 0.4);
+  background: oklch(0.14 0.015 275 / 0.55);
+}
+
+.rs3-creative-idea-card-selected {
+  border-color: oklch(0.72 0.14 145 / 0.7);
+}
+
+.rs3-creative-idea-card-rejected {
+  opacity: 0.55;
+}
+
+.rs3-creative-idea-card-shortlist {
+  border-color: oklch(0.75 0.1 85 / 0.55);
+}
+
+.rs3-creative-idea-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.rs3-creative-idea-phrase {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.rs3-creative-idea-status {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.rs3-creative-idea-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 560;
+}
+
+.rs3-creative-idea-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  font-size: 0.78rem;
+  opacity: 0.82;
+}
+
+.rs3-creative-idea-alts,
+.rs3-creative-idea-honesty {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.75;
+  line-height: 1.45;
+}
+
+.rs3-creative-idea-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.25rem;
+}
+
+.rs3-creative-idea-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid oklch(0.4 0.02 275 / 0.45);
+  background: oklch(0.18 0.015 275 / 0.7);
+  color: inherit;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.rs3-creative-idea-btn-primary {
+  border-color: oklch(0.72 0.12 145 / 0.55);
+  background: oklch(0.28 0.05 145 / 0.35);
+}
+
+.rs3-creative-collection-block {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid oklch(0.35 0.02 275 / 0.35);
+}
+
+.rs3-creative-collection-block h4 {
+  margin: 0 0 0.35rem;
+}

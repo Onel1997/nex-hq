@@ -116,8 +116,9 @@ export interface PatternIntelligenceInput {
   userRequest?: string;
 }
 
+/** @deprecated Use CREATIVE_DIRECTION_HANDOFF_MISSION — Design Studio does not generate designs. */
 export const DESIGN_STUDIO_MISSION =
-  "Entwickle ein neues originales Design, das sich an den erfolgreichen Designmustern orientiert, ohne bestehende Milaene-Produkte zu kopieren.";
+  "Die kreative Richtung wurde ausgewählt. Der Nutzer erstellt das finale Artwork selbst. Öffne das Design Studio für den Upload und speichere diese Designidee als Referenz für die anschließende Artwork-Prüfung und Asset-Produktion.";
 
 export type IntelligenceEntityKind =
   | "trend"

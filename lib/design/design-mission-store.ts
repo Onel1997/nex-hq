@@ -24,6 +24,7 @@ const STORAGE_KEY = "nexhq-design-mission";
 
 export type PipelineStage =
   | "research"
+  | "awaiting_artwork_upload"
   | "design"
   | "commercial-review"
   | "image"
@@ -670,6 +671,11 @@ export function buildDesignMissionFromHandoff(input: {
   intelligenceContext?: IntelligenceHandoffContext;
   brief: DesignStudioBrief;
   allBriefs?: DesignStudioBrief[];
+  /** Defaults to "design". Creative Research uses "awaiting_artwork_upload". */
+  pipelineStage?: PipelineStage;
+  timelineStage?: CollectionTimelineStage;
+  versionLabel?: string;
+  versionType?: VersionEntryType;
 }): DesignMissionState {
   const now = new Date().toISOString();
   const designWorkspaces: Record<string, PerDesignWorkspace> = {};
@@ -678,6 +684,14 @@ export function buildDesignMissionFromHandoff(input: {
     input.intelligenceContext?.collectionName ??
     input.collectionName ??
     input.brief.title;
+  const pipelineStage = input.pipelineStage ?? "design";
+  const timelineStage = input.timelineStage ?? "design";
+  const versionType = input.versionType ?? "design";
+  const versionLabel =
+    input.versionLabel ??
+    (pipelineStage === "awaiting_artwork_upload"
+      ? `Creative Direction — ${input.brief.title} (awaiting artwork upload)`
+      : `Design V1 — ${input.brief.title}`);
 
   for (const b of input.allBriefs ?? [input.brief]) {
     designWorkspaces[b.designId] = createDesignWorkspace(b);
@@ -693,11 +707,9 @@ export function buildDesignMissionFromHandoff(input: {
     brief: { ...input.brief, title: reportTitle },
     allBriefs: input.allBriefs,
     handoffAt: now,
-    pipelineStage: "design",
-    timelineStage: "design",
-    versionHistory: [
-      createVersionEntry(`Design V1 — ${input.brief.title}`, "design"),
-    ],
+    pipelineStage,
+    timelineStage,
+    versionHistory: [createVersionEntry(versionLabel, versionType)],
     assets: {},
     promptOverrides: {},
     designWorkspaces,

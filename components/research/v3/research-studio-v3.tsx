@@ -59,6 +59,18 @@ export function ResearchStudioV3() {
     return () => mq.removeEventListener("change", apply);
   }, []);
 
+  useEffect(() => {
+    const onRerun = (event: Event) => {
+      const detail = (event as CustomEvent<{ prompt?: string }>).detail;
+      const prompt = detail?.prompt?.trim();
+      if (!prompt) return;
+      setRequest(prompt);
+      void runResearch(prompt);
+    };
+    window.addEventListener("nexhq-creative-research-rerun", onRerun);
+    return () => window.removeEventListener("nexhq-creative-research-rerun", onRerun);
+  }, [runResearch, setRequest]);
+
   const handleSelectMission = useCallback(
     (prompt: string) => {
       setRequest(prompt);

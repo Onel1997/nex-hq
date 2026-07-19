@@ -49,6 +49,9 @@ export interface BuildResearchReportInput {
   patternIntelligence?: PatternIntelligenceSection | null;
   title?: string;
   userRequest?: string;
+  researchMode?: import("./types").ResearchReportMode;
+  providerMode?: import("./types").ResearchProviderMode;
+  creativeResearch?: import("../creative-research/types").CreativeResearchReportSection | null;
 }
 
 function scoreBlock(
@@ -527,6 +530,8 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
     version: RESEARCH_STUDIO_REPORT_VERSION,
     generatedAt: intelligence.generatedAt,
     title,
+    researchMode: input.researchMode ?? "trend_intelligence",
+    providerMode: input.providerMode ?? "full_intelligence",
     overallConfidence: intelligence.confidence.overallScore,
     overallTier: intelligence.confidence.overall,
     intelligenceWeak: weak,
@@ -563,6 +568,7 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
     patternIntelligence: mapPatternIntelligence(input.patternIntelligence),
     brandLearning: mapBrandLearning(input.patternIntelligence),
     creativeBrief: mapCreativeBrief(input.creativeBrief),
+    creativeResearch: input.creativeResearch ?? null,
   };
 
   return report;
@@ -570,7 +576,9 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
 
 export function reportHasVisibleSections(report: ResearchStudioReport): boolean {
   return Boolean(
-    report.executiveSummary ||
+    report.creativeResearch?.designIdeas.length ||
+      report.creativeResearch?.collection ||
+      report.executiveSummary ||
       report.executiveNarrative ||
       report.prioritizedOpportunities.length > 0 ||
       report.sourceTrust.length > 0 ||

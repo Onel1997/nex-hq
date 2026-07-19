@@ -1,17 +1,10 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  Eye,
   Layers,
   Palette,
-  ScanSearch,
-  ShoppingBag,
   Sparkles,
-  Store,
-  Sun,
-  Swords,
-  TrendingUp,
   Type,
-  Users,
+  Wand2,
 } from "lucide-react";
 import type { Locale } from "../config";
 import { getDictionary } from "../get-dictionary";
@@ -27,100 +20,42 @@ export interface QuickMissionDefinition {
 
 const QUICK_MISSION_DEFINITIONS: QuickMissionDefinition[] = [
   {
-    id: "trend-discovery",
-    labelKey: "trendDiscovery",
-    prompt:
-      "Identify the top 5 streetwear trends for the next season with DNA fit scores and product implications for Milaene.",
-    icon: TrendingUp,
+    id: "weekly-ideas",
+    labelKey: "weeklyIdeas",
+    prompt: "Erstelle 4 Wochenideen für Milaene — originale Sprüche und konkrete visuelle Designideen.",
+    icon: Sparkles,
     accent: "violet",
   },
   {
-    id: "collection-research",
-    labelKey: "collectionResearch",
-    prompt:
-      "Research a connected 5–8 piece capsule collection with hero piece, supporting designs, drop strategy, and Milaene brand DNA alignment.",
-    icon: Layers,
+    id: "single-idea",
+    labelKey: "singleIdea",
+    prompt: "Erstelle eine einzelne Designidee mit Spruch, Typografie und Platzierung für Milaene.",
+    icon: Wand2,
     accent: "indigo",
   },
   {
-    id: "competitor-intelligence",
-    labelKey: "competitorIntelligence",
+    id: "plan-collection",
+    labelKey: "planCollection",
     prompt:
-      "Analyze Represent and Cole Buxton — positioning, pricing, product categories, strengths, weaknesses, and opportunities for Milaene.",
-    icon: Swords,
-    accent: "rose",
-  },
-  {
-    id: "pinterest-intelligence",
-    labelKey: "pinterestIntelligence",
-    prompt:
-      "Research Pinterest color palettes, aesthetics, and capsule trends for premium streetwear over the next 30 days.",
-    icon: Eye,
-    accent: "coral",
-  },
-  {
-    id: "tiktok-scanner",
-    labelKey: "tiktokScanner",
-    prompt:
-      "Find viral TikTok streetwear trends — silhouettes, hashtags, and graphics with commercial potential for Milaene.",
-    icon: ScanSearch,
-    accent: "cyan",
-  },
-  {
-    id: "amazon-fashion",
-    labelKey: "amazonFashion",
-    prompt:
-      "Research Amazon bestsellers in oversized hoodies and premium streetwear — demand signals, price bands, and white-space opportunities.",
-    icon: ShoppingBag,
-    accent: "amber",
-  },
-  {
-    id: "etsy-bestseller",
-    labelKey: "etsyBestseller",
-    prompt:
-      "Analyze Etsy print trends, keywords, and bestseller patterns relevant to Milaene POD products.",
-    icon: Store,
-    accent: "orange",
-  },
-  {
-    id: "luxury-typography",
-    labelKey: "luxuryTypography",
-    prompt:
-      "Research luxury typography trends for streetwear — editorial type treatments, placement, and 5 distinct design concepts.",
-    icon: Type,
+      "Kollektion planen: Quiet Continuum — 8 zusammenhängende, aber unterscheidbare Designideen für die Saison.",
+    icon: Layers,
     accent: "pearl",
   },
   {
-    id: "color-intelligence",
+    id: "typography-direction",
+    labelKey: "luxuryTypography",
+    prompt:
+      "4 Wochenideen mit Fokus auf editorialer Typografie und ruhiger Platzierung für Oversized Tees.",
+    icon: Type,
+    accent: "coral",
+  },
+  {
+    id: "color-direction",
     labelKey: "colorIntelligence",
     prompt:
-      "Research emerging color trends for SS26 streetwear — earth tones, muted palettes, and catalog-ready color directions.",
+      "4 Wochenideen mit erdiger Farbwelt (Black, Stone, Cream) und konkreten Artwork-Farben.",
     icon: Palette,
     accent: "emerald",
-  },
-  {
-    id: "streetwear-graphics",
-    labelKey: "streetwearGraphics",
-    prompt:
-      "Find 5 winning oversized t-shirt graphic directions with precise art direction, print placement, and Milaene DNA fit.",
-    icon: Sparkles,
-    accent: "fuchsia",
-  },
-  {
-    id: "season-forecast",
-    labelKey: "seasonForecast",
-    prompt:
-      "Forecast streetwear demand for the upcoming season — silhouettes, materials, categories, and prioritized launch recommendations.",
-    icon: Sun,
-    accent: "gold",
-  },
-  {
-    id: "audience-discovery",
-    labelKey: "audienceDiscovery",
-    prompt:
-      "Research Milaene target audience segments — purchase behavior, aesthetic preferences, and content implications.",
-    icon: Users,
-    accent: "sky",
   },
 ];
 

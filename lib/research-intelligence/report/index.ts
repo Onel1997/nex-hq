@@ -1,3 +1,9 @@
+export {
+  emptyResearchStudioReport,
+  RESEARCH_STUDIO_REPORT_VERSION,
+  RESEARCH_STUDIO_REPORT_LEGACY_VERSION,
+} from "./types";
+
 export type {
   ReportActionCard,
   ReportBrandIntelligence,
@@ -14,10 +20,8 @@ export type {
   ReportSourceBadge,
   ReportSourceCoverage,
   ResearchStudioReport,
-} from "./types";
-export {
-  emptyResearchStudioReport,
-  RESEARCH_STUDIO_REPORT_VERSION,
+  ResearchReportMode,
+  ResearchProviderMode,
 } from "./types";
 
 export {
@@ -41,3 +45,9 @@ export {
 export type { BuildResearchReportInput } from "./build-report";
 
 export { syncResultToEnvelope, syncResultsToEnvelopes } from "./envelopes";
+
+export {
+  adaptLegacyResearchStudioReport,
+  isCreativeResearchReport,
+  isLegacyTrendReport,
+} from "./legacy-adapter";

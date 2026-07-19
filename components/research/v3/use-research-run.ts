@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "@/lib/i18n";
 import { getResearchRunSteps, getStudioErrorMessages } from "@/lib/i18n/data/research-studio";
 import {
-  parseResearchApiError,
-  parseResearchApiResponse,
   parseFusionReportResponse,
   type FusionReportError,
   type ResearchResultV3,
@@ -13,8 +11,7 @@ import {
   type ResearchRunPhase,
 } from "./types";
 
-const STEP_INTERVAL_MS = 1400;
-const RESEARCH_RUN_TIMEOUT_MS = 180_000;
+const STEP_INTERVAL_MS = 900;
 const FUSION_REPORT_TIMEOUT_MS = 120_000;
 
 function sleep(ms: number) {
@@ -50,6 +47,23 @@ async function fetchWithTimeout(
   }
 }
 
+function detectModes(prompt: string): {
+  mode: string;
+  providerMode: string;
+} {
+  const lower = prompt.toLowerCase();
+  if (/kollektion|collection|kapsel|capsule/.test(lower)) {
+    return { mode: "collection_creator", providerMode: "creative_only" };
+  }
+  if (/full intelligence|trend_intelligence|voller provider/.test(lower)) {
+    return { mode: "trend_intelligence", providerMode: "full_intelligence" };
+  }
+  if (/shopify assisted|shopify-assisted/.test(lower)) {
+    return { mode: "weekly_design_ideas", providerMode: "shopify_assisted" };
+  }
+  return { mode: "weekly_design_ideas", providerMode: "creative_only" };
+}
+
 export function useResearchRun() {
   const locale = useLocale();
   const studioErrors = getStudioErrorMessages(locale);
@@ -80,8 +94,9 @@ export function useResearchRun() {
   }, [locale]);
 
   const fetchFusionReport = useCallback(async (title: string) => {
+    const { mode, providerMode } = detectModes(title);
     const fusionRes = await fetchWithTimeout(
-      `/api/research/fusion-report?title=${encodeURIComponent(title)}&refresh=1`,
+      `/api/research/fusion-report?title=${encodeURIComponent(title)}&refresh=1&mode=${encodeURIComponent(mode)}&providerMode=${encodeURIComponent(providerMode)}`,
       { cache: "no-store" },
       FUSION_REPORT_TIMEOUT_MS,
     );
@@ -128,55 +143,33 @@ export function useResearchRun() {
       const animation = animateSteps(runId);
 
       try {
-        const res = await fetchWithTimeout(
-          "/api/research/run",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ request: trimmed }),
-          },
-          RESEARCH_RUN_TIMEOUT_MS,
-        );
-
-        const data = (await res.json()) as Record<string, unknown>;
-
-        if (!res.ok) {
-          cancelRunAnimation();
-          const parsedError = parseResearchApiError(data);
-          console.error("[Research Studio] Research API error", {
-            status: res.status,
-            stage: parsedError.stage,
-            missingFields: parsedError.missingFields,
-            validationIssues: parsedError.validationIssues,
-            response: data,
-          });
-          if (parsedError.validationIssues?.length) {
-            console.table(parsedError.validationIssues);
-          }
-          setPhase("error");
-          setError(parsedError);
-          return;
-        }
-
-        const parsed = parseResearchApiResponse(data);
-        let fusionReport: ResearchResultV3["fusionReport"] = null;
-        let nextFusionError: FusionReportError | null = null;
-
-        try {
-          fusionReport = await fetchFusionReport(parsed.title);
-        } catch (err) {
-          nextFusionError = {
-            message:
-              err instanceof Error ? err.message : studioErrors.fusionUnavailable,
-          };
-        }
+        // Creative Research default: fusion/creative pipeline only — no paid provider agent run.
+        const fusionReport = await fetchFusionReport(trimmed);
 
         await animation;
         if (runIdRef.current !== runId) return;
 
         setPhase("complete");
-        setResult({ ...parsed, fusionReport });
-        setFusionError(nextFusionError);
+        setResult({
+          outputKind: "research",
+          reportId: `creative-${fusionReport.generatedAt}`,
+          title: fusionReport.title || trimmed,
+          executiveSummary:
+            fusionReport.executiveSummary ??
+            fusionReport.creativeResearch?.creativeDirectionSummary ??
+            trimmed,
+          keyFindings:
+            fusionReport.creativeResearch?.designIdeas.map((idea) => idea.primaryPhrase) ??
+            [],
+          opportunities: [],
+          recommendations: [fusionReport.creativeResearch?.nextStep].filter(
+            (value): value is string => Boolean(value),
+          ),
+          confidence: fusionReport.overallConfidence,
+          savedDomains: [],
+          fusionReport,
+        });
+        setFusionError(null);
       } catch (err) {
         cancelRunAnimation();
         setPhase("error");
@@ -197,7 +190,6 @@ export function useResearchRun() {
       fetchFusionReport,
       finishLoadingRun,
       isLoading,
-      studioErrors.fusionUnavailable,
       studioErrors.researchFailed,
     ],
   );
@@ -225,7 +217,7 @@ export function useResearchRun() {
   }, [lastPrompt, reset, runResearch]);
 
   const retryFusionReport = useCallback(async () => {
-    const title = result?.title;
+    const title = result?.title ?? lastPrompt;
     if (!title || fusionRetrying) return;
 
     setFusionRetrying(true);
@@ -234,7 +226,19 @@ export function useResearchRun() {
     try {
       const fusionReport = await fetchFusionReport(title);
       setResult((current) =>
-        current ? { ...current, fusionReport } : current,
+        current
+          ? { ...current, fusionReport, title: fusionReport.title || current.title }
+          : {
+              outputKind: "research",
+              reportId: `creative-${fusionReport.generatedAt}`,
+              title: fusionReport.title || title,
+              executiveSummary: fusionReport.executiveSummary ?? "",
+              keyFindings: [],
+              opportunities: [],
+              recommendations: [],
+              savedDomains: [],
+              fusionReport,
+            },
       );
       setFusionError(null);
     } catch (err) {
@@ -245,7 +249,13 @@ export function useResearchRun() {
     } finally {
       setFusionRetrying(false);
     }
-  }, [fetchFusionReport, fusionRetrying, result?.title, studioErrors.fusionUnavailable]);
+  }, [
+    fetchFusionReport,
+    fusionRetrying,
+    lastPrompt,
+    result?.title,
+    studioErrors.fusionUnavailable,
+  ]);
 
   useEffect(() => {
     return () => {

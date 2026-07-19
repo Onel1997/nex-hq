@@ -2,6 +2,7 @@
 
 import type { ResearchStudioReport } from "@/lib/research-intelligence/report";
 import { ResearchStudioCreativeBrief } from "./research-studio-creative-brief";
+import { ResearchStudioDesignIdeas } from "./research-studio-design-ideas";
 import { CollapsibleSection } from "./collapsible-section";
 import {
   formatLaunchPriority,
@@ -33,6 +34,7 @@ import {
   Brain,
   Shapes,
 } from "lucide-react";
+import { useState } from "react";
 
 interface ResearchStudioFusionReportProps {
   report: ResearchStudioReport;
@@ -521,6 +523,164 @@ function BrandIntelligenceSection({
   );
 }
 
+function CreativeResearchReportView({
+  report,
+  creative,
+}: {
+  report: ResearchStudioReport;
+  creative: NonNullable<ResearchStudioReport["creativeResearch"]>;
+}) {
+  const { research } = useDictionary();
+  const f = research.studio.fusion;
+  const [summary, setSummary] = useState(creative.creativeDirectionSummary);
+  const [nextStep, setNextStep] = useState(creative.nextStep);
+  const [ideas, setIdeas] = useState(creative.designIdeas);
+  const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(
+    creative.selectedIdeaId,
+  );
+  const cost = creative.estimatedProviderCost;
+  const usage = creative.providerUsage;
+  const isCreativeOnly = report.providerMode === "creative_only";
+
+  return (
+    <div className="rs3-fusion-report rs3-creative-report">
+      <header className="rs3-fusion-hero">
+        <div className="rs3-fusion-hero-glow" aria-hidden />
+        <p className="rs3-fusion-eyebrow">{f.eyebrow}</p>
+        <h2 className="rs3-fusion-title">{report.title}</h2>
+        <div className="rs3-fusion-hero-meta">
+          <span className="rs3-fusion-hero-tier">
+            {f.providerMode}: {report.providerMode}
+          </span>
+          {cost ? (
+            <span className="rs3-fusion-hero-sources">
+              {f.estimatedCost}: {cost.estimatedMin.toFixed(2)}{" "}
+              {cost.estimatedMin === cost.estimatedMax
+                ? ""
+                : `– ${cost.estimatedMax.toFixed(2)} `}
+              {cost.currency}
+            </span>
+          ) : null}
+        </div>
+      </header>
+
+      <section className="rs3-fusion-section rs3-fusion-section-hero">
+        <header className="rs3-fusion-section-head">
+          <Sparkles className="size-4" />
+          <h3>{f.creativeDirection}</h3>
+        </header>
+        <p className="rs3-fusion-lead">{summary}</p>
+        {creative.collection ? (
+          <div className="rs3-creative-collection-block">
+            <h4>{creative.collection.collectionName}</h4>
+            <p>{creative.collection.collectionTagline}</p>
+            <p className="rs3-fusion-body">{creative.collection.collectionStory}</p>
+          </div>
+        ) : null}
+      </section>
+
+      <ResearchStudioDesignIdeas
+        ideas={ideas}
+        selectedIdeaId={selectedIdeaId}
+        sourceResearchRunId={`creative-${report.generatedAt}`}
+        onSelectionChange={(payload) => {
+          setIdeas(payload.ideas);
+          setSelectedIdeaId(payload.selectedIdeaId);
+          setSummary(payload.creativeDirectionSummary);
+          setNextStep(payload.nextStep);
+        }}
+      />
+
+      <section className="rs3-fusion-section">
+        <header className="rs3-fusion-section-head">
+          <ArrowRight className="size-4" />
+          <h3>{f.nextStep}</h3>
+        </header>
+        <p className="rs3-fusion-lead">{nextStep}</p>
+      </section>
+
+      <CollapsibleSection
+        title={f.supportingIntelligence}
+        icon={<Brain className="size-4" />}
+        expandLabel={f.expandSection}
+        collapseLabel={f.collapseSection}
+        defaultOpen={false}
+      >
+        {isCreativeOnly ? (
+          <p className="rs3-fusion-body">{f.noPatternEvidence}</p>
+        ) : report.patternIntelligence ? (
+          <PatternIntelligenceSection patternIntelligence={report.patternIntelligence} />
+        ) : (
+          <p className="rs3-fusion-body">{f.noPatternEvidence}</p>
+        )}
+        {!isCreativeOnly && report.brandIntelligence ? (
+          <BrandIntelligenceSection brandIntelligence={report.brandIntelligence} />
+        ) : null}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title={f.technicalDetails}
+        icon={<Layers className="size-4" />}
+        expandLabel={f.expandSection}
+        collapseLabel={f.collapseSection}
+        defaultOpen={false}
+      >
+        <div className="rs3-fusion-body">
+          <p>
+            Generator: {creative.generatorSource} · Diversity Score:{" "}
+            {creative.diversityScore}
+          </p>
+          {cost ? (
+            <ul className="rs3-fusion-evidence">
+              <li>
+                Creative Generation: {cost.creativeGenerationMin.toFixed(2)}–
+                {cost.creativeGenerationMax.toFixed(2)} {cost.currency}
+                {cost.llmCalled ? "" : " (kein LLM)"}
+              </li>
+              <li>
+                External Providers: {cost.externalProvidersMin.toFixed(2)}–
+                {cost.externalProvidersMax.toFixed(2)} {cost.currency}
+              </li>
+              <li>
+                Estimated Total: {cost.estimatedMin.toFixed(2)}
+                {cost.estimatedMin === cost.estimatedMax
+                  ? ""
+                  : `–${cost.estimatedMax.toFixed(2)}`}{" "}
+                {cost.currency}
+              </li>
+              <li>{cost.note}</li>
+            </ul>
+          ) : null}
+          {usage ? (
+            <ul className="rs3-fusion-evidence">
+              <li>
+                Provider Sync Count: {usage.providerSyncCount}
+              </li>
+              <li>
+                In diesem Lauf verwendet:{" "}
+                {usage.usedProviders.length > 0
+                  ? usage.usedProviders.join(", ")
+                  : "keine"}
+              </li>
+              {usage.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </CollapsibleSection>
+
+      {report.caveats.length > 0 ? (
+        <footer className="rs3-fusion-caveats">
+          {report.caveats.slice(0, 4).map((caveat) => (
+            <p key={caveat}>{caveat}</p>
+          ))}
+        </footer>
+      ) : null}
+    </div>
+  );
+}
+
 export function ResearchStudioFusionReport({ report }: ResearchStudioFusionReportProps) {
   const locale = useLocale();
   const { research } = useDictionary();
@@ -529,6 +689,16 @@ export function ResearchStudioFusionReport({ report }: ResearchStudioFusionRepor
     report.trendConfidence ||
     report.commercialConfidence ||
     report.sourceAgreement;
+  const creative = report.creativeResearch;
+  const isCreative =
+    report.researchMode === "weekly_design_ideas" ||
+    report.researchMode === "collection_creator";
+
+  if (isCreative && creative) {
+    return (
+      <CreativeResearchReportView report={report} creative={creative} />
+    );
+  }
 
   return (
     <div className="rs3-fusion-report">
