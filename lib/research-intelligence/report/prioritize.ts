@@ -2,6 +2,21 @@ import { getSourceWeightProfile } from "../confidence/source-weights";
 import type { BrandIntelligenceSection } from "../brand-intelligence/types";
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { formatIntelligenceTemplate, getIntelligenceCopy } from "../copy";
+import {
+  classifyEntity,
+  isCreativeOpportunityEntity,
+} from "../pattern-intelligence/entity-quality";
+import {
+  buildCatalogReferenceIndex,
+  isCatalogProductReference,
+} from "../pattern-intelligence/catalog-filter";
+import {
+  buildDesignStudioNextStep,
+  resolveProductTarget,
+} from "../pattern-intelligence/product-target";
+import type { PatternIntelligenceSection } from "../pattern-intelligence/types";
+import type { CleanResearchSignalSet } from "../clean-signals";
+import type { IntelligenceEntityKind } from "../pattern-intelligence/types";
 import type { ResearchReasoningIntelligence } from "../types/reasoning";
 import type { UnifiedResearchIntelligence } from "../types/unified";
 import type {
@@ -35,33 +50,59 @@ function priorityFromOpportunity(
   return brandFit >= 60 ? "develop" : "watch";
 }
 
-function findNextStep(
-  title: string,
-  cards: ReportRecommendationCard[],
-): string {
-  const normalized = title.toLowerCase();
-  for (const card of cards) {
-    if (
-      card.title.toLowerCase().includes(normalized) ||
-      normalized.includes(card.title.toLowerCase().slice(0, 12))
-    ) {
-      return card.suggestedNextStep;
-    }
-  }
-  return cards[0]?.suggestedNextStep ?? "";
+function mapEntityKind(classification: ReturnType<typeof classifyEntity>): IntelligenceEntityKind {
+  if (classification === "design_pattern") return "design_pattern";
+  if (classification === "trend") return "trend";
+  if (classification === "product") return "product";
+  if (classification === "category") return "category";
+  if (classification === "catalog_metadata") return "catalog_metadata";
+  if (classification === "noise") return "noise";
+  return "recommendation";
 }
 
 export function buildPrioritizedOpportunities(
   intelligence: UnifiedResearchIntelligence,
   brandIntelligence: BrandIntelligenceSection | null | undefined,
   cards: ReportRecommendationCard[],
+  patternIntelligence?: PatternIntelligenceSection | null,
+  userRequest?: string,
 ): ReportPrioritizedOpportunity[] {
   if (!brandIntelligence) return [];
+
+  const catalogTitles = patternIntelligence?.catalogProductTitles ?? [];
+  const catalogIndex = buildCatalogReferenceIndex(
+    catalogTitles.map((title, index) => ({
+      id: `catalog-${index}`,
+      title,
+      handle: "",
+      status: "ACTIVE",
+      productType: "",
+      price: "0",
+      currency: "EUR",
+      inventory: 0,
+      collections: [],
+      tags: [],
+      colors: [],
+      materials: [],
+    })),
+  );
+
+  const silhouette = resolveProductTarget({
+    userRequest,
+    patternSilhouette: patternIntelligence?.recommendedSilhouette,
+    intelligenceCorpus: brandIntelligence.topOpportunities
+      .map((opp) => opp.title)
+      .join(" "),
+  });
 
   const opportunities = [
     ...brandIntelligence.topOpportunities,
     ...brandIntelligence.rejectedOpportunities.slice(0, 2),
-  ];
+  ].filter((opp) => {
+    if (isCatalogProductReference(opp.title, catalogIndex)) return false;
+    const kind = classifyEntity(opp.title, catalogIndex);
+    return isCreativeOpportunityEntity(kind);
+  });
 
   const seen = new Set<string>();
   const result: ReportPrioritizedOpportunity[] = [];
@@ -71,12 +112,14 @@ export function buildPrioritizedOpportunities(
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const designCard = cards.find(
-      (card) =>
-        card.title.toLowerCase().includes(key) ||
-        key.includes(card.title.toLowerCase().replace(/^explore "|" as a design direction$/g, "")),
+    const designCard = cards.find((card) =>
+      /design direction|graphic theme|typography/i.test(card.title),
     );
-    const productCard = cards.find((card) => card.title.toLowerCase().includes(key));
+
+    const entityKind = mapEntityKind(classifyEntity(opp.title, catalogIndex));
+    const dynamicNextStep = opp.rejected
+      ? opp.rejectionReasons[0] ?? ""
+      : buildDesignStudioNextStep(silhouette, designCard?.title ?? opp.title);
 
     result.push({
       id: opp.id,
@@ -84,12 +127,9 @@ export function buildPrioritizedOpportunities(
       brandFit: opp.brandFit,
       trendScore: opp.trendScore,
       commercialPotential: opp.commercialPotential,
+      confidence: opp.confidence,
       whyRecommended: opp.reasons[0] ?? opp.matches.join(", "),
-      nextStep:
-        findNextStep(opp.title, cards) ||
-        (opp.rejected
-          ? opp.rejectionReasons[0] ?? ""
-          : "Im Design Studio weiterentwickeln und gegen Milaene-Guardrails prüfen."),
+      nextStep: dynamicNextStep,
       sourceKeys: opp.sourceKeys,
       prioritySignal: priorityFromOpportunity(
         opp.brandFit,
@@ -97,8 +137,9 @@ export function buildPrioritizedOpportunities(
         opp.rejected,
         opp.launchPriority,
       ),
-      productHint: productCard?.title ?? null,
+      productHint: silhouette,
       designDirection: designCard?.title ?? null,
+      entityKind,
     });
   }
 
@@ -151,6 +192,8 @@ export function buildExecutiveNarrative(
   reasoning: ResearchReasoningIntelligence,
   brandIntelligence: BrandIntelligenceSection | null | undefined,
   weak: boolean,
+  cleanSignalSet?: CleanResearchSignalSet | null,
+  patternIntelligence?: PatternIntelligenceSection | null,
 ): ReportExecutiveNarrative | null {
   const copy = getIntelligenceCopy(DEFAULT_LOCALE).executive;
 
@@ -164,30 +207,70 @@ export function buildExecutiveNarrative(
     };
   }
 
-  const topOpp = brandIntelligence?.topOpportunities[0];
-  const terms = topOpp?.title ?? reasoning.trendSignificance[0]?.replace(/.*?:\s*/, "") ?? "aktuelle Trendsignale";
+  const scopeLabels = cleanSignalSet?.summaryLabels ?? [];
+  const terms =
+    scopeLabels.length > 0
+      ? scopeLabels.slice(0, 4).join(", ")
+      : brandIntelligence?.topOpportunities[0]?.title ?? "aktuelle Trendsignale";
+
   const sourceKeys = new Set(
     intelligence.manifest.contributions.map((item) => String(item.sourceKey)),
   );
 
   const whatFound = formatIntelligenceTemplate(copy.trendRising, { terms });
+
   const whyParts: string[] = [];
-  if (sourceKeys.has("shopify")) whyParts.push(copy.shopifyConfirms);
-  if (sourceKeys.has("google_trends")) whyParts.push(copy.googleTrendsConfirms);
-  if (intelligence.manifest.providerCount >= 3) whyParts.push(copy.multiSource);
+  const heavyLearning = patternIntelligence?.brandLearning.find((item) =>
+    item.id.includes("heavyweight"),
+  );
+  if (sourceKeys.has("google_trends")) {
+    whyParts.push(
+      formatIntelligenceTemplate(copy.googleTrendsSpecific, {
+        terms: scopeLabels[0] ?? terms.split(",")[0] ?? "die Zielrichtung",
+      }),
+    );
+  }
+  if (sourceKeys.has("shopify")) {
+    if (heavyLearning?.evidence) {
+      whyParts.push(heavyLearning.evidence);
+    } else {
+      whyParts.push(copy.shopifyConfirms);
+    }
+  }
+  if (intelligence.manifest.providerCount >= 3 && whyParts.length < 2) {
+    whyParts.push(copy.multiSource);
+  }
   const whyInteresting = whyParts.length > 0 ? whyParts.join(" ") : reasoning.narratives[0] ?? whatFound;
 
   const brandFit = brandIntelligence?.brandFitScore ?? reasoning.brandFit.score;
+  const alignedAttrs = [
+    ...(patternIntelligence?.designLanguage.material.slice(0, 2) ?? []),
+    ...(patternIntelligence?.designLanguage.silhouette.slice(0, 2) ?? []),
+  ]
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(", ");
+
   const milaeneFit =
     brandFit >= 70
-      ? copy.brandAligned
+      ? alignedAttrs
+        ? formatIntelligenceTemplate(copy.brandAlignedSpecific, { attrs: alignedAttrs })
+        : copy.brandAligned
       : brandFit >= 55
         ? copy.brandPartial
         : copy.brandWeak;
 
+  const topOpp = brandIntelligence?.topOpportunities[0];
+  const overall = intelligence.confidence.overallScore;
   const shouldAct =
     topOpp?.launchPriority === "A" || (topOpp && topOpp.brandFit >= 70)
-      ? copy.actNow
+      ? overall >= 65
+        ? copy.actNow
+        : formatIntelligenceTemplate(copy.actDevelop, {
+            channels: sourceKeys.has("tiktok") || sourceKeys.has("pinterest")
+              ? "TikTok oder Pinterest"
+              : "weitere Quellen",
+          })
       : topOpp?.rejected
         ? copy.avoid
         : copy.observe;
@@ -216,3 +299,15 @@ export function humanizeInsightDetail(
     .replace(/Catalog gap detected/gi, "Lücke im Sortiment erkannt")
     .replace(/Support Milaene/gi, copy.supportsMilaene);
 }
+
+function dedupeStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = value.toLowerCase().trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export { dedupeStrings };

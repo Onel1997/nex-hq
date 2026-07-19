@@ -4,6 +4,16 @@ import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 
 import { rankOpportunityTerms, rankTrendClusters } from "../fusion/weighted-fusion";
+import {
+  buildCatalogReferenceIndex,
+  isCatalogProductReference,
+  isCollectionConceptForCatalogProduct,
+} from "../pattern-intelligence/catalog-filter";
+import {
+  dedupeByNormalizedLabel,
+  isNoiseEntity,
+  passesOpportunityQualityGate,
+} from "../pattern-intelligence/entity-quality";
 import type { RecommendationType } from "../types/recommendation";
 import type { UnifiedResearchIntelligence } from "../types/unified";
 import type { ResearchReasoningIntelligence } from "../types/reasoning";
@@ -43,15 +53,18 @@ function opportunityId(prefix: string, title: string, index: number): string {
 function extractScorableItems(
   intelligence: UnifiedResearchIntelligence,
   reasoning: ResearchReasoningIntelligence,
+  catalogIndex: ReturnType<typeof buildCatalogReferenceIndex>,
 ): Array<{ id: string; title: string; trendScore: number; sourceKeys: string[] }> {
   const items: Array<{ id: string; title: string; trendScore: number; sourceKeys: string[] }> = [];
   const seen = new Set<string>();
 
   const add = (id: string, title: string, trendScore: number, sourceKeys: string[]) => {
-    const key = title.toLowerCase().trim();
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    items.push({ id, title, trendScore, sourceKeys });
+    const cleaned = title.trim();
+    if (!cleaned || seen.has(cleaned.toLowerCase())) return;
+    if (!passesOpportunityQualityGate(cleaned, catalogIndex)) return;
+    if (isCollectionConceptForCatalogProduct(cleaned, catalogIndex)) return;
+    seen.add(cleaned.toLowerCase());
+    items.push({ id, title: cleaned, trendScore, sourceKeys });
   };
 
   for (const rec of intelligence.recommendations.items) {
@@ -87,21 +100,32 @@ function extractScorableItems(
   }
 
   for (const [index, signal] of reasoning.brandFit.alignedSignals.slice(0, 4).entries()) {
+    if (isNoiseEntity(signal)) continue;
     add(opportunityId("aligned", signal, index), signal, reasoning.brandFit.score, []);
   }
 
-  for (const [index, signal] of reasoning.brandFit.misalignedSignals.slice(0, 4).entries()) {
-    add(opportunityId("misaligned", signal, index), signal, 50, []);
-  }
-
-  return items;
+  return dedupeByNormalizedLabel(items);
 }
 
 function filterRecommendations(
   intelligence: UnifiedResearchIntelligence,
   rejectedTitles: Set<string>,
+  catalogIndex: ReturnType<typeof buildCatalogReferenceIndex>,
 ): UnifiedResearchIntelligence {
   const filteredItems = intelligence.recommendations.items.filter((rec) => {
+    if (
+      rec.type === "product_opportunity" &&
+      isCatalogProductReference(rec.title, catalogIndex)
+    ) {
+      return false;
+    }
+    if (
+      rec.type === "collection_concept" &&
+      isCollectionConceptForCatalogProduct(rec.title, catalogIndex)
+    ) {
+      return false;
+    }
+    if (isNoiseEntity(rec.title)) return false;
     if (!SCORABLE_RECOMMENDATION_TYPES.has(rec.type)) return true;
     const normalizedTitle = rec.title.toLowerCase();
     for (const rejected of rejectedTitles) {
@@ -220,7 +244,30 @@ export async function runBrandIntelligenceEngine(
   const originality = confidence.scores.novelty.score;
   const defaultTrendScore = confidence.scores.trend_confidence.score;
 
-  const scorableItems = extractScorableItems(input.intelligence, input.reasoning);
+  const catalogIndex = buildCatalogReferenceIndex(
+    shopify.titles.map((title, index) => ({
+      id: `shopify-${index}`,
+      title,
+      handle: "",
+      status: "ACTIVE",
+      productType: "",
+      price: "0",
+      currency: "EUR",
+      inventory: 0,
+      collections: shopify.collectionNames,
+      tags: shopify.tags,
+      colors: [],
+      materials: shopify.materials,
+    })),
+    shopify.collectionNames,
+    shopify.tags,
+  );
+
+  const scorableItems = extractScorableItems(
+    input.intelligence,
+    input.reasoning,
+    catalogIndex,
+  );
 
   const opportunities: ScoredOpportunity[] = scorableItems.map((item) =>
     scoreOpportunityText(
@@ -240,7 +287,11 @@ export async function runBrandIntelligenceEngine(
     opportunities.filter((opp) => opp.rejected).map((opp) => opp.title.toLowerCase()),
   );
 
-  const filteredIntelligence = filterRecommendations(input.intelligence, rejectedTitles);
+  const filteredIntelligence = filterRecommendations(
+    input.intelligence,
+    rejectedTitles,
+    catalogIndex,
+  );
 
   const brandIntelligence = buildOverallBrandIntelligence(
     opportunities,
@@ -268,7 +319,30 @@ export function runBrandIntelligenceEngineSync(
   const originality = confidence.scores.novelty.score;
   const defaultTrendScore = confidence.scores.trend_confidence.score;
 
-  const scorableItems = extractScorableItems(input.intelligence, input.reasoning);
+  const catalogIndex = buildCatalogReferenceIndex(
+    shopify.titles.map((title, index) => ({
+      id: `shopify-${index}`,
+      title,
+      handle: "",
+      status: "ACTIVE",
+      productType: "",
+      price: "0",
+      currency: "EUR",
+      inventory: 0,
+      collections: shopify.collectionNames,
+      tags: shopify.tags,
+      colors: [],
+      materials: shopify.materials,
+    })),
+    shopify.collectionNames,
+    shopify.tags,
+  );
+
+  const scorableItems = extractScorableItems(
+    input.intelligence,
+    input.reasoning,
+    catalogIndex,
+  );
 
   const opportunities: ScoredOpportunity[] = scorableItems.map((item) =>
     scoreOpportunityText(
@@ -289,7 +363,7 @@ export function runBrandIntelligenceEngineSync(
   );
 
   return {
-    intelligence: filterRecommendations(input.intelligence, rejectedTitles),
+    intelligence: filterRecommendations(input.intelligence, rejectedTitles, catalogIndex),
     brandIntelligence: buildOverallBrandIntelligence(
       opportunities,
       shopify,

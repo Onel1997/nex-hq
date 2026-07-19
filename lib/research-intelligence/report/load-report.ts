@@ -5,6 +5,7 @@ import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { runBrandIntelligenceEngine } from "../brand-intelligence";
 import { runCreativeBriefEngine } from "../creative-brief";
 import { runResearchIntelligencePipeline } from "../fusion/pipeline";
+import { runPatternIntelligenceEngine } from "../pattern-intelligence";
 import { buildResearchReport } from "./build-report";
 import { syncResultsToEnvelopes } from "./envelopes";
 import type { ResearchStudioReport } from "./types";
@@ -40,11 +41,18 @@ export async function loadResearchStudioReport(
     generatedAt,
   });
 
+  const patternIntelligence = await runPatternIntelligenceEngine({
+    generatedAt,
+    userRequest: options.title,
+  });
+
   const briefResult = runCreativeBriefEngine({
     intelligence: brandResult.intelligence,
     reasoning: pipeline.reasoning,
     brandIntelligence: brandResult.brandIntelligence,
+    patternIntelligence,
     generatedAt,
+    userRequest: options.title,
   });
 
   return buildResearchReport({
@@ -52,7 +60,9 @@ export async function loadResearchStudioReport(
     reasoning: pipeline.reasoning,
     brandIntelligence: brandResult.brandIntelligence,
     creativeBrief: briefResult.creativeBrief,
+    patternIntelligence,
     title: options.title,
+    userRequest: options.title,
   });
 }
 

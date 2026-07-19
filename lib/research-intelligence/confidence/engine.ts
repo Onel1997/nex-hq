@@ -368,24 +368,31 @@ function scoreBrandFitConfidence(ctx: ScoringContext): ConfidenceScore {
     alignmentRatio * 70 + aestheticHits.length * 8 - conflictPenalty * 40 + 20,
   );
 
+  const copy = getIntelligenceCopy(ctx.locale);
   const evidence: ConfidenceEvidence[] = [
     {
       id: evidenceId("brand_fit_confidence", 0),
-      label: `${aligned.length} Milaene-aligned terms detected`,
+      label: formatIntelligenceTemplate(copy.recommendations.alignedTermsDetected, {
+        count: String(aligned.length),
+      }),
       weight: 0.5,
       contribution: clampScore(alignmentRatio * 100),
       direction: aligned.length > 0 ? "supports" : "neutral",
     },
     {
       id: evidenceId("brand_fit_confidence", 1),
-      label: `${conflicts.length} misaligned terms detected`,
+      label: formatIntelligenceTemplate(copy.recommendations.misalignedTermsDetected, {
+        count: String(conflicts.length),
+      }),
       weight: 0.3,
       contribution: clampScore(conflictPenalty * 100),
       direction: conflicts.length > 0 ? "contradicts" : "neutral",
     },
     {
       id: evidenceId("brand_fit_confidence", 2),
-      label: `${aestheticHits.length} preferred aesthetic matches`,
+      label: formatIntelligenceTemplate(copy.recommendations.aestheticMatches, {
+        count: String(aestheticHits.length),
+      }),
       weight: 0.2,
       contribution: clampScore(aestheticHits.length * 25),
       direction: aestheticHits.length > 0 ? "supports" : "neutral",
@@ -394,9 +401,15 @@ function scoreBrandFitConfidence(ctx: ScoringContext): ConfidenceScore {
 
   return makeScore("brand_fit_confidence", score,
     conflicts.length > aligned.length
-      ? `Brand fit is ${scoreToTier(score)} — misaligned novelty signals outweigh Milaene restraint cues.`
-      : `Brand fit is ${scoreToTier(score)} — ${aligned.length} aligned signals support Milaene's quiet luxury and archive streetwear positioning.`,
+      ? formatIntelligenceTemplate(copy.recommendations.brandFitMisaligned, {
+          tier: tierLabel(scoreToTier(score), ctx.locale),
+        })
+      : formatIntelligenceTemplate(copy.recommendations.brandFitAligned, {
+          tier: tierLabel(scoreToTier(score), ctx.locale),
+          count: String(aligned.length),
+        }),
     evidence,
+    ctx.locale,
   );
 }
 
@@ -441,17 +454,22 @@ function scoreSourceAgreement(ctx: ScoringContext): ConfidenceScore {
   const agreementRatio = safeRatio(aligned, comparable);
   const score = comparable > 0 ? clampScore(agreementRatio * 100) : clampScore(ctx.sourceKeys.length * 8);
 
+  const copy = getIntelligenceCopy(ctx.locale);
   const evidence: ConfidenceEvidence[] = [
     {
       id: evidenceId("source_agreement", 0),
-      label: `${aligned} aligned cross-source direction pairs`,
+      label: formatIntelligenceTemplate(copy.recommendations.alignedDirectionPairs, {
+        count: String(aligned),
+      }),
       weight: 0.6,
       contribution: clampScore(agreementRatio * 100),
       direction: aligned > 0 ? "supports" : "neutral",
     },
     {
       id: evidenceId("source_agreement", 1),
-      label: `${comparable - aligned} conflicting direction pairs`,
+      label: formatIntelligenceTemplate(copy.recommendations.conflictingDirectionPairs, {
+        count: String(comparable - aligned),
+      }),
       weight: 0.4,
       contribution: clampScore(safeRatio(comparable - aligned, Math.max(comparable, 1)) * 100),
       direction: comparable - aligned > aligned ? "contradicts" : "neutral",
@@ -461,7 +479,9 @@ function scoreSourceAgreement(ctx: ScoringContext): ConfidenceScore {
   if (disagreementExamples.length > 0) {
     evidence.push({
       id: evidenceId("source_agreement", 2),
-      label: `Disagreement on: ${uniqueTerms(disagreementExamples).slice(0, 3).join(", ")}`,
+      label: formatIntelligenceTemplate(copy.recommendations.disagreementOn, {
+        terms: uniqueTerms(disagreementExamples).slice(0, 3).join(", "),
+      }),
       weight: 0.2,
       contribution: clampScore(disagreementExamples.length * 5),
       direction: "contradicts",
@@ -470,9 +490,13 @@ function scoreSourceAgreement(ctx: ScoringContext): ConfidenceScore {
 
   return makeScore("source_agreement", score,
     comparable > 0
-      ? `Source agreement is ${scoreToTier(score)} across ${comparable} comparable cross-source pairs.`
-      : "Source agreement is inferred from limited overlap — few shared terms across providers.",
+      ? formatIntelligenceTemplate(copy.recommendations.sourceAgreementVerified, {
+          tier: tierLabel(scoreToTier(score), ctx.locale),
+          count: String(comparable),
+        })
+      : copy.recommendations.sourceAgreementLimited,
     evidence,
+    ctx.locale,
   );
 }
 

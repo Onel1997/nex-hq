@@ -21,7 +21,9 @@ export function runCreativeBriefEngine(
     intelligence: input.intelligence,
     reasoning: input.reasoning,
     brandIntelligence: input.brandIntelligence,
+    patternIntelligence: input.patternIntelligence,
     generatedAt,
+    userRequest: input.userRequest,
   });
 
   return { creativeBrief };

@@ -1,9 +1,12 @@
 export type {
   ReportActionCard,
   ReportBrandIntelligence,
+  ReportBrandLearning,
   ReportCreativeBrief,
+  ReportDesignPattern,
   ReportInsight,
   ReportOpportunity,
+  ReportPatternIntelligence,
   ReportRecommendationCard,
   ReportRiskCard,
   ReportScoreBlock,

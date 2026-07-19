@@ -262,6 +262,8 @@ export const researchStudio = {
     brandFitLabel: "Brand Fit",
     trendScoreLabel: "Trend-Score",
     commercialPotentialLabel: "Kommerzielles Potenzial",
+    confidenceLabel: "Konfidenz",
+    competitionLabel: "Wettbewerb",
     whyRecommended: "Warum empfohlen",
     nextStepLabel: "Nächster Schritt",
     sourceLabel: "Quelle",
@@ -366,6 +368,7 @@ export const researchStudio = {
       competition: "Wettbewerb",
       longevity: "Langlebigkeit",
       originality: "Originalität",
+      confidence: "Konfidenz",
     },
   },
 } as const;

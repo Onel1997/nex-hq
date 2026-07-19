@@ -39,6 +39,7 @@ function BriefScoreGrid({
         competition: string;
         longevity: string;
         originality: string;
+        confidence: string;
       }
     : never;
 }) {
@@ -46,6 +47,7 @@ function BriefScoreGrid({
     { label: labels.trendScore, value: scores.trendScore },
     { label: labels.brandFit, value: scores.brandFit },
     { label: labels.commercialPotential, value: scores.commercialPotential },
+    { label: labels.confidence, value: scores.confidence },
     { label: labels.competition, value: scores.competition },
     { label: labels.longevity, value: scores.longevity },
     { label: labels.originality, value: scores.originality },
@@ -102,7 +104,17 @@ export function ResearchStudioCreativeBrief({
             {cb.anchoredOn} {brief.anchorOpportunityTitle}
           </p>
         ) : null}
+        {brief.missionStatement ? (
+          <p className="rs3-brief-mission">{brief.missionStatement}</p>
+        ) : null}
       </div>
+
+      {brief.patternSummary ? (
+        <div className="rs3-brief-block">
+          <h5>Pattern Summary</h5>
+          <p>{brief.patternSummary}</p>
+        </div>
+      ) : null}
 
       <div className="rs3-brief-block">
         <h5>{cb.executiveSummary}</h5>

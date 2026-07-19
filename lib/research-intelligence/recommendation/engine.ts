@@ -5,6 +5,9 @@ import {
   rankSignalsByWeight,
   rankTrendClusters,
 } from "../fusion/weighted-fusion";
+import { isCatalogProductReference } from "../pattern-intelligence/catalog-filter";
+import { isNoiseEntity } from "../pattern-intelligence/entity-quality";
+import { dedupeRecommendationsSemantic } from "../clean-signals/semantic-dedup";
 import type { ConfidenceScoreId } from "../types/confidence";
 import type { ResearchReasoningIntelligence } from "../types/reasoning";
 import type {
@@ -40,6 +43,7 @@ export interface RecommendationInput {
   intelligence: UnifiedResearchIntelligence;
   reasoning: ResearchReasoningIntelligence;
   generatedAt?: string;
+  catalogProductTitles?: string[];
 }
 
 let recommendationCounter = 0;
@@ -219,7 +223,10 @@ function buildDesignDirections(ctx: RecommendationRuleContext): ResearchRecommen
   });
 }
 
-function buildProductOpportunities(ctx: RecommendationRuleContext): ResearchRecommendation[] {
+function buildProductOpportunities(
+  ctx: RecommendationRuleContext,
+  catalogTitles: string[] = [],
+): ResearchRecommendation[] {
   const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   const commercialScore = ctx.confidence.scores.commercial_confidence.score;
   if (commercialScore < RULE_THRESHOLDS.minCommercialForProduct) return [];
@@ -227,6 +234,7 @@ function buildProductOpportunities(ctx: RecommendationRuleContext): ResearchReco
   const items: ResearchRecommendation[] = [];
 
   for (const [index, opportunity] of ctx.intelligence.commercial.opportunities.slice(0, 3).entries()) {
+    if (isCatalogProductReference(opportunity.title, catalogTitles)) continue;
     const sourceKey = String(opportunity.provenance.sourceKey);
     const confidence = blendScores(ctx.confidence, [
       "commercial_confidence",
@@ -280,6 +288,8 @@ function buildProductOpportunities(ctx: RecommendationRuleContext): ResearchReco
   ).slice(0, 2);
 
   for (const [index, ranked] of rankedProducts.entries()) {
+    if (isCatalogProductReference(ranked.item.label, catalogTitles)) continue;
+    if (isNoiseEntity(ranked.item.label)) continue;
     const confidence = blendScores(ctx.confidence, ["commercial_confidence", "source_agreement"]);
     items.push(
       makeRecommendation({
@@ -315,6 +325,7 @@ function buildProductOpportunities(ctx: RecommendationRuleContext): ResearchReco
 }
 
 function buildCollectionConcepts(ctx: RecommendationRuleContext): ResearchRecommendation[] {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   const novelty = ctx.confidence.scores.novelty.score;
   const brandFit = ctx.confidence.scores.brand_fit_confidence.score;
   if (novelty < RULE_THRESHOLDS.minNoveltyForCollection || brandFit < RULE_THRESHOLDS.minBrandFitForDesign) {
@@ -335,11 +346,21 @@ function buildCollectionConcepts(ctx: RecommendationRuleContext): ResearchRecomm
   return [
     makeRecommendation({
       id: recId("collection_concept", anchor),
-      title: `${anchor} collection concept — ${ctx.reasoning.brandFit.fits ? "brand-aligned" : "cautionary"} capsule`,
+      title: formatIntelligenceTemplate(copy.collectionTitle, {
+        anchor,
+        alignment: ctx.reasoning.brandFit.fits
+          ? copy.collectionAligned
+          : copy.collectionCaution,
+      }),
       type: "collection_concept",
       priority: derivePriority(confidence, "collection_concept", ctx),
       confidence,
-      why: `Novelty (${novelty}/100) and brand fit (${brandFit}/100) support a capsule concept anchored on "${anchor}". ${ctx.reasoning.brandFit.summary}`,
+      why: formatIntelligenceTemplate(copy.collectionWhy, {
+        novelty,
+        brandFit,
+        anchor,
+        summary: ctx.reasoning.brandFit.summary,
+      }),
       evidence: [
         evidence("ev-collection-novelty", ctx.confidence.scores.novelty.rationale, {
           scoreId: "novelty",
@@ -349,17 +370,21 @@ function buildCollectionConcepts(ctx: RecommendationRuleContext): ResearchRecomm
         }),
         ...(terms[0]
           ? [
-              evidence("ev-collection-term", `Weighted opportunity term "${terms[0].term}"`, {
-                scoreId: "trend_confidence",
-              }),
+              evidence(
+                "ev-collection-term",
+                formatIntelligenceTemplate(copy.weightedTerm, { term: terms[0].term }),
+                { scoreId: "trend_confidence" },
+              ),
             ]
           : []),
       ],
       sourceSupport: buildSourceSupport(terms[0]?.sourceKeys ?? []),
-      risks: ctx.reasoning.brandFit.misalignedSignals.map((signal) => `Misaligned cue: ${signal}`),
+      risks: ctx.reasoning.brandFit.misalignedSignals.map((signal) =>
+        formatIntelligenceTemplate(copy.misalignedCue, { signal }),
+      ),
       suggestedNextStep: ctx.reasoning.brandFit.fits
-        ? "Draft a capsule brief tying silhouette, color, and graphic restraint to Milaene DNA."
-        : getIntelligenceCopy(DEFAULT_LOCALE).recommendations.reconcileBeforeCapsule,
+        ? copy.collectionCapsuleBrief
+        : copy.reconcileBeforeCapsule,
       audiences: ["design", "ceo"],
       tags: ["collection", "capsule"],
       sourceDomains: ["trend", "brand"],
@@ -369,6 +394,7 @@ function buildCollectionConcepts(ctx: RecommendationRuleContext): ResearchRecomm
 }
 
 function buildColorPalettes(ctx: RecommendationRuleContext): ResearchRecommendation[] {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   const colors = extractColorTerms(ctx.intelligence).slice(0, 4);
   if (colors.length === 0) return [];
   if (ctx.confidence.scores.trend_confidence.score < 30) return [];
@@ -383,24 +409,34 @@ function buildColorPalettes(ctx: RecommendationRuleContext): ResearchRecommendat
   return [
     makeRecommendation({
       id: recId("color_palette", labels.join("-")),
-      title: `Color palette direction: ${labels.join(", ")}`,
+      title: formatIntelligenceTemplate(copy.colorPaletteTitle, { colors: labels.join(", ") }),
       type: "color_palette",
       priority: derivePriority(confidence, "color_palette", ctx),
       confidence,
-      why: `Weighted color signals converge on ${labels.length} hue(s) with ${ctx.confidence.scores.trend_confidence.tier} trend confidence.`,
+      why: formatIntelligenceTemplate(copy.colorPaletteWhy, {
+        count: labels.length,
+        tier: tierLabel(ctx.confidence.scores.trend_confidence.tier, DEFAULT_LOCALE),
+      }),
       evidence: colors.map((color, index) =>
-        evidence(`ev-color-${index}`, `Color signal "${color.term}" (${color.weightedScore}/100)`, {
-          sourceKey: color.sourceKeys[0],
-          signalId: color.signalIds[0],
-          scoreId: "trend_confidence",
-        }),
+        evidence(
+          `ev-color-${index}`,
+          formatIntelligenceTemplate(copy.colorSignal, {
+            color: color.term,
+            score: color.weightedScore,
+          }),
+          {
+            sourceKey: color.sourceKeys[0],
+            signalId: color.signalIds[0],
+            scoreId: "trend_confidence",
+          },
+        ),
       ),
       sourceSupport: buildSourceSupport(colors.flatMap((color) => color.sourceKeys)),
       risks:
         ctx.confidence.scores.saturation_risk.score >= 60
-          ? ["Palette may already be saturated in market — differentiate with material or placement."]
+          ? [copy.colorSaturationRisk]
           : [],
-      suggestedNextStep: "Translate palette into yarn/print lab dips and validate against Milaene neutral baseline.",
+      suggestedNextStep: copy.colorNextStep,
       audiences: ["design"],
       tags: ["color", "palette"],
       sourceDomains: ["trend", "brand", "market"],
@@ -410,6 +446,7 @@ function buildColorPalettes(ctx: RecommendationRuleContext): ResearchRecommendat
 }
 
 function buildTypographyDirections(ctx: RecommendationRuleContext): ResearchRecommendation[] {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   const terms = [
     ...rankOpportunityTerms(ctx.intelligence).slice(0, 4).map((term) => term.term),
     ...ctx.reasoning.brandFit.alignedSignals,
@@ -423,22 +460,30 @@ function buildTypographyDirections(ctx: RecommendationRuleContext): ResearchReco
   return [
     makeRecommendation({
       id: recId("typography_direction", "milaene-type"),
-      title: "Typography direction for current intelligence cycle",
+      title: copy.typographyTitle,
       type: "typography_direction",
       priority: derivePriority(confidence, "typography_direction", ctx),
       confidence,
-      why: `Brand-fit (${ctx.confidence.scores.brand_fit_confidence.score}/100) and aligned aesthetics map to: ${direction}`,
+      why: formatIntelligenceTemplate(copy.typographyWhy, {
+        score: ctx.confidence.scores.brand_fit_confidence.score,
+        direction,
+      }),
       evidence: [
         evidence("ev-type-brand", ctx.confidence.scores.brand_fit_confidence.rationale, {
           scoreId: "brand_fit_confidence",
         }),
-        evidence("ev-type-aligned", `Aligned signals: ${terms.slice(0, 4).join(", ") || "none"}`),
+        evidence(
+          "ev-type-aligned",
+          formatIntelligenceTemplate(copy.alignedSignals, {
+            signals: terms.slice(0, 4).join(", ") || "—",
+          }),
+        ),
       ],
       sourceSupport: buildSourceSupport(
         ctx.reasoning.confirmingSources.slice(0, 3).map((source) => source.sourceKey),
       ),
       risks: [],
-      suggestedNextStep: "Apply typography pairing to hero artwork tests in Design Studio.",
+      suggestedNextStep: copy.typographyNext,
       audiences: ["design"],
       tags: ["typography"],
       sourceDomains: ["brand"],
@@ -448,6 +493,7 @@ function buildTypographyDirections(ctx: RecommendationRuleContext): ResearchReco
 }
 
 function buildGraphicThemes(ctx: RecommendationRuleContext): ResearchRecommendation[] {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   const terms = rankOpportunityTerms(ctx.intelligence).slice(0, 5).map((term) => term.term);
   const graphicSignals = ctx.intelligence.signals.filter((signal) =>
     signal.tags.some((tag) => /graphic|print|emblem|logo|aesthetic/i.test(tag)),
@@ -455,25 +501,28 @@ function buildGraphicThemes(ctx: RecommendationRuleContext): ResearchRecommendat
   if (terms.length === 0 && graphicSignals.length === 0) return [];
   if (ctx.confidence.scores.trend_confidence.score < 35) return [];
 
-  const theme =
-    graphicThemeForTerms([
-      ...terms,
-      ...graphicSignals.map((signal) => signal.label),
-    ]) ?? "Abstract texture-led graphic system with brand-fit moderation";
   const confidence = blendScores(ctx.confidence, [
     "trend_confidence",
     "brand_fit_confidence",
     "novelty",
   ]);
 
+  const theme =
+    graphicThemeForTerms([
+      ...terms,
+      ...graphicSignals.map((signal) => signal.label),
+    ]) ?? copy.graphicDefault;
+
   return [
     makeRecommendation({
       id: recId("graphic_theme", theme.slice(0, 24)),
-      title: `Graphic theme: ${theme}`,
+      title: formatIntelligenceTemplate(copy.graphicTitle, { theme }),
       type: "graphic_theme",
       priority: derivePriority(confidence, "graphic_theme", ctx),
       confidence,
-      why: `Trend and brand signals support a graphic system direction with ${ctx.confidence.scores.novelty.tier} novelty.`,
+      why: formatIntelligenceTemplate(copy.graphicWhy, {
+        tier: tierLabel(ctx.confidence.scores.novelty.tier, DEFAULT_LOCALE),
+      }),
       evidence: [
         evidence("ev-graphic-trend", ctx.confidence.scores.trend_confidence.rationale, {
           scoreId: "trend_confidence",
@@ -489,9 +538,13 @@ function buildGraphicThemes(ctx: RecommendationRuleContext): ResearchRecommendat
         graphicSignals.map((signal) => String(signal.provenance.sourceKey)),
       ),
       risks: ctx.reasoning.brandFit.misalignedSignals.length
-        ? [`Brand tension: ${ctx.reasoning.brandFit.misalignedSignals.slice(0, 2).join(", ")}`]
+        ? [
+            formatIntelligenceTemplate(copy.brandTension, {
+              signals: ctx.reasoning.brandFit.misalignedSignals.slice(0, 2).join(", "),
+            }),
+          ]
         : [],
-      suggestedNextStep: "Prototype 2–3 graphic placements under Milaene restraint rules before scaling.",
+      suggestedNextStep: copy.graphicNext,
       audiences: ["design"],
       tags: ["graphic", "print"],
       sourceDomains: ["trend", "brand"],
@@ -501,6 +554,7 @@ function buildGraphicThemes(ctx: RecommendationRuleContext): ResearchRecommendat
 }
 
 function buildLaunchTiming(ctx: RecommendationRuleContext): ResearchRecommendation[] {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   const seasonality = ctx.confidence.scores.seasonality.score;
   const readiness = ctx.confidence.scores.launch_readiness.score;
   if (seasonality < RULE_THRESHOLDS.minSeasonalityForLaunch && readiness < 50) return [];
@@ -515,7 +569,7 @@ function buildLaunchTiming(ctx: RecommendationRuleContext): ResearchRecommendati
   return [
     makeRecommendation({
       id: recId("launch_timing", "window"),
-      title: "Launch timing assessment",
+      title: copy.launchTitle,
       type: "launch_timing",
       priority:
         readiness >= RULE_THRESHOLDS.minLaunchReadinessForAct && seasonality >= 55
@@ -545,8 +599,8 @@ function buildLaunchTiming(ctx: RecommendationRuleContext): ResearchRecommendati
         : [],
       suggestedNextStep:
         readiness >= RULE_THRESHOLDS.minLaunchReadinessForAct
-          ? "Align drop calendar with seasonal peak and confirm inventory lead times."
-          : "Continue monitoring — do not fix a launch date until readiness and seasonality strengthen.",
+          ? copy.launchAlignCalendar
+          : copy.launchMonitor,
       audiences: ["ceo", "commerce", "marketing"],
       tags: ["launch", "timing"],
       sourceDomains: ["market", "trend"],
@@ -556,13 +610,14 @@ function buildLaunchTiming(ctx: RecommendationRuleContext): ResearchRecommendati
 }
 
 function buildRiskWarnings(ctx: RecommendationRuleContext): ResearchRecommendation[] {
+  const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
   return ctx.reasoning.risks.map((risk) => {
     const relatedScores = risk.relatedScoreIds as ConfidenceScoreId[];
     const confidence = blendScores(ctx.confidence, relatedScores.length ? relatedScores : ["source_agreement"]);
 
     return makeRecommendation({
       id: recId("risk_warning", risk.id),
-      title: `Risk: ${risk.label}`,
+      title: formatIntelligenceTemplate(copy.riskTitle, { label: risk.label }),
       type: "risk_warning",
       priority: derivePriority(confidence, "risk_warning", ctx),
       confidence,
@@ -578,9 +633,7 @@ function buildRiskWarnings(ctx: RecommendationRuleContext): ResearchRecommendati
       ),
       risks: [risk.reason],
       suggestedNextStep:
-        risk.severity === "high"
-          ? "Pause downstream action until risk is mitigated or disproven."
-          : "Track risk indicators on the next research sync.",
+        risk.severity === "high" ? copy.riskPause : copy.riskTrack,
       audiences: ["research", "ceo"],
       tags: ["risk", risk.severity],
       sourceDomains: ["trend", "commercial", "brand"],
@@ -610,6 +663,7 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
   resetRecommendationCounter();
 
   const generatedAt = input.generatedAt ?? input.intelligence.generatedAt;
+  const catalogTitles = input.catalogProductTitles ?? [];
   const ctx: RecommendationRuleContext = {
     intelligence: input.intelligence,
     confidence: input.intelligence.confidence,
@@ -640,7 +694,7 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
   items.push(
     ...buildRiskWarnings(ctx),
     ...buildDesignDirections(ctx),
-    ...buildProductOpportunities(ctx),
+    ...buildProductOpportunities(ctx, catalogTitles),
     ...buildCollectionConcepts(ctx),
     ...buildColorPalettes(ctx),
     ...buildTypographyDirections(ctx),
@@ -652,7 +706,7 @@ export function generateRecommendations(input: RecommendationInput): Recommendat
     items.push(...buildResearchActions(ctx, DEFAULT_LOCALE));
   }
 
-  const deduped = dedupeRecommendations(items);
+  const deduped = dedupeRecommendationsSemantic(items);
   const sorted = deduped.sort((a, b) => b.confidence - a.confidence);
 
   const copy = getIntelligenceCopy(DEFAULT_LOCALE).recommendations;
@@ -685,11 +739,13 @@ export function enrichIntelligenceWithRecommendations(
   intelligence: UnifiedResearchIntelligence,
   reasoning: ResearchReasoningIntelligence,
   generatedAt?: string,
+  catalogProductTitles?: string[],
 ): UnifiedResearchIntelligence {
   const recommendations = generateRecommendations({
     intelligence,
     reasoning,
     generatedAt,
+    catalogProductTitles,
   });
   return { ...intelligence, recommendations };
 }

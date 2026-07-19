@@ -30,6 +30,8 @@ import {
   Target,
   Type,
   Zap,
+  Brain,
+  Shapes,
 } from "lucide-react";
 
 interface ResearchStudioFusionReportProps {
@@ -261,6 +263,10 @@ function PrioritizedOpportunitiesSection({
                 <dt>{f.commercialPotentialLabel}</dt>
                 <dd>{item.commercialPotential}</dd>
               </div>
+              <div>
+                <dt>{f.confidenceLabel ?? "Konfidenz"}</dt>
+                <dd>{item.confidence}</dd>
+              </div>
             </dl>
             <p className="rs3-fusion-priority-why">
               <strong>{f.whyRecommended}:</strong> {item.whyRecommended}
@@ -305,6 +311,89 @@ function ExecutiveNarrativeSection({
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function PatternIntelligenceSection({
+  patternIntelligence,
+}: {
+  patternIntelligence: NonNullable<ResearchStudioReport["patternIntelligence"]>;
+}) {
+  if (!patternIntelligence.loaded || patternIntelligence.patterns.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="rs3-fusion-section rs3-fusion-section-patterns">
+      <header className="rs3-fusion-section-head">
+        <Shapes className="size-4" />
+        <h3>Erfolgreiche Designmuster</h3>
+      </header>
+      <p className="rs3-fusion-body rs3-fusion-pattern-note">
+        Extrahiert aus {patternIntelligence.analyzedProductCount} Shopify-Bestsellern —
+        Produktnamen werden nicht empfohlen, nur die erfolgreiche Designsprache.
+      </p>
+      <div className="rs3-fusion-pattern-grid">
+        {patternIntelligence.patterns.map((pattern) => (
+          <article key={pattern.dimension} className="rs3-fusion-pattern-card">
+            <h4>{pattern.dimensionLabel}</h4>
+            <ul className="rs3-fusion-evidence">
+              {pattern.traits.map((trait) => (
+                <li key={trait}>{trait}</li>
+              ))}
+            </ul>
+            {pattern.evidence.length > 0 ? (
+              <div className="rs3-fusion-pattern-evidence">
+                <strong>Warum erfolgreich?</strong>
+                <ul className="rs3-fusion-evidence">
+                  {pattern.evidence.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </article>
+        ))}
+      </div>
+      {patternIntelligence.successReasons.length > 0 ? (
+        <div className="rs3-fusion-brand-block">
+          <h4>Shopify-Belege</h4>
+          <ul className="rs3-fusion-evidence">
+            {patternIntelligence.successReasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function BrandLearningSection({
+  insights,
+}: {
+  insights: ResearchStudioReport["brandLearning"];
+}) {
+  if (insights.length === 0) return null;
+
+  return (
+    <section className="rs3-fusion-section rs3-fusion-section-learning">
+      <header className="rs3-fusion-section-head">
+        <Brain className="size-4" />
+        <h3>Was Milaene gelernt hat</h3>
+      </header>
+      <ul className="rs3-fusion-learning-list">
+        {insights.map((insight) => (
+          <li key={insight.id} className="rs3-fusion-learning-item">
+            <CheckCircle2 className="size-4 rs3-fusion-learning-icon" />
+            <div>
+              <strong>{insight.statement}</strong>
+              <p>{insight.evidence}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -480,6 +569,14 @@ export function ResearchStudioFusionReport({ report }: ResearchStudioFusionRepor
       <SourceTrustSection entries={report.sourceTrust} />
 
       <PrioritizedOpportunitiesSection items={report.prioritizedOpportunities} />
+
+      {report.patternIntelligence ? (
+        <PatternIntelligenceSection patternIntelligence={report.patternIntelligence} />
+      ) : null}
+
+      {report.brandLearning.length > 0 ? (
+        <BrandLearningSection insights={report.brandLearning} />
+      ) : null}
 
       {hasScores ? (
         <CollapsibleSection

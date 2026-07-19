@@ -146,9 +146,9 @@ export const intelligence = {
     graphicNext:
       "Zwei bis drei Platzierungsvarianten unter Milaene-Zurückhaltungsregeln prototypen.",
     graphicDefault: "Texturgeführtes Grafiksystem mit moderierter Brand-Fit",
-    launchTitle: "Veröffentlichungszeitpunkt",
+    launchTitle: "Bewertung des Launch-Zeitpunkts",
     launchAlignCalendar:
-      "Drop-Kalender mit saisonalem Peak abstimmen und Lieferzeiten prüfen.",
+      "Drop-Kalender am saisonalen Höhepunkt ausrichten und Produktions- sowie Lieferzeiten bestätigen.",
     launchMonitor:
       "Weiter beobachten — kein festes Launch-Datum, bis Bereitschaft und Saisonalität steigen.",
     riskTitle: "Risiko: {label}",
@@ -168,8 +168,26 @@ export const intelligence = {
     weightedScore: "Gewichteter Score {score}/100",
     trendClusterScore: 'Trend-Cluster „{label}" — Score {score}',
     alignedSignals: "Passende Signale: {signals}",
+    socialMomentumTitle: "Social-Momentum validieren",
+    socialMomentumDesc:
+      "TikTok oder Pinterest verbinden, um Social-Momentum und Zielgruppenresonanz zu prüfen.",
     colorSignal: 'Farbsignal „{color}" ({score}/100)',
     collectionConcept: "{anchor}-Kollektionskonzept",
+    alignedTermsDetected: "{count} Milaene-konforme Begriffe erkannt",
+    misalignedTermsDetected: "{count} abweichende Begriffe erkannt",
+    aestheticMatches: "{count} bevorzugte Ästhetik-Treffer",
+    alignedDirectionPairs: "{count} übereinstimmende Quellen-Richtungspaare",
+    conflictingDirectionPairs: "{count} widersprüchliche Richtungspaare",
+    disagreementOn: "Widerspruch bei: {terms}",
+    insufficientCrossSource: "Zu wenige quellenübergreifende Beobachtungen für Übereinstimmungsmessung.",
+    brandFitMisaligned:
+      "Brand Fit ist {tier} — abweichende Novelty-Signale überwiegen Milaene-Zurückhaltung.",
+    brandFitAligned:
+      "Brand Fit ist {tier} — {count} passende Signale stützen die Quiet-Luxury- und Archive-Streetwear-Positionierung von Milaene.",
+    sourceAgreementVerified:
+      "Quellenübereinstimmung ist {tier} über {count} vergleichbare quellenübergreifende Paare.",
+    sourceAgreementLimited:
+      "Quellenübereinstimmung basiert auf begrenzter Überlappung — wenige gemeinsame Begriffe über Provider hinweg.",
   },
   typography: {
     minimalGrotesk: "Verfeinerte Grotesk mit großzügiger Spationierung — ruhige Hierarchie",
@@ -197,14 +215,19 @@ export const intelligence = {
     shouldAct: "Sollte gehandelt werden?",
     weakData:
       "Die aktuelle Datenlage ist noch begrenzt. Zusätzliche Quellen erhöhen die Zuverlässigkeit der Empfehlungen.",
-    trendRising: "Die Recherche zeigt steigende Nachfrage nach {terms}.",
+    trendRising: "Die Recherche zeigt wachsende Nachfrage nach {terms}.",
     shopifyConfirms: "Shopify bestätigt bereits Verkäufe ähnlicher Produkte.",
     googleTrendsConfirms: "Google Trends zeigt zunehmendes Suchinteresse.",
+    googleTrendsSpecific: "Google Trends zeigt wachsendes Suchinteresse für {terms}.",
     multiSource: "Mehrere Quellen unterstützen diese Richtung.",
     brandAligned: "Die Richtung passt sehr gut zur Milaene-DNA.",
+    brandAlignedSpecific:
+      "Heavyweight-Materialien, Oversized Fits und neutrale Farben ({attrs}) passen zur bisherigen Milaene-Positionierung.",
     brandPartial: "Die Richtung ist teilweise markenkonform — Anpassungen empfohlen.",
     brandWeak: "Die Markenpassung ist noch unscharf — vor Umsetzung validieren.",
     actNow: "Empfehlung: Richtung im Design Studio weiterentwickeln.",
+    actDevelop:
+      "Aufgrund mittlerer Gesamtkonfidenz zunächst als Designrichtung weiterentwickeln und Social-Momentum über {channels} validieren.",
     observe: "Empfehlung: weiter beobachten und Quellenabdeckung stärken.",
     avoid: "Empfehlung: diese Richtung vorerst nicht verfolgen.",
     developExample:

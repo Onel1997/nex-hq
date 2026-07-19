@@ -3854,3 +3854,72 @@ body:has(.rs3) {
   display: none;
 }
 
+.rs3-fusion-pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.rs3-fusion-pattern-card {
+  padding: 1rem;
+  border-radius: var(--rs3-radius);
+  border: 1px solid oklch(0.35 0.02 275 / 0.35);
+  background: oklch(0.13 0.015 275 / 0.45);
+}
+
+.rs3-fusion-pattern-card h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: oklch(0.72 0.04 275);
+}
+
+.rs3-fusion-pattern-note {
+  margin-bottom: 1rem;
+  opacity: 0.85;
+}
+
+.rs3-fusion-pattern-evidence {
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.rs3-fusion-learning-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.rs3-fusion-learning-item {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  border-radius: var(--rs3-radius);
+  border: 1px solid oklch(0.35 0.02 275 / 0.35);
+  background: oklch(0.13 0.015 275 / 0.45);
+}
+
+.rs3-fusion-learning-icon {
+  color: oklch(0.72 0.14 145);
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.rs3-fusion-learning-item p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
+.rs3-brief-mission {
+  margin-top: 0.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: oklch(0.78 0.06 275);
+}
+

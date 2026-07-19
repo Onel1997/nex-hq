@@ -2,6 +2,11 @@ import { rankOpportunityTerms } from "../fusion/weighted-fusion";
 import type { BrandIntelligenceSection } from "../brand-intelligence/types";
 import type { ResearchCreativeBrief } from "../creative-brief/types";
 import { getSourceWeightProfile } from "../confidence/source-weights";
+import { isCatalogProductReference } from "../pattern-intelligence/catalog-filter";
+import { buildCleanResearchSignalSet } from "../clean-signals";
+import { dedupeActionCardsSemantic } from "../clean-signals/semantic-dedup";
+import { dedupeStrings } from "./prioritize";
+import type { PatternIntelligenceSection } from "../pattern-intelligence/types";
 import type { ConfidenceScoreId } from "../types/confidence";
 import type { ResearchRecommendation, RecommendationType } from "../types/recommendation";
 import type { ResearchReasoningIntelligence } from "../types/reasoning";
@@ -22,9 +27,11 @@ import {
 import type {
   ReportActionCard,
   ReportBrandIntelligence,
+  ReportBrandLearning,
   ReportCreativeBrief,
   ReportInsight,
   ReportOpportunity,
+  ReportPatternIntelligence,
   ReportRecommendationCard,
   ReportRiskCard,
   ReportScoreBlock,
@@ -39,7 +46,9 @@ export interface BuildResearchReportInput {
   reasoning: ResearchReasoningIntelligence;
   brandIntelligence?: BrandIntelligenceSection | null;
   creativeBrief?: ResearchCreativeBrief | null;
+  patternIntelligence?: PatternIntelligenceSection | null;
   title?: string;
+  userRequest?: string;
 }
 
 function scoreBlock(
@@ -126,12 +135,16 @@ function buildExecutiveSummary(
   reasoning: ResearchReasoningIntelligence,
   brandIntelligence: BrandIntelligenceSection | null | undefined,
   weak: boolean,
+  cleanSignalSet?: ReturnType<typeof buildCleanResearchSignalSet> | null,
+  patternIntelligence?: PatternIntelligenceSection | null,
 ): string | null {
   const narrative = buildExecutiveNarrative(
     intelligence,
     reasoning,
     brandIntelligence,
     weak,
+    cleanSignalSet,
+    patternIntelligence,
   );
   if (narrative?.fullText) return narrative.fullText;
 
@@ -153,22 +166,56 @@ function buildExecutiveSummary(
 function buildKeyInsights(
   intelligence: UnifiedResearchIntelligence,
   reasoning: ResearchReasoningIntelligence,
+  cleanSignalSet: ReturnType<typeof buildCleanResearchSignalSet> | null,
+  patternIntelligence?: PatternIntelligenceSection | null,
 ): ReportInsight[] {
   const copy = getIntelligenceCopy(DEFAULT_LOCALE);
   const insights: ReportInsight[] = [];
 
-  for (const [index, line] of reasoning.trendSignificance.entries()) {
-    const sourceKeys = reasoning.confirmingSources.slice(0, 3).map((s) => s.sourceKey);
+  if (cleanSignalSet && cleanSignalSet.summaryLabels.length > 0) {
     insights.push({
-      id: `insight-trend-${index}`,
+      id: "insight-clean-trend",
       headline: copy.insights.trendSignal,
-      detail: humanizeInsightDetail(line, sourceKeys),
-      sourceKeys,
+      detail: formatIntelligenceTemplate(copy.reasoning.risingClusters, {
+        count: cleanSignalSet.summaryLabels.length,
+        terms: `: ${cleanSignalSet.summaryLabels.slice(0, 4).join(", ")}`,
+      }),
+      sourceKeys: cleanSignalSet.signals
+        .flatMap((signal) => signal.sourceKeys)
+        .slice(0, 3),
     });
   }
 
-  for (const score of reasoning.scoreEvidence.slice(0, 4)) {
+  if (patternIntelligence?.designLanguage.material.length) {
+    const materials = patternIntelligence.designLanguage.material.slice(0, 3).join(", ");
+    insights.push({
+      id: "insight-material",
+      headline: "Material-Evidenz",
+      detail: `Strukturierte Shopify-Materialsignale: ${materials}.`,
+      sourceKeys: ["shopify"],
+    });
+  }
+
+  if (patternIntelligence?.recommendedSilhouette) {
+    insights.push({
+      id: "insight-silhouette",
+      headline: "Silhouette",
+      detail: `Für den Suchauftrag relevante Silhouetten: ${[
+        patternIntelligence.recommendedSilhouette,
+        ...patternIntelligence.alternativeSilhouettes,
+      ]
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(", ")}.`,
+      sourceKeys: ["shopify"],
+    });
+  }
+
+  for (const score of reasoning.scoreEvidence.slice(0, 3)) {
     if (score.score < 35) continue;
+    if (/source agreement|quellenübereinstimmung/i.test(score.label) && score.score >= 65) {
+      continue;
+    }
     insights.push({
       id: `insight-score-${score.scoreId}`,
       headline: score.label,
@@ -177,11 +224,11 @@ function buildKeyInsights(
     });
   }
 
-  for (const [index, narrative] of intelligence.market.demandNarratives.slice(0, 2).entries()) {
+  if (intelligence.confidence.caveats.length > 0) {
     insights.push({
-      id: `insight-market-${index}`,
-      headline: copy.insights.marketDemand,
-      detail: narrative,
+      id: "insight-coverage",
+      headline: "Quellenabdeckung",
+      detail: intelligence.confidence.caveats[0],
       sourceKeys: [],
     });
   }
@@ -285,6 +332,7 @@ function mapScoredOpportunity(opp: BrandIntelligenceSection["topOpportunities"][
     originality: opp.originality,
     manufacturingDifficulty: opp.manufacturingDifficulty,
     launchPriority: opp.launchPriority,
+    confidence: opp.confidence,
     matches: opp.matches,
     conflicts: opp.conflicts,
     adjustments: opp.adjustments,
@@ -325,6 +373,7 @@ function mapCreativeBrief(
     conceptName: brief.conceptName,
     executiveSummary: brief.executiveSummary,
     businessCase: brief.businessCase,
+    missionStatement: brief.missionStatement,
     scores: brief.scores,
     targetAudience: brief.targetAudience,
     recommendedProduct: brief.recommendedProduct,
@@ -340,7 +389,66 @@ function mapCreativeBrief(
     researchEvidence: brief.researchEvidence,
     nextStep: brief.nextStep,
     anchorOpportunityTitle: brief.anchorOpportunityTitle,
+    designLanguage: brief.designLanguage,
+    patternSummary: brief.patternSummary,
   };
+}
+
+function mapPatternIntelligence(
+  section: PatternIntelligenceSection | null | undefined,
+): ReportPatternIntelligence | null {
+  if (!section) return null;
+  return {
+    loaded: section.loaded,
+    analyzedProductCount: section.analyzedProductCount,
+    patterns: section.patterns.map((pattern) => ({
+      dimension: pattern.dimension,
+      dimensionLabel: pattern.dimensionLabel,
+      traits: pattern.traits,
+      evidence: pattern.evidence,
+    })),
+    successReasons: section.successReasons,
+    recommendedSilhouette: section.recommendedSilhouette,
+    alternativeSilhouettes: section.alternativeSilhouettes,
+  };
+}
+
+function mapBrandLearning(
+  section: PatternIntelligenceSection | null | undefined,
+): ReportBrandLearning[] {
+  if (!section?.brandLearning.length) return [];
+  return section.brandLearning.map((insight) => ({
+    id: insight.id,
+    statement:
+      insight.status === "unconfirmed"
+        ? `Noch nicht ausreichend bestätigt: ${insight.statement}`
+        : insight.statement,
+    evidence: `${insight.evidenceLevelLabel} — ${insight.evidence}`,
+  }));
+}
+
+function filterCatalogRecommendations(
+  cards: ReportRecommendationCard[],
+  catalogTitles: string[],
+): ReportRecommendationCard[] {
+  const index = catalogTitles;
+  return cards.filter((card) => !isCatalogProductReference(card.title, index));
+}
+
+function dedupeRecommendationCards(
+  cards: ReportRecommendationCard[],
+): ReportRecommendationCard[] {
+  const seen = new Set<string>();
+  return cards.filter((card) => {
+    const key = card.title.toLowerCase().replace(/\s+/g, " ").trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dedupeActionCards(actions: ReportActionCard[]): ReportActionCard[] {
+  return dedupeActionCardsSemantic(actions);
 }
 
 function isWeakIntelligence(intelligence: UnifiedResearchIntelligence): boolean {
@@ -359,16 +467,38 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
     input.title?.trim() ||
     (weak ? copy.report.titleLimited : copy.report.titleDefault);
 
-  const designDirections = recommendationsByType(intelligence, "design_direction");
-  const recommendedProducts = recommendationsByType(intelligence, "product_opportunity");
+  const catalogTitles = input.patternIntelligence?.catalogProductTitles ?? [];
+  const cleanSignalSet = buildCleanResearchSignalSet({
+    intelligence,
+    catalogProductTitles: catalogTitles,
+    userRequest: input.userRequest ?? input.title,
+  });
+
+  const designDirections = dedupeRecommendationCards(
+    filterCatalogRecommendations(
+      recommendationsByType(intelligence, "design_direction"),
+      catalogTitles,
+    ),
+  );
+  const recommendedProducts = dedupeRecommendationCards(
+    filterCatalogRecommendations(
+      recommendationsByType(intelligence, "product_opportunity"),
+      catalogTitles,
+    ),
+  );
   const colorPalettes = recommendationsByType(intelligence, "color_palette");
   const typographyCards = recommendationsByType(intelligence, "typography_direction");
   const graphicCards = recommendationsByType(intelligence, "graphic_theme");
 
-  const keyInsights = buildKeyInsights(intelligence, reasoning);
+  const keyInsights = buildKeyInsights(
+    intelligence,
+    reasoning,
+    cleanSignalSet,
+    input.patternIntelligence,
+  );
   const topOpportunities = buildTopOpportunities(intelligence);
   const riskWarnings = buildRiskWarnings(intelligence, reasoning);
-  const suggestedNextActions = buildSuggestedActions(intelligence);
+  const suggestedNextActions = dedupeActionCards(buildSuggestedActions(intelligence));
   const allRecommendationCards = [
     ...designDirections,
     ...recommendedProducts,
@@ -381,11 +511,15 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
     reasoning,
     input.brandIntelligence,
     weak,
+    cleanSignalSet,
+    input.patternIntelligence,
   );
   const prioritizedOpportunities = buildPrioritizedOpportunities(
     intelligence,
     input.brandIntelligence,
     allRecommendationCards,
+    input.patternIntelligence,
+    input.userRequest ?? input.title,
   );
   const sourceTrust = buildSourceTrust(intelligence);
 
@@ -396,16 +530,18 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
     overallConfidence: intelligence.confidence.overallScore,
     overallTier: intelligence.confidence.overall,
     intelligenceWeak: weak,
-    caveats: [
+    caveats: dedupeStrings([
       ...intelligence.confidence.caveats,
       ...reasoning.caveats,
       ...intelligence.recommendations.caveats,
-    ],
+    ]).slice(0, 6),
     executiveSummary: buildExecutiveSummary(
       intelligence,
       reasoning,
       input.brandIntelligence,
       weak,
+      cleanSignalSet,
+      input.patternIntelligence,
     ),
     executiveNarrative,
     prioritizedOpportunities,
@@ -424,6 +560,8 @@ export function buildResearchReport(input: BuildResearchReportInput): ResearchSt
     riskWarnings,
     suggestedNextActions,
     brandIntelligence: mapBrandIntelligence(input.brandIntelligence),
+    patternIntelligence: mapPatternIntelligence(input.patternIntelligence),
+    brandLearning: mapBrandLearning(input.patternIntelligence),
     creativeBrief: mapCreativeBrief(input.creativeBrief),
   };
 
@@ -450,6 +588,8 @@ export function reportHasVisibleSections(report: ResearchStudioReport): boolean 
       report.riskWarnings.length > 0 ||
       report.suggestedNextActions.length > 0 ||
       report.brandIntelligence !== null ||
+      report.patternIntelligence !== null ||
+      report.brandLearning.length > 0 ||
       report.creativeBrief !== null,
   );
 }

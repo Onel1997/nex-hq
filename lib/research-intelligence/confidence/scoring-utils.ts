@@ -80,6 +80,26 @@ export function strengthToScore(strength: "weak" | "moderate" | "strong"): numbe
   }
 }
 
+/** Deterministic per-id offset for score differentiation without randomness. */
+export function stableOffset(id: string, spread: number): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  }
+  const normalized = (Math.abs(hash) % 1000) / 1000;
+  return Math.round((normalized * 2 - 1) * spread);
+}
+
+export function deriveBoundedScore(
+  id: string,
+  base: number,
+  min: number,
+  max: number,
+  spread = 6,
+): number {
+  return clampScore(Math.max(min, Math.min(max, base + stableOffset(id, spread))));
+}
+
 export function horizonLongevityWeight(
   horizon: "immediate" | "seasonal" | "structural",
 ): number {

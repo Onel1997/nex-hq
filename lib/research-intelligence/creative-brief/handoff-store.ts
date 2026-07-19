@@ -4,6 +4,7 @@ export interface CreativeBriefHandoffPayload {
   conceptName: string;
   executiveSummary: string;
   businessCase: string;
+  missionStatement: string;
   scores: {
     trendScore: number;
     brandFit: number;
@@ -11,6 +12,7 @@ export interface CreativeBriefHandoffPayload {
     competition: number;
     longevity: number;
     originality: number;
+    confidence: number;
   };
   targetAudience: string[];
   recommendedProduct: string;
@@ -26,6 +28,20 @@ export interface CreativeBriefHandoffPayload {
   researchEvidence: string[];
   nextStep: string;
   anchorOpportunityTitle: string | null;
+  designLanguage: {
+    typography: string[];
+    placement: string[];
+    colorWorld: string[];
+    graphicStyle: string[];
+    symbolism: string[];
+    material: string[];
+    printTechnique: string[];
+    guardrails: string[];
+    risks: string[];
+    prohibitions: string[];
+    patternSummary: string;
+  };
+  patternSummary: string;
   generatedAt: string;
 }
 

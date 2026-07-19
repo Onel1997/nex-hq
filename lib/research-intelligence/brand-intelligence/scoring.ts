@@ -1,4 +1,9 @@
-import { clampScore } from "../confidence/scoring-utils";
+import { clampScore, deriveBoundedScore } from "../confidence/scoring-utils";
+import {
+  capScoreBySourceAgreement,
+  uniqueSourceCount,
+} from "../pattern-intelligence/score-calibration";
+import { isCatalogProductReference } from "../pattern-intelligence/catalog-filter";
 import {
   brandFitTierFromScore,
   MILAENE_BRAND_PROFILE,
@@ -29,14 +34,14 @@ const DIMENSION_WEIGHTS: Record<string, number> = {
 };
 
 const SHOPIFY_BONUSES = {
-  bestseller: 20,
-  category: 15,
-  materials: 10,
-  silhouette: 15,
-  colorWorld: 10,
-  brandPositioning: 15,
-  googleTrends: 10,
-  fashionNews: 5,
+  bestseller: 8,
+  category: 8,
+  materials: 6,
+  silhouette: 8,
+  colorWorld: 6,
+  brandPositioning: 8,
+  googleTrends: 8,
+  fashionNews: 4,
 } as const;
 
 const BRAND_FIT_REJECT_THRESHOLD = 40;
@@ -329,7 +334,7 @@ function applyBrandFitBonuses(
     });
     if (bestsellerOverlap.length > 0) {
       scoreDelta += SHOPIFY_BONUSES.bestseller;
-      reasons.push(`Shopify-Bestseller-Überlappung: ${bestsellerOverlap.slice(0, 2).join(", ")}.`);
+      reasons.push(`Shopify-Katalogresonanz erkannt — Designmuster extrahiert, Produktname nicht empfohlen.`);
     }
 
     const categoryOverlap = shopify.collectionNames.filter((name) => {
@@ -557,6 +562,12 @@ export function scoreOpportunityText(
 ): ScoredOpportunity {
   const dimensions = computeBrandFitDimensions(title, shopify);
   let brandFit = computeBrandFitScore(dimensions);
+  const catalogOverlap =
+    shopify.loaded &&
+    shopify.bestsellerTitles.some((t) => {
+      const norm = normalizeText(t);
+      return normalizeText(title).includes(norm) || norm.includes(normalizeText(title));
+    });
   const bonuses = applyBrandFitBonuses(title, shopify, sourceKeys);
   brandFit = clampScore(brandFit + bonuses.scoreDelta);
   const brandFitTier = tierFromScore(brandFit);
@@ -582,16 +593,67 @@ export function scoreOpportunityText(
 
   const launchPriority = deriveLaunchPriority(brandFit, trendScore, commercialPotential);
 
+  const sourceCount = uniqueSourceCount(sourceKeys);
+  const cappedTrend = capScoreBySourceAgreement(
+    deriveBoundedScore(id, trendScore, 65, 100, 5),
+    {
+      sourceKeyCount: sourceCount,
+      hasStrongShopifyEvidence: sourceKeys.includes("shopify"),
+      highBrandFit: brandFit >= 70,
+      hasConflicts: conflicts.length > 0,
+      isCatalogOverlap: catalogOverlap,
+    },
+  );
+  const cappedBrandFit = capScoreBySourceAgreement(
+    deriveBoundedScore(id, brandFit, 50, 100, 4),
+    {
+      sourceKeyCount: sourceCount,
+      hasStrongShopifyEvidence: sourceKeys.includes("shopify"),
+      highBrandFit: brandFit >= 70,
+      hasConflicts: conflicts.length > 0,
+      isCatalogOverlap: catalogOverlap,
+    },
+  );
+  const cappedCommercial = capScoreBySourceAgreement(
+    deriveBoundedScore(id, commercialPotential, 45, 100, 6),
+    {
+      sourceKeyCount: sourceCount,
+      hasStrongShopifyEvidence: sourceKeys.includes("shopify"),
+      highBrandFit: brandFit >= 70,
+      hasConflicts: conflicts.length > 0,
+      isCatalogOverlap: catalogOverlap,
+    },
+  );
+  const variedCompetition = deriveBoundedScore(id, competition, 35, 85, 5);
+  const variedLongevity = deriveBoundedScore(id, longevity, 40, 95, 5);
+  const variedOriginality = deriveBoundedScore(id, originality, 40, 95, 5);
+  const confidence = capScoreBySourceAgreement(
+    deriveBoundedScore(
+      `${id}-confidence`,
+      Math.round((cappedTrend + cappedBrandFit + cappedCommercial) / 3),
+      40,
+      100,
+      4,
+    ),
+    {
+      sourceKeyCount: sourceCount,
+      hasStrongShopifyEvidence: sourceKeys.includes("shopify"),
+      highBrandFit: brandFit >= 70,
+      hasConflicts: conflicts.length > 0,
+      isCatalogOverlap: catalogOverlap,
+    },
+  );
+
   return {
     id,
     title,
-    trendScore,
-    brandFit,
+    trendScore: cappedTrend,
+    brandFit: cappedBrandFit,
     brandFitTier,
-    commercialPotential,
-    competition,
-    longevity,
-    originality,
+    commercialPotential: cappedCommercial,
+    competition: variedCompetition,
+    longevity: variedLongevity,
+    originality: variedOriginality,
     manufacturingDifficulty,
     launchPriority,
     matches,
@@ -601,6 +663,7 @@ export function scoreOpportunityText(
     sourceKeys,
     rejected,
     rejectionReasons,
+    confidence,
   };
 }
 

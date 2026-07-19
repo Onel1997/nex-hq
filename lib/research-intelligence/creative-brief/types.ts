@@ -14,6 +14,7 @@ export interface CreativeBriefScores {
   competition: number;
   longevity: number;
   originality: number;
+  confidence: number;
 }
 
 export interface ResearchCreativeBrief {
@@ -39,13 +40,30 @@ export interface ResearchCreativeBrief {
   nextStep: typeof CREATIVE_BRIEF_NEXT_STEP;
   anchorOpportunityId: string | null;
   anchorOpportunityTitle: string | null;
+  missionStatement: string;
+  designLanguage: {
+    typography: string[];
+    placement: string[];
+    colorWorld: string[];
+    graphicStyle: string[];
+    symbolism: string[];
+    material: string[];
+    printTechnique: string[];
+    guardrails: string[];
+    risks: string[];
+    prohibitions: string[];
+    patternSummary: string;
+  };
+  patternSummary: string;
 }
 
 export interface CreativeBriefEngineInput {
   intelligence: import("../types/unified").UnifiedResearchIntelligence;
   reasoning: import("../types/reasoning").ResearchReasoningIntelligence;
   brandIntelligence: import("../brand-intelligence/types").BrandIntelligenceSection;
+  patternIntelligence?: import("../pattern-intelligence/types").PatternIntelligenceSection | null;
   generatedAt?: string;
+  userRequest?: string;
 }
 
 export interface CreativeBriefEngineResult {

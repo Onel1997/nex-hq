@@ -1,6 +1,10 @@
 import { MILAENE_BRAND_PROFILE } from "../confidence/brand-profile";
 import { getSourceWeightProfile } from "../confidence/source-weights";
 import { extractColorTerms, rankOpportunityTerms } from "../fusion/weighted-fusion";
+import { resolveProductTarget } from "../pattern-intelligence/product-target";
+import { parseStructuredMaterials } from "../pattern-intelligence/material-parser";
+import { DESIGN_STUDIO_MISSION } from "../pattern-intelligence/types";
+import type { PatternIntelligenceSection } from "../pattern-intelligence/types";
 import {
   graphicThemeForTerms,
   typographyDirectionForTerms,
@@ -234,10 +238,23 @@ export function buildResearchCreativeBrief(input: {
   intelligence: UnifiedResearchIntelligence;
   reasoning: ResearchReasoningIntelligence;
   brandIntelligence: BrandIntelligenceSection;
+  patternIntelligence?: PatternIntelligenceSection | null;
   generatedAt: string;
+  userRequest?: string;
 }): ResearchCreativeBrief | null {
   const anchor = pickAnchorOpportunity(input.brandIntelligence);
   if (!anchor || anchor.brandFit < 40) return null;
+
+  const pattern = input.patternIntelligence;
+  const designLanguage = pattern?.designLanguage;
+  const silhouette = resolveProductTarget({
+    userRequest: input.userRequest,
+    patternSilhouette: designLanguage?.silhouette?.join(" "),
+    intelligenceCorpus: anchor.title,
+  });
+  const alternatives =
+    pattern?.alternativeSilhouettes ??
+    ["Heavyweight Hoodie", "Zip Hoodie", "Long Sleeve"].filter((t) => t !== silhouette);
 
   const corpus = collectCorpus(
     anchor,
@@ -246,14 +263,30 @@ export function buildResearchCreativeBrief(input: {
     input.reasoning,
   );
   const conceptName = deriveConceptName(corpus, anchor.title);
-  const graphicDirection = deriveGraphicDirection(corpus, input.intelligence);
-  const typographyDirection = deriveTypography(corpus, input.intelligence);
-  const colorPalette = deriveColorPalette(input.intelligence, input.brandIntelligence);
-  const { recommended, alternatives } = deriveProducts(anchor);
-  const recommendedPlacement = derivePlacement(anchor, graphicDirection);
-  const printTechnique = [...DEFAULT_PRINT];
-  const materialRecommendation = [...DEFAULT_MATERIALS];
-  const avoid = deriveAvoid(input.brandIntelligence, anchor);
+  const graphicDirection =
+    designLanguage?.graphicStyle ?? deriveGraphicDirection(corpus, input.intelligence);
+  const typographyDirection =
+    designLanguage?.typography ?? deriveTypography(corpus, input.intelligence);
+  const colorPalette =
+    designLanguage?.palette ??
+    designLanguage?.colorWorld ??
+    deriveColorPalette(input.intelligence, input.brandIntelligence);
+  const recommendedPlacement =
+    designLanguage?.placement ?? derivePlacement(anchor, graphicDirection);
+  const printTechnique =
+    designLanguage?.printTechnique?.length
+      ? designLanguage.printTechnique
+      : [...DEFAULT_PRINT];
+  const materialRecommendation = parseStructuredMaterials(
+    designLanguage?.material?.length
+      ? designLanguage.material
+      : [...DEFAULT_MATERIALS],
+  );
+  const avoid = [
+    ...deriveAvoid(input.brandIntelligence, anchor),
+    ...(designLanguage?.prohibitions ?? []),
+    ...(pattern?.catalogProductTitles ?? []).map((title) => `Nicht kopieren: ${title}`),
+  ];
   const researchEvidence = deriveResearchEvidence(input.intelligence, anchor);
 
   const scores = {
@@ -263,6 +296,21 @@ export function buildResearchCreativeBrief(input: {
     competition: anchor.competition,
     longevity: anchor.longevity,
     originality: anchor.originality,
+    confidence: anchor.confidence,
+  };
+
+  const briefDesignLanguage = {
+    typography: typographyDirection,
+    placement: recommendedPlacement,
+    colorWorld: colorPalette,
+    graphicStyle: graphicDirection,
+    symbolism: designLanguage?.symbolism ?? [],
+    material: materialRecommendation,
+    printTechnique,
+    guardrails: designLanguage?.guardrails ?? [],
+    risks: designLanguage?.risks ?? [],
+    prohibitions: [...new Set(avoid)].slice(0, 10),
+    patternSummary: designLanguage?.patternSummary ?? graphicDirection.join(" · "),
   };
 
   return {
@@ -279,7 +327,7 @@ export function buildResearchCreativeBrief(input: {
     businessCase: buildBusinessCase(conceptName, anchor, scores, input.brandIntelligence),
     scores,
     targetAudience: [...DEFAULT_AUDIENCE],
-    recommendedProduct: recommended,
+    recommendedProduct: silhouette,
     alternativeProducts: alternatives,
     recommendedPlacement,
     typographyDirection,
@@ -288,10 +336,13 @@ export function buildResearchCreativeBrief(input: {
     materialRecommendation,
     printTechnique,
     productionNotes: buildProductionNotes(printTechnique, materialRecommendation),
-    avoid,
+    avoid: [...new Set(avoid)].slice(0, 10),
     researchEvidence,
     nextStep: CREATIVE_BRIEF_NEXT_STEP,
     anchorOpportunityId: anchor.id,
-    anchorOpportunityTitle: anchor.title,
+    anchorOpportunityTitle: null,
+    missionStatement: DESIGN_STUDIO_MISSION,
+    designLanguage: briefDesignLanguage,
+    patternSummary: briefDesignLanguage.patternSummary,
   };
 }

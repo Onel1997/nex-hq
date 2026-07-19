@@ -5,8 +5,9 @@
 
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import type { IntelligenceEntityKind } from "../pattern-intelligence/types";
 
-export const RESEARCH_STUDIO_REPORT_VERSION = "5.6.0";
+export const RESEARCH_STUDIO_REPORT_VERSION = "6.0.0";
 
 export type PrioritySignal = "develop" | "watch" | "reject";
 
@@ -16,12 +17,14 @@ export interface ReportPrioritizedOpportunity {
   brandFit: number;
   trendScore: number;
   commercialPotential: number;
+  confidence: number;
   whyRecommended: string;
   nextStep: string;
   sourceKeys: string[];
   prioritySignal: PrioritySignal;
   productHint: string | null;
   designDirection: string | null;
+  entityKind: IntelligenceEntityKind;
 }
 
 export interface ReportExecutiveNarrative {
@@ -129,6 +132,7 @@ export interface ReportScoredOpportunity {
   originality: number;
   manufacturingDifficulty: number;
   launchPriority: string;
+  confidence: number;
   matches: string[];
   conflicts: string[];
   adjustments: string[];
@@ -147,6 +151,7 @@ export interface ReportCreativeBrief {
   conceptName: string;
   executiveSummary: string;
   businessCase: string;
+  missionStatement: string;
   scores: {
     trendScore: number;
     brandFit: number;
@@ -154,6 +159,7 @@ export interface ReportCreativeBrief {
     competition: number;
     longevity: number;
     originality: number;
+    confidence: number;
   };
   targetAudience: string[];
   recommendedProduct: string;
@@ -169,6 +175,42 @@ export interface ReportCreativeBrief {
   researchEvidence: string[];
   nextStep: string;
   anchorOpportunityTitle: string | null;
+  designLanguage: {
+    typography: string[];
+    placement: string[];
+    colorWorld: string[];
+    graphicStyle: string[];
+    symbolism: string[];
+    material: string[];
+    printTechnique: string[];
+    guardrails: string[];
+    risks: string[];
+    prohibitions: string[];
+    patternSummary: string;
+  };
+  patternSummary: string;
+}
+
+export interface ReportDesignPattern {
+  dimension: string;
+  dimensionLabel: string;
+  traits: string[];
+  evidence: string[];
+}
+
+export interface ReportBrandLearning {
+  id: string;
+  statement: string;
+  evidence: string;
+}
+
+export interface ReportPatternIntelligence {
+  loaded: boolean;
+  analyzedProductCount: number;
+  patterns: ReportDesignPattern[];
+  successReasons: string[];
+  recommendedSilhouette: string;
+  alternativeSilhouettes: string[];
 }
 
 export interface ReportBrandIntelligence {
@@ -212,6 +254,8 @@ export interface ResearchStudioReport {
   riskWarnings: ReportRiskCard[];
   suggestedNextActions: ReportActionCard[];
   brandIntelligence: ReportBrandIntelligence | null;
+  patternIntelligence: ReportPatternIntelligence | null;
+  brandLearning: ReportBrandLearning[];
   creativeBrief: ReportCreativeBrief | null;
 }
 
@@ -244,6 +288,8 @@ export function emptyResearchStudioReport(
     riskWarnings: [],
     suggestedNextActions: [],
     brandIntelligence: null,
+    patternIntelligence: null,
+    brandLearning: [],
     creativeBrief: null,
   };
 }

@@ -40,6 +40,7 @@ export interface ScoredOpportunity {
   sourceKeys: string[];
   rejected: boolean;
   rejectionReasons: string[];
+  confidence: number;
 }
 
 export interface ShopifyLearningContext {
