@@ -10,19 +10,24 @@ import type {
 import {
   CAST_MILESTONES,
   CREATOR_STEPS,
+  GENERATION_INCLUDES,
   STYLE_STARTERS,
   VISUAL_FLOW,
   PRESET_CARD_META,
+  VISIBLE_PROVIDER_MODES,
   brandRoleDisplayLabel,
   computeCastProgressView,
   computeCreatorCostPreview,
   computeLiveCastScores,
+  creatorPrimaryActionLabel,
   fashionDirectionLabel,
+  isPaidProviderMode,
   isPersonaDefined,
-  mockComparisonCandidates,
   primaryFaceLabel,
   usageDisplayLabel,
+  canStartPaidCandidateGeneration,
   type CreatorFormState,
+  type CreatorCostPreview,
   type PresetCardMeta,
 } from "@/components/persona/persona-creator-ux";
 import { PersonaGenerationExperience } from "@/components/persona/persona-generation-experience";
@@ -80,6 +85,133 @@ function ScoreMeter({ label, value }: { label: string; value: number }) {
 function PresetIcon({ icon }: { icon: PresetCardMeta["icon"] }) {
   const Icon = PRESET_ICONS[icon];
   return <Icon className="size-5" strokeWidth={1.4} aria-hidden />;
+}
+
+function GenerationEconomicsCheckout({
+  cost,
+  providerMode,
+}: {
+  cost: CreatorCostPreview;
+  providerMode: ProviderMode;
+}) {
+  const paid = isPaidProviderMode(providerMode);
+
+  return (
+    <div className="ps-cost-checkout">
+      <div className="ps-cost-checkout-head">
+        <span className="ps-cost-checkout-label">Generation Economics</span>
+        {paid ? (
+          <span className="ps-provider-badge">{cost.provider}</span>
+        ) : (
+          <span className="ps-provider-badge ps-provider-badge--muted">{cost.provider}</span>
+        )}
+      </div>
+
+      {paid ? (
+        <>
+          <div className="ps-cost-checkout-hero">
+            <em>Estimated Generation Cost</em>
+            <strong className="ps-cost-checkout-price">
+              {cost.estimatedMin.toFixed(2)}–{cost.estimatedMax.toFixed(2)} {cost.currency}
+            </strong>
+            <div className="ps-cost-checkout-meta">
+              <span>per generation</span>
+              <span>OpenAI GPT Image</span>
+              <span>Premium Quality</span>
+            </div>
+          </div>
+          <div className="ps-cost-checkout-secondary">
+            <div>
+              <em>Expected time</em>
+              <strong>
+                {cost.expectedMinutesMin}–{cost.expectedMinutesMax} min
+              </strong>
+            </div>
+            <div className="ps-cost-checkout-budget">
+              <em>Daily budget</em>
+              <strong>
+                {cost.dailyBudget} {cost.currency}
+              </strong>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="ps-cost-checkout-hero">
+          <em>Estimated Generation Cost</em>
+          <strong className="ps-cost-checkout-price ps-cost-checkout-price--free">0.00 {cost.currency}</strong>
+          <div className="ps-cost-checkout-meta">
+            <span>per generation</span>
+            <span>Manual Upload</span>
+            <span>No provider cost</span>
+          </div>
+          <div className="ps-cost-checkout-budget ps-cost-checkout-budget--solo">
+            <em>Daily budget</em>
+            <strong>
+              {cost.dailyBudget} {cost.currency}
+            </strong>
+          </div>
+        </div>
+      )}
+
+      {paid ? (
+        <div className="ps-generation-includes">
+          <p>Generation includes:</p>
+          <ul>
+            {GENERATION_INCLUDES.map((item) => (
+              <li key={item}>
+                <Check className="size-3.5" strokeWidth={2.25} aria-hidden />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <p className="ps-muted ps-cost-checkout-note">{cost.note}</p>
+    </div>
+  );
+}
+
+function ProviderModePicker({
+  value,
+  onChange,
+}: {
+  value: ProviderMode;
+  onChange: (mode: ProviderMode) => void;
+}) {
+  const hidden =
+    !VISIBLE_PROVIDER_MODES.some((m) => m.value === value) ? value : null;
+
+  return (
+    <div className="ps-provider-picker">
+      <span className="ps-provider-picker-label">Generation Provider</span>
+      <div className="ps-provider-options" role="radiogroup" aria-label="Generation Provider">
+        {VISIBLE_PROVIDER_MODES.map((mode) => (
+          <button
+            key={mode.value}
+            type="button"
+            role="radio"
+            aria-checked={value === mode.value}
+            className={`ps-provider-option${value === mode.value ? " is-active" : ""}`}
+            onClick={() => onChange(mode.value)}
+          >
+            <span className="ps-provider-option-head">
+              <strong>{mode.label}</strong>
+              {mode.value === "image_provider" ? (
+                <span className="ps-provider-badge">OpenAI</span>
+              ) : null}
+            </span>
+            <p>{mode.description}</p>
+          </button>
+        ))}
+        {hidden ? (
+          <p className="ps-muted ps-provider-hidden-note">
+            Current mode ({hidden}) is hidden until Image Studio ships.
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function EmptyState({
@@ -213,7 +345,6 @@ export function PersonaCreatorView({
   const scores = useMemo(() => computeLiveCastScores(form), [form]);
   const cost = useMemo(() => computeCreatorCostPreview(form), [form]);
   const progress = useMemo(() => computeCastProgressView(form), [form]);
-  const mockCandidates = useMemo(() => mockComparisonCandidates(form), [form]);
   const defined = isPersonaDefined(form);
   const fashionLabel = fashionDirectionLabel(form);
 
@@ -592,18 +723,10 @@ export function PersonaCreatorView({
                       onChange={(e) => set("candidate_count", Number(e.target.value))}
                     />
                   </label>
-                  <label>
-                    Provider Mode
-                    <select
-                      value={form.provider_mode}
-                      onChange={(e) => set("provider_mode", e.target.value as ProviderMode)}
-                    >
-                      <option value="manual_upload">Manual Upload</option>
-                      <option value="image_provider">Image Provider (OpenAI)</option>
-                      <option value="hybrid">Hybrid</option>
-                      <option value="disabled">Disabled</option>
-                    </select>
-                  </label>
+                  <ProviderModePicker
+                    value={form.provider_mode}
+                    onChange={(mode) => set("provider_mode", mode)}
+                  />
                   <label>
                     Additional Notes
                     <textarea
@@ -613,40 +736,7 @@ export function PersonaCreatorView({
                       placeholder="Optional — no complex prompt needed"
                     />
                   </label>
-                  <div className="ps-cost-panel">
-                    <div className="ps-section-label">
-                      <span>Generation Economics</span>
-                    </div>
-                    <div className="ps-cost-grid">
-                      <div className="ps-cost-cell">
-                        <em>Estimated cost</em>
-                        <strong>
-                          {cost.estimatedMin.toFixed(2)}–{cost.estimatedMax.toFixed(2)} {cost.currency}
-                        </strong>
-                      </div>
-                      <div className="ps-cost-cell">
-                        <em>Expected time</em>
-                        <strong>
-                          {cost.expectedMinutesMin}–{cost.expectedMinutesMax} min
-                        </strong>
-                      </div>
-                      <div className="ps-cost-cell">
-                        <em>Generation mode</em>
-                        <strong>{cost.generationMode}</strong>
-                      </div>
-                      <div className="ps-cost-cell">
-                        <em>Daily budget</em>
-                        <strong>
-                          {cost.dailyBudget} {cost.currency}
-                        </strong>
-                      </div>
-                      <div className="ps-cost-cell">
-                        <em>Provider</em>
-                        <strong>{cost.provider}</strong>
-                      </div>
-                    </div>
-                    <p className="ps-muted">{cost.note}</p>
-                  </div>
+                  <GenerationEconomicsCheckout cost={cost} providerMode={form.provider_mode} />
                 </>
               ) : null}
               {step === 9 ? (
@@ -663,38 +753,30 @@ export function PersonaCreatorView({
                       </div>
                     ))}
                   </dl>
+                  <GenerationEconomicsCheckout cost={cost} providerMode={form.provider_mode} />
                   <div className="ps-confirm-metrics">
-                    <div>
-                      <em>Estimated Cost</em>
-                      <strong>
-                        {cost.estimatedTotal.toFixed(2)} {cost.currency}
-                      </strong>
-                      <span className="ps-muted">
-                        range {cost.estimatedMin.toFixed(2)}–{cost.estimatedMax.toFixed(2)}
-                      </span>
-                    </div>
-                    <div>
-                      <em>Estimated Time</em>
-                      <strong>
-                        {cost.expectedMinutesMin}–{cost.expectedMinutesMax} min
-                      </strong>
-                    </div>
                     <div>
                       <em>Candidate Count</em>
                       <strong className="ps-score-counter">{form.candidate_count}</strong>
                     </div>
+                    <div>
+                      <em>Provider</em>
+                      <strong>{cost.generationMode}</strong>
+                    </div>
                   </div>
-                  <p className="ps-muted">
-                    Saves as a creation project. Paid generation starts only after explicit cost
-                    confirmation in Creation Projects.
-                  </p>
-                  <label className="ps-check ps-confirm-check">
+                  <label className="ps-payment-confirm">
                     <input
                       type="checkbox"
                       checked={confirmCast}
                       onChange={(e) => setConfirmCast(e.target.checked)}
                     />
-                    I confirm this Brand Cast brief and understand generation is not started yet.
+                    <div className="ps-payment-confirm-copy">
+                      <strong>
+                        I understand that generation will use paid OpenAI credits and the estimated
+                        costs shown above.
+                      </strong>
+                      <span>No generation starts until I confirm.</span>
+                    </div>
                   </label>
                 </div>
               ) : null}
@@ -709,7 +791,7 @@ export function PersonaCreatorView({
             </button>
             {step < CREATOR_STEPS.length - 1 ? (
               <button type="button" className="ps-btn-primary" onClick={() => goTo(step + 1)}>
-                Continue
+                {creatorPrimaryActionLabel(step, form.provider_mode)}
               </button>
             ) : (
               <button
@@ -794,50 +876,21 @@ export function PersonaCreatorView({
             <PersonaGenerationExperience
               active={previewGen}
               messageIndex={genMessageIndex}
-              candidateCount={form.candidate_count}
             />
 
             {!previewGen ? (
               <div className="ps-candidate-showcase-body">
-                <div className="ps-candidate-showcase-intro">
-                  <p className="ps-eyebrow">Official Milaene Brand Cast</p>
-                  <h4>Your selected candidates will appear here.</h4>
-                  <p>
-                    After generation you can compare, rate, shortlist, and approve your
-                    official brand faces.
+                <div className="ps-candidate-empty">
+                  <div className="ps-candidate-empty-icon" aria-hidden>
+                    <UserRound className="size-10" strokeWidth={1.15} />
+                  </div>
+                  <p className="ps-eyebrow">Awaiting generation</p>
+                  <h4>Waiting for Generation</h4>
+                  <p>No candidates generated yet.</p>
+                  <p className="ps-candidate-empty-hint">
+                    After generation you can compare, rate, shortlist, and approve your official
+                    brand faces.
                   </p>
-                </div>
-
-                <div className="ps-compare-grid" aria-label="Future candidate comparison">
-                  {mockCandidates.map((c) => (
-                    <article key={c.id} className="ps-compare-card">
-                      <div className="ps-compare-portrait" aria-hidden>
-                        <UserRound className="size-8" strokeWidth={1.15} />
-                      </div>
-                      <strong>{c.label}</strong>
-                      <dl className="ps-compare-scores">
-                        <div>
-                          <dt>Luxury</dt>
-                          <dd>{c.luxury}</dd>
-                        </div>
-                        <div>
-                          <dt>Realism</dt>
-                          <dd>{c.realism}</dd>
-                        </div>
-                        <div>
-                          <dt>Commercial</dt>
-                          <dd>{c.commercial}</dd>
-                        </div>
-                        <div>
-                          <dt>Consistency</dt>
-                          <dd>{c.consistency}</dd>
-                        </div>
-                      </dl>
-                      <button type="button" className="ps-compare-select" disabled>
-                        Select
-                      </button>
-                    </article>
-                  ))}
                 </div>
               </div>
             ) : null}
@@ -908,17 +961,40 @@ export function CreationProjectsView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmCost, setConfirmCost] = useState(false);
-  const [confirmationToken, setConfirmationToken] = useState<string | null>(null);
   const selected = studio.creationProjects.find(
     (p) => p.id === studio.selectedProjectId,
   );
+
+  useEffect(() => {
+    setConfirmCost(false);
+    setError(null);
+  }, [studio.selectedProjectId]);
+
+  const canStartGeneration = useMemo(() => {
+    if (!selected) return false;
+    return canStartPaidCandidateGeneration({
+      busy,
+      costConfirmed: confirmCost,
+      providerMode: selected.provider_mode,
+      costEstimate: studio.costEstimate,
+      confirmationToken: studio.paidConfirmationToken,
+      confirmationProjectId: studio.paidConfirmationProjectId,
+      projectId: selected.id,
+    });
+  }, [
+    busy,
+    confirmCost,
+    selected,
+    studio.costEstimate,
+    studio.paidConfirmationProjectId,
+    studio.paidConfirmationToken,
+  ]);
 
   const runEstimate = async (id: string) => {
     setBusy(true);
     setError(null);
     try {
-      const prepared = await studio.preparePaidConfirmation(id);
-      setConfirmationToken(prepared.confirmation?.confirmation_token ?? null);
+      await studio.preparePaidConfirmation(id);
       setConfirmCost(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Schätzung fehlgeschlagen");
@@ -932,7 +1008,8 @@ export function CreationProjectsView({
       setError("Bitte Kosten explizit bestätigen.");
       return;
     }
-    if (!confirmationToken) {
+    const confirmationToken = studio.paidConfirmationToken;
+    if (!confirmationToken || studio.paidConfirmationProjectId !== id) {
       setError("Bitte zuerst Kostenschätzung & Bestätigungstoken vorbereiten.");
       return;
     }
@@ -945,7 +1022,6 @@ export function CreationProjectsView({
         retryConfirmed: Boolean(selected && selected.actual_cost > 0),
       });
       setConfirmCost(false);
-      setConfirmationToken(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generierung fehlgeschlagen");
     } finally {
@@ -1032,7 +1108,8 @@ export function CreationProjectsView({
               <p className="ps-muted">
                 {studio.costEstimate.note} — Werte sind Schätzungen, keine finalen Kosten.
               </p>
-              {confirmationToken ? (
+              {studio.paidConfirmationToken &&
+              studio.paidConfirmationProjectId === selected.id ? (
                 <p className="ps-muted">Bestätigungstoken bereit · explizite Bestätigung erforderlich</p>
               ) : null}
               <label className="ps-check">
@@ -1045,9 +1122,7 @@ export function CreationProjectsView({
               </label>
               <button
                 type="button"
-                disabled={
-                  busy || !confirmCost || !confirmationToken || !studio.costEstimate.available
-                }
+                disabled={!canStartGeneration}
                 onClick={() => void runGenerate(selected.id)}
               >
                 Generierung starten

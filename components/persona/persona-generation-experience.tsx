@@ -10,15 +10,11 @@ import { GENERATION_LOADING_MESSAGES } from "@/components/persona/persona-creato
 export function PersonaGenerationExperience({
   active = false,
   messageIndex = 0,
-  candidateCount = 4,
 }: {
   active?: boolean;
   messageIndex?: number;
-  candidateCount?: number;
 }) {
-  const messages = GENERATION_LOADING_MESSAGES.map((m) =>
-    m.replace("{n}", "1").replace("{total}", String(candidateCount)),
-  );
+  const messages = GENERATION_LOADING_MESSAGES;
   const idx = ((messageIndex % messages.length) + messages.length) % messages.length;
   const progress = Math.round(((idx + 1) / messages.length) * 100);
 
@@ -29,7 +25,7 @@ export function PersonaGenerationExperience({
       <div className="ps-gen-experience-orb" aria-hidden>
         <Loader2 className="size-6 animate-spin" strokeWidth={1.25} />
       </div>
-      <p className="ps-eyebrow">Casting in progress</p>
+      <p className="ps-eyebrow">Premium generation</p>
       <h3 className="ps-gen-experience-title">{messages[idx]}</h3>
       <div className="ps-gen-experience-bar" aria-hidden>
         <span style={{ width: `${progress}%` }} />

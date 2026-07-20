@@ -70,6 +70,8 @@ interface StudioState {
   candidateAssets: PersonaCandidateAssetView[];
   brandCastProgress: BrandCastMilestoneProgress | null;
   costEstimate: CandidateGenerationCostEstimate | null;
+  paidConfirmationToken: string | null;
+  paidConfirmationProjectId: string | null;
   presets: CreationProjectPreset[];
   providerSetupMessage: string | null;
 }
@@ -105,6 +107,8 @@ export function usePersonaStudio() {
     candidateAssets: [],
     brandCastProgress: null,
     costEstimate: null,
+    paidConfirmationToken: null,
+    paidConfirmationProjectId: null,
     presets: [],
     providerSetupMessage: null,
   });
@@ -194,6 +198,20 @@ export function usePersonaStudio() {
     }
   }, [refreshHealth, refreshCreation]);
 
+  const estimateProjectCost = useCallback(async (projectId: string) => {
+    const res = await fetch(
+      `/api/persona/creation-projects/${projectId}?estimate=1`,
+    );
+    const data = (await res.json()) as {
+      error?: string;
+      estimate?: CandidateGenerationCostEstimate;
+      costLabel?: string;
+    };
+    if (!res.ok) throw new Error(data.error ?? "Kostenschätzung fehlgeschlagen");
+    setState((prev) => ({ ...prev, costEstimate: data.estimate ?? null }));
+    return data.estimate;
+  }, []);
+
   const loadProject = useCallback(async (projectId: string, opts?: { openCandidates?: boolean }) => {
     const res = await fetch(`/api/persona/creation-projects/${projectId}`);
     const data = (await res.json()) as {
@@ -202,16 +220,31 @@ export function usePersonaStudio() {
       candidates?: PersonaCandidate[];
     };
     if (!res.ok) throw new Error(data.error ?? "Projekt laden fehlgeschlagen");
-    setState((prev) => ({
-      ...prev,
-      selectedProjectId: projectId,
-      candidates: data.candidates ?? [],
-      creationProjects: prev.creationProjects.map((p) =>
-        p.id === projectId && data.project ? data.project : p,
-      ),
-      section: opts?.openCandidates ? "candidates" : prev.section,
-    }));
-  }, []);
+    setState((prev) => {
+      const projectChanged = prev.selectedProjectId !== projectId;
+      return {
+        ...prev,
+        selectedProjectId: projectId,
+        candidates: data.candidates ?? [],
+        creationProjects: prev.creationProjects.map((p) =>
+          p.id === projectId && data.project ? data.project : p,
+        ),
+        costEstimate: projectChanged ? null : prev.costEstimate,
+        paidConfirmationToken: projectChanged
+          ? (data.project?.last_confirmation_token ?? null)
+          : prev.paidConfirmationToken,
+        paidConfirmationProjectId: projectChanged
+          ? data.project?.last_confirmation_token
+            ? projectId
+            : null
+          : prev.paidConfirmationProjectId,
+        section: opts?.openCandidates ? "candidates" : prev.section,
+      };
+    });
+    if (data.project?.last_estimate_at) {
+      void estimateProjectCost(projectId).catch(() => undefined);
+    }
+  }, [estimateProjectCost]);
 
   const loadCandidate = useCallback(async (candidateId: string) => {
     const res = await fetch(`/api/persona/candidates/${candidateId}`);
@@ -249,26 +282,15 @@ export function usePersonaStudio() {
           ...prev,
           selectedProjectId: data.project!.id,
           section: "creation_projects",
+          costEstimate: null,
+          paidConfirmationToken: null,
+          paidConfirmationProjectId: null,
         }));
       }
       return data.project;
     },
     [refreshCreation],
   );
-
-  const estimateProjectCost = useCallback(async (projectId: string) => {
-    const res = await fetch(
-      `/api/persona/creation-projects/${projectId}?estimate=1`,
-    );
-    const data = (await res.json()) as {
-      error?: string;
-      estimate?: CandidateGenerationCostEstimate;
-      costLabel?: string;
-    };
-    if (!res.ok) throw new Error(data.error ?? "Kostenschätzung fehlgeschlagen");
-    setState((prev) => ({ ...prev, costEstimate: data.estimate ?? null }));
-    return data.estimate;
-  }, []);
 
   const preparePaidConfirmation = useCallback(async (projectId: string) => {
     const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
@@ -280,11 +302,20 @@ export function usePersonaStudio() {
       error?: string;
       estimate?: CandidateGenerationCostEstimate;
       confirmation?: { confirmation_token: string };
+      job?: { confirmation_token?: string | null };
       costLabel?: string;
     };
     if (!res.ok) throw new Error(data.error ?? "Bestätigung vorbereiten fehlgeschlagen");
-    setState((prev) => ({ ...prev, costEstimate: data.estimate ?? null }));
-    return data;
+    const token =
+      data.confirmation?.confirmation_token ?? data.job?.confirmation_token ?? null;
+    setState((prev) => ({
+      ...prev,
+      selectedProjectId: projectId,
+      costEstimate: data.estimate ?? null,
+      paidConfirmationToken: token,
+      paidConfirmationProjectId: token ? projectId : null,
+    }));
+    return { ...data, confirmationToken: token };
   }, []);
 
   const generateCandidates = useCallback(
@@ -303,6 +334,12 @@ export function usePersonaStudio() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Generierung fehlgeschlagen");
+      setState((prev) => ({
+        ...prev,
+        costEstimate: null,
+        paidConfirmationToken: null,
+        paidConfirmationProjectId: null,
+      }));
       await loadProject(projectId);
       await refreshCreation();
     },

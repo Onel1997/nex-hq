@@ -8,6 +8,8 @@ import {
   computeCastProgressView,
   computeCreatorCostPreview,
   computeLiveCastScores,
+  creatorPrimaryActionLabel,
+  canStartPaidCandidateGeneration,
   isPersonaDefined,
   mockComparisonCandidates,
   type CreatorFormState,
@@ -100,5 +102,54 @@ describe("Persona Creator Phase 1.3 UX helpers", () => {
       assert.ok(card.luxury >= 0 && card.luxury <= 100);
       assert.ok(card.realism >= 0 && card.realism <= 100);
     }
+  });
+
+  it("labels primary actions for generation step", () => {
+    assert.equal(creatorPrimaryActionLabel(7, "manual_upload"), "Next");
+    assert.equal(creatorPrimaryActionLabel(8, "image_provider"), "Start Premium Generation");
+    assert.equal(creatorPrimaryActionLabel(8, "manual_upload"), "Generate Candidate");
+  });
+
+  it("enables paid generation only with matching confirmation + paid provider", () => {
+    const estimate = computeCreatorCostPreview({
+      ...baseForm,
+      provider_mode: "image_provider",
+    });
+    assert.equal(
+      canStartPaidCandidateGeneration({
+        busy: false,
+        costConfirmed: true,
+        providerMode: "image_provider",
+        costEstimate: estimate,
+        confirmationToken: "pct_test",
+        confirmationProjectId: "project-a",
+        projectId: "project-a",
+      }),
+      true,
+    );
+    assert.equal(
+      canStartPaidCandidateGeneration({
+        busy: false,
+        costConfirmed: true,
+        providerMode: "image_provider",
+        costEstimate: estimate,
+        confirmationToken: "pct_test",
+        confirmationProjectId: "project-a",
+        projectId: "project-b",
+      }),
+      false,
+    );
+    assert.equal(
+      canStartPaidCandidateGeneration({
+        busy: false,
+        costConfirmed: true,
+        providerMode: "manual_upload",
+        costEstimate: estimate,
+        confirmationToken: "pct_test",
+        confirmationProjectId: "project-a",
+        projectId: "project-a",
+      }),
+      false,
+    );
   });
 });

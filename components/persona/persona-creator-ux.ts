@@ -5,6 +5,7 @@
 
 import type {
   BrandRole,
+  CandidateGenerationCostEstimate,
   IntendedUsage,
   ProviderMode,
   QualityMode,
@@ -308,10 +309,70 @@ export type CreatorCostPreview = {
 
 const MODE_LABELS: Record<ProviderMode, string> = {
   manual_upload: "Manual Upload",
-  image_provider: "Image Provider",
+  image_provider: "OpenAI Premium",
   hybrid: "Hybrid",
   disabled: "Disabled",
 };
+
+/** Provider options shown in Creator UI until Image Studio ships. Logic for hidden modes remains. */
+export const VISIBLE_PROVIDER_MODES: ReadonlyArray<{
+  value: ProviderMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "image_provider",
+    label: "OpenAI Premium",
+    description: "Paid GPT Image generation with commercial fashion prompts.",
+  },
+  {
+    value: "manual_upload",
+    label: "Manual Upload",
+    description: "Upload your own reference portraits — no provider cost.",
+  },
+];
+
+export const GENERATION_INCLUDES = [
+  "Premium OpenAI model",
+  "Commercial fashion prompt",
+  "Brand consistency rules",
+  "Candidate comparison",
+  "Private storage",
+] as const;
+
+export function isPaidProviderMode(mode: ProviderMode): boolean {
+  return mode === "image_provider" || mode === "hybrid";
+}
+
+/** UI gate for Creation Projects — paid generation start button. */
+export function canStartPaidCandidateGeneration(args: {
+  busy: boolean;
+  costConfirmed: boolean;
+  providerMode: ProviderMode;
+  costEstimate: CreatorCostPreview | CandidateGenerationCostEstimate | null;
+  confirmationToken: string | null;
+  confirmationProjectId: string | null;
+  projectId: string;
+}): boolean {
+  const estimatePrepared =
+    Boolean(args.costEstimate) &&
+    Boolean(args.confirmationToken) &&
+    args.confirmationProjectId === args.projectId;
+
+  return (
+    !args.busy &&
+    args.costConfirmed &&
+    estimatePrepared &&
+    isPaidProviderMode(args.providerMode)
+  );
+}
+
+export function creatorPrimaryActionLabel(step: number, providerMode: ProviderMode): string {
+  if (step === 8) {
+    return providerMode === "image_provider" ? "Start Premium Generation" : "Generate Candidate";
+  }
+  return "Next";
+}
 
 export function computeCreatorCostPreview(form: CreatorFormState): CreatorCostPreview {
   const count = Math.min(8, Math.max(1, form.candidate_count || 1));
@@ -385,13 +446,11 @@ export function primaryFaceLabel(form: CreatorFormState): string {
 
 /** Future generation loading copy — UI only, not wired to providers. */
 export const GENERATION_LOADING_MESSAGES = [
-  "Creating official Milaene Brand Cast...",
-  "Matching facial structure...",
-  "Building luxury identity...",
-  "Generating Candidate {n} of {total}...",
-  "Preparing editorial consistency...",
-  "Optimizing realism...",
-  "Almost finished...",
+  "Preparing Brand Brief…",
+  "Creating Fashion Prompt…",
+  "Generating Candidate…",
+  "Evaluating Quality…",
+  "Preparing Comparison…",
 ] as const;
 
 export type CastProgressView = {
