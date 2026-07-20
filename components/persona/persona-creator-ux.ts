@@ -90,24 +90,32 @@ export type PresetCardMeta = {
 
 /** Enrichment for API presets + pure client style starters. */
 export const PRESET_CARD_META: Record<string, PresetCardMeta> = {
+  milaene_street_luxury: {
+    title: "Milaene Street Luxury",
+    description:
+      "Authentic premium streetwear lifestyle — followable, urban, warm olive.",
+    usage: "Primary male · brand face",
+    icon: "urban",
+    bestFor: ["Campaigns", "Social", "Editorial"],
+  },
   primary_male_quiet_luxury: {
-    title: "Quiet Luxury",
-    description: "Restrained presence, calm confidence, premium neutrals.",
-    usage: "Hero campaigns · brand face",
+    title: "Everyday Premium",
+    description: "Approachable premium casual — real lifestyle presence.",
+    usage: "Hero lifestyle · brand face",
     icon: "diamond",
-    bestFor: ["Campaigns", "Editorial"],
+    bestFor: ["Campaigns", "Social"],
   },
   primary_female_minimal_editorial: {
-    title: "Minimal Editorial",
-    description: "Clean lines, soft structure, brand-forward restraint.",
-    usage: "Editorial · lookbooks",
+    title: "Minimal Lifestyle",
+    description: "Clean lines, soft structure, authentic brand-forward calm.",
+    usage: "Lifestyle · lookbooks",
     icon: "frame",
     bestFor: ["Editorial", "Campaigns"],
   },
   secondary_male_street_editorial: {
-    title: "Street Editorial",
-    description: "Urban edge with controlled texture and sharp silhouette.",
-    usage: "Street drops · seasonal",
+    title: "Urban Creator",
+    description: "Community-friendly creator energy with tonal streetwear.",
+    usage: "Social · seasonal drops",
     icon: "urban",
     bestFor: ["Social", "Editorial"],
   },

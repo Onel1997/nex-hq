@@ -13,7 +13,11 @@ export type PersonaChipTone =
   | "approved"
   | "draft"
   | "review"
-  | "muted";
+  | "muted"
+  | "rejected"
+  | "reference"
+  | "selected"
+  | "production";
 
 const TONE_CLASS: Record<PersonaChipTone, string> = {
   premium: "ps-status-chip--premium",
@@ -27,6 +31,10 @@ const TONE_CLASS: Record<PersonaChipTone, string> = {
   draft: "ps-status-chip--draft",
   review: "ps-status-chip--review",
   muted: "ps-status-chip--muted",
+  rejected: "ps-status-chip--rejected",
+  reference: "ps-status-chip--reference",
+  selected: "ps-status-chip--selected",
+  production: "ps-status-chip--production",
 };
 
 export function PersonaStatusChip({

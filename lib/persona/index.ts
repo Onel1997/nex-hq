@@ -69,6 +69,27 @@ export { SupabasePersonaRepository } from "./repositories/supabase-persona-repos
 export type { PersonaRepository } from "./repositories/persona-repository";
 
 export {
+  CANDIDATE_VARIATION_PROFILES,
+  resolveCandidateVariation,
+  buildCandidatePrompt,
+  composeProviderPrompt,
+  assessCandidateQuality,
+  qualityFieldsForCandidate,
+  buildDiversityReport,
+  appendCandidateNoteRevision,
+  readNotesHistory,
+} from "./creation/candidate-intelligence";
+export type {
+  CandidateVariationProfile,
+  BuiltCandidatePrompt,
+  PromptBlocks,
+  CandidateQualityAssessment,
+  CandidateQualityDimensions,
+  CandidateDiversityReport,
+  CandidateNoteRevision,
+} from "./creation/candidate-intelligence";
+
+export {
   createProductionCreationRepository,
   getCreationRepository,
   getCreationRepositoryKind,
@@ -83,11 +104,14 @@ export {
   canPrepareManualSlots,
   canPreparePaidConfirmation,
   canStartPaidGeneration,
+  evaluatePreparePaidConfirmationGate,
   resolveCreationWorkflowStep,
 } from "./creation/creation-workflow";
 export type {
   CreationWorkflowAction,
   CreationWorkflowStep,
+  PaidGenerationSafetyContext,
+  PreparePaidConfirmationGateReasons,
 } from "./creation/creation-workflow";
 export { PERSONA_CREATION_PRESETS, getCreationPreset } from "./creation/presets";
 export {

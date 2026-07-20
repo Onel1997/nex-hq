@@ -562,7 +562,8 @@ describe("Persona Studio Phase 1.2 creation workflow", () => {
 
   it("presets are available and not auto-submitted", () => {
     const presets = listCreationPresets();
-    assert.equal(presets.length, 3);
+    assert.equal(presets.length, 4);
     assert.ok(presets.some((p) => p.id === "primary_male_quiet_luxury"));
+    assert.ok(presets.some((p) => p.id === "milaene_street_luxury"));
   });
 });

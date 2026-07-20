@@ -36,8 +36,19 @@ import {
 import { PersonaGenerationExperience } from "@/components/persona/persona-generation-experience";
 import { PersonaStatusChip } from "@/components/persona/persona-status-chip";
 import {
+  CandidateBoardCard,
+  CandidateComparePanel,
+  CandidateDetailGallery,
+  CandidateLightbox,
+  CandidateNotesPanel,
+  CandidateQualityPanel,
+  getCandidateDiversityWarning,
+  getCandidateVariationLabel,
+} from "@/components/persona/candidate-board";
+import { CandidateStatusBadge } from "@/components/persona/candidate-status-badge";
+import {
   canPrepareManualSlots,
-  canPreparePaidConfirmation,
+  evaluatePreparePaidConfirmationGate,
 } from "@/lib/persona/creation/creation-workflow";
 import {
   assertProjectSelectionSync,
@@ -230,15 +241,27 @@ function ProviderModePicker({
 function EmptyState({
   title,
   body,
+  actionLabel,
+  onAction,
 }: {
   title: string;
   body: string;
+  actionLabel?: string;
+  onAction?: () => void;
 }) {
   return (
-    <div className="ps-empty-state">
-      <p className="ps-eyebrow">Milaene</p>
+    <div className="ps-empty-state ps-empty-state--luxury">
+      <div className="ps-empty-state-art" aria-hidden>
+        <UserRound className="size-12" strokeWidth={1.1} />
+      </div>
+      <p className="ps-eyebrow">Milaene Casting</p>
       <strong>{title}</strong>
       <p>{body}</p>
+      {actionLabel && onAction ? (
+        <button type="button" className="ps-empty-state-cta" onClick={onAction}>
+          {actionLabel}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -353,7 +376,6 @@ export function PersonaCreatorView({
   const [form, setForm] = useState<CreatorFormState>(DEFAULT_CREATOR_FORM);
   const [stepKey, setStepKey] = useState(0);
   const [previewGen, setPreviewGen] = useState(false);
-  const [genMessageIndex, setGenMessageIndex] = useState(0);
 
   const scores = useMemo(() => computeLiveCastScores(form), [form]);
   const cost = useMemo(() => computeCreatorCostPreview(form), [form]);
@@ -364,14 +386,6 @@ export function PersonaCreatorView({
   useEffect(() => {
     setStepKey((k) => k + 1);
   }, [step]);
-
-  useEffect(() => {
-    if (!previewGen) return;
-    const id = window.setInterval(() => {
-      setGenMessageIndex((i) => i + 1);
-    }, 1600);
-    return () => window.clearInterval(id);
-  }, [previewGen]);
 
   const applyPreset = (presetId: string) => {
     const preset = studio.presets.find((p) => p.id === presetId);
@@ -879,7 +893,6 @@ export function PersonaCreatorView({
                 className="ps-link-quiet"
                 onClick={() => {
                   setPreviewGen((v) => !v);
-                  setGenMessageIndex(0);
                 }}
               >
                 {previewGen ? "Hide experience" : "Preview experience"}
@@ -888,7 +901,7 @@ export function PersonaCreatorView({
 
             <PersonaGenerationExperience
               active={previewGen}
-              messageIndex={genMessageIndex}
+              candidateCount={form.candidate_count || 4}
             />
 
             {!previewGen ? (
@@ -972,6 +985,7 @@ export function CreationProjectsView({
   studio: PersonaStudioController;
 }) {
   const [busy, setBusy] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmCost, setConfirmCost] = useState(false);
 
@@ -1000,6 +1014,49 @@ export function CreationProjectsView({
 
   const paidGenerationEnabled =
     studio.health?.paidGenerationSafety?.paidGenerationEnabled ?? false;
+  const openaiApiKeyConfigured =
+    studio.health?.paidGenerationSafety?.openaiApiKeyConfigured ?? false;
+
+  const prepareConfirmationGate = useMemo(
+    () =>
+      evaluatePreparePaidConfirmationGate({
+        project: selected,
+        projectLoaded: detailReady,
+        busy,
+        paidGenerationSafety: studio.health?.paidGenerationSafety ?? null,
+      }),
+    [selected, detailReady, busy, studio.health?.paidGenerationSafety],
+  );
+
+  const canPrepareConfirmation = prepareConfirmationGate.allowed;
+
+  useEffect(() => {
+    if (!DEBUG_MODE || !selected) return;
+
+    console.log("[persona] prepare confirmation gate", {
+      selectedProjectId: studio.selectedProjectId,
+      loadedProjectId: studio.loadedProjectId,
+      projectStatus: selected.status,
+      providerMode: selected.provider_mode,
+      generationStage: selected.generation_stage,
+      paidGenerationEnabled,
+      openaiApiKeyConfigured,
+      healthStatus: studio.health?.status ?? null,
+      busy,
+      canPrepareConfirmation,
+      disabledReasons: prepareConfirmationGate.disabledReasons,
+    });
+  }, [
+    selected,
+    studio.selectedProjectId,
+    studio.loadedProjectId,
+    studio.health?.status,
+    paidGenerationEnabled,
+    openaiApiKeyConfigured,
+    busy,
+    canPrepareConfirmation,
+    prepareConfirmationGate.disabledReasons,
+  ]);
 
   const canStartGeneration = useMemo(() => {
     if (!selected) return false;
@@ -1047,6 +1104,7 @@ export function CreationProjectsView({
       return;
     }
     setBusy(true);
+    setGenerating(true);
     setError(null);
     try {
       await studio.generateCandidates(id, {
@@ -1060,6 +1118,7 @@ export function CreationProjectsView({
       setError(e instanceof Error ? e.message : "Generierung fehlgeschlagen");
     } finally {
       setBusy(false);
+      setGenerating(false);
     }
   };
 
@@ -1103,6 +1162,8 @@ export function CreationProjectsView({
           <EmptyState
             title="No casting sessions yet."
             body="Open Persona Creator to define your first official Brand Cast brief."
+            actionLabel="New casting"
+            onAction={() => studio.setSection("creator")}
           />
         ) : (
           studio.creationProjects.map((p) => (
@@ -1137,6 +1198,15 @@ export function CreationProjectsView({
 
       {selected ? (
         <div className="ps-detail">
+          {generating ? (
+            <PersonaGenerationExperience
+              active
+              candidateCount={selected.candidate_count || 4}
+              estimatedSeconds={Math.max(60, (selected.candidate_count || 4) * 25)}
+            />
+          ) : null}
+          {!generating ? (
+            <>
           <h2>{selected.name}</h2>
           {DEBUG_MODE ? (
             <p className="ps-project-id-debug">ID {projectIdPrefix(selected.id)}</p>
@@ -1193,11 +1263,49 @@ export function CreationProjectsView({
           <div className="ps-actions">
             <button
               type="button"
-              disabled={busy || !canPreparePaidConfirmation(selected)}
+              disabled={!canPrepareConfirmation}
               onClick={() => void runEstimate(selected.id)}
             >
               Schätzung & Bestätigung vorbereiten
             </button>
+            {DEBUG_MODE && !canPrepareConfirmation ? (
+              <div className="ps-callout ps-callout-warn">
+                <p>
+                  <strong>Warum deaktiviert?</strong>
+                </p>
+                <ul>
+                  <li>
+                    Projekt geladen:{" "}
+                    {prepareConfirmationGate.reasons.projectLoaded ? "true" : "false"}
+                  </li>
+                  <li>
+                    Status erlaubt:{" "}
+                    {prepareConfirmationGate.reasons.statusAllowed ? "true" : "false"}
+                  </li>
+                  <li>
+                    Provider erlaubt:{" "}
+                    {prepareConfirmationGate.reasons.providerAllowed ? "true" : "false"}
+                  </li>
+                  <li>
+                    Bezahlte Generierung aktiv:{" "}
+                    {prepareConfirmationGate.reasons.paidGenerationEnabled ? "true" : "false"}
+                  </li>
+                  <li>
+                    OpenAI konfiguriert:{" "}
+                    {prepareConfirmationGate.reasons.openaiConfigured ? "true" : "false"}
+                  </li>
+                  <li>
+                    Health geladen:{" "}
+                    {prepareConfirmationGate.reasons.healthLoaded ? "true" : "false"}
+                  </li>
+                  <li>Busy: {prepareConfirmationGate.reasons.busy ? "true" : "false"}</li>
+                  <li>
+                    Workflow erlaubt:{" "}
+                    {prepareConfirmationGate.reasons.workflowAllowed ? "true" : "false"}
+                  </li>
+                </ul>
+              </div>
+            ) : null}
             <button
               type="button"
               disabled={busy || !canPrepareManualSlots(selected)}
@@ -1255,6 +1363,8 @@ export function CreationProjectsView({
             </div>
           ) : null}
           {error ? <p className="ps-error-inline">{error}</p> : null}
+            </>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -1264,6 +1374,7 @@ export function CreationProjectsView({
 export function CandidatesView({ studio }: { studio: PersonaStudioController }) {
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const candidatesInSync =
     studio.selectedProjectId != null &&
     studio.loadedProjectId === studio.selectedProjectId;
@@ -1279,6 +1390,15 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     () => (selected ? isDebugRunCandidate(selected, studio.generationJobs) : false),
     [selected, studio.generationJobs],
   );
+  const diversityWarning = useMemo(
+    () => getCandidateDiversityWarning(visibleCandidates),
+    [visibleCandidates],
+  );
+
+  useEffect(() => {
+    setNotes(selected?.user_notes ?? "");
+    setLightboxIndex(null);
+  }, [selected?.id, selected?.user_notes]);
 
   const act = async (body: Record<string, unknown>) => {
     if (!selected) return;
@@ -1303,6 +1423,15 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         </div>
       </header>
 
+      {diversityWarning ? (
+        <div className="ps-callout ps-callout-warn">
+          <p>
+            <strong>{diversityWarning}</strong> Consider regenerating with stronger variation
+            slots.
+          </p>
+        </div>
+      ) : null}
+
       {visibleCandidates.length === 0 ? (
         <EmptyState
           title="No candidates on the board yet."
@@ -1311,37 +1440,36 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
               ? "After a casting session generates or receives uploads, your Brand Faces will appear here for comparison."
               : "Select a creation project and wait for it to finish loading before viewing candidates."
           }
+          actionLabel={candidatesInSync ? "Open Creation Projects" : undefined}
+          onAction={
+            candidatesInSync ? () => studio.setSection("creation_projects") : undefined
+          }
         />
       ) : (
-        <div className="ps-candidate-grid">
+        <div className="ps-ci-grid">
           {visibleCandidates.map((c) => (
-            <button
+            <CandidateBoardCard
               key={c.id}
-              type="button"
-              className={`ps-candidate-card${studio.selectedCandidateId === c.id ? " is-active" : ""}`}
-              onClick={() => void studio.loadCandidate(c.id)}
-            >
-              <strong>
-                #{c.candidate_number} {c.candidate_name}
-              </strong>
-              <span>{c.status}</span>
-              <em>
-                Fit {c.brand_fit_score ?? "—"} · Video {c.video_suitability_score ?? "—"}
-              </em>
-            </button>
+              candidate={c}
+              previewUrl={studio.candidatePreviews[c.id] ?? null}
+              active={studio.selectedCandidateId === c.id}
+              onSelect={() => void studio.loadCandidate(c.id)}
+            />
           ))}
         </div>
       )}
 
       {selected ? (
-        <div className="ps-detail">
-          <h2>
-            {selected.candidate_name}{" "}
-            <span className="ps-muted">({selected.status})</span>
-            {selectedIsDebugRun ? (
-              <span className="ps-badge-warn"> Debug-Lauf · nicht UI-bestätigt</span>
-            ) : null}
-          </h2>
+        <div className="ps-detail ps-ci-detail">
+          <div className="ps-ci-detail-header">
+            <div>
+              <h2>
+                #{selected.candidate_number} {getCandidateVariationLabel(selected)}
+              </h2>
+              <p className="ps-muted">{selected.identity_summary}</p>
+            </div>
+            <CandidateStatusBadge candidate={selected} />
+          </div>
           {selectedIsDebugRun ? (
             <div className="ps-callout ps-callout-warn">
               <p>
@@ -1351,25 +1479,16 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
               </p>
             </div>
           ) : null}
-          <p>{selected.identity_summary || "Identity notes will appear once this candidate is ready."}</p>
           <p className="ps-muted">{selected.distinguishing_features}</p>
 
-          <div className="ps-ref-grid">
-            {studio.candidateAssets.map((a) => (
-              <figure key={a.id} className="ps-ref-thumb">
-                {a.signed_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={a.signed_url} alt={a.asset_type} />
-                ) : (
-                  <div className="ps-muted">Portrait unavailable</div>
-                )}
-                <figcaption>
-                  {a.asset_type}
-                  {a.is_primary ? " · Primär" : ""}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
+          <CandidateDetailGallery
+            assets={studio.candidateAssets}
+            onOpen={(index) => setLightboxIndex(index)}
+          />
+
+          <CandidateQualityPanel candidate={selected} />
+
+          <CandidateComparePanel candidate={selected} peers={visibleCandidates} />
 
           <details className="ps-tech">
             <summary>Technische Details</summary>
@@ -1377,21 +1496,20 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
               provider: selected.provider,
               job: selected.provider_job_id,
               seed: selected.generation_seed,
+              variation: selected.generation_settings?.variation ?? null,
+              cost: selected.actual_generation_cost,
+              created: selected.created_at,
             }, null, 2)}</pre>
           </details>
 
-          <label>
-            Notizen
-            <textarea
-              value={notes || selected.user_notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-            />
-          </label>
+          <CandidateNotesPanel
+            candidate={selected}
+            notes={notes}
+            onNotesChange={setNotes}
+            onSave={() => void act({ user_notes: notes })}
+          />
+
           <div className="ps-actions">
-            <button type="button" onClick={() => void act({ user_rating: 5, user_notes: notes })}>
-              Note speichern / 5★
-            </button>
             <button
               type="button"
               disabled={selectedIsDebugRun}
@@ -1466,6 +1584,13 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             </label>
           </div>
           {error ? <p className="ps-error-inline">{error}</p> : null}
+          {lightboxIndex != null ? (
+            <CandidateLightbox
+              assets={studio.candidateAssets}
+              startIndex={lightboxIndex}
+              onClose={() => setLightboxIndex(null)}
+            />
+          ) : null}
         </div>
       ) : null}
     </section>

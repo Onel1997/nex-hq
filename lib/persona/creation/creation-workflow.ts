@@ -14,8 +14,17 @@ import type {
 } from "../domain/creation-types";
 import { PersonaDomainError, PersonaWorkflowError } from "../domain/errors";
 import { resolveEffectiveProviderMode, isPersonaImageProviderConfigured } from "./provider/config";
-import { shouldUseFakePersonaProvider } from "./paid-generation-guard";
+import {
+  shouldUseFakePersonaProvider,
+  type PaidGenerationSafetyStatus,
+} from "./paid-generation-guard";
 import { assetTypesForStage } from "./provider/cost";
+
+/** Server health probe values — use in client UI instead of reading OPENAI_API_KEY. */
+export type PaidGenerationSafetyContext = Pick<
+  PaidGenerationSafetyStatus,
+  "openaiApiKeyConfigured" | "fakeProviderActive"
+>;
 
 /** API / service workflow actions for creation projects. */
 export type CreationWorkflowAction =
@@ -72,6 +81,7 @@ function isManualProviderMode(mode: ProviderMode): boolean {
 function assertPaidProviderConfigured(
   project: PersonaCreationProject,
   details: Record<string, unknown>,
+  paidGenerationSafety?: PaidGenerationSafetyContext,
 ): void {
   if (!isPaidProviderMode(project.provider_mode)) {
     const effective = resolveEffectiveProviderMode(project.provider_mode);
@@ -83,8 +93,13 @@ function assertPaidProviderConfigured(
     );
   }
 
-  if (shouldUseFakePersonaProvider()) return;
-  if (isPersonaImageProviderConfigured()) return;
+  if (paidGenerationSafety) {
+    if (paidGenerationSafety.fakeProviderActive) return;
+    if (paidGenerationSafety.openaiApiKeyConfigured) return;
+  } else {
+    if (shouldUseFakePersonaProvider()) return;
+    if (isPersonaImageProviderConfigured()) return;
+  }
 
   const effective = resolveEffectiveProviderMode(project.provider_mode);
   throw new PersonaDomainError(
@@ -93,6 +108,87 @@ function assertPaidProviderConfigured(
     "CONFIG",
     details,
   );
+}
+
+function isPrepareConfirmationStatusAllowed(project: PersonaCreationProject): boolean {
+  if (project.status === "generating" || project.status === "selected") return false;
+  if (project.status === "cancelled" || project.status === "archived") return false;
+  return PREPARE_CONFIRMATION_STATUSES.includes(project.status);
+}
+
+function isPrepareConfirmationStageAllowed(project: PersonaCreationProject): boolean {
+  if (project.generation_stage === "identity_lock") return false;
+  if (!GENERATION_STAGES.includes(project.generation_stage)) return false;
+  return assetTypesForStage(project.generation_stage).length > 0;
+}
+
+export type PreparePaidConfirmationGateReasons = {
+  projectLoaded: boolean;
+  statusAllowed: boolean;
+  providerAllowed: boolean;
+  paidGenerationEnabled: boolean;
+  openaiConfigured: boolean;
+  healthLoaded: boolean;
+  busy: boolean;
+  workflowAllowed: boolean;
+};
+
+export function evaluatePreparePaidConfirmationGate(args: {
+  project: PersonaCreationProject | null;
+  projectLoaded: boolean;
+  busy: boolean;
+  paidGenerationSafety: PaidGenerationSafetyStatus | null | undefined;
+}): {
+  reasons: PreparePaidConfirmationGateReasons;
+  allowed: boolean;
+  disabledReasons: string[];
+} {
+  const safety = args.paidGenerationSafety;
+  const project = args.project;
+  const healthLoaded = safety != null;
+  const paidGenerationEnabled = safety?.paidGenerationEnabled ?? false;
+  const openaiConfigured = Boolean(
+    safety?.openaiApiKeyConfigured || safety?.fakeProviderActive,
+  );
+  const providerModeAllowed = project ? isPaidProviderMode(project.provider_mode) : false;
+  const providerAllowed = providerModeAllowed && openaiConfigured;
+  const statusAllowed = project ? isPrepareConfirmationStatusAllowed(project) : false;
+  const stageAllowed = project ? isPrepareConfirmationStageAllowed(project) : false;
+  const manualModeBlocked =
+    project != null && isManualProviderMode(project.provider_mode);
+  const workflowAllowed =
+    healthLoaded &&
+    project != null &&
+    !manualModeBlocked &&
+    canPreparePaidConfirmation(project, safety ?? undefined);
+  const allowed = args.projectLoaded && !args.busy && workflowAllowed;
+
+  const disabledReasons: string[] = [];
+  if (!args.projectLoaded) disabledReasons.push("project_not_loaded");
+  if (!healthLoaded) disabledReasons.push("health_not_loaded");
+  if (!paidGenerationEnabled) disabledReasons.push("paid_generation_disabled");
+  if (!openaiConfigured) disabledReasons.push("openai_not_configured");
+  if (!providerModeAllowed) disabledReasons.push("provider_mode_not_paid");
+  if (!statusAllowed) disabledReasons.push("status_not_allowed");
+  if (!stageAllowed) disabledReasons.push("stage_not_allowed");
+  if (manualModeBlocked) disabledReasons.push("manual_upload_mode");
+  if (!workflowAllowed && project != null) disabledReasons.push("workflow_blocked");
+  if (args.busy) disabledReasons.push("busy");
+
+  return {
+    reasons: {
+      projectLoaded: args.projectLoaded,
+      statusAllowed,
+      providerAllowed,
+      paidGenerationEnabled,
+      openaiConfigured,
+      healthLoaded,
+      busy: args.busy,
+      workflowAllowed,
+    },
+    allowed,
+    disabledReasons,
+  };
 }
 
 export function resolveCreationWorkflowStep(
@@ -116,9 +212,10 @@ export function resolveCreationWorkflowStep(
 
 export function canPreparePaidConfirmation(
   project: PersonaCreationProject,
+  paidGenerationSafety?: PaidGenerationSafetyContext,
 ): boolean {
   try {
-    assertCreationProjectAction(project, "prepare_confirmation");
+    assertCreationProjectAction(project, "prepare_confirmation", paidGenerationSafety);
     return true;
   } catch {
     return false;
@@ -150,6 +247,7 @@ export function canStartPaidGeneration(project: PersonaCreationProject): boolean
 export function assertCreationProjectAction(
   project: PersonaCreationProject,
   action: CreationWorkflowAction,
+  paidGenerationSafety?: PaidGenerationSafetyContext,
 ): void {
   const workflowStep = resolveCreationWorkflowStep(project);
   const details = {
@@ -168,7 +266,7 @@ export function assertCreationProjectAction(
       );
     }
 
-    assertPaidProviderConfigured(project, details);
+    assertPaidProviderConfigured(project, details, paidGenerationSafety);
 
     if (project.status === "generating") {
       throw new PersonaWorkflowError(
@@ -279,7 +377,7 @@ export function assertCreationProjectAction(
       );
     }
 
-    assertPaidProviderConfigured(project, details);
+    assertPaidProviderConfigured(project, details, paidGenerationSafety);
 
     if (project.status === "generating") {
       throw new PersonaWorkflowError(

@@ -117,6 +117,7 @@ interface StudioState {
   paidConfirmationProjectId: string | null;
   generationJobs: import("@/lib/persona/domain/creation-types").PersonaGenerationJob[];
   incidentSummary: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
+  candidatePreviews: Record<string, string | null>;
   presets: CreationProjectPreset[];
   providerSetupMessage: string | null;
 }
@@ -160,6 +161,7 @@ export function usePersonaStudio() {
     paidConfirmationProjectId: null,
     generationJobs: [],
     incidentSummary: null,
+    candidatePreviews: {},
     presets: [],
     providerSetupMessage: null,
   });
@@ -289,6 +291,7 @@ export function usePersonaStudio() {
       candidates?: PersonaCandidate[];
       jobs?: import("@/lib/persona/domain/creation-types").PersonaGenerationJob[];
       incident?: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
+      candidatePreviews?: Record<string, string | null>;
     };
     if (!res.ok) throw new Error(data.error ?? "Projekt laden fehlgeschlagen");
 
@@ -329,6 +332,7 @@ export function usePersonaStudio() {
         candidates: data.candidates ?? [],
         generationJobs: data.jobs ?? [],
         incidentSummary: data.incident ?? null,
+        candidatePreviews: data.candidatePreviews ?? {},
         creationProjects: prev.creationProjects.map((p) =>
           p.id === projectId && data.project ? data.project : p,
         ),

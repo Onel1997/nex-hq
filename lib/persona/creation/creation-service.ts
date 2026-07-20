@@ -71,6 +71,12 @@ import {
   type PaidConfirmationIntent,
 } from "./paid-generation-guard";
 import {
+  appendCandidateNoteRevision,
+  assessCandidateQuality,
+  qualityFieldsForCandidate,
+  resolveCandidateVariation,
+} from "./candidate-intelligence";
+import {
   INCIDENT_CLASSIFICATION,
   PERSONA_INCIDENT_PROJECT_ID,
 } from "./incident-constants";
@@ -585,29 +591,40 @@ export async function confirmAndStartCandidateGeneration(
 
     const existing = await creationRepo().listCandidates(scope, projectId);
     for (const result of job.results) {
+      const variation = resolveCandidateVariation(result.candidateNumber);
+      const qualityAssessment = assessCandidateQuality({
+        project,
+        variation,
+        assetTypes: result.assets.map((a) => a.assetType),
+        qualityMode,
+      });
+      const qualityFields = qualityFieldsForCandidate(qualityAssessment);
+      const enrichedSettings = {
+        ...result.settings,
+        qualityAssessment,
+      };
+      const displayName =
+        typeof (result.settings as { variation?: { label?: string } }).variation?.label ===
+        "string"
+          ? (result.settings as { variation: { label: string } }).variation.label
+          : variation.label;
+
       let candidate = existing.find((c) => c.candidate_number === result.candidateNumber);
       if (!candidate) {
         candidate = await creationRepo().createCandidate(scope, {
           creation_project_id: projectId,
           candidate_number: result.candidateNumber,
-          candidate_name: `Kandidat ${result.candidateNumber}`,
+          candidate_name: displayName,
           status: "ready",
           provider: job.provider,
           provider_job_id: durableJob.id,
           generation_seed: result.seed,
           generation_prompt: result.prompt,
           negative_prompt: result.negativePrompt,
-          generation_settings: result.settings,
+          generation_settings: enrichedSettings,
           identity_summary: result.identitySummary,
           distinguishing_features: result.distinguishingFeatures,
-          visual_strengths: "",
-          visual_risks: "",
-          brand_fit_score: null,
-          identity_consistency_score: null,
-          realism_score: null,
-          video_suitability_score: null,
-          image_suitability_label: "system_heuristic:pending_review",
-          video_suitability_label: "manual_heuristic:not_video_ready",
+          ...qualityFields,
           user_rating: null,
           user_notes: "",
           rejection_reason: "",
@@ -616,16 +633,16 @@ export async function confirmAndStartCandidateGeneration(
       } else {
         candidate = await creationRepo().updateCandidate(scope, candidate.id, {
           status: "ready",
+          candidate_name: displayName,
           provider: job.provider,
           provider_job_id: durableJob.id,
           generation_seed: result.seed,
           generation_prompt: result.prompt,
           negative_prompt: result.negativePrompt,
-          generation_settings: result.settings,
+          generation_settings: enrichedSettings,
           identity_summary: result.identitySummary,
           distinguishing_features: result.distinguishingFeatures,
-          image_suitability_label: "system_heuristic:pending_review",
-          video_suitability_label: "manual_heuristic:not_video_ready",
+          ...qualityFields,
           actual_generation_cost: Number(
             ((candidate.actual_generation_cost ?? 0) + result.actualCostEur).toFixed(4),
           ),
@@ -1019,6 +1036,25 @@ export async function updateCandidateReview(
 ) {
   const candidate = await requireCandidate(scope, candidateId);
 
+  // Version notes when user_notes changes — keeps user_notes as latest snapshot.
+  if (
+    typeof patch.user_notes === "string" &&
+    patch.user_notes.trim() !== (candidate.user_notes ?? "").trim()
+  ) {
+    const appended = appendCandidateNoteRevision({
+      settings: candidate.generation_settings ?? {},
+      previousNote: candidate.user_notes ?? "",
+      nextNote: patch.user_notes,
+      author: scope.actorId ?? "user",
+    });
+    if (appended) {
+      patch = {
+        ...patch,
+        generation_settings: appended.settings,
+      };
+    }
+  }
+
   if (patch.status === "shortlisted") {
     if (!["ready", "archived"].includes(candidate.status)) {
       throw new PersonaDomainError(
@@ -1145,6 +1181,31 @@ export async function listCandidateAssetViews(
     }
   }
   return views;
+}
+
+/** Primary portrait signed URLs for the candidate board (additive API field). */
+export async function listCandidateBoardPreviews(
+  scope: WorkspaceScope,
+  projectId: string,
+): Promise<Record<string, string | null>> {
+  const candidates = await creationRepo().listCandidates(scope, projectId);
+  const previews: Record<string, string | null> = {};
+  for (const candidate of candidates) {
+    previews[candidate.id] = null;
+    if (!candidate.primary_preview_asset_id) continue;
+    try {
+      const asset = await creationRepo().getCandidateAsset(
+        scope,
+        candidate.primary_preview_asset_id,
+      );
+      if (!asset) continue;
+      const signed = await createPersonaCandidateSignedUrl(asset.storage_path);
+      previews[candidate.id] = signed.signedUrl;
+    } catch {
+      previews[candidate.id] = null;
+    }
+  }
+  return previews;
 }
 
 export async function uploadManualCandidateAsset(

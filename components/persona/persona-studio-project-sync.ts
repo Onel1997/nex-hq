@@ -72,6 +72,7 @@ export function emptyProjectDetailState() {
     candidates: [] as import("@/lib/persona/domain/creation-types").PersonaCandidate[],
     generationJobs: [] as import("@/lib/persona/domain/creation-types").PersonaGenerationJob[],
     incidentSummary: null as import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null,
+    candidatePreviews: {} as Record<string, string | null>,
     selectedCandidateId: null as string | null,
     candidateAssets: [] as import("@/lib/persona/domain/creation-types").PersonaCandidateAssetView[],
     costEstimate: null as import("@/lib/persona/domain/creation-types").CandidateGenerationCostEstimate | null,

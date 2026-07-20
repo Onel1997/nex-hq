@@ -8,11 +8,17 @@ import { randomUUID } from "node:crypto";
 import { generateOpenAiImage } from "@/agents/image/providers/openai-images-provider";
 import { PersonaDomainError } from "../../domain/errors";
 import { assertLivePaidProviderInvocationAllowed } from "../paid-generation-guard";
-import type { CandidateAssetType, PersonaCreationProject } from "../../domain/creation-types";
+import type { PersonaCreationProject } from "../../domain/creation-types";
 import {
   getQualityModeProfile,
   type OpenAiPersonaQuality,
 } from "../quality-modes";
+import {
+  buildCandidatePrompt,
+  buildDiversityReport,
+  composeProviderPrompt,
+  resolveCandidateVariation,
+} from "../candidate-intelligence";
 import {
   PERSONA_CANDIDATE_PROVIDER_ID,
   isPersonaImageProviderConfigured,
@@ -29,76 +35,24 @@ import type {
 /** In-process cache only — durable status lives in persona_generation_jobs. */
 const jobs = new Map<string, CandidateBatchJob>();
 
-function buildPremiumPrompt(
-  project: PersonaCreationProject,
-  assetType: CandidateAssetType,
-  candidateNumber: number,
-): { prompt: string; negative: string } {
-  const framing =
-    assetType === "portrait_front"
-      ? "front-facing head-and-shoulders portrait, eyes to camera, locked framing"
-      : assetType === "portrait_three_quarter"
-        ? "three-quarter angle head-and-shoulders portrait, clear facial structure"
-        : assetType === "portrait_profile"
-          ? "clean true side profile portrait, ear visible, no head tilt"
-          : assetType === "half_body"
-            ? "half-body editorial portrait, waist-up, natural posture"
-            : assetType === "full_body"
-              ? "full-body standing editorial portrait, head to toe visible, natural stance"
-              : assetType === "expression_variant"
-                ? "close portrait with subtle approved calm expression, same person"
-                : assetType === "outfit_variant"
-                  ? "half-body portrait in preferred Milaene styling look"
-                  : "editorial fashion portrait";
-
-  const prompt = [
-    "Photorealistic adult fashion casting photograph for a luxury brand identity lock.",
-    "Premium fashion-editorial photography, commercial usable, natural light falloff.",
-    "Clearly an adult human. Natural facial asymmetry. Realistic skin texture with subtle pores.",
-    "Realistic hair strands. Natural eyes and teeth. Correct anatomy. No plastic skin.",
-    "No over-retouching, no beauty filter, no uncanny perfect symmetry.",
-    `Distinct candidate variation ${candidateNumber} — different person from other candidates, same brand direction.`,
-    `Adult age range: ${project.age_range || "28-35"}.`,
-    `Gender presentation: ${project.gender_presentation || "unspecified"}.`,
-    `Height: ${project.height_range || "average"}.`,
-    `Body type: ${project.body_type || "athletic lean"}.`,
-    `Skin tone: ${project.skin_tone_direction || "natural"}.`,
-    `Face: ${project.face_shape_direction || "balanced, defined"}.`,
-    `Hair: ${project.hair_direction || "neat natural"}.`,
-    `Facial hair: ${project.facial_hair_direction || "none"}.`,
-    `Eyes: ${project.eye_direction || "natural"}.`,
-    `Expression: ${project.expression_direction || "quiet confidence, neutral calm"}.`,
-    `Personality presence: ${project.personality || "composed"}.`,
-    `Fashion direction: ${project.fashion_style || "quiet luxury"}.`,
-    `Brand role: ${project.brand_role}.`,
-    project.visual_keywords ? `Visual keywords: ${project.visual_keywords}.` : "",
-    project.preferred_outfits ? `Outfit direction: ${project.preferred_outfits}.` : "",
-    project.preferred_brand_looks ? `Brand look: ${project.preferred_brand_looks}.` : "",
-    project.additional_description ? `Creative notes: ${project.additional_description}.` : "",
-    `Shot: ${framing}.`,
-    "Neutral clean studio background, soft key light, premium casting look.",
-    "No brand logos, no copyrighted characters, no text, no watermark.",
-    "Single adult person only. Suitable as an official brand face reference.",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const negative = [
-    "cartoon, anime, illustration, 3d render, plastic skin, over-smoothed,",
-    "deformed hands, extra fingers, bad anatomy, watermark, text, logo,",
-    "collage, multiple people, child, minor, underage, age-ambiguous,",
-    "sexualized pose, exaggerated beauty filter, uncanny symmetry,",
-    project.excluded_features || "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  return { prompt, negative };
-}
-
 function resolveQuality(input: CreateCandidateBatchInput): OpenAiPersonaQuality {
   const mode = input.qualityMode ?? input.project.quality_mode ?? "premium_editorial";
   return getQualityModeProfile(mode).openaiQuality;
+}
+
+function identitySummaryFor(
+  project: PersonaCreationProject,
+  variationLabel: string,
+): string {
+  return [
+    variationLabel,
+    project.gender_presentation,
+    project.age_range,
+    project.hair_direction,
+    project.fashion_style,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
@@ -153,6 +107,12 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
     let actualCost = 0;
     const errors: string[] = [];
 
+    const variations = numbers.map((n) => resolveCandidateVariation(n));
+    const diversity = buildDiversityReport({
+      candidateNumbers: numbers,
+      variations,
+    });
+
     jobs.set(jobId, {
       jobId,
       status: "generating",
@@ -167,19 +127,30 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
       ).costMultiplier).toFixed(4),
     );
 
-    for (const i of numbers) {
-      const seed = `${jobId}-${i}`;
+    for (let idx = 0; idx < numbers.length; idx += 1) {
+      const i = numbers[idx]!;
+      const variation = variations[idx]!;
+      const seed = `${jobId}-${i}-${variation.id}`;
       const assets = [];
       let prompt = "";
       let negative = "";
+      let identityLock = "";
 
       for (const assetType of assetTypes) {
-        const built = buildPremiumPrompt(input.project, assetType, i);
-        prompt = built.prompt;
-        negative = built.negative;
+        const built = buildCandidatePrompt({
+          project: input.project,
+          assetType,
+          candidateNumber: i,
+          variation,
+        });
+        if (!prompt || assetType === "portrait_front") {
+          prompt = built.prompt;
+          negative = built.negativePrompt;
+          identityLock = built.identityLock;
+        }
         try {
           const generated = await generateOpenAiImage({
-            prompt: `${built.prompt}\nAvoid: ${built.negative}`,
+            prompt: composeProviderPrompt(built),
             dimensions: "1024x1024",
             assetType: "persona_candidate",
             qualityOverride: quality,
@@ -199,6 +170,13 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
               seed,
               quality,
               costLabel: "estimated",
+              variationId: variation.id,
+              variationLabel: variation.label,
+              identityLock,
+              promptBlocks: {
+                camera: built.blocks.camera,
+                variation: variation.id,
+              },
             },
             estimatedCostEur: unitCost,
           });
@@ -219,29 +197,46 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             provider: this.id,
             quality,
             costLabel: "estimated",
+            variation: {
+              id: variation.id,
+              label: variation.label,
+              style: variation.style,
+              aesthetic: variation.aesthetic,
+              identityDescriptor: variation.identityDescriptor,
+              skinTone: variation.skinTone,
+              wardrobe: variation.wardrobe,
+            },
+            identityLock,
+            identitySeed: variation.identityDescriptor,
+            diversity: {
+              minPairwiseScore: diversity.minPairwiseScore,
+              averagePairwiseScore: diversity.averagePairwiseScore,
+              lowDiversity: diversity.lowDiversity,
+              warning: diversity.warning,
+            },
           },
           assets,
-          identitySummary: [
-            input.project.gender_presentation,
-            input.project.age_range,
-            input.project.hair_direction,
-            input.project.fashion_style,
+          identitySummary: identitySummaryFor(input.project, variation.label),
+          distinguishingFeatures: [
+            variation.label,
+            variation.faceStructure,
+            variation.jawline,
+            variation.eyeShape,
+            variation.hair,
+            variation.stubble,
+            variation.skinTone,
+            variation.presence,
+            input.project.visual_keywords || "",
           ]
             .filter(Boolean)
             .join(" · "),
-          distinguishingFeatures: input.project.visual_keywords || "",
           actualCostEur: assets.reduce((s, a) => s + (a.estimatedCostEur ?? 0), 0),
           providerJobId: jobId,
         });
       }
     }
 
-    const status =
-      results.length === 0
-        ? "failed"
-        : errors.length
-          ? "completed"
-          : "completed";
+    const status = results.length === 0 ? "failed" : "completed";
 
     const job: CandidateBatchJob = {
       jobId,

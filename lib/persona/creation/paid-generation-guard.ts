@@ -81,12 +81,14 @@ export function isOpenAiApiKeyConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
-export function getPaidGenerationSafetyStatus(): {
+export type PaidGenerationSafetyStatus = {
   openaiApiKeyConfigured: boolean;
   paidGenerationEnabled: boolean;
   fakeProviderActive: boolean;
   liveTestsEnabled: boolean;
-} {
+};
+
+export function getPaidGenerationSafetyStatus(): PaidGenerationSafetyStatus {
   return {
     openaiApiKeyConfigured: isOpenAiApiKeyConfigured(),
     paidGenerationEnabled: isPaidGenerationEnabled(),

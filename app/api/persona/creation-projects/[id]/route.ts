@@ -8,6 +8,7 @@ import {
   getCreationProject,
   getCreationProviderSetup,
   getIncidentProjectSummary,
+  listCandidateBoardPreviews,
   listCandidates,
   listGenerationJobsForProject,
   preparePaidGenerationConfirmation,
@@ -58,7 +59,8 @@ export async function GET(_request: Request, ctx: Ctx) {
     const candidates = await listCandidates(gate.scope, id);
     const jobs = await listGenerationJobsForProject(gate.scope, id);
     const incident = await getIncidentProjectSummary(gate.scope, id);
-    return jsonOk({ project, candidates, jobs, incident });
+    const candidatePreviews = await listCandidateBoardPreviews(gate.scope, id);
+    return jsonOk({ project, candidates, jobs, incident, candidatePreviews });
   } catch (error) {
     return jsonError(error, dict.persona.errors.unexpected);
   }
