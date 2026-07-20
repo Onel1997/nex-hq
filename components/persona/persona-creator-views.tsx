@@ -1,13 +1,47 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { PersonaStudioController } from "@/components/persona/use-persona-studio";
 import type {
   BrandRole,
   IntendedUsage,
   ProviderMode,
 } from "@/lib/persona/domain/creation-types";
-import { Loader2 } from "lucide-react";
+import {
+  CAST_MILESTONES,
+  CREATOR_STEPS,
+  STYLE_STARTERS,
+  VISUAL_FLOW,
+  PRESET_CARD_META,
+  brandRoleDisplayLabel,
+  computeCastProgressView,
+  computeCreatorCostPreview,
+  computeLiveCastScores,
+  fashionDirectionLabel,
+  isPersonaDefined,
+  mockComparisonCandidates,
+  primaryFaceLabel,
+  usageDisplayLabel,
+  type CreatorFormState,
+  type PresetCardMeta,
+} from "@/components/persona/persona-creator-ux";
+import { PersonaGenerationExperience } from "@/components/persona/persona-generation-experience";
+import { PersonaStatusChip } from "@/components/persona/persona-status-chip";
+import {
+  Check,
+  Circle,
+  Diamond,
+  Frame,
+  Landmark,
+  Loader2,
+  Lock,
+  Package,
+  Sparkles,
+  Store,
+  UserRound,
+  Users,
+  Wind,
+} from "lucide-react";
 
 const BRAND_ROLE_LABELS: Record<BrandRole, string> = {
   primary_male: "Primary Male",
@@ -18,18 +52,51 @@ const BRAND_ROLE_LABELS: Record<BrandRole, string> = {
   campaign_specialist: "Campaign Specialist",
 };
 
-const STEPS = [
-  "Brand-Rolle",
-  "Körperliche Richtung",
-  "Gesicht & Haar",
-  "Persönlichkeit",
-  "Fashion Style",
-  "Looks & Outfits",
-  "Ausschlüsse",
-  "Nutzung",
-  "Kandidatenanzahl",
-  "Kosten & Bestätigung",
-] as const;
+const PRESET_ICONS = {
+  diamond: Diamond,
+  frame: Frame,
+  urban: Wind,
+  campaign: Sparkles,
+  nordic: Landmark,
+  commercial: Store,
+} as const;
+
+const MILESTONE_ICONS = [UserRound, Users, Check, Circle, Package, Lock, Sparkles] as const;
+
+function ScoreMeter({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="ps-score-meter">
+      <div className="ps-score-meter-head">
+        <span>{label}</span>
+        <strong className="ps-score-counter">{value}</strong>
+      </div>
+      <div className="ps-score-track" aria-hidden>
+        <span className="ps-score-fill" style={{ width: `${value}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function PresetIcon({ icon }: { icon: PresetCardMeta["icon"] }) {
+  const Icon = PRESET_ICONS[icon];
+  return <Icon className="size-5" strokeWidth={1.4} aria-hidden />;
+}
+
+function EmptyState({
+  title,
+  body,
+}: {
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="ps-empty-state">
+      <p className="ps-eyebrow">Milaene</p>
+      <strong>{title}</strong>
+      <p>{body}</p>
+    </div>
+  );
+}
 
 export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
   const p = studio.brandCastProgress;
@@ -37,47 +104,57 @@ export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
     <section className="ps-panel">
       <header className="ps-panel-header">
         <div>
+          <p className="ps-eyebrow">Official Faces</p>
           <h1>Brand Cast</h1>
           <p className="ps-muted">
-            Meilenstein für genehmigte Milaene-Personas. Image/Video Studio bleiben
-            deaktiviert, bis der Cast freigegeben ist.
+            The approved faces of Milaene — Image and Video Studio stay dark until the cast
+            is complete.
           </p>
         </div>
       </header>
 
       {!p ? (
-        <p className="ps-muted">Brand-Cast-Fortschritt wird geladen…</p>
+        <EmptyState
+          title="Preparing Brand Cast progress"
+          body="Your casting milestone will appear here in a moment."
+        />
       ) : (
         <div className="ps-brand-cast">
           <div className={`ps-milestone${p.milestone_reached ? " is-done" : ""}`}>
             <span className="ps-milestone-label">{p.milestone_label}</span>
-            <strong>{p.milestone_reached ? "Erreicht" : "Offen"}</strong>
+            <strong>{p.milestone_reached ? "Reached" : "In progress"}</strong>
           </div>
+          {!p.milestone_reached && p.male_approved === 0 && p.female_approved === 0 ? (
+            <EmptyState
+              title="No Brand Cast has been approved yet."
+              body="Cast your first official faces in Persona Creator — then lock identity and approve."
+            />
+          ) : null}
           <div className="ps-stat-grid">
             <div className="ps-stat">
-              <em>Männliche Personas</em>
+              <em>Male faces</em>
               <strong>
                 {p.male_approved}/{p.male_required}
               </strong>
             </div>
             <div className="ps-stat">
-              <em>Weibliche Personas</em>
+              <em>Female faces</em>
               <strong>
                 {p.female_approved}/{p.female_required}
               </strong>
             </div>
             <div className="ps-stat">
-              <em>Image-ready</em>
+              <em>Image ready</em>
               <strong>{p.image_ready_count}</strong>
             </div>
             <div className="ps-stat">
-              <em>Video-ready</em>
+              <em>Video ready</em>
               <strong>{p.video_ready_count}</strong>
             </div>
           </div>
           {p.missing_reference_requirements.length > 0 ? (
             <div className="ps-callout">
-              <p>Fehlende Referenzanforderungen</p>
+              <p>Still needed for a complete cast</p>
               <ul>
                 {p.missing_reference_requirements.map((m) => (
                   <li key={m}>{m}</li>
@@ -91,6 +168,33 @@ export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
   );
 }
 
+const DEFAULT_CREATOR_FORM: CreatorFormState = {
+  name: "",
+  brand_role: "primary_male",
+  gender_presentation: "Male",
+  age_range: "28-35",
+  height_range: "180-188 cm",
+  body_type: "Athletic lean",
+  skin_tone_direction: "Light to medium olive",
+  face_shape_direction: "Defined jaw, calm features",
+  hair_direction: "Dark brown, short neat",
+  facial_hair_direction: "Clean shaven or light stubble",
+  eye_direction: "Brown or hazel",
+  expression_direction: "Quiet confidence, neutral calm",
+  personality: "Reserved warmth",
+  fashion_style: "Quiet luxury streetwear",
+  preferred_brand_looks: "Quiet Luxury",
+  preferred_outfits: "Black wide pants, premium basics",
+  excluded_features: "extreme makeup, flashy jewelry",
+  visual_keywords: "editorial, restrained, premium casual",
+  intended_usage: "image_and_video",
+  candidate_count: 4,
+  provider_mode: "manual_upload",
+  quality_mode: "premium_editorial",
+  additional_description: "",
+  description: "",
+};
+
 export function PersonaCreatorView({
   studio,
 }: {
@@ -99,35 +203,36 @@ export function PersonaCreatorView({
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    name: "",
-    brand_role: "primary_male" as BrandRole,
-    gender_presentation: "Male",
-    age_range: "28-35",
-    height_range: "180-188 cm",
-    body_type: "Athletic lean",
-    skin_tone_direction: "Light to medium olive",
-    face_shape_direction: "Defined jaw, calm features",
-    hair_direction: "Dark brown, short neat",
-    facial_hair_direction: "Clean shaven or light stubble",
-    eye_direction: "Brown or hazel",
-    expression_direction: "Quiet confidence, neutral calm",
-    personality: "Reserved warmth",
-    fashion_style: "Quiet luxury streetwear",
-    preferred_brand_looks: "Quiet Luxury",
-    preferred_outfits: "Black wide pants, premium basics",
-    excluded_features: "extreme makeup, flashy jewelry",
-    visual_keywords: "editorial, restrained, premium casual",
-    intended_usage: "image_and_video" as IntendedUsage,
-    candidate_count: 4,
-    provider_mode: "manual_upload" as ProviderMode,
-    additional_description: "",
-    description: "",
-  });
+  const [confirmCast, setConfirmCast] = useState(false);
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const [form, setForm] = useState<CreatorFormState>(DEFAULT_CREATOR_FORM);
+  const [stepKey, setStepKey] = useState(0);
+  const [previewGen, setPreviewGen] = useState(false);
+  const [genMessageIndex, setGenMessageIndex] = useState(0);
+
+  const scores = useMemo(() => computeLiveCastScores(form), [form]);
+  const cost = useMemo(() => computeCreatorCostPreview(form), [form]);
+  const progress = useMemo(() => computeCastProgressView(form), [form]);
+  const mockCandidates = useMemo(() => mockComparisonCandidates(form), [form]);
+  const defined = isPersonaDefined(form);
+  const fashionLabel = fashionDirectionLabel(form);
+
+  useEffect(() => {
+    setStepKey((k) => k + 1);
+  }, [step]);
+
+  useEffect(() => {
+    if (!previewGen) return;
+    const id = window.setInterval(() => {
+      setGenMessageIndex((i) => i + 1);
+    }, 1600);
+    return () => window.clearInterval(id);
+  }, [previewGen]);
 
   const applyPreset = (presetId: string) => {
     const preset = studio.presets.find((p) => p.id === presetId);
     if (!preset) return;
+    setActivePresetId(presetId);
     setForm((prev) => ({
       ...prev,
       name: preset.label,
@@ -153,11 +258,27 @@ export function PersonaCreatorView({
     }));
   };
 
-  const set = (key: keyof typeof form, value: string | number) => {
+  const applyStarter = (starterId: string) => {
+    const starter = STYLE_STARTERS.find((s) => s.id === starterId);
+    if (!starter) return;
+    setActivePresetId(starterId);
+    setForm((prev) => ({ ...prev, ...starter.patch }));
+  };
+
+  const set = (key: keyof CreatorFormState, value: string | number) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const goTo = (next: number) => {
+    setStep(Math.max(0, Math.min(CREATOR_STEPS.length - 1, next)));
+    if (next < CREATOR_STEPS.length - 1) setConfirmCast(false);
+  };
+
   const submit = async () => {
+    if (!confirmCast) {
+      setError("Please confirm the Brand Cast summary before continuing.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -167,274 +288,613 @@ export function PersonaCreatorView({
       });
       studio.setSection("creation_projects");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+      setError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setBusy(false);
     }
   };
 
+  const summaryRows: Array<{ label: string; value: string }> = [
+    { label: "Primary Brand Face", value: primaryFaceLabel(form) },
+    { label: "Role", value: brandRoleDisplayLabel(form.brand_role) },
+    { label: "Age Range", value: form.age_range || "—" },
+    { label: "Height", value: form.height_range || "—" },
+    { label: "Body Type", value: form.body_type || "—" },
+    { label: "Hair", value: form.hair_direction || "—" },
+    { label: "Facial Hair", value: form.facial_hair_direction || "—" },
+    { label: "Eye Color", value: form.eye_direction || "—" },
+    { label: "Skin Tone", value: form.skin_tone_direction || "—" },
+    { label: "Fashion Direction", value: form.fashion_style || "—" },
+    { label: "Campaign Usage", value: usageDisplayLabel(form.intended_usage) },
+    { label: "Target Audience", value: form.preferred_brand_looks || "—" },
+  ];
+
   return (
-    <section className="ps-panel">
+    <section className="ps-panel ps-creator">
       <header className="ps-panel-header">
         <div>
+          <p className="ps-eyebrow">Official Brand Faces</p>
           <h1>Persona Creator</h1>
           <p className="ps-muted">
-            Strukturierte Erstellung von Brand-Cast-Kandidaten. Keine Image-Studio-
-            Produktgenerierung.
+            Cast the faces of your fashion brand — editorial direction, not admin config.
           </p>
         </div>
       </header>
+
+      <nav className="ps-visual-flow" aria-label="Brand Cast journey">
+        {VISUAL_FLOW.map((node, i) => {
+          const current = node.id === "creator";
+          const done = i < 1;
+          return (
+            <div key={node.id} className="ps-visual-flow-item">
+              {i > 0 ? <span className="ps-visual-flow-arrow" aria-hidden>↓</span> : null}
+              <span
+                className={`ps-visual-flow-node${current ? " is-current" : ""}${done ? " is-done" : ""}`}
+              >
+                {node.label}
+              </span>
+            </div>
+          );
+        })}
+      </nav>
 
       {studio.providerSetupMessage ? (
         <div className="ps-callout ps-callout-warn">{studio.providerSetupMessage}</div>
       ) : null}
 
-      <div className="ps-preset-row">
-        <span className="ps-muted">Vorlagen (nur Startwerte):</span>
-        {studio.presets.map((p) => (
-          <button key={p.id} type="button" className="ps-chip" onClick={() => applyPreset(p.id)}>
-            {p.label}
-          </button>
-        ))}
+      <div className="ps-preset-gallery">
+        <div className="ps-section-label">
+          <span>Casting Directions</span>
+          <em>Starting points only — never auto-submit</em>
+        </div>
+        <div className="ps-preset-cards">
+          {studio.presets.map((p) => {
+            const meta = PRESET_CARD_META[p.id] ?? {
+              title: p.label,
+              description: p.fashion_style,
+              usage: usageDisplayLabel(p.intended_usage),
+              icon: "diamond" as const,
+              bestFor: ["Campaigns", "Editorial"] as const,
+            };
+            return (
+              <button
+                key={p.id}
+                type="button"
+                className={`ps-preset-card${activePresetId === p.id ? " is-active" : ""}`}
+                onClick={() => applyPreset(p.id)}
+              >
+                <span className="ps-preset-card-icon">
+                  <PresetIcon icon={meta.icon} />
+                </span>
+                <strong>{meta.title}</strong>
+                <p>{meta.description}</p>
+                <div className="ps-preset-card-footer">
+                  <span>Best for</span>
+                  <em>{meta.bestFor.join(" · ")}</em>
+                </div>
+              </button>
+            );
+          })}
+          {STYLE_STARTERS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`ps-preset-card${activePresetId === s.id ? " is-active" : ""}`}
+              onClick={() => applyStarter(s.id)}
+            >
+              <span className="ps-preset-card-icon">
+                <PresetIcon icon={s.meta.icon} />
+              </span>
+              <strong>{s.meta.title}</strong>
+              <p>{s.meta.description}</p>
+              <div className="ps-preset-card-footer">
+                <span>Best for</span>
+                <em>{s.meta.bestFor.join(" · ")}</em>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
-      <ol className="ps-steps">
-        {STEPS.map((label, i) => (
-          <li key={label} className={i === step ? "is-active" : i < step ? "is-done" : ""}>
-            <button type="button" onClick={() => setStep(i)}>
-              {i + 1}. {label}
-            </button>
-          </li>
-        ))}
+      <ol className="ps-step-nav" aria-label="Creator steps">
+        {CREATOR_STEPS.map((s, i) => {
+          const state = i < step ? "done" : i === step ? "current" : "upcoming";
+          return (
+            <li key={s.id} className={`ps-step-nav-item is-${state}`}>
+              <button type="button" onClick={() => goTo(i)} aria-current={i === step ? "step" : undefined}>
+                <span className="ps-step-marker" aria-hidden>
+                  {state === "done" ? <Check className="size-3" strokeWidth={2.5} /> : null}
+                  {state === "current" ? <span className="ps-step-dot" /> : null}
+                  {state === "upcoming" ? <span className="ps-step-ring" /> : null}
+                </span>
+                <span className="ps-step-label">{s.short}</span>
+              </button>
+            </li>
+          );
+        })}
       </ol>
 
-      <div className="ps-form-grid">
-        {step === 0 ? (
-          <>
-            <label>
-              Name
-              <input value={form.name} onChange={(e) => set("name", e.target.value)} />
-            </label>
-            <label>
-              Brand-Rolle
-              <select
-                value={form.brand_role}
-                onChange={(e) => set("brand_role", e.target.value)}
-              >
-                {Object.entries(BRAND_ROLE_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </>
-        ) : null}
-        {step === 1 ? (
-          <>
-            <label>
-              Geschlechtspräsentation
-              <input
-                value={form.gender_presentation}
-                onChange={(e) => set("gender_presentation", e.target.value)}
-              />
-            </label>
-            <label>
-              Altersrange
-              <input value={form.age_range} onChange={(e) => set("age_range", e.target.value)} />
-            </label>
-            <label>
-              Körpergröße
-              <input
-                value={form.height_range}
-                onChange={(e) => set("height_range", e.target.value)}
-              />
-            </label>
-            <label>
-              Körpertyp
-              <input value={form.body_type} onChange={(e) => set("body_type", e.target.value)} />
-            </label>
-            <label>
-              Hautton-Richtung
-              <input
-                value={form.skin_tone_direction}
-                onChange={(e) => set("skin_tone_direction", e.target.value)}
-              />
-            </label>
-          </>
-        ) : null}
-        {step === 2 ? (
-          <>
-            <label>
-              Gesichtsform
-              <input
-                value={form.face_shape_direction}
-                onChange={(e) => set("face_shape_direction", e.target.value)}
-              />
-            </label>
-            <label>
-              Haar
-              <input
-                value={form.hair_direction}
-                onChange={(e) => set("hair_direction", e.target.value)}
-              />
-            </label>
-            <label>
-              Gesichtshaar
-              <input
-                value={form.facial_hair_direction}
-                onChange={(e) => set("facial_hair_direction", e.target.value)}
-              />
-            </label>
-            <label>
-              Augen
-              <input
-                value={form.eye_direction}
-                onChange={(e) => set("eye_direction", e.target.value)}
-              />
-            </label>
-          </>
-        ) : null}
-        {step === 3 ? (
-          <>
-            <label>
-              Ausdruck
-              <input
-                value={form.expression_direction}
-                onChange={(e) => set("expression_direction", e.target.value)}
-              />
-            </label>
-            <label>
-              Persönlichkeit
-              <input
-                value={form.personality}
-                onChange={(e) => set("personality", e.target.value)}
-              />
-            </label>
-          </>
-        ) : null}
-        {step === 4 ? (
-          <label>
-            Fashion Style
-            <input
-              value={form.fashion_style}
-              onChange={(e) => set("fashion_style", e.target.value)}
-            />
-          </label>
-        ) : null}
-        {step === 5 ? (
-          <>
-            <label>
-              Bevorzugte Brand Looks
-              <input
-                value={form.preferred_brand_looks}
-                onChange={(e) => set("preferred_brand_looks", e.target.value)}
-              />
-            </label>
-            <label>
-              Bevorzugte Outfits
-              <input
-                value={form.preferred_outfits}
-                onChange={(e) => set("preferred_outfits", e.target.value)}
-              />
-            </label>
-            <label>
-              Visuelle Keywords
-              <input
-                value={form.visual_keywords}
-                onChange={(e) => set("visual_keywords", e.target.value)}
-              />
-            </label>
-          </>
-        ) : null}
-        {step === 6 ? (
-          <label>
-            Ausgeschlossene Merkmale
-            <textarea
-              value={form.excluded_features}
-              onChange={(e) => set("excluded_features", e.target.value)}
-              rows={3}
-            />
-          </label>
-        ) : null}
-        {step === 7 ? (
-          <label>
-            Geplante Nutzung
-            <select
-              value={form.intended_usage}
-              onChange={(e) => set("intended_usage", e.target.value)}
-            >
-              <option value="image">Nur Bild</option>
-              <option value="video">Nur Video</option>
-              <option value="image_and_video">Bild und Video</option>
-            </select>
-          </label>
-        ) : null}
-        {step === 8 ? (
-          <>
-            <label>
-              Kandidatenanzahl (max. 8)
-              <input
-                type="number"
-                min={1}
-                max={8}
-                value={form.candidate_count}
-                onChange={(e) => set("candidate_count", Number(e.target.value))}
-              />
-            </label>
-            <label>
-              Provider-Modus
-              <select
-                value={form.provider_mode}
-                onChange={(e) => set("provider_mode", e.target.value)}
-              >
-                <option value="manual_upload">Manueller Upload</option>
-                <option value="image_provider">Image Provider (OpenAI)</option>
-                <option value="hybrid">Hybrid</option>
-                <option value="disabled">Deaktiviert</option>
-              </select>
-            </label>
-            <label>
-              Zusätzliche Beschreibung
-              <textarea
-                value={form.additional_description}
-                onChange={(e) => set("additional_description", e.target.value)}
-                rows={3}
-                placeholder="Optional — kein komplexer Prompt nötig"
-              />
-            </label>
-          </>
-        ) : null}
-        {step === 9 ? (
-          <div className="ps-callout">
-            <p>
-              Projekt wird als Entwurf gespeichert. Bezahlte Generierung startet erst nach
-              expliziter Kostenbestätigung im Creation-Projekt.
-            </p>
-            <p className="ps-muted">
-              {form.candidate_count} Kandidaten · Stage A: 3 Vorschaubilder je Kandidat ·
-              Modus: {form.provider_mode}
-            </p>
+      <div className="ps-creator-layout">
+        <div className="ps-creator-main">
+          <div key={stepKey} className="ps-step-pane">
+            <h2 className="ps-step-title">{CREATOR_STEPS[step]?.label}</h2>
+            <div className="ps-form-grid">
+              {step === 0 ? (
+                <>
+                  <label>
+                    Name
+                    <input value={form.name} onChange={(e) => set("name", e.target.value)} />
+                  </label>
+                  <label>
+                    Brand Role
+                    <select
+                      value={form.brand_role}
+                      onChange={(e) => set("brand_role", e.target.value as BrandRole)}
+                    >
+                      {Object.entries(BRAND_ROLE_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              ) : null}
+              {step === 1 ? (
+                <>
+                  <label>
+                    Gender Presentation
+                    <input
+                      value={form.gender_presentation}
+                      onChange={(e) => set("gender_presentation", e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Age Range
+                    <input value={form.age_range} onChange={(e) => set("age_range", e.target.value)} />
+                  </label>
+                  <label>
+                    Height
+                    <input
+                      value={form.height_range}
+                      onChange={(e) => set("height_range", e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Body Type
+                    <input value={form.body_type} onChange={(e) => set("body_type", e.target.value)} />
+                  </label>
+                  <label>
+                    Skin Tone
+                    <input
+                      value={form.skin_tone_direction}
+                      onChange={(e) => set("skin_tone_direction", e.target.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
+              {step === 2 ? (
+                <>
+                  <label>
+                    Face Shape
+                    <input
+                      value={form.face_shape_direction}
+                      onChange={(e) => set("face_shape_direction", e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Hair
+                    <input
+                      value={form.hair_direction}
+                      onChange={(e) => set("hair_direction", e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Facial Hair
+                    <input
+                      value={form.facial_hair_direction}
+                      onChange={(e) => set("facial_hair_direction", e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Eyes
+                    <input
+                      value={form.eye_direction}
+                      onChange={(e) => set("eye_direction", e.target.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
+              {step === 3 ? (
+                <>
+                  <label>
+                    Expression
+                    <input
+                      value={form.expression_direction}
+                      onChange={(e) => set("expression_direction", e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Personality
+                    <input
+                      value={form.personality}
+                      onChange={(e) => set("personality", e.target.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
+              {step === 4 ? (
+                <label>
+                  Fashion Style
+                  <input
+                    value={form.fashion_style}
+                    onChange={(e) => set("fashion_style", e.target.value)}
+                  />
+                </label>
+              ) : null}
+              {step === 5 ? (
+                <>
+                  <label>
+                    Preferred Brand Looks
+                    <input
+                      value={form.preferred_brand_looks}
+                      onChange={(e) => set("preferred_brand_looks", e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Preferred Outfits
+                    <input
+                      value={form.preferred_outfits}
+                      onChange={(e) => set("preferred_outfits", e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Visual Keywords
+                    <input
+                      value={form.visual_keywords}
+                      onChange={(e) => set("visual_keywords", e.target.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
+              {step === 6 ? (
+                <label>
+                  Excluded Features
+                  <textarea
+                    value={form.excluded_features}
+                    onChange={(e) => set("excluded_features", e.target.value)}
+                    rows={3}
+                  />
+                </label>
+              ) : null}
+              {step === 7 ? (
+                <label>
+                  Intended Usage
+                  <select
+                    value={form.intended_usage}
+                    onChange={(e) => set("intended_usage", e.target.value as IntendedUsage)}
+                  >
+                    <option value="image">Image only</option>
+                    <option value="video">Video only</option>
+                    <option value="image_and_video">Image and Video</option>
+                  </select>
+                </label>
+              ) : null}
+              {step === 8 ? (
+                <>
+                  <label>
+                    Candidate Count (max 8)
+                    <input
+                      type="number"
+                      min={1}
+                      max={8}
+                      value={form.candidate_count}
+                      onChange={(e) => set("candidate_count", Number(e.target.value))}
+                    />
+                  </label>
+                  <label>
+                    Provider Mode
+                    <select
+                      value={form.provider_mode}
+                      onChange={(e) => set("provider_mode", e.target.value as ProviderMode)}
+                    >
+                      <option value="manual_upload">Manual Upload</option>
+                      <option value="image_provider">Image Provider (OpenAI)</option>
+                      <option value="hybrid">Hybrid</option>
+                      <option value="disabled">Disabled</option>
+                    </select>
+                  </label>
+                  <label>
+                    Additional Notes
+                    <textarea
+                      value={form.additional_description}
+                      onChange={(e) => set("additional_description", e.target.value)}
+                      rows={3}
+                      placeholder="Optional — no complex prompt needed"
+                    />
+                  </label>
+                  <div className="ps-cost-panel">
+                    <div className="ps-section-label">
+                      <span>Generation Economics</span>
+                    </div>
+                    <div className="ps-cost-grid">
+                      <div className="ps-cost-cell">
+                        <em>Estimated cost</em>
+                        <strong>
+                          {cost.estimatedMin.toFixed(2)}–{cost.estimatedMax.toFixed(2)} {cost.currency}
+                        </strong>
+                      </div>
+                      <div className="ps-cost-cell">
+                        <em>Expected time</em>
+                        <strong>
+                          {cost.expectedMinutesMin}–{cost.expectedMinutesMax} min
+                        </strong>
+                      </div>
+                      <div className="ps-cost-cell">
+                        <em>Generation mode</em>
+                        <strong>{cost.generationMode}</strong>
+                      </div>
+                      <div className="ps-cost-cell">
+                        <em>Daily budget</em>
+                        <strong>
+                          {cost.dailyBudget} {cost.currency}
+                        </strong>
+                      </div>
+                      <div className="ps-cost-cell">
+                        <em>Provider</em>
+                        <strong>{cost.provider}</strong>
+                      </div>
+                    </div>
+                    <p className="ps-muted">{cost.note}</p>
+                  </div>
+                </>
+              ) : null}
+              {step === 9 ? (
+                <div className="ps-confirm-screen">
+                  <div className="ps-section-label">
+                    <span>Brand Cast Summary</span>
+                    <em>Review before saving this casting brief</em>
+                  </div>
+                  <dl className="ps-confirm-summary">
+                    {summaryRows.map((row) => (
+                      <div key={row.label}>
+                        <dt>{row.label}</dt>
+                        <dd>{row.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <div className="ps-confirm-metrics">
+                    <div>
+                      <em>Estimated Cost</em>
+                      <strong>
+                        {cost.estimatedTotal.toFixed(2)} {cost.currency}
+                      </strong>
+                      <span className="ps-muted">
+                        range {cost.estimatedMin.toFixed(2)}–{cost.estimatedMax.toFixed(2)}
+                      </span>
+                    </div>
+                    <div>
+                      <em>Estimated Time</em>
+                      <strong>
+                        {cost.expectedMinutesMin}–{cost.expectedMinutesMax} min
+                      </strong>
+                    </div>
+                    <div>
+                      <em>Candidate Count</em>
+                      <strong className="ps-score-counter">{form.candidate_count}</strong>
+                    </div>
+                  </div>
+                  <p className="ps-muted">
+                    Saves as a creation project. Paid generation starts only after explicit cost
+                    confirmation in Creation Projects.
+                  </p>
+                  <label className="ps-check ps-confirm-check">
+                    <input
+                      type="checkbox"
+                      checked={confirmCast}
+                      onChange={(e) => setConfirmCast(e.target.checked)}
+                    />
+                    I confirm this Brand Cast brief and understand generation is not started yet.
+                  </label>
+                </div>
+              ) : null}
+            </div>
           </div>
-        ) : null}
-      </div>
 
-      {error ? <p className="ps-error-inline">{error}</p> : null}
+          {error ? <p className="ps-error-inline">{error}</p> : null}
 
-      <div className="ps-actions">
-        <button type="button" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
-          Zurück
-        </button>
-        {step < STEPS.length - 1 ? (
-          <button type="button" onClick={() => setStep((s) => s + 1)}>
-            Weiter
-          </button>
-        ) : (
-          <button type="button" disabled={busy} onClick={() => void submit()}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-            Projekt speichern
-          </button>
-        )}
+          <div className="ps-actions">
+            <button type="button" disabled={step === 0} onClick={() => goTo(step - 1)}>
+              Back
+            </button>
+            {step < CREATOR_STEPS.length - 1 ? (
+              <button type="button" className="ps-btn-primary" onClick={() => goTo(step + 1)}>
+                Continue
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="ps-btn-primary"
+                disabled={busy || !confirmCast}
+                onClick={() => void submit()}
+              >
+                {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+                Confirm Brand Cast
+              </button>
+            )}
+          </div>
+        </div>
+
+        <aside className="ps-creator-aside" aria-label="Live Brand Cast summary">
+          <div className="ps-live-summary">
+            <div className="ps-live-summary-head">
+              <span className="ps-eyebrow">Live Preview</span>
+              <h3>Brand Cast Summary</h3>
+            </div>
+
+            <div className="ps-live-portrait-wrap">
+              <div className="ps-live-portrait" aria-hidden>
+                <span className="ps-live-portrait-frame">
+                  <UserRound className="size-10" strokeWidth={1.15} />
+                </span>
+              </div>
+            </div>
+
+            <div className="ps-live-hero">
+              <span className="ps-live-role">{brandRoleDisplayLabel(form.brand_role)}</span>
+              <strong>{fashionLabel}</strong>
+              <p>Official Milaene Brand Face</p>
+              <div className="ps-chip-row-premium">
+                <PersonaStatusChip label="Brand Face" tone="brand" />
+                <PersonaStatusChip label="Premium" tone="premium" />
+                <PersonaStatusChip
+                  label="Image Ready"
+                  tone={scores.imageReadiness >= 60 ? "image" : "muted"}
+                />
+                <PersonaStatusChip
+                  label="Video Ready"
+                  tone={scores.videoReadiness >= 60 ? "video" : "muted"}
+                />
+              </div>
+            </div>
+
+            <dl className="ps-live-facts">
+              {summaryRows.slice(2).map((row) => (
+                <div key={row.label}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="ps-live-scores">
+              <ScoreMeter label="Brand Fit" value={scores.brandFit} />
+              <ScoreMeter label="Luxury Score" value={scores.luxury} />
+              <ScoreMeter label="Commercial Score" value={scores.commercial} />
+              <ScoreMeter label="Video Readiness" value={scores.videoReadiness} />
+              <ScoreMeter label="Image Readiness" value={scores.imageReadiness} />
+              <ScoreMeter label="Consistency Score" value={scores.consistency} />
+            </div>
+          </div>
+
+          <div className="ps-candidate-showcase">
+            <div className="ps-section-label">
+              <span>Candidate Preview</span>
+              <button
+                type="button"
+                className="ps-link-quiet"
+                onClick={() => {
+                  setPreviewGen((v) => !v);
+                  setGenMessageIndex(0);
+                }}
+              >
+                {previewGen ? "Hide experience" : "Preview experience"}
+              </button>
+            </div>
+
+            <PersonaGenerationExperience
+              active={previewGen}
+              messageIndex={genMessageIndex}
+              candidateCount={form.candidate_count}
+            />
+
+            {!previewGen ? (
+              <div className="ps-candidate-showcase-body">
+                <div className="ps-candidate-showcase-intro">
+                  <p className="ps-eyebrow">Official Milaene Brand Cast</p>
+                  <h4>Your selected candidates will appear here.</h4>
+                  <p>
+                    After generation you can compare, rate, shortlist, and approve your
+                    official brand faces.
+                  </p>
+                </div>
+
+                <div className="ps-compare-grid" aria-label="Future candidate comparison">
+                  {mockCandidates.map((c) => (
+                    <article key={c.id} className="ps-compare-card">
+                      <div className="ps-compare-portrait" aria-hidden>
+                        <UserRound className="size-8" strokeWidth={1.15} />
+                      </div>
+                      <strong>{c.label}</strong>
+                      <dl className="ps-compare-scores">
+                        <div>
+                          <dt>Luxury</dt>
+                          <dd>{c.luxury}</dd>
+                        </div>
+                        <div>
+                          <dt>Realism</dt>
+                          <dd>{c.realism}</dd>
+                        </div>
+                        <div>
+                          <dt>Commercial</dt>
+                          <dd>{c.commercial}</dd>
+                        </div>
+                        <div>
+                          <dt>Consistency</dt>
+                          <dd>{c.consistency}</dd>
+                        </div>
+                      </dl>
+                      <button type="button" className="ps-compare-select" disabled>
+                        Select
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="ps-cast-progress">
+            <div className="ps-section-label">
+              <span>Brand Cast Progress</span>
+            </div>
+            <div className="ps-cast-progress-role">{brandRoleDisplayLabel(form.brand_role)}</div>
+            <div
+              className="ps-cast-progress-bar ps-cast-progress-bar--lg"
+              aria-valuenow={progress.percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <span style={{ width: `${Math.max(progress.percent, 6)}%` }} />
+            </div>
+            <div className="ps-cast-progress-meta">
+              <div>
+                <em>Current milestone</em>
+                <strong>{progress.currentMilestone}</strong>
+              </div>
+              <div>
+                <em>Next milestone</em>
+                <strong>{progress.nextMilestone}</strong>
+              </div>
+              <div>
+                <em>Estimated completion</em>
+                <strong>{progress.estimatedCompletion}</strong>
+              </div>
+            </div>
+            <ul className="ps-cast-milestones ps-cast-milestones--icons">
+              {CAST_MILESTONES.map((m, i) => {
+                const done = i < progress.completedCount;
+                const current = i === progress.completedCount;
+                const Icon = MILESTONE_ICONS[i] ?? Circle;
+                return (
+                  <li
+                    key={m.id}
+                    className={`${done ? "is-done" : ""}${current ? " is-current" : ""}`}
+                  >
+                    <span className="ps-milestone-icon" aria-hidden>
+                      <Icon className="size-3.5" strokeWidth={1.6} />
+                    </span>
+                    {m.label}
+                  </li>
+                );
+              })}
+            </ul>
+            {defined ? null : (
+              <p className="ps-muted ps-cast-hint">
+                Complete the casting brief to mark the first milestone.
+              </p>
+            )}
+          </div>
+        </aside>
       </div>
     </section>
   );
@@ -448,6 +908,7 @@ export function CreationProjectsView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmCost, setConfirmCost] = useState(false);
+  const [confirmationToken, setConfirmationToken] = useState<string | null>(null);
   const selected = studio.creationProjects.find(
     (p) => p.id === studio.selectedProjectId,
   );
@@ -456,7 +917,9 @@ export function CreationProjectsView({
     setBusy(true);
     setError(null);
     try {
-      await studio.estimateProjectCost(id);
+      const prepared = await studio.preparePaidConfirmation(id);
+      setConfirmationToken(prepared.confirmation?.confirmation_token ?? null);
+      setConfirmCost(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Schätzung fehlgeschlagen");
     } finally {
@@ -469,14 +932,20 @@ export function CreationProjectsView({
       setError("Bitte Kosten explizit bestätigen.");
       return;
     }
+    if (!confirmationToken) {
+      setError("Bitte zuerst Kostenschätzung & Bestätigungstoken vorbereiten.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       await studio.generateCandidates(id, {
         costConfirmed: true,
+        confirmationToken,
         retryConfirmed: Boolean(selected && selected.actual_cost > 0),
       });
       setConfirmCost(false);
+      setConfirmationToken(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generierung fehlgeschlagen");
     } finally {
@@ -488,17 +957,23 @@ export function CreationProjectsView({
     <section className="ps-panel">
       <header className="ps-panel-header">
         <div>
+          <p className="ps-eyebrow">Sessions</p>
           <h1>Creation Projects</h1>
-          <p className="ps-muted">Modell-Erstellungssessions und Kostkontrolle.</p>
+          <p className="ps-muted">
+            Casting sessions with cost control — generation never starts without confirmation.
+          </p>
         </div>
         <button type="button" onClick={() => studio.setSection("creator")}>
-          Neues Projekt
+          New casting
         </button>
       </header>
 
       <div className="ps-list">
         {studio.creationProjects.length === 0 ? (
-          <p className="ps-muted">Noch keine Creation-Projekte.</p>
+          <EmptyState
+            title="No casting sessions yet."
+            body="Open Persona Creator to define your first official Brand Cast brief."
+          />
         ) : (
           studio.creationProjects.map((p) => (
             <button
@@ -507,7 +982,7 @@ export function CreationProjectsView({
               className={`ps-list-item${studio.selectedProjectId === p.id ? " is-active" : ""}`}
               onClick={() => void studio.loadProject(p.id)}
             >
-              <strong>{p.name || "Unbenannt"}</strong>
+              <strong>{p.name || "Untitled cast"}</strong>
               <span>
                 {BRAND_ROLE_LABELS[p.brand_role]} · {p.status} · {p.provider_mode}
               </span>
@@ -525,7 +1000,7 @@ export function CreationProjectsView({
           </p>
           <div className="ps-actions">
             <button type="button" disabled={busy} onClick={() => void runEstimate(selected.id)}>
-              Kosten schätzen
+              Schätzung & Bestätigung vorbereiten
             </button>
             <button
               type="button"
@@ -547,14 +1022,19 @@ export function CreationProjectsView({
               <p>
                 Schätzung: {studio.costEstimate.candidateCount} ×{" "}
                 {studio.costEstimate.imagesPerCandidate} Bilder ={" "}
-                {studio.costEstimate.totalImages} · Provider {studio.costEstimate.provider}
+                {studio.costEstimate.totalImages} · Mode {selected.quality_mode}
               </p>
               <p>
                 Min {studio.costEstimate.estimatedMin.toFixed(2)} € · Max{" "}
                 {studio.costEstimate.estimatedMax.toFixed(2)} € · Ø{" "}
                 {studio.costEstimate.estimatedTotal.toFixed(2)} €
               </p>
-              <p className="ps-muted">{studio.costEstimate.note}</p>
+              <p className="ps-muted">
+                {studio.costEstimate.note} — Werte sind Schätzungen, keine finalen Kosten.
+              </p>
+              {confirmationToken ? (
+                <p className="ps-muted">Bestätigungstoken bereit · explizite Bestätigung erforderlich</p>
+              ) : null}
               <label className="ps-check">
                 <input
                   type="checkbox"
@@ -565,7 +1045,9 @@ export function CreationProjectsView({
               </label>
               <button
                 type="button"
-                disabled={busy || !confirmCost || !studio.costEstimate.available}
+                disabled={
+                  busy || !confirmCost || !confirmationToken || !studio.costEstimate.available
+                }
                 onClick={() => void runGenerate(selected.id)}
               >
                 Generierung starten
@@ -601,18 +1083,20 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     <section className="ps-panel">
       <header className="ps-panel-header">
         <div>
-          <h1>Kandidaten</h1>
+          <p className="ps-eyebrow">Selection</p>
+          <h1>Candidates</h1>
           <p className="ps-muted">
-            Vergleichen, shortlisten, ablehnen, auswählen — Auswahl erzeugt nur einen
-            Draft-Persona, keine Produktionsfreigabe.
+            Compare, shortlist, and select — selection creates a draft persona only, never
+            production approval.
           </p>
         </div>
       </header>
 
       {studio.candidates.length === 0 ? (
-        <p className="ps-muted">
-          Keine Kandidaten. Opening Creation Projects → manuelle Slots oder Generierung.
-        </p>
+        <EmptyState
+          title="No candidates on the board yet."
+          body="After a casting session generates or receives uploads, your Brand Faces will appear here for comparison."
+        />
       ) : (
         <div className="ps-candidate-grid">
           {studio.candidates.map((c) => (
@@ -640,7 +1124,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             {selected.candidate_name}{" "}
             <span className="ps-muted">({selected.status})</span>
           </h2>
-          <p>{selected.identity_summary || "Keine Identitätszusammenfassung"}</p>
+          <p>{selected.identity_summary || "Identity notes will appear once this candidate is ready."}</p>
           <p className="ps-muted">{selected.distinguishing_features}</p>
 
           <div className="ps-ref-grid">
@@ -650,7 +1134,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={a.signed_url} alt={a.asset_type} />
                 ) : (
-                  <div className="ps-muted">URL fehlgeschlagen</div>
+                  <div className="ps-muted">Portrait unavailable</div>
                 )}
                 <figcaption>
                   {a.asset_type}
@@ -683,6 +1167,16 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             </button>
             <button type="button" onClick={() => void act({ status: "shortlisted" })}>
               Shortlist
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                void studio.patchCandidate(selected.id, { action: "stage_b_package" }).catch((e: Error) =>
+                  setError(e.message),
+                )
+              }
+            >
+              Stage B / Referenzpaket
             </button>
             <button
               type="button"

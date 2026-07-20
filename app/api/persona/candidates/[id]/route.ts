@@ -3,9 +3,12 @@ import {
   convertCandidateToPersona,
   getCandidate,
   listCandidateAssetViews,
+  requestStageBReferencePackage,
+  retrySingleCandidateAsset,
   updateCandidateReview,
   uploadManualCandidateAsset,
 } from "@/lib/persona/creation/creation-service";
+import type { CandidateAssetType } from "@/lib/persona/domain/creation-types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -32,6 +35,26 @@ export async function PATCH(request: Request, ctx: Ctx) {
     const body = (await request.json()) as Record<string, unknown>;
     if (body.action === "convert") {
       const result = await convertCandidateToPersona(gate.scope, id);
+      return jsonOk(result);
+    }
+    if (body.action === "stage_b_package") {
+      const result = await requestStageBReferencePackage(gate.scope, id);
+      return jsonOk(result);
+    }
+    if (body.action === "retry_asset") {
+      const result = await retrySingleCandidateAsset(
+        gate.scope,
+        id,
+        String(body.asset_type || "portrait_front") as CandidateAssetType,
+        {
+          costConfirmed: Boolean(body.costConfirmed),
+          retryConfirmed: Boolean(body.retryConfirmed),
+          confirmationToken:
+            typeof body.confirmationToken === "string"
+              ? body.confirmationToken
+              : undefined,
+        },
+      );
       return jsonOk(result);
     }
     const candidate = await updateCandidateReview(gate.scope, id, body as never);

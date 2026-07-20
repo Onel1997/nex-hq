@@ -161,12 +161,16 @@ describe("Persona Studio Phase 1.2 creation workflow", () => {
             intended_usage: "image",
             candidate_count: 4,
             provider_mode: "disabled",
+            quality_mode: "premium_editorial",
             status: "ready",
             generation_stage: "discovery",
             estimated_cost_min: 0,
             estimated_cost_max: 0,
             actual_cost: 0,
             cost_confirmed_at: null,
+            last_estimate_hash: null,
+            last_estimate_at: null,
+            last_confirmation_token: null,
             additional_description: "",
             created_by: null,
             created_at: new Date().toISOString(),
@@ -507,8 +511,8 @@ describe("Persona Studio Phase 1.2 creation workflow", () => {
     );
   });
 
-  it("24. audit event types include phase 1.2 events (type-level via schema version)", () => {
-    assert.match(PERSONA_SCHEMA_VERSION, /phase_1_2/);
+  it("24. audit event types include phase 1.2+ events (type-level via schema version)", () => {
+    assert.match(PERSONA_SCHEMA_VERSION, /phase_1_[25]/);
   });
 
   it("25. production repository never uses memory fallback", () => {

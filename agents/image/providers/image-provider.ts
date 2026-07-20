@@ -4,6 +4,8 @@ export interface ImageGenerationRequest {
   dimensions: string;
   assetType: string;
   styleNotes?: string;
+  /** Persona Studio quality override — does not change Image Studio defaults. */
+  qualityOverride?: "low" | "medium" | "high" | "auto";
 }
 
 /** Result from an image provider — Phase 1 stores prompts only. */

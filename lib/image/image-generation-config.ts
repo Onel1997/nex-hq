@@ -134,6 +134,7 @@ export function stripUnknownOpenAiImagePayloadFields(
 export function buildOpenAiGenerationPayload(
   prompt: string,
   dimensions: string,
+  qualityOverride?: OpenAiImageQuality,
 ): OpenAiImageGenerationPayload {
   const profile = getActiveImageGenerationProfile();
 
@@ -142,7 +143,7 @@ export function buildOpenAiGenerationPayload(
     prompt,
     n: 1,
     size: resolveOpenAiImageSize(dimensions),
-    quality: profile.quality,
+    quality: qualityOverride ?? profile.quality,
     output_format: profile.outputFormat,
   };
 }

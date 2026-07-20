@@ -22,11 +22,15 @@ export {
   CANDIDATE_ASSET_STATUSES,
   IDENTITY_LOCK_STATUSES,
   IDENTITY_REVIEW_CHECK_KEYS,
+  QUALITY_MODES,
+  GENERATION_JOB_STATUSES,
   STAGE_A_ASSET_TYPES,
   STAGE_B_ASSET_TYPES,
   DEFAULT_CANDIDATE_COUNT,
   MAX_CANDIDATE_BATCH_SIZE,
   MAX_DAILY_GENERATION_EUR,
+  TARGET_PERSONA_BUDGET_EUR_MIN,
+  TARGET_PERSONA_BUDGET_EUR_MAX,
 } from "./domain/creation-types";
 
 export {
@@ -83,6 +87,22 @@ export {
   buildPersonaCandidateStoragePath,
   defaultCandidateRetentionUntil,
 } from "./creation/candidate-storage";
+export {
+  QUALITY_MODE_PROFILES,
+  DEFAULT_QUALITY_MODE,
+  getQualityModeProfile,
+  OPENAI_PROVIDER_CAPABILITY,
+} from "./creation/quality-modes";
+export {
+  getGenerationJobRepository,
+  setGenerationJobRepositoryForTests,
+} from "./creation/generation-job-factory";
+export { resetMemoryGenerationJobStoreForTests, MemoryGenerationJobRepository } from "./creation/memory-generation-job-repository";
+export {
+  buildEstimateHash,
+  createConfirmationToken,
+  estimateFingerprintFromCost,
+} from "./creation/paid-confirmation";
 
 export * from "./services/persona-service";
 export { resolvePersonaWorkspaceScope } from "./services/workspace-scope";

@@ -54,6 +54,8 @@ export interface EstimateCandidateGenerationInput {
   stage: GenerationStage;
   candidateCount?: number;
   imagesPerCandidate?: number;
+  costMultiplier?: number;
+  qualityMode?: string;
 }
 
 export interface CreateCandidateBatchInput {
@@ -64,6 +66,11 @@ export interface CreateCandidateBatchInput {
   /** Required when re-running paid generation. */
   retryConfirmed?: boolean;
   candidateIds?: string[];
+  qualityMode?: string;
+  /** Generate only these asset types (retry single asset). */
+  assetTypes?: CandidateAssetType[];
+  /** Distinct identity index for prompts. */
+  candidateNumbers?: number[];
 }
 
 export interface PersonaCandidateGenerator {

@@ -42,9 +42,20 @@ import {
   uploadPersonaCandidateBytes,
 } from "./candidate-storage";
 import { getCreationRepository } from "./creation-factory";
+import { getGenerationJobRepository } from "./generation-job-factory";
+import {
+  createConfirmationToken,
+  estimateFingerprintFromCost,
+} from "./paid-confirmation";
+import {
+  DEFAULT_QUALITY_MODE,
+  OPENAI_PROVIDER_CAPABILITY,
+  getQualityModeProfile,
+} from "./quality-modes";
 import { defaultProviderModeForEnvironment } from "./provider/config";
 import { getPersonaCandidateGenerator, getProviderSetupState } from "./provider/registry";
 import { getCreationPreset, PERSONA_CREATION_PRESETS } from "./presets";
+import { assetTypesForStage } from "./provider/cost";
 
 function creationRepo() {
   return getCreationRepository();
@@ -52,6 +63,10 @@ function creationRepo() {
 
 function personaRepo() {
   return getPersonaRepository();
+}
+
+function jobRepo() {
+  return getGenerationJobRepository();
 }
 
 async function requireProject(scope: WorkspaceScope, id: string) {
@@ -138,6 +153,7 @@ export async function createCreationProject(
     ...merged,
     candidate_count: candidateCount,
     provider_mode,
+    quality_mode: merged.quality_mode ?? DEFAULT_QUALITY_MODE,
     status: merged.status ?? "draft",
   });
 
@@ -175,12 +191,102 @@ export async function estimateCreationCost(
   projectId: string,
 ): Promise<CandidateGenerationCostEstimate> {
   const project = await requireProject(scope, projectId);
+  const qualityMode = project.quality_mode ?? DEFAULT_QUALITY_MODE;
+  const profile = getQualityModeProfile(qualityMode);
   const generator = getPersonaCandidateGenerator(project.provider_mode);
-  return generator.estimateCandidateGeneration({
+  const estimate = await generator.estimateCandidateGeneration({
     project,
     stage: project.generation_stage,
     candidateCount: project.candidate_count,
+    qualityMode,
+    costMultiplier: profile.costMultiplier,
   });
+
+  const estimateHash = estimateFingerprintFromCost(projectId, qualityMode, estimate);
+  await creationRepo().updateProject(scope, projectId, {
+    estimated_cost_min: estimate.estimatedMin,
+    estimated_cost_max: estimate.estimatedMax,
+    last_estimate_hash: estimateHash,
+    last_estimate_at: new Date().toISOString(),
+  });
+
+  return estimate;
+}
+
+/**
+ * Creates a durable pending job + confirmation token for paid generation.
+ * User must confirm with this token before generation starts.
+ */
+export async function preparePaidGenerationConfirmation(
+  scope: WorkspaceScope,
+  projectId: string,
+) {
+  const project = await requireProject(scope, projectId);
+  const estimate = await estimateCreationCost(scope, projectId);
+  if (!estimate.available) {
+    throw new PersonaDomainError(
+      "Kostenschätzung nicht verfügbar.",
+      "CONFIG",
+    );
+  }
+
+  const qualityMode = project.quality_mode ?? DEFAULT_QUALITY_MODE;
+  const estimateHash = estimateFingerprintFromCost(projectId, qualityMode, estimate);
+  const token = createConfirmationToken();
+  const assetTypes = assetTypesForStage(project.generation_stage);
+
+  const job = await jobRepo().createJob(scope, {
+    creation_project_id: projectId,
+    stage: project.generation_stage,
+    provider: estimate.provider,
+    status: "pending_confirmation",
+    requested_asset_types: assetTypes,
+    quality_mode: qualityMode,
+    estimated_cost_min: estimate.estimatedMin,
+    estimated_cost_max: estimate.estimatedMax,
+    cost_is_estimated: true,
+    confirmation_token: token,
+    estimate_hash: estimateHash,
+    confirmation_payload: {
+      projectId,
+      stage: project.generation_stage,
+      qualityMode,
+      candidateCount: estimate.candidateCount,
+      assetCount: estimate.totalImages,
+      estimatedMin: estimate.estimatedMin,
+      estimatedMax: estimate.estimatedMax,
+      timestamp: new Date().toISOString(),
+    },
+    created_by: scope.actorId,
+  });
+
+  const confirmation = await jobRepo().createConfirmation(scope, {
+    creation_project_id: projectId,
+    generation_job_id: job.id,
+    confirmation_token: token,
+    estimate_hash: estimateHash,
+    stage: project.generation_stage,
+    quality_mode: qualityMode,
+    candidate_count: estimate.candidateCount,
+    asset_count: estimate.totalImages,
+    estimated_cost_min: estimate.estimatedMin,
+    estimated_cost_max: estimate.estimatedMax,
+    payload: job.confirmation_payload,
+    created_by: scope.actorId,
+  });
+
+  await creationRepo().updateProject(scope, projectId, {
+    last_confirmation_token: token,
+    last_estimate_hash: estimateHash,
+  });
+
+  return {
+    estimate,
+    job,
+    confirmation,
+    quality: getQualityModeProfile(qualityMode),
+    costLabel: "estimated" as const,
+  };
 }
 
 export async function getCreationProviderSetup(scope: WorkspaceScope, projectId?: string) {
@@ -196,6 +302,8 @@ export async function confirmAndStartCandidateGeneration(
   options: {
     costConfirmed: boolean;
     retryConfirmed?: boolean;
+    /** Required for Phase 1.5 paid runs — ties to preparePaidGenerationConfirmation. */
+    confirmationToken?: string;
   },
 ) {
   const project = await requireProject(scope, projectId);
@@ -217,7 +325,7 @@ export async function confirmAndStartCandidateGeneration(
   const setup = getProviderSetupState(project.provider_mode);
   if (setup.mode === "disabled") {
     throw new PersonaDomainError(
-      setup.setupMessage ?? "Generierung deaktiviert.",
+      setup.setupMessage ?? "Provider nicht eingerichtet.",
       "CONFIG",
     );
   }
@@ -228,11 +336,65 @@ export async function confirmAndStartCandidateGeneration(
     );
   }
 
+  // No silent provider fallback — image_provider must be configured.
+  if (
+    (project.provider_mode === "image_provider" || project.provider_mode === "hybrid") &&
+    !getPersonaCandidateGenerator(project.provider_mode).isConfigured()
+  ) {
+    throw new PersonaDomainError(
+      "Provider nicht eingerichtet — kein stiller Fallback.",
+      "CONFIG",
+    );
+  }
+
   const estimate = await estimateCreationCost(scope, projectId);
   if (!estimate.available) {
     throw new PersonaDomainError(
       "Kostenschätzung nicht verfügbar — Generierung abgebrochen.",
       "CONFIG",
+    );
+  }
+
+  const qualityMode = project.quality_mode ?? DEFAULT_QUALITY_MODE;
+  const currentHash = estimateFingerprintFromCost(projectId, qualityMode, estimate);
+
+  let durableJobId: string | null = null;
+
+  if (options.confirmationToken) {
+    const confirmation = await jobRepo().getConfirmationByToken(
+      scope,
+      options.confirmationToken,
+    );
+    if (!confirmation || confirmation.creation_project_id !== projectId) {
+      throw new PersonaDomainError(
+        "Bestätigung ungültig — bitte Kostenschätzung erneut bestätigen.",
+        "WORKFLOW",
+      );
+    }
+    if (confirmation.estimate_hash !== currentHash) {
+      throw new PersonaDomainError(
+        "Kostenschätzung veraltet oder Parameter geändert — neue Bestätigung erforderlich.",
+        "WORKFLOW",
+        { requiresReconfirmation: true },
+      );
+    }
+    if (
+      confirmation.candidate_count !== estimate.candidateCount ||
+      confirmation.quality_mode !== qualityMode
+    ) {
+      throw new PersonaDomainError(
+        "Kandidatenanzahl oder Qualitätsmodus geändert — neue Bestätigung erforderlich.",
+        "WORKFLOW",
+        { requiresReconfirmation: true },
+      );
+    }
+    await jobRepo().consumeConfirmation(scope, options.confirmationToken);
+    durableJobId = confirmation.generation_job_id;
+  } else if (project.last_estimate_hash && project.last_estimate_hash !== currentHash) {
+    throw new PersonaDomainError(
+      "Kostenschätzung veraltet — neue Bestätigung erforderlich.",
+      "WORKFLOW",
+      { requiresReconfirmation: true },
     );
   }
 
@@ -253,21 +415,77 @@ export async function confirmAndStartCandidateGeneration(
     );
   }
 
+  // Stage B auto-expansion not supported on OpenAI — require manual references.
+  if (
+    project.generation_stage === "shortlist_validation" &&
+    !OPENAI_PROVIDER_CAPABILITY.stageBIdentityConsistentExpansion
+  ) {
+    throw new PersonaDomainError(
+      "Identitätskonsistente Referenzpaket-Generierung ist mit dem aktuellen Provider nicht zuverlässig. " +
+        "Bitte Manuelle Referenzen hochladen (needs_manual_references).",
+      "WORKFLOW",
+      {
+        identityExpansionUnsupported: true,
+        capability: OPENAI_PROVIDER_CAPABILITY,
+      },
+    );
+  }
+
   const generator = getPersonaCandidateGenerator(project.provider_mode);
+  const now = new Date().toISOString();
+
+  let durableJob = durableJobId
+    ? await jobRepo().getJob(scope, durableJobId)
+    : null;
+
+  if (!durableJob) {
+    durableJob = await jobRepo().createJob(scope, {
+      creation_project_id: projectId,
+      stage: project.generation_stage,
+      provider: estimate.provider,
+      status: "queued",
+      requested_asset_types: assetTypesForStage(project.generation_stage),
+      quality_mode: qualityMode,
+      estimated_cost_min: estimate.estimatedMin,
+      estimated_cost_max: estimate.estimatedMax,
+      cost_is_estimated: true,
+      confirmation_token: options.confirmationToken ?? null,
+      estimate_hash: currentHash,
+      confirmed_at: now,
+      started_at: now,
+      created_by: scope.actorId,
+    });
+  } else {
+    durableJob = await jobRepo().updateJob(scope, durableJob.id, {
+      status: "queued",
+      confirmed_at: now,
+      started_at: now,
+      estimate_hash: currentHash,
+    });
+  }
 
   await creationRepo().updateProject(scope, projectId, {
     status: "generating",
-    cost_confirmed_at: new Date().toISOString(),
+    cost_confirmed_at: now,
     estimated_cost_min: estimate.estimatedMin,
     estimated_cost_max: estimate.estimatedMax,
+    last_estimate_hash: currentHash,
   });
+
+  await jobRepo().updateJob(scope, durableJob.id, { status: "generating" });
 
   await logPersonaAuditEvent({
     workspaceId: scope.workspaceId,
     eventType: "candidate_generation.started",
     recordId: projectId,
     actorId: scope.actorId,
-    payload: { estimate, stage: project.generation_stage },
+    payload: {
+      estimate,
+      stage: project.generation_stage,
+      qualityMode,
+      durableJobId: durableJob.id,
+      costLabel: "estimated",
+    },
   });
 
   try {
@@ -276,9 +494,9 @@ export async function confirmAndStartCandidateGeneration(
       stage: project.generation_stage,
       costConfirmed: true,
       retryConfirmed: options.retryConfirmed,
+      qualityMode,
     });
 
-    // Clear prior queued placeholders for this stage
     const existing = await creationRepo().listCandidates(scope, projectId);
     for (const result of job.results) {
       let candidate = existing.find((c) => c.candidate_number === result.candidateNumber);
@@ -289,7 +507,7 @@ export async function confirmAndStartCandidateGeneration(
           candidate_name: `Kandidat ${result.candidateNumber}`,
           status: "ready",
           provider: job.provider,
-          provider_job_id: job.jobId,
+          provider_job_id: durableJob.id,
           generation_seed: result.seed,
           generation_prompt: result.prompt,
           negative_prompt: result.negativePrompt,
@@ -301,23 +519,30 @@ export async function confirmAndStartCandidateGeneration(
           brand_fit_score: null,
           identity_consistency_score: null,
           realism_score: null,
-          video_suitability_score: 70,
+          video_suitability_score: null,
+          image_suitability_label: "system_heuristic:pending_review",
+          video_suitability_label: "manual_heuristic:not_video_ready",
           user_rating: null,
           user_notes: "",
           rejection_reason: "",
+          actual_generation_cost: result.actualCostEur,
         });
       } else {
         candidate = await creationRepo().updateCandidate(scope, candidate.id, {
           status: "ready",
           provider: job.provider,
-          provider_job_id: job.jobId,
+          provider_job_id: durableJob.id,
           generation_seed: result.seed,
           generation_prompt: result.prompt,
           negative_prompt: result.negativePrompt,
           generation_settings: result.settings,
           identity_summary: result.identitySummary,
           distinguishing_features: result.distinguishingFeatures,
-          video_suitability_score: 70,
+          image_suitability_label: "system_heuristic:pending_review",
+          video_suitability_label: "manual_heuristic:not_video_ready",
+          actual_generation_cost: Number(
+            ((candidate.actual_generation_cost ?? 0) + result.actualCostEur).toFixed(4),
+          ),
         });
       }
 
@@ -343,7 +568,10 @@ export async function confirmAndStartCandidateGeneration(
           file_size_bytes: asset.imageBytes.length,
           checksum: uploaded.checksum,
           provider_output_id: asset.providerOutputId ?? null,
-          generation_metadata: asset.metadata ?? {},
+          generation_metadata: {
+            ...(asset.metadata ?? {}),
+            costLabel: "estimated",
+          },
           status: "ready",
           is_primary: asset.assetType === "portrait_front",
         });
@@ -355,6 +583,19 @@ export async function confirmAndStartCandidateGeneration(
         });
       }
     }
+
+    const partial = Boolean(job.errorMessage) && job.results.length > 0;
+    const finalStatus = job.results.length === 0 ? "failed" : partial ? "partially_completed" : "completed";
+
+    await jobRepo().updateJob(scope, durableJob.id, {
+      status: finalStatus,
+      provider_job_id: job.jobId,
+      actual_cost: job.actualCostEur,
+      cost_is_estimated: true,
+      error_message: job.errorMessage ?? null,
+      error_code: job.results.length === 0 ? "GENERATION_FAILED" : partial ? "PARTIAL" : null,
+      completed_at: new Date().toISOString(),
+    });
 
     await creationRepo().updateProject(scope, projectId, {
       status: job.results.length ? "review" : "failed",
@@ -370,8 +611,10 @@ export async function confirmAndStartCandidateGeneration(
       actorId: scope.actorId,
       payload: {
         jobId: job.jobId,
+        durableJobId: durableJob.id,
         resultCount: job.results.length,
         actualCostEur: job.actualCostEur,
+        costLabel: "estimated",
         errorMessage: job.errorMessage,
       },
     });
@@ -379,10 +622,18 @@ export async function confirmAndStartCandidateGeneration(
     return {
       project: await requireProject(scope, projectId),
       job,
+      durableJob: await jobRepo().getJob(scope, durableJob.id),
       candidates: await creationRepo().listCandidates(scope, projectId),
+      costLabel: "estimated" as const,
     };
   } catch (error) {
     await creationRepo().updateProject(scope, projectId, { status: "failed" });
+    await jobRepo().updateJob(scope, durableJob.id, {
+      status: "failed",
+      error_code: "GENERATION_FAILED",
+      error_message: error instanceof Error ? error.message : "unknown",
+      completed_at: new Date().toISOString(),
+    });
     await logPersonaAuditEvent({
       workspaceId: scope.workspaceId,
       eventType: "candidate_generation.failed",
@@ -390,10 +641,193 @@ export async function confirmAndStartCandidateGeneration(
       actorId: scope.actorId,
       payload: {
         message: error instanceof Error ? error.message : "unknown",
+        durableJobId: durableJob.id,
       },
     });
     throw error;
   }
+}
+
+/**
+ * Stage B reference package — OpenAI cannot reliably preserve identity.
+ * Marks shortlisted candidate for manual references instead of faking expansion.
+ */
+export async function requestStageBReferencePackage(
+  scope: WorkspaceScope,
+  candidateId: string,
+) {
+  const candidate = await requireCandidate(scope, candidateId);
+  if (candidate.status !== "shortlisted" && candidate.status !== "selected") {
+    throw new PersonaDomainError(
+      "Nur shortlistete oder ausgewählte Kandidaten für Stage B.",
+      "WORKFLOW",
+    );
+  }
+
+  if (!OPENAI_PROVIDER_CAPABILITY.stageBIdentityConsistentExpansion) {
+    const updated = await creationRepo().updateCandidate(scope, candidateId, {
+      status: "needs_manual_references",
+      visual_risks:
+        "Automatische Identitäts-Expansion mit aktuellem Provider nicht zuverlässig. " +
+        "Bitte Referenzpaket manuell hochladen und Identitätsprüfung durchführen.",
+    });
+    return {
+      candidate: updated,
+      automaticExpansion: false as const,
+      reason: OPENAI_PROVIDER_CAPABILITY.note,
+      requiredAction: "manual_upload" as const,
+    };
+  }
+
+  throw new PersonaDomainError(
+    "Stage B Automatik ist für diesen Provider noch nicht angebunden.",
+    "CONFIG",
+  );
+}
+
+/** Retry a single failed asset for one candidate — requires fresh confirmation. */
+export async function retrySingleCandidateAsset(
+  scope: WorkspaceScope,
+  candidateId: string,
+  assetType: CandidateAssetType,
+  options: {
+    costConfirmed: boolean;
+    confirmationToken?: string;
+    retryConfirmed: boolean;
+  },
+) {
+  if (!options.costConfirmed || !options.retryConfirmed) {
+    throw new PersonaDomainError(
+      "Explizite Kosten- und Retry-Bestätigung erforderlich.",
+      "WORKFLOW",
+    );
+  }
+  const candidate = await requireCandidate(scope, candidateId);
+  const project = await requireProject(scope, candidate.creation_project_id);
+
+  // Temporarily scope project to one candidate / one asset for generation
+  const estimate = await estimateCreationCost(scope, project.id);
+  const qualityMode = project.quality_mode ?? DEFAULT_QUALITY_MODE;
+  if (options.confirmationToken) {
+    const confirmation = await jobRepo().getConfirmationByToken(
+      scope,
+      options.confirmationToken,
+    );
+    const currentHash = estimateFingerprintFromCost(project.id, qualityMode, {
+      ...estimate,
+      candidateCount: 1,
+      totalImages: 1,
+      imagesPerCandidate: 1,
+    });
+    if (!confirmation || confirmation.estimate_hash !== currentHash) {
+      // Allow token from prepare if asset_count matches 1
+      if (!confirmation || confirmation.asset_count !== 1) {
+        throw new PersonaDomainError(
+          "Kostenschätzung veraltet — neue Bestätigung für Einzel-Retry erforderlich.",
+          "WORKFLOW",
+        );
+      }
+    }
+    await jobRepo().consumeConfirmation(scope, options.confirmationToken);
+  }
+
+  const generator = getPersonaCandidateGenerator(project.provider_mode);
+  if (!generator.isConfigured()) {
+    throw new PersonaDomainError("Provider nicht eingerichtet.", "CONFIG");
+  }
+
+  const durableJob = await jobRepo().createJob(scope, {
+    creation_project_id: project.id,
+    candidate_id: candidateId,
+    stage: project.generation_stage,
+    provider: estimate.provider,
+    status: "generating",
+    requested_asset_types: [assetType],
+    quality_mode: qualityMode,
+    estimated_cost_min: estimate.estimatedMin,
+    estimated_cost_max: estimate.estimatedMax,
+    cost_is_estimated: true,
+    retry_count: 1,
+    confirmed_at: new Date().toISOString(),
+    started_at: new Date().toISOString(),
+    created_by: scope.actorId,
+  });
+
+  const batch = await generator.createCandidateBatch({
+    project: { ...project, candidate_count: 1 },
+    stage: project.generation_stage,
+    costConfirmed: true,
+    retryConfirmed: true,
+    qualityMode,
+    assetTypes: [assetType],
+    candidateNumbers: [candidate.candidate_number],
+  });
+
+  const result = batch.results[0];
+  if (!result?.assets.length) {
+    await jobRepo().updateJob(scope, durableJob.id, {
+      status: "failed",
+      error_message: batch.errorMessage ?? "Retry fehlgeschlagen",
+      completed_at: new Date().toISOString(),
+    });
+    throw new PersonaDomainError("Generierung fehlgeschlagen", "WORKFLOW");
+  }
+
+  for (const asset of result.assets) {
+    const assetId = randomUUID();
+    const uploaded = await uploadPersonaCandidateBytes({
+      workspaceId: scope.workspaceId,
+      projectId: project.id,
+      candidateId,
+      assetId,
+      filename: `${asset.assetType}-retry.png`,
+      bytes: asset.imageBytes,
+      mimeType: asset.mimeType,
+    });
+    await creationRepo().createCandidateAsset(scope, {
+      candidate_id: candidateId,
+      asset_type: asset.assetType,
+      storage_path: uploaded.storagePath,
+      mime_type: asset.mimeType,
+      width: uploaded.width,
+      height: uploaded.height,
+      file_size_bytes: asset.imageBytes.length,
+      checksum: uploaded.checksum,
+      provider_output_id: asset.providerOutputId ?? null,
+      generation_metadata: { ...(asset.metadata ?? {}), retry: true, costLabel: "estimated" },
+      status: "ready",
+      is_primary: asset.assetType === "portrait_front",
+    });
+  }
+
+  await creationRepo().updateProject(scope, project.id, {
+    actual_cost: Number((project.actual_cost + batch.actualCostEur).toFixed(4)),
+  });
+  await creationRepo().updateCandidate(scope, candidateId, {
+    actual_generation_cost: Number(
+      ((candidate.actual_generation_cost ?? 0) + batch.actualCostEur).toFixed(4),
+    ),
+    status: candidate.status === "failed" ? "ready" : candidate.status,
+  });
+  await jobRepo().updateJob(scope, durableJob.id, {
+    status: "completed",
+    actual_cost: batch.actualCostEur,
+    completed_at: new Date().toISOString(),
+  });
+
+  return {
+    candidate: await requireCandidate(scope, candidateId),
+    durableJob: await jobRepo().getJob(scope, durableJob.id),
+    costLabel: "estimated" as const,
+  };
+}
+
+export async function listGenerationJobsForProject(
+  scope: WorkspaceScope,
+  projectId: string,
+) {
+  await requireProject(scope, projectId);
+  return jobRepo().listJobsForProject(scope, projectId);
 }
 
 export async function listCandidates(scope: WorkspaceScope, projectId: string) {
@@ -465,9 +899,9 @@ export async function updateCandidateReview(
         "WORKFLOW",
       );
     }
-    if (!["ready", "shortlisted"].includes(candidate.status)) {
+    if (!["ready", "shortlisted", "needs_manual_references"].includes(candidate.status)) {
       throw new PersonaDomainError(
-        "Nur bereite oder shortlistete Kandidaten können ausgewählt werden.",
+        "Nur bereite, shortlistete oder manuell referenzierte Kandidaten können ausgewählt werden.",
         "WORKFLOW",
       );
     }

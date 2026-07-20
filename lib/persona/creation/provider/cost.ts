@@ -37,6 +37,8 @@ export function buildCostEstimate(params: {
   imagesPerCandidate?: number;
   available: boolean;
   note?: string;
+  /** Quality mode cost multiplier (default 1). */
+  costMultiplier?: number;
 }): CandidateGenerationCostEstimate {
   const count = Math.min(
     Math.max(1, params.candidateCount),
@@ -45,6 +47,7 @@ export function buildCostEstimate(params: {
   const imagesPer =
     params.imagesPerCandidate ?? imagesPerCandidateForStage(params.stage);
   const totalImages = count * imagesPer;
+  const mult = params.costMultiplier ?? 1;
 
   if (
     !params.available ||
@@ -74,8 +77,8 @@ export function buildCostEstimate(params: {
     };
   }
 
-  const estimatedMin = Number((totalImages * OPENAI_IMAGE_COST_EUR_MIN).toFixed(4));
-  const estimatedMax = Number((totalImages * OPENAI_IMAGE_COST_EUR_MAX).toFixed(4));
+  const estimatedMin = Number((totalImages * OPENAI_IMAGE_COST_EUR_MIN * mult).toFixed(4));
+  const estimatedMax = Number((totalImages * OPENAI_IMAGE_COST_EUR_MAX * mult).toFixed(4));
   const estimatedTotal = Number(((estimatedMin + estimatedMax) / 2).toFixed(4));
 
   return {
@@ -92,7 +95,7 @@ export function buildCostEstimate(params: {
     available: true,
     note:
       params.note ??
-      `Stufe ${params.stage}: ${count} Kandidaten × ${imagesPer} Bilder. Explizite Kostenbestätigung erforderlich.`,
+      `Stufe ${params.stage}: ${count} Kandidaten × ${imagesPer} Bilder. Schätzung — keine finalen Kosten. Explizite Bestätigung erforderlich.`,
   };
 }
 
@@ -109,5 +112,6 @@ export function estimateFromProject(
     candidateCount: input.candidateCount ?? input.project.candidate_count,
     imagesPerCandidate: input.imagesPerCandidate,
     available,
+    costMultiplier: input.costMultiplier,
   });
 }

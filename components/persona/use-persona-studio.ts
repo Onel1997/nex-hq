@@ -263,16 +263,38 @@ export function usePersonaStudio() {
     const data = (await res.json()) as {
       error?: string;
       estimate?: CandidateGenerationCostEstimate;
+      costLabel?: string;
     };
     if (!res.ok) throw new Error(data.error ?? "Kostenschätzung fehlgeschlagen");
     setState((prev) => ({ ...prev, costEstimate: data.estimate ?? null }));
     return data.estimate;
   }, []);
 
+  const preparePaidConfirmation = useCallback(async (projectId: string) => {
+    const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "prepare_confirmation" }),
+    });
+    const data = (await res.json()) as {
+      error?: string;
+      estimate?: CandidateGenerationCostEstimate;
+      confirmation?: { confirmation_token: string };
+      costLabel?: string;
+    };
+    if (!res.ok) throw new Error(data.error ?? "Bestätigung vorbereiten fehlgeschlagen");
+    setState((prev) => ({ ...prev, costEstimate: data.estimate ?? null }));
+    return data;
+  }, []);
+
   const generateCandidates = useCallback(
     async (
       projectId: string,
-      opts: { costConfirmed: boolean; retryConfirmed?: boolean },
+      opts: {
+        costConfirmed: boolean;
+        retryConfirmed?: boolean;
+        confirmationToken?: string;
+      },
     ) => {
       const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
         method: "PATCH",
@@ -557,6 +579,7 @@ export function usePersonaStudio() {
     loadCandidate,
     createProject,
     estimateProjectCost,
+    preparePaidConfirmation,
     generateCandidates,
     prepareManualCandidates,
     patchCandidate,

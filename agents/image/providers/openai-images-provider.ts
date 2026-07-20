@@ -24,7 +24,11 @@ export type GptImageSize = OpenAiImageSize;
 export function buildOpenAiImageRequest(
   request: ImageGenerationRequest,
 ): OpenAiImageGenerationPayload {
-  return buildOpenAiGenerationPayload(request.prompt, request.dimensions);
+  return buildOpenAiGenerationPayload(
+    request.prompt,
+    request.dimensions,
+    request.qualityOverride,
+  );
 }
 
 async function decodeOpenAiImageItem(item: Image): Promise<Buffer> {

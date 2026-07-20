@@ -32,6 +32,10 @@ import {
   CreationProjectsView,
   PersonaCreatorView,
 } from "@/components/persona/persona-creator-views";
+import {
+  PersonaStatusChip,
+  personaStatusTone,
+} from "@/components/persona/persona-status-chip";
 
 const NAV: Array<{
   id: PersonaStudioSection;
@@ -124,7 +128,7 @@ export function PersonaStudio() {
           {studio.loading && !studio.snapshot ? (
             <div className="ps-loading">
               <Loader2 className="size-7 animate-spin" />
-              <p>Loading Brand Cast…</p>
+              <p>Preparing the Brand Cast…</p>
             </div>
           ) : studio.error ? (
             <div className="ps-error">
@@ -313,23 +317,31 @@ function PersonasView({ studio }: { studio: PersonaStudioController }) {
         ) : null}
 
         <ul className="ps-entity-list">
-          {studio.personas.map((persona) => (
-            <li key={persona.id}>
-              <button
-                type="button"
-                className={`ps-entity-row${
-                  studio.selectedPersonaId === persona.id ? " is-active" : ""
-                }`}
-                onClick={() => studio.selectPersona(persona.id)}
-              >
-                <div>
-                  <strong>{persona.name}</strong>
-                  <span>{persona.role}</span>
-                </div>
-                <StatusPill status={persona.status} />
-              </button>
+          {studio.personas.length === 0 ? (
+            <li className="ps-empty-state ps-empty-state--inline">
+              <p className="ps-eyebrow">Cast</p>
+              <strong>No Brand Cast has been approved yet.</strong>
+              <p>Create a draft face or open Persona Creator to begin casting.</p>
             </li>
-          ))}
+          ) : (
+            studio.personas.map((persona) => (
+              <li key={persona.id}>
+                <button
+                  type="button"
+                  className={`ps-entity-row${
+                    studio.selectedPersonaId === persona.id ? " is-active" : ""
+                  }`}
+                  onClick={() => studio.selectPersona(persona.id)}
+                >
+                  <div>
+                    <strong>{persona.name}</strong>
+                    <span>{persona.role}</span>
+                  </div>
+                  <StatusPill status={persona.status} />
+                </button>
+              </li>
+            ))
+          )}
         </ul>
       </div>
 
@@ -340,7 +352,14 @@ function PersonasView({ studio }: { studio: PersonaStudioController }) {
             studio={studio}
           />
         ) : (
-          <div className="ps-empty">Select a persona to manage details and relations.</div>
+          <div className="ps-empty-state">
+            <p className="ps-eyebrow">Brand Cast</p>
+            <strong>Select a Brand Face</strong>
+            <p>
+              Choose a persona to review identity, references, and readiness for Image and
+              Video Studio.
+            </p>
+          </div>
         )}
       </div>
     </div>
@@ -994,6 +1013,13 @@ function LibraryPanel({
         </button>
       </header>
       {error ? <p className="ps-inline-error">{error}</p> : null}
+      {rows.length === 0 ? (
+        <div className="ps-empty-state">
+          <p className="ps-eyebrow">Library</p>
+          <strong>Nothing cast for this shelf yet.</strong>
+          <p>Add your first entry to keep Brand Cast shoots consistent.</p>
+        </div>
+      ) : (
       <ul className="ps-card-list">
         {rows.map((row) => (
           <li key={row.id} className="ps-lib-card">
@@ -1012,12 +1038,15 @@ function LibraryPanel({
           </li>
         ))}
       </ul>
+      )}
     </div>
   );
 }
 
 function StatusPill({ status }: { status: PersonaStatus }) {
-  return <span className={`ps-status ps-status-${status.toLowerCase()}`}>{status}</span>;
+  return (
+    <PersonaStatusChip label={status} tone={personaStatusTone(status)} />
+  );
 }
 
 function Meta({ label, value }: { label: string; value: string }) {

@@ -14,7 +14,8 @@ import {
 } from "../storage/reference-storage";
 import { resolvePersonaWorkspaceScope } from "./workspace-scope";
 
-export const PERSONA_SCHEMA_VERSION = "20260719220000_persona_studio_phase_1_2_candidate_workflow";
+export const PERSONA_SCHEMA_VERSION =
+  "20260719220142_persona_studio_phase_1_5_generation_jobs";
 
 const REQUIRED_TABLES = [
   "persona_personas",
@@ -34,6 +35,8 @@ const REQUIRED_TABLES = [
   "persona_candidate_assets",
   "persona_identity_reviews",
   "persona_brand_cast_requirements",
+  "persona_generation_jobs",
+  "persona_generation_confirmations",
 ] as const;
 
 export type PersonaHealthStatus = "healthy" | "degraded" | "unavailable";
@@ -41,7 +44,14 @@ export type PersonaHealthStatus = "healthy" | "degraded" | "unavailable";
 export type PersonaHealthUiLabel =
   | "Bereit"
   | "Einrichtung erforderlich"
-  | "Fehler";
+  | "Fehler"
+  | "Provider nicht eingerichtet"
+  | "Kostenschätzung nicht verfügbar"
+  | "Generierung fehlgeschlagen"
+  | "Teilweise abgeschlossen"
+  | "Manuelle Referenzen erforderlich"
+  | "Identitätsprüfung fehlgeschlagen"
+  | "Freigabe erforderlich";
 
 export interface PersonaHealthCheck {
   name: string;
@@ -261,6 +271,40 @@ export async function checkPersonaStudioHealth(): Promise<PersonaHealthReport> {
     detail: signed.detail,
   });
 
+  // Provider + cost estimation (no secrets)
+  try {
+    const { isPersonaImageProviderConfigured } = await import(
+      "../creation/provider/config"
+    );
+    const providerOk = isPersonaImageProviderConfigured();
+    checks.push({
+      name: "image_provider_configured",
+      ok: providerOk,
+      detail: providerOk
+        ? "Image-Provider konfiguriert"
+        : "Provider nicht eingerichtet (OPENAI_API_KEY)",
+    });
+    checks.push({
+      name: "cost_estimation_available",
+      ok: true,
+      detail: "Kostenschätzung verfügbar (Schätzung — keine finalen Kosten)",
+    });
+    checks.push({
+      name: "generation_job_persistence",
+      ok: missingTables.length === 0 || !missingTables.includes("persona_generation_jobs"),
+      detail:
+        missingTables.includes("persona_generation_jobs")
+          ? "persona_generation_jobs fehlt — Migration 1.5 anwenden"
+          : "Generation-Jobs persistent",
+    });
+  } catch (error) {
+    checks.push({
+      name: "image_provider_configured",
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   let workspaceId: string | null = null;
   try {
     const scope = await resolvePersonaWorkspaceScope();
@@ -310,7 +354,7 @@ export async function checkPersonaStudioHealth(): Promise<PersonaHealthReport> {
     status = "degraded";
     message =
       missingTables.length > 0 || !checks.find((c) => c.name === "schema_phase_1_1")?.ok
-        ? "Einrichtung erforderlich: Persona-Studio-Migrationen fehlen. Bitte 20250719120000_persona_studio.sql, 20260719140000_persona_studio_phase_1_1.sql und 20260719220000_persona_studio_phase_1_2_candidate_workflow.sql anwenden."
+        ? "Einrichtung erforderlich: Persona-Studio-Migrationen fehlen. Bitte Phase-1.1, 1.2 und 1.5 (20260719220142_persona_studio_phase_1_5_generation_jobs.sql) anwenden."
         : !bucket.ok
           ? "Einrichtung erforderlich: Privater Storage-Bucket „persona-references“ fehlt oder ist falsch konfiguriert."
           : "Einrichtung erforderlich: Workspace oder Schema unvollständig.";
