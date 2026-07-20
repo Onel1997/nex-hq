@@ -13,7 +13,8 @@ import type {
   ProviderMode,
 } from "../domain/creation-types";
 import { PersonaDomainError, PersonaWorkflowError } from "../domain/errors";
-import { resolveEffectiveProviderMode } from "./provider/config";
+import { resolveEffectiveProviderMode, isPersonaImageProviderConfigured } from "./provider/config";
+import { shouldUseFakePersonaProvider } from "./paid-generation-guard";
 import { assetTypesForStage } from "./provider/cost";
 
 /** API / service workflow actions for creation projects. */
@@ -66,6 +67,32 @@ function isPaidProviderMode(mode: ProviderMode): boolean {
 
 function isManualProviderMode(mode: ProviderMode): boolean {
   return mode === "manual_upload";
+}
+
+function assertPaidProviderConfigured(
+  project: PersonaCreationProject,
+  details: Record<string, unknown>,
+): void {
+  if (!isPaidProviderMode(project.provider_mode)) {
+    const effective = resolveEffectiveProviderMode(project.provider_mode);
+    throw new PersonaDomainError(
+      effective.setupMessage ??
+        "Bezahlte Generierung ist nicht verfügbar — Provider nicht eingerichtet.",
+      "CONFIG",
+      details,
+    );
+  }
+
+  if (shouldUseFakePersonaProvider()) return;
+  if (isPersonaImageProviderConfigured()) return;
+
+  const effective = resolveEffectiveProviderMode(project.provider_mode);
+  throw new PersonaDomainError(
+    effective.setupMessage ??
+      "Bezahlte Generierung ist nicht verfügbar — Provider nicht eingerichtet.",
+    "CONFIG",
+    details,
+  );
 }
 
 export function resolveCreationWorkflowStep(
@@ -141,15 +168,7 @@ export function assertCreationProjectAction(
       );
     }
 
-    const effective = resolveEffectiveProviderMode(project.provider_mode);
-    if (effective.mode === "disabled" || !isPaidProviderMode(project.provider_mode)) {
-      throw new PersonaDomainError(
-        effective.setupMessage ??
-          "Bezahlte Generierung ist nicht verfügbar — Provider nicht eingerichtet.",
-        "CONFIG",
-        details,
-      );
-    }
+    assertPaidProviderConfigured(project, details);
 
     if (project.status === "generating") {
       throw new PersonaWorkflowError(
@@ -260,14 +279,7 @@ export function assertCreationProjectAction(
       );
     }
 
-    const effective = resolveEffectiveProviderMode(project.provider_mode);
-    if (effective.mode === "disabled" || !isPaidProviderMode(project.provider_mode)) {
-      throw new PersonaDomainError(
-        effective.setupMessage ?? "Provider nicht eingerichtet.",
-        "CONFIG",
-        details,
-      );
-    }
+    assertPaidProviderConfigured(project, details);
 
     if (project.status === "generating") {
       throw new PersonaWorkflowError(

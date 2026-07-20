@@ -51,11 +51,9 @@ export async function GET(_request: Request, ctx: Ctx) {
       const jobs = await listGenerationJobsForProject(gate.scope, id);
       return jsonOk({ project, jobs });
     }
-    if (url.searchParams.get("incident") === "1" || id === "f04d43f3-1a74-436d-a458-8e23658eebf1") {
+    if (url.searchParams.get("incident") === "1") {
       const incident = await getIncidentProjectSummary(gate.scope, id);
-      if (url.searchParams.get("incident") === "1") {
-        return jsonOk({ project, incident });
-      }
+      return jsonOk({ project, incident });
     }
     const candidates = await listCandidates(gate.scope, id);
     const jobs = await listGenerationJobsForProject(gate.scope, id);

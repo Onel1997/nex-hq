@@ -25,6 +25,50 @@ export function buildPersonaCandidateStoragePath(params: {
   return `workspace/${params.workspaceId}/persona-creation/${params.projectId}/candidates/${params.candidateId}/${params.assetId}-${safeName}`;
 }
 
+/** Memory-repo / automated tests — private path metadata without Supabase I/O. */
+export function buildPersonaCandidateAssetMetadata(params: {
+  workspaceId: string;
+  projectId: string;
+  candidateId: string;
+  assetId: string;
+  filename: string;
+  bytes: Buffer;
+  mimeType: string;
+}): {
+  storagePath: string;
+  checksum: string;
+  width: number | null;
+  height: number | null;
+} {
+  assertAllowedPersonaReferenceUpload({
+    mimeType: params.mimeType,
+    byteLength: params.bytes.length,
+  });
+
+  if (!params.workspaceId || !params.projectId || !params.candidateId) {
+    throw new PersonaDomainError(
+      "Unbefugter Speicherzugriff.",
+      "UNAUTHORIZED_WORKSPACE",
+    );
+  }
+
+  const storagePath = buildPersonaCandidateStoragePath(params);
+  if (!storagePath.startsWith(`workspace/${params.workspaceId}/persona-creation/`)) {
+    throw new PersonaDomainError(
+      "Unbefugter Speicherzugriff.",
+      "UNAUTHORIZED_WORKSPACE",
+    );
+  }
+
+  const dims = extractImageDimensions(params.bytes, params.mimeType);
+  return {
+    storagePath,
+    checksum: checksumBytes(params.bytes),
+    width: dims.width,
+    height: dims.height,
+  };
+}
+
 export async function uploadPersonaCandidateBytes(params: {
   workspaceId: string;
   projectId: string;

@@ -20,6 +20,8 @@ export const LIVE_PERSONA_GENERATION_MAX_EUR_ENV =
   "LIVE_PERSONA_GENERATION_MAX_EUR";
 export const PERSONA_USE_FAKE_PROVIDER_ENV = "PERSONA_USE_FAKE_PROVIDER";
 export const PERSONA_PAID_GENERATION_ENABLED_ENV = "PERSONA_PAID_GENERATION_ENABLED";
+/** When "1", automated tests simulate production guard paths (no fake provider bypass). */
+export const PERSONA_SIMULATE_PRODUCTION_ENV = "PERSONA_SIMULATE_PRODUCTION_ENV";
 
 /** Normal UI attestation — server requires matching confirmation + userConfirmedAt. */
 export const UI_CHECKBOX_ATTESTATION = "ui_checkbox" as const;
@@ -30,6 +32,8 @@ export const CONFIRMATION_TTL_MS = 30 * 60 * 1000;
 export type PaidConfirmationIntent = "initial" | "retry";
 
 export function isAutomatedTestEnvironment(): boolean {
+  if (process.env[PERSONA_SIMULATE_PRODUCTION_ENV] === "1") return false;
+  if (process.env.NODE_TEST_CONTEXT) return true;
   if (
     process.env.NODE_ENV === "test" ||
     process.env.VITEST === "true" ||
@@ -37,7 +41,7 @@ export function isAutomatedTestEnvironment(): boolean {
   ) {
     return true;
   }
-  // tsx/node --test may run with NODE_ENV=development when .env.local is loaded
+  // tsx consumes `--test` from argv; npm lifecycle + NODE_TEST_CONTEXT cover normal runs.
   if (process.argv.includes("--test")) return true;
   if (process.env.npm_lifecycle_event === "test") return true;
   return false;
@@ -48,8 +52,8 @@ export const PERSONA_FORCE_LIVE_PROVIDER_GUARD_ENV =
 
 export function shouldUseFakePersonaProvider(): boolean {
   if (process.env[PERSONA_USE_FAKE_PROVIDER_ENV] === "true") return true;
-  if (process.env[PERSONA_FORCE_LIVE_PROVIDER_GUARD_ENV] === "1") return false;
   if (isAutomatedTestEnvironment()) return true;
+  if (process.env[PERSONA_FORCE_LIVE_PROVIDER_GUARD_ENV] === "1") return false;
   return false;
 }
 

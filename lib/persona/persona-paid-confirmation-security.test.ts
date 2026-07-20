@@ -67,6 +67,7 @@ function asNonTestEnv(fn: () => void): void {
       NODE_ENV: "development",
       PERSONA_USE_FAKE_PROVIDER: "false",
       PERSONA_FORCE_LIVE_PROVIDER_GUARD: "1",
+      PERSONA_SIMULATE_PRODUCTION_ENV: "1",
     },
     fn,
   );
@@ -120,7 +121,10 @@ describe("Persona paid confirmation security", () => {
 
   beforeEach(() => {
     process.env.OPENAI_API_KEY = "test-key";
-    delete process.env.PERSONA_USE_FAKE_PROVIDER;
+    process.env.PERSONA_USE_FAKE_PROVIDER = "true";
+    delete process.env.PERSONA_FORCE_LIVE_PROVIDER_GUARD;
+    delete process.env.PERSONA_SIMULATE_PRODUCTION_ENV;
+    delete process.env.PERSONA_PAID_GENERATION_ENABLED;
     creationRepo = new MemoryCreationRepository();
     jobRepo = new MemoryGenerationJobRepository();
     resetMemoryGenerationJobStoreForTests();
@@ -130,6 +134,8 @@ describe("Persona paid confirmation security", () => {
   });
 
   afterEach(() => {
+    delete process.env.PERSONA_FORCE_LIVE_PROVIDER_GUARD;
+    delete process.env.PERSONA_SIMULATE_PRODUCTION_ENV;
     setPersonaRepositoryForTests(null);
     setCreationRepositoryForTests(null);
     setGenerationJobRepositoryForTests(null);

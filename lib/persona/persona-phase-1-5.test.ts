@@ -84,6 +84,10 @@ describe("Persona Studio Phase 1.5 generation jobs & confirmation", () => {
   let jobRepo: MemoryGenerationJobRepository;
 
   beforeEach(() => {
+    process.env.PERSONA_USE_FAKE_PROVIDER = "true";
+    delete process.env.PERSONA_FORCE_LIVE_PROVIDER_GUARD;
+    delete process.env.PERSONA_SIMULATE_PRODUCTION_ENV;
+    delete process.env.PERSONA_PAID_GENERATION_ENABLED;
     personaRepo = new MemoryPersonaRepository();
     creationRepo = new MemoryCreationRepository();
     jobRepo = new MemoryGenerationJobRepository();

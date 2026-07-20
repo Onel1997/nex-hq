@@ -40,6 +40,7 @@ import {
   createPersonaCandidateSignedUrl,
   defaultCandidateRetentionUntil,
   uploadPersonaCandidateBytes,
+  buildPersonaCandidateAssetMetadata,
 } from "./candidate-storage";
 import { getCreationRepository } from "./creation-factory";
 import { getGenerationJobRepository } from "./generation-job-factory";
@@ -360,7 +361,6 @@ export async function confirmAndStartCandidateGeneration(
   },
 ) {
   const project = await requireProject(scope, projectId);
-  assertCreationProjectAction(project, "start_generation");
   if (!options.costConfirmed) {
     throw new PersonaDomainError(
       "Kostenbestätigung erforderlich vor bezahlter Generierung.",
@@ -368,6 +368,7 @@ export async function confirmAndStartCandidateGeneration(
       { requiresCostConfirmation: true },
     );
   }
+  assertCreationProjectAction(project, "start_generation");
 
   if (isPaidProviderMode(project.provider_mode) && !options.confirmationToken?.trim()) {
     throw new PersonaDomainError(
@@ -634,15 +635,26 @@ export async function confirmAndStartCandidateGeneration(
       let primaryId: string | null = null;
       for (const asset of result.assets) {
         const assetId = randomUUID();
-        const uploaded = await uploadPersonaCandidateBytes({
-          workspaceId: scope.workspaceId,
-          projectId,
-          candidateId: candidate.id,
-          assetId,
-          filename: `${asset.assetType}.png`,
-          bytes: asset.imageBytes,
-          mimeType: asset.mimeType,
-        });
+        const uploaded =
+          creationRepo().kind === "memory"
+            ? buildPersonaCandidateAssetMetadata({
+                workspaceId: scope.workspaceId,
+                projectId,
+                candidateId: candidate.id,
+                assetId,
+                filename: `${asset.assetType}.png`,
+                bytes: asset.imageBytes,
+                mimeType: asset.mimeType,
+              })
+            : await uploadPersonaCandidateBytes({
+                workspaceId: scope.workspaceId,
+                projectId,
+                candidateId: candidate.id,
+                assetId,
+                filename: `${asset.assetType}.png`,
+                bytes: asset.imageBytes,
+                mimeType: asset.mimeType,
+              });
         const created = await creationRepo().createCandidateAsset(scope, {
           candidate_id: candidate.id,
           asset_type: asset.assetType,
@@ -926,15 +938,26 @@ export async function retrySingleCandidateAsset(
 
   for (const asset of result.assets) {
     const assetId = randomUUID();
-    const uploaded = await uploadPersonaCandidateBytes({
-      workspaceId: scope.workspaceId,
-      projectId: project.id,
-      candidateId,
-      assetId,
-      filename: `${asset.assetType}-retry.png`,
-      bytes: asset.imageBytes,
-      mimeType: asset.mimeType,
-    });
+    const uploaded =
+      creationRepo().kind === "memory"
+        ? buildPersonaCandidateAssetMetadata({
+            workspaceId: scope.workspaceId,
+            projectId: project.id,
+            candidateId,
+            assetId,
+            filename: `${asset.assetType}-retry.png`,
+            bytes: asset.imageBytes,
+            mimeType: asset.mimeType,
+          })
+        : await uploadPersonaCandidateBytes({
+            workspaceId: scope.workspaceId,
+            projectId: project.id,
+            candidateId,
+            assetId,
+            filename: `${asset.assetType}-retry.png`,
+            bytes: asset.imageBytes,
+            mimeType: asset.mimeType,
+          });
     await creationRepo().createCandidateAsset(scope, {
       candidate_id: candidateId,
       asset_type: asset.assetType,
@@ -1144,21 +1167,19 @@ export async function uploadManualCandidateAsset(
   let height: number | null;
 
   if (isMemory) {
-    const { checksumBytes, extractImageDimensions } = await import(
-      "../storage/reference-storage"
-    );
-    const { buildPersonaCandidateStoragePath } = await import("./candidate-storage");
-    storagePath = buildPersonaCandidateStoragePath({
+    const uploaded = buildPersonaCandidateAssetMetadata({
       workspaceId: scope.workspaceId,
       projectId: project.id,
       candidateId,
       assetId,
       filename: file.filename,
+      bytes: file.bytes,
+      mimeType: file.mimeType,
     });
-    checksum = checksumBytes(file.bytes);
-    const dims = extractImageDimensions(file.bytes, file.mimeType);
-    width = dims.width;
-    height = dims.height;
+    storagePath = uploaded.storagePath;
+    checksum = uploaded.checksum;
+    width = uploaded.width;
+    height = uploaded.height;
   } else {
     const uploaded = await uploadPersonaCandidateBytes({
       workspaceId: scope.workspaceId,

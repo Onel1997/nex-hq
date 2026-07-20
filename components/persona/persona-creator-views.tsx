@@ -40,6 +40,12 @@ import {
   canPreparePaidConfirmation,
 } from "@/lib/persona/creation/creation-workflow";
 import {
+  assertProjectSelectionSync,
+  DEBUG_MODE,
+  isProjectDetailReady,
+  projectIdPrefix,
+} from "@/components/persona/persona-studio-project-sync";
+import {
   Check,
   Circle,
   Diamond,
@@ -968,9 +974,24 @@ export function CreationProjectsView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmCost, setConfirmCost] = useState(false);
-  const selected = studio.creationProjects.find(
-    (p) => p.id === studio.selectedProjectId,
-  );
+
+  const detailReady = isProjectDetailReady({
+    selectedProjectId: studio.selectedProjectId,
+    loadedProjectId: studio.loadedProjectId,
+    loadedProject: studio.loadedProject,
+  });
+  const selected = detailReady ? studio.loadedProject : null;
+  const detailLoading =
+    studio.selectedProjectId != null &&
+    studio.loadedProjectId !== studio.selectedProjectId;
+
+  useEffect(() => {
+    assertProjectSelectionSync({
+      clickedProjectId: studio.selectedProjectId,
+      loadedProjectId: studio.loadedProjectId,
+      renderedProjectId: selected?.id ?? null,
+    });
+  }, [studio.selectedProjectId, studio.loadedProjectId, selected?.id]);
 
   useEffect(() => {
     setConfirmCost(false);
@@ -1089,23 +1110,41 @@ export function CreationProjectsView({
               key={p.id}
               type="button"
               className={`ps-list-item${studio.selectedProjectId === p.id ? " is-active" : ""}`}
+              aria-current={studio.selectedProjectId === p.id ? "true" : undefined}
               onClick={() => void studio.loadProject(p.id)}
             >
               <strong>{p.name || "Untitled cast"}</strong>
               <span>
                 {BRAND_ROLE_LABELS[p.brand_role]} · {p.status} · {p.provider_mode}
+                {typeof p.candidate_count === "number" ? ` · ${p.candidate_count} Kandidaten` : ""}
               </span>
+              {DEBUG_MODE ? (
+                <span className="ps-project-id-debug">{projectIdPrefix(p.id)}</span>
+              ) : null}
             </button>
           ))
         )}
       </div>
 
+      {detailLoading ? (
+        <div className="ps-detail ps-detail-loading">
+          <p className="ps-muted">Projekt wird geladen…</p>
+          {DEBUG_MODE && studio.selectedProjectId ? (
+            <p className="ps-project-id-debug">{projectIdPrefix(studio.selectedProjectId)}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {selected ? (
         <div className="ps-detail">
           <h2>{selected.name}</h2>
+          {DEBUG_MODE ? (
+            <p className="ps-project-id-debug">ID {projectIdPrefix(selected.id)}</p>
+          ) : null}
           <p className="ps-muted">
-            {selected.candidate_count} Kandidaten · Stage {selected.generation_stage} ·
-            Ist-Kosten {selected.actual_cost.toFixed(2)} €
+            {studio.candidates.length} Kandidaten · Stage {selected.generation_stage} · Status{" "}
+            {selected.status} · Provider {selected.provider_mode} · Ist-Kosten{" "}
+            {selected.actual_cost.toFixed(2)} €
           </p>
           {countUnattestedPaidJobs(studio.generationJobs) > 0 ? (
             <div className="ps-callout ps-callout-warn">
@@ -1225,9 +1264,16 @@ export function CreationProjectsView({
 export function CandidatesView({ studio }: { studio: PersonaStudioController }) {
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
+  const candidatesInSync =
+    studio.selectedProjectId != null &&
+    studio.loadedProjectId === studio.selectedProjectId;
+  const visibleCandidates = useMemo(
+    () => (candidatesInSync ? studio.candidates : []),
+    [candidatesInSync, studio.candidates],
+  );
   const selected = useMemo(
-    () => studio.candidates.find((c) => c.id === studio.selectedCandidateId) ?? null,
-    [studio.candidates, studio.selectedCandidateId],
+    () => visibleCandidates.find((c) => c.id === studio.selectedCandidateId) ?? null,
+    [visibleCandidates, studio.selectedCandidateId],
   );
   const selectedIsDebugRun = useMemo(
     () => (selected ? isDebugRunCandidate(selected, studio.generationJobs) : false),
@@ -1257,14 +1303,18 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         </div>
       </header>
 
-      {studio.candidates.length === 0 ? (
+      {visibleCandidates.length === 0 ? (
         <EmptyState
           title="No candidates on the board yet."
-          body="After a casting session generates or receives uploads, your Brand Faces will appear here for comparison."
+          body={
+            candidatesInSync
+              ? "After a casting session generates or receives uploads, your Brand Faces will appear here for comparison."
+              : "Select a creation project and wait for it to finish loading before viewing candidates."
+          }
         />
       ) : (
         <div className="ps-candidate-grid">
-          {studio.candidates.map((c) => (
+          {visibleCandidates.map((c) => (
             <button
               key={c.id}
               type="button"

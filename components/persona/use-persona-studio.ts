@@ -1,6 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  DEBUG_MODE,
+  emptyProjectDetailState,
+} from "@/components/persona/persona-studio-project-sync";
 
 /**
  * Safe JSON fetch: validates status and content-type before parsing.
@@ -102,6 +106,8 @@ interface StudioState {
   selectedReferences: PersonaReferenceAssetView[];
   creationProjects: PersonaCreationProject[];
   selectedProjectId: string | null;
+  loadedProjectId: string | null;
+  loadedProject: PersonaCreationProject | null;
   candidates: PersonaCandidate[];
   selectedCandidateId: string | null;
   candidateAssets: PersonaCandidateAssetView[];
@@ -129,6 +135,8 @@ const EMPTY_COUNTS: PersonaStudioDashboardCounts = {
 };
 
 export function usePersonaStudio() {
+  const loadProjectRequestRef = useRef(0);
+
   const [state, setState] = useState<StudioState>({
     loading: true,
     error: null,
@@ -141,6 +149,8 @@ export function usePersonaStudio() {
     selectedReferences: [],
     creationProjects: [],
     selectedProjectId: null,
+    loadedProjectId: null,
+    loadedProject: null,
     candidates: [],
     selectedCandidateId: null,
     candidateAssets: [],
@@ -257,6 +267,21 @@ export function usePersonaStudio() {
   }, []);
 
   const loadProject = useCallback(async (projectId: string, opts?: { openCandidates?: boolean }) => {
+    if (DEBUG_MODE) {
+      console.log("[persona] Clicked project id:", projectId);
+    }
+
+    const requestId = ++loadProjectRequestRef.current;
+
+    setState((prev) => {
+      const switching = prev.selectedProjectId !== projectId;
+      return {
+        ...prev,
+        selectedProjectId: projectId,
+        ...(switching ? emptyProjectDetailState() : {}),
+      };
+    });
+
     const res = await fetch(`/api/persona/creation-projects/${projectId}`);
     const data = (await res.json()) as {
       error?: string;
@@ -266,11 +291,41 @@ export function usePersonaStudio() {
       incident?: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
     };
     if (!res.ok) throw new Error(data.error ?? "Projekt laden fehlgeschlagen");
+
+    if (data.project && data.project.id !== projectId) {
+      console.error("[persona] API returned a different project id than requested", {
+        requestedProjectId: projectId,
+        returnedProjectId: data.project.id,
+      });
+      throw new Error("Projekt-Antwort passt nicht zur angeforderten ID");
+    }
+
+    if (requestId !== loadProjectRequestRef.current) {
+      if (DEBUG_MODE) {
+        console.log("[persona] Ignoring stale loadProject response", {
+          requestedProjectId: projectId,
+          requestId,
+          latestRequestId: loadProjectRequestRef.current,
+        });
+      }
+      return;
+    }
+
+    if (DEBUG_MODE) {
+      console.log("[persona] Loaded project id:", data.project?.id ?? projectId);
+    }
+
     setState((prev) => {
-      const projectChanged = prev.selectedProjectId !== projectId;
+      if (prev.selectedProjectId !== projectId) {
+        return prev;
+      }
+
+      const projectChanged = prev.loadedProjectId !== projectId;
       return {
         ...prev,
         selectedProjectId: projectId,
+        loadedProjectId: projectId,
+        loadedProject: data.project ?? null,
         candidates: data.candidates ?? [],
         generationJobs: data.jobs ?? [],
         incidentSummary: data.incident ?? null,
@@ -326,18 +381,12 @@ export function usePersonaStudio() {
       if (!res.ok) throw new Error(data.error ?? "Projekt erstellen fehlgeschlagen");
       await refreshCreation();
       if (data.project) {
-        setState((prev) => ({
-          ...prev,
-          selectedProjectId: data.project!.id,
-          section: "creation_projects",
-          costEstimate: null,
-          paidConfirmationToken: null,
-          paidConfirmationProjectId: null,
-        }));
+        await loadProject(data.project.id);
+        setState((prev) => ({ ...prev, section: "creation_projects" }));
       }
       return data.project;
     },
-    [refreshCreation],
+    [loadProject, refreshCreation],
   );
 
   const preparePaidConfirmation = useCallback(async (projectId: string) => {
