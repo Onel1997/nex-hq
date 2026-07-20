@@ -224,4 +224,43 @@ export class SupabaseGenerationJobRepository implements PersonaGenerationJobRepo
     }
     return mapConfirmation(data as Record<string, unknown>);
   }
+
+  async listConfirmationsForProject(scope: WorkspaceScope, projectId: string) {
+    const db = createAdminClient();
+    const { data, error } = await db
+      .from("persona_generation_confirmations")
+      .select("*")
+      .eq("workspace_id", scope.workspaceId)
+      .eq("creation_project_id", projectId)
+      .order("created_at", { ascending: false });
+    if (error) throw new PersonaStoreError(error.message);
+    return (data ?? []).map((row) => mapConfirmation(row as Record<string, unknown>));
+  }
+
+  async updateConfirmationByToken(
+    scope: WorkspaceScope,
+    token: string,
+    patch: { payload?: Record<string, unknown>; consumed_at?: string | null },
+  ) {
+    const db = createAdminClient();
+    const { data, error } = await db
+      .from("persona_generation_confirmations")
+      .update({
+        ...(patch.payload !== undefined ? { payload: patch.payload } : {}),
+        ...(patch.consumed_at !== undefined
+          ? { consumed_at: patch.consumed_at }
+          : {}),
+      })
+      .eq("confirmation_token", token)
+      .eq("workspace_id", scope.workspaceId)
+      .select("*")
+      .single();
+    if (error || !data) {
+      throw new PersonaDomainError(
+        error?.message ?? "Bestätigung nicht gefunden.",
+        "NOT_FOUND",
+      );
+    }
+    return mapConfirmation(data as Record<string, unknown>);
+  }
 }

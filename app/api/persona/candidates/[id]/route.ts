@@ -1,4 +1,5 @@
 import { requirePersonaScope, jsonOk, jsonError, dict } from "../../_utils";
+import { assertPaidGenerationHttpRequestAllowed } from "@/lib/persona/creation/paid-generation-guard";
 import {
   convertCandidateToPersona,
   getCandidate,
@@ -42,6 +43,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
       return jsonOk(result);
     }
     if (body.action === "retry_asset") {
+      assertPaidGenerationHttpRequestAllowed(request);
       const result = await retrySingleCandidateAsset(
         gate.scope,
         id,
@@ -52,6 +54,10 @@ export async function PATCH(request: Request, ctx: Ctx) {
           confirmationToken:
             typeof body.confirmationToken === "string"
               ? body.confirmationToken
+              : undefined,
+          userConfirmedAt:
+            typeof body.userConfirmedAt === "string"
+              ? body.userConfirmedAt
               : undefined,
         },
       );

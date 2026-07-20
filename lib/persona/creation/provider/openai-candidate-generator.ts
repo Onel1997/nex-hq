@@ -7,6 +7,7 @@
 import { randomUUID } from "node:crypto";
 import { generateOpenAiImage } from "@/agents/image/providers/openai-images-provider";
 import { PersonaDomainError } from "../../domain/errors";
+import { assertLivePaidProviderInvocationAllowed } from "../paid-generation-guard";
 import type { CandidateAssetType, PersonaCreationProject } from "../../domain/creation-types";
 import {
   getQualityModeProfile,
@@ -137,6 +138,10 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
         { requiresCostConfirmation: true },
       );
     }
+
+    assertLivePaidProviderInvocationAllowed({
+      estimatedMaxEur: undefined,
+    });
 
     const quality = resolveQuality(input);
     const jobId = randomUUID();

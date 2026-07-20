@@ -53,6 +53,13 @@ export type PersonaHealthUiLabel =
   | "Identitätsprüfung fehlgeschlagen"
   | "Freigabe erforderlich";
 
+const DEFAULT_PAID_GENERATION_SAFETY = {
+  openaiApiKeyConfigured: false,
+  paidGenerationEnabled: false,
+  fakeProviderActive: true,
+  liveTestsEnabled: false,
+} as const;
+
 export interface PersonaHealthCheck {
   name: string;
   ok: boolean;
@@ -69,6 +76,12 @@ export interface PersonaHealthReport {
   workspaceId: string | null;
   memoryFallback: false;
   checkedAt: string;
+  paidGenerationSafety: {
+    openaiApiKeyConfigured: boolean;
+    paidGenerationEnabled: boolean;
+    fakeProviderActive: boolean;
+    liveTestsEnabled: boolean;
+  };
 }
 
 function uiLabelFor(status: PersonaHealthStatus): PersonaHealthUiLabel {
@@ -180,6 +193,7 @@ export async function checkPersonaStudioHealth(): Promise<PersonaHealthReport> {
       workspaceId: null,
       memoryFallback: false,
       checkedAt,
+      paidGenerationSafety: { ...DEFAULT_PAID_GENERATION_SAFETY },
     };
   }
 
@@ -272,10 +286,20 @@ export async function checkPersonaStudioHealth(): Promise<PersonaHealthReport> {
   });
 
   // Provider + cost estimation (no secrets)
+  let paidGenerationSafety = {
+    openaiApiKeyConfigured: false,
+    paidGenerationEnabled: false,
+    fakeProviderActive: true,
+    liveTestsEnabled: false,
+  };
   try {
     const { isPersonaImageProviderConfigured } = await import(
       "../creation/provider/config"
     );
+    const { getPaidGenerationSafetyStatus } = await import(
+      "../creation/paid-generation-guard"
+    );
+    paidGenerationSafety = getPaidGenerationSafetyStatus();
     const providerOk = isPersonaImageProviderConfigured();
     checks.push({
       name: "image_provider_configured",
@@ -296,6 +320,20 @@ export async function checkPersonaStudioHealth(): Promise<PersonaHealthReport> {
         missingTables.includes("persona_generation_jobs")
           ? "persona_generation_jobs fehlt — Migration 1.5 anwenden"
           : "Generation-Jobs persistent",
+    });
+    checks.push({
+      name: "paid_generation_enabled",
+      ok: paidGenerationSafety.paidGenerationEnabled,
+      detail: paidGenerationSafety.paidGenerationEnabled
+        ? "Kostenpflichtige Generierung freigegeben"
+        : "Kostenpflichtige Generierung gesperrt (PERSONA_PAID_GENERATION_ENABLED)",
+    });
+    checks.push({
+      name: "fake_provider_active",
+      ok: paidGenerationSafety.fakeProviderActive,
+      detail: paidGenerationSafety.fakeProviderActive
+        ? "Fake-Provider aktiv"
+        : "Live-Provider-Pfad möglich",
     });
   } catch (error) {
     checks.push({
@@ -380,5 +418,6 @@ export async function checkPersonaStudioHealth(): Promise<PersonaHealthReport> {
     workspaceId,
     memoryFallback: false,
     checkedAt,
+    paidGenerationSafety,
   };
 }

@@ -26,6 +26,12 @@ export async function GET() {
         workspaceId: null,
         memoryFallback: false,
         checkedAt: new Date().toISOString(),
+        paidGenerationSafety: {
+          openaiApiKeyConfigured: false,
+          paidGenerationEnabled: false,
+          fakeProviderActive: true,
+          liveTestsEnabled: false,
+        },
       },
       { status: 503 },
     );

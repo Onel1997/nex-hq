@@ -26,12 +26,19 @@ import {
   primaryFaceLabel,
   usageDisplayLabel,
   canStartPaidCandidateGeneration,
+  countUnattestedPaidJobs,
+  isDebugRunCandidate,
+  isUnattestedPaidGenerationJob,
   type CreatorFormState,
   type CreatorCostPreview,
   type PresetCardMeta,
 } from "@/components/persona/persona-creator-ux";
 import { PersonaGenerationExperience } from "@/components/persona/persona-generation-experience";
 import { PersonaStatusChip } from "@/components/persona/persona-status-chip";
+import {
+  canPrepareManualSlots,
+  canPreparePaidConfirmation,
+} from "@/lib/persona/creation/creation-workflow";
 import {
   Check,
   Circle,
@@ -415,7 +422,7 @@ export function PersonaCreatorView({
     try {
       await studio.createProject({
         ...form,
-        status: "ready",
+        status: "draft",
       });
       studio.setSection("creation_projects");
     } catch (e) {
@@ -970,8 +977,12 @@ export function CreationProjectsView({
     setError(null);
   }, [studio.selectedProjectId]);
 
+  const paidGenerationEnabled =
+    studio.health?.paidGenerationSafety?.paidGenerationEnabled ?? false;
+
   const canStartGeneration = useMemo(() => {
     if (!selected) return false;
+    if (!paidGenerationEnabled) return false;
     return canStartPaidCandidateGeneration({
       busy,
       costConfirmed: confirmCost,
@@ -988,6 +999,7 @@ export function CreationProjectsView({
     studio.costEstimate,
     studio.paidConfirmationProjectId,
     studio.paidConfirmationToken,
+    paidGenerationEnabled,
   ]);
 
   const runEstimate = async (id: string) => {
@@ -1019,6 +1031,7 @@ export function CreationProjectsView({
       await studio.generateCandidates(id, {
         costConfirmed: true,
         confirmationToken,
+        userConfirmedAt: new Date().toISOString(),
         retryConfirmed: Boolean(selected && selected.actual_cost > 0),
       });
       setConfirmCost(false);
@@ -1042,7 +1055,27 @@ export function CreationProjectsView({
         <button type="button" onClick={() => studio.setSection("creator")}>
           New casting
         </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setError(null);
+            void studio
+              .createSafeTestRun()
+              .catch((e: Error) => setError(e.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          Neuen sicheren Testlauf anlegen
+        </button>
       </header>
+
+      {!paidGenerationEnabled ? (
+        <div className="ps-callout ps-callout-warn">
+          <p>Kostenpflichtige Generierung ist derzeit gesperrt.</p>
+        </div>
+      ) : null}
 
       <div className="ps-list">
         {studio.creationProjects.length === 0 ? (
@@ -1074,13 +1107,61 @@ export function CreationProjectsView({
             {selected.candidate_count} Kandidaten · Stage {selected.generation_stage} ·
             Ist-Kosten {selected.actual_cost.toFixed(2)} €
           </p>
+          {countUnattestedPaidJobs(studio.generationJobs) > 0 ? (
+            <div className="ps-callout ps-callout-warn">
+              <p>
+                <strong>Debug-Lauf erkannt:</strong>{" "}
+                {countUnattestedPaidJobs(studio.generationJobs)} Provider-Lauf/Läufe ohne
+                UI-Bestätigung ({countUnattestedPaidJobs(studio.generationJobs)} × geschätzte
+                Kosten). Tatsächlicher OpenAI-Aufruf erfolgte — nicht über normale
+                Persona-Studio-Bestätigung freigegeben. Kandidaten aus diesen Läufen sind nicht
+                für Brand-Cast-Shortlist oder -Konvertierung vorgesehen.
+              </p>
+            </div>
+          ) : selected.actual_cost > 0 ? (
+            <div className="ps-callout ps-callout-warn">
+              <p>
+                <strong>Hinweis:</strong> Dieses Projekt enthält Provider-Läufe mit geschätzten
+                Kosten ({selected.actual_cost.toFixed(2)} €). Prüfen Sie, ob alle Läufe über die
+                UI bestätigt wurden.
+              </p>
+            </div>
+          ) : null}
+          {studio.incidentSummary ? (
+            <div className="ps-callout ps-callout-warn">
+              <p>
+                <strong>Vorfall-Details (Debug-Lauf · nicht über die normale UI bestätigt)</strong>
+              </p>
+              <ul>
+                <li>
+                  Provider-Läufe (NexHQ): {studio.incidentSummary.completedProviderRuns}
+                </li>
+                <li>Bereite Assets: {studio.incidentSummary.readyAssetCount}</li>
+                <li>
+                  NexHQ geschätzte Kosten: {studio.incidentSummary.estimatedCostEur.toFixed(2)} €
+                  (Schätzung — keine bestätigte OpenAI-Abrechnung)
+                </li>
+                <li>Tatsächliche OpenAI-Abrechnung: unbekannt</li>
+                {studio.incidentSummary.firstRunAt ? (
+                  <li>Erster Lauf: {studio.incidentSummary.firstRunAt}</li>
+                ) : null}
+                {studio.incidentSummary.lastRunAt ? (
+                  <li>Letzter Lauf: {studio.incidentSummary.lastRunAt}</li>
+                ) : null}
+              </ul>
+            </div>
+          ) : null}
           <div className="ps-actions">
-            <button type="button" disabled={busy} onClick={() => void runEstimate(selected.id)}>
+            <button
+              type="button"
+              disabled={busy || !canPreparePaidConfirmation(selected)}
+              onClick={() => void runEstimate(selected.id)}
+            >
               Schätzung & Bestätigung vorbereiten
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || !canPrepareManualSlots(selected)}
               onClick={() => void studio.prepareManualCandidates(selected.id)}
             >
               Manuelle Slots vorbereiten
@@ -1127,6 +1208,11 @@ export function CreationProjectsView({
               >
                 Generierung starten
               </button>
+              {!paidGenerationEnabled ? (
+                <p className="ps-muted">
+                  Kostenpflichtige Generierung ist derzeit gesperrt.
+                </p>
+              ) : null}
             </div>
           ) : null}
           {error ? <p className="ps-error-inline">{error}</p> : null}
@@ -1142,6 +1228,10 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
   const selected = useMemo(
     () => studio.candidates.find((c) => c.id === studio.selectedCandidateId) ?? null,
     [studio.candidates, studio.selectedCandidateId],
+  );
+  const selectedIsDebugRun = useMemo(
+    () => (selected ? isDebugRunCandidate(selected, studio.generationJobs) : false),
+    [selected, studio.generationJobs],
   );
 
   const act = async (body: Record<string, unknown>) => {
@@ -1198,7 +1288,19 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
           <h2>
             {selected.candidate_name}{" "}
             <span className="ps-muted">({selected.status})</span>
+            {selectedIsDebugRun ? (
+              <span className="ps-badge-warn"> Debug-Lauf · nicht UI-bestätigt</span>
+            ) : null}
           </h2>
+          {selectedIsDebugRun ? (
+            <div className="ps-callout ps-callout-warn">
+              <p>
+                Tatsächlicher Provider-Aufruf (OpenAI) — Kosten geschätzt, nicht über normale
+                UI-Bestätigung freigegeben. Shortlist, Auswahl und Konvertierung sind für diesen
+                Kandidaten gesperrt.
+              </p>
+            </div>
+          ) : null}
           <p>{selected.identity_summary || "Identity notes will appear once this candidate is ready."}</p>
           <p className="ps-muted">{selected.distinguishing_features}</p>
 
@@ -1240,7 +1342,16 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             <button type="button" onClick={() => void act({ user_rating: 5, user_notes: notes })}>
               Note speichern / 5★
             </button>
-            <button type="button" onClick={() => void act({ status: "shortlisted" })}>
+            <button
+              type="button"
+              disabled={selectedIsDebugRun}
+              title={
+                selectedIsDebugRun
+                  ? "Debug-Lauf ohne UI-Bestätigung — nicht für Brand Cast"
+                  : undefined
+              }
+              onClick={() => void act({ status: "shortlisted" })}
+            >
               Shortlist
             </button>
             <button
@@ -1261,11 +1372,26 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             >
               Ablehnen
             </button>
-            <button type="button" onClick={() => void act({ status: "selected" })}>
+            <button
+              type="button"
+              disabled={selectedIsDebugRun}
+              title={
+                selectedIsDebugRun
+                  ? "Debug-Lauf ohne UI-Bestätigung — nicht für Brand Cast"
+                  : undefined
+              }
+              onClick={() => void act({ status: "selected" })}
+            >
               Auswählen
             </button>
             <button
               type="button"
+              disabled={selectedIsDebugRun}
+              title={
+                selectedIsDebugRun
+                  ? "Debug-Lauf ohne UI-Bestätigung — nicht für Brand Cast"
+                  : undefined
+              }
               onClick={() => void studio.convertCandidate(selected.id).catch((e: Error) => setError(e.message))}
             >
               In Draft-Persona überführen

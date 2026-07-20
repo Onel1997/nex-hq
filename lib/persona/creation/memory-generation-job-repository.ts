@@ -157,4 +157,35 @@ export class MemoryGenerationJobRepository implements PersonaGenerationJobReposi
     sharedConfirmations.set(token, updated);
     return structuredClone(updated);
   }
+
+  async listConfirmationsForProject(scope: WorkspaceScope, projectId: string) {
+    return structuredClone(
+      [...sharedConfirmations.values()]
+        .filter(
+          (c) =>
+            c.workspace_id === scope.workspaceId &&
+            c.creation_project_id === projectId,
+        )
+        .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    );
+  }
+
+  async updateConfirmationByToken(
+    scope: WorkspaceScope,
+    token: string,
+    patch: { payload?: Record<string, unknown>; consumed_at?: string | null },
+  ) {
+    const row = await this.getConfirmationByToken(scope, token);
+    if (!row) {
+      throw new PersonaDomainError("Bestätigung nicht gefunden.", "NOT_FOUND");
+    }
+    const updated: PersonaGenerationConfirmation = {
+      ...row,
+      payload: patch.payload ?? row.payload,
+      consumed_at:
+        patch.consumed_at !== undefined ? patch.consumed_at : row.consumed_at,
+    };
+    sharedConfirmations.set(token, updated);
+    return structuredClone(updated);
+  }
 }

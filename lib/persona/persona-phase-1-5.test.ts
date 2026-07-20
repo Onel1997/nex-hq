@@ -70,6 +70,14 @@ async function baseProject(overrides: Record<string, unknown> = {}) {
   } as never);
 }
 
+async function paidBaseProject(overrides: Record<string, unknown> = {}) {
+  return baseProject({
+    provider_mode: "image_provider",
+    status: "draft",
+    ...overrides,
+  });
+}
+
 describe("Persona Studio Phase 1.5 generation jobs & confirmation", () => {
   let personaRepo: MemoryPersonaRepository;
   let creationRepo: MemoryCreationRepository;
@@ -92,8 +100,21 @@ describe("Persona Studio Phase 1.5 generation jobs & confirmation", () => {
     resetMemoryGenerationJobStoreForTests();
   });
 
+  describe("paid OpenAI confirmation (requires OPENAI_API_KEY stub)", () => {
+    let previousOpenAiKey: string | undefined;
+
+    beforeEach(() => {
+      previousOpenAiKey = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = "test-key";
+    });
+
+    afterEach(() => {
+      if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previousOpenAiKey;
+    });
+
   it("1. generation jobs persist across service restart (shared memory store)", async () => {
-    const project = await baseProject();
+    const project = await paidBaseProject();
     const prepared = await preparePaidGenerationConfirmation(scopeA, project.id);
     assert.ok(prepared.job.id);
     assert.equal(prepared.job.status, "pending_confirmation");
@@ -107,14 +128,14 @@ describe("Persona Studio Phase 1.5 generation jobs & confirmation", () => {
   });
 
   it("2. page refresh does not lose active job", async () => {
-    const project = await baseProject();
+    const project = await paidBaseProject();
     const prepared = await preparePaidGenerationConfirmation(scopeA, project.id);
     const again = await listGenerationJobsForProject(scopeA, project.id);
     assert.equal(again[0]?.confirmation_token, prepared.confirmation.confirmation_token);
   });
 
   it("3. stale estimate blocks generation", async () => {
-    const project = await baseProject({ provider_mode: "manual_upload" });
+    const project = await paidBaseProject();
     const prepared = await preparePaidGenerationConfirmation(scopeA, project.id);
     await creationRepo.updateProject(scopeA, project.id, { candidate_count: 6 });
     await assert.rejects(
@@ -122,16 +143,17 @@ describe("Persona Studio Phase 1.5 generation jobs & confirmation", () => {
         confirmAndStartCandidateGeneration(scopeA, project.id, {
           costConfirmed: true,
           confirmationToken: prepared.confirmation.confirmation_token,
+          userConfirmedAt: new Date().toISOString(),
         }),
       (err: unknown) =>
         err instanceof PersonaDomainError &&
-        (/veraltet|Bestätigung|Manueller Upload|Parameter/i.test(err.message) ||
+        (/veraltet|Bestätigung|Parameter/i.test(err.message) ||
           err.code === "WORKFLOW"),
     );
   });
 
   it("4. changed candidate count requires reconfirmation", async () => {
-    const project = await baseProject();
+    const project = await paidBaseProject();
     const prepared = await preparePaidGenerationConfirmation(scopeA, project.id);
     const hashBefore = prepared.confirmation.estimate_hash;
     await creationRepo.updateProject(scopeA, project.id, { candidate_count: 8 });
@@ -148,32 +170,67 @@ describe("Persona Studio Phase 1.5 generation jobs & confirmation", () => {
     assert.notEqual(hashBefore, hashAfter);
   });
 
-  it("5. no paid generation without confirmation", async () => {
-    const project = await baseProject({ provider_mode: "image_provider" });
+  it("22. quality mode defaults to Premium Editorial with estimated cost labels", async () => {
+    const profile = getQualityModeProfile("premium_editorial");
+    assert.equal(profile.label, "Premium Editorial");
+    const project = await paidBaseProject();
+    assert.equal(project.quality_mode, "premium_editorial");
+    const prepared = await preparePaidGenerationConfirmation(scopeA, project.id);
+    assert.equal(prepared.costLabel, "estimated");
+  });
+
+  it("workflow: generating status rejects prepare_confirmation", async () => {
+    const project = await paidBaseProject({ status: "generating" });
     await assert.rejects(
-      () =>
-        confirmAndStartCandidateGeneration(scopeA, project.id, {
-          costConfirmed: false,
-        }),
+      () => preparePaidGenerationConfirmation(scopeA, project.id),
       (err: unknown) =>
-        err instanceof PersonaDomainError && /Kostenbestätigung/i.test(err.message),
+        err instanceof PersonaDomainError &&
+        err.code === "WORKFLOW" &&
+        /Generierung läuft bereits/i.test(err.message),
     );
+  });
+  });
+
+  it("5. no paid generation without confirmation", async () => {
+    const previousKey = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test-key";
+    try {
+      const project = await baseProject({ provider_mode: "image_provider" });
+      await assert.rejects(
+        () =>
+          confirmAndStartCandidateGeneration(scopeA, project.id, {
+            costConfirmed: false,
+          }),
+        (err: unknown) =>
+          err instanceof PersonaDomainError && /Kostenbestätigung/i.test(err.message),
+      );
+    } finally {
+      if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previousKey;
+    }
   });
 
   it("6. no silent provider fallback when provider missing", async () => {
-    const project = await baseProject({ provider_mode: "image_provider" });
-    await assert.rejects(
-      () =>
-        confirmAndStartCandidateGeneration(scopeA, project.id, {
-          costConfirmed: true,
-        }),
-      (err: unknown) =>
-        err instanceof PersonaDomainError &&
-        (/Provider nicht eingerichtet|deaktiviert|Fallback|OPENAI|Kostenschätzung/i.test(
-          err.message,
-        ) ||
-          err.code === "CONFIG"),
-    );
+    const previousKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    try {
+      const project = await baseProject({ provider_mode: "image_provider" });
+      await assert.rejects(
+        () =>
+          confirmAndStartCandidateGeneration(scopeA, project.id, {
+            costConfirmed: true,
+          }),
+        (err: unknown) =>
+          err instanceof PersonaDomainError &&
+          (/Provider nicht eingerichtet|deaktiviert|Fallback|OPENAI|Kostenschätzung/i.test(
+            err.message,
+          ) ||
+            err.code === "CONFIG"),
+      );
+    } finally {
+      if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previousKey;
+    }
   });
 
   it("9. shortlist required for Stage B package request", async () => {
@@ -251,13 +308,17 @@ describe("Persona Studio Phase 1.5 generation jobs & confirmation", () => {
     assert.equal(persona.status, "Draft");
   });
 
-  it("22. quality mode defaults to Premium Editorial with estimated cost labels", async () => {
-    const profile = getQualityModeProfile("premium_editorial");
-    assert.equal(profile.label, "Premium Editorial");
-    const project = await baseProject();
-    assert.equal(project.quality_mode, "premium_editorial");
-    const prepared = await preparePaidGenerationConfirmation(scopeA, project.id);
-    assert.equal(prepared.costLabel, "estimated");
+  it("workflow: manual_upload rejects paid prepare_confirmation", async () => {
+    const project = await baseProject({ provider_mode: "manual_upload", status: "draft" });
+    await assert.rejects(
+      () => preparePaidGenerationConfirmation(scopeA, project.id),
+      (err: unknown) =>
+        err instanceof PersonaDomainError &&
+        err.code === "WORKFLOW" &&
+        /Manueller Upload/i.test(err.message),
+    );
+    const candidates = await ensureManualCandidateSlots(scopeA, project.id);
+    assert.ok(candidates.length >= 1);
   });
 
   it("26–28. Image/Video Studio remain unstarted hooks", () => {

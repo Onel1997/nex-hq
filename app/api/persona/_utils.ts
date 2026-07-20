@@ -24,6 +24,10 @@ export function jsonError(error: unknown, fallback = dict.persona.errors.unexpec
             ? 409
             : error.code === "CONFIG"
               ? 503
+              : error.code === "LIVE_PAID_TEST_NOT_AUTHORIZED"
+                ? 403
+                : error.code === "PAID_GENERATION_DISABLED"
+                  ? 403
               : error.code === "STORAGE_DELETE_FAILED"
                 ? 500
                 : 400;
@@ -44,13 +48,17 @@ export function jsonError(error: unknown, fallback = dict.persona.errors.unexpec
                   : error.code === "STORAGE_DELETE_FAILED"
                     ? dict.persona.errors.storageDeleteFailed
                     : error.code === "WORKFLOW"
-                    ? dict.persona.errors.workflow
-                    : error.code === "NOT_FOUND"
+                      ? error.message || dict.persona.errors.workflow
+                      : error.code === "LIVE_PAID_TEST_NOT_AUTHORIZED"
+                ? error.message
+                : error.code === "PAID_GENERATION_DISABLED"
+                  ? error.message
+              : error.code === "NOT_FOUND"
                       ? dict.persona.errors.notFound
                       : error.message;
 
     return NextResponse.json(
-      { error: localized, code: error.code, details: error.details },
+      { success: false, error: localized, code: error.code, details: error.details },
       { status },
     );
   }

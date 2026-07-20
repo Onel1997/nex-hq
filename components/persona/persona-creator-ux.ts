@@ -508,3 +508,32 @@ export function mockComparisonCandidates(form: CreatorFormState): MockCandidateC
 export function fashionDirectionLabel(form: CreatorFormState): string {
   return form.preferred_brand_looks.trim() || form.fashion_style.trim() || "Quiet Luxury";
 }
+
+/** Client-side mirror of server debug-run detection for UI honesty. */
+export function isUnattestedPaidGenerationJob(job: {
+  provider: string;
+  confirmation_payload?: Record<string, unknown>;
+  status?: string;
+}): boolean {
+  const payload = job.confirmation_payload ?? {};
+  if (payload.attestation === "debug_or_api_only") return true;
+  if (job.provider !== "openai") return false;
+  if (job.status === "pending_confirmation") return false;
+  return payload.attestation !== "ui_checkbox" || payload.userConfirmedAt == null;
+}
+
+export function isDebugRunCandidate(
+  candidate: { provider_job_id: string | null },
+  jobs: Array<{ id: string; provider: string; confirmation_payload?: Record<string, unknown>; status?: string }>,
+): boolean {
+  if (!candidate.provider_job_id) return false;
+  const job = jobs.find((j) => j.id === candidate.provider_job_id);
+  if (!job) return false;
+  return isUnattestedPaidGenerationJob(job);
+}
+
+export function countUnattestedPaidJobs(
+  jobs: Array<{ provider: string; confirmation_payload?: Record<string, unknown>; status?: string }>,
+): number {
+  return jobs.filter(isUnattestedPaidGenerationJob).length;
+}

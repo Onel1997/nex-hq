@@ -1,6 +1,37 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+
+/**
+ * Safe JSON fetch: validates status and content-type before parsing.
+ * Throws a structured, human-readable error instead of "Unexpected token '<'".
+ */
+async function fetchJson<T>(
+  url: string,
+  init?: RequestInit,
+): Promise<{ res: Response; data: T }> {
+  const res = await fetch(url, init);
+  const contentType = res.headers.get("content-type") ?? "";
+  const isJson = contentType.includes("application/json");
+
+  if (!isJson) {
+    const preview = await res.text().then((t) => t.slice(0, 120).replace(/\s+/g, " "));
+    console.error("[persona] Unexpected non-JSON response", {
+      url,
+      method: init?.method ?? "GET",
+      status: res.status,
+      contentType,
+      preview,
+    });
+    throw new Error(
+      `Der Persona-Endpunkt hat keine gültige JSON-Antwort geliefert (HTTP ${res.status}). ` +
+        `Erwartet: application/json — Erhalten: ${contentType || "(leer)"}`,
+    );
+  }
+
+  const data = (await res.json()) as T;
+  return { res, data };
+}
 import type {
   BrandLook,
   CameraPreset,
@@ -38,6 +69,12 @@ export interface PersonaHealthReport {
   workspaceId: string | null;
   memoryFallback: false;
   checkedAt: string;
+  paidGenerationSafety: {
+    openaiApiKeyConfigured: boolean;
+    paidGenerationEnabled: boolean;
+    fakeProviderActive: boolean;
+    liveTestsEnabled: boolean;
+  };
 }
 
 export type PersonaStudioSection =
@@ -72,6 +109,8 @@ interface StudioState {
   costEstimate: CandidateGenerationCostEstimate | null;
   paidConfirmationToken: string | null;
   paidConfirmationProjectId: string | null;
+  generationJobs: import("@/lib/persona/domain/creation-types").PersonaGenerationJob[];
+  incidentSummary: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
   presets: CreationProjectPreset[];
   providerSetupMessage: string | null;
 }
@@ -109,6 +148,8 @@ export function usePersonaStudio() {
     costEstimate: null,
     paidConfirmationToken: null,
     paidConfirmationProjectId: null,
+    generationJobs: [],
+    incidentSummary: null,
     presets: [],
     providerSetupMessage: null,
   });
@@ -131,6 +172,12 @@ export function usePersonaStudio() {
           workspaceId: null,
           memoryFallback: false,
           checkedAt: new Date().toISOString(),
+          paidGenerationSafety: {
+            openaiApiKeyConfigured: false,
+            paidGenerationEnabled: false,
+            fakeProviderActive: true,
+            liveTestsEnabled: false,
+          },
         },
       }));
     }
@@ -199,14 +246,11 @@ export function usePersonaStudio() {
   }, [refreshHealth, refreshCreation]);
 
   const estimateProjectCost = useCallback(async (projectId: string) => {
-    const res = await fetch(
-      `/api/persona/creation-projects/${projectId}?estimate=1`,
-    );
-    const data = (await res.json()) as {
+    const { res, data } = await fetchJson<{
       error?: string;
       estimate?: CandidateGenerationCostEstimate;
       costLabel?: string;
-    };
+    }>(`/api/persona/creation-projects/${projectId}?estimate=1`);
     if (!res.ok) throw new Error(data.error ?? "Kostenschätzung fehlgeschlagen");
     setState((prev) => ({ ...prev, costEstimate: data.estimate ?? null }));
     return data.estimate;
@@ -218,6 +262,8 @@ export function usePersonaStudio() {
       error?: string;
       project?: PersonaCreationProject;
       candidates?: PersonaCandidate[];
+      jobs?: import("@/lib/persona/domain/creation-types").PersonaGenerationJob[];
+      incident?: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
     };
     if (!res.ok) throw new Error(data.error ?? "Projekt laden fehlgeschlagen");
     setState((prev) => {
@@ -226,6 +272,8 @@ export function usePersonaStudio() {
         ...prev,
         selectedProjectId: projectId,
         candidates: data.candidates ?? [],
+        generationJobs: data.jobs ?? [],
+        incidentSummary: data.incident ?? null,
         creationProjects: prev.creationProjects.map((p) =>
           p.id === projectId && data.project ? data.project : p,
         ),
@@ -293,18 +341,17 @@ export function usePersonaStudio() {
   );
 
   const preparePaidConfirmation = useCallback(async (projectId: string) => {
-    const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "prepare_confirmation" }),
-    });
-    const data = (await res.json()) as {
+    const { res, data } = await fetchJson<{
       error?: string;
       estimate?: CandidateGenerationCostEstimate;
       confirmation?: { confirmation_token: string };
       job?: { confirmation_token?: string | null };
       costLabel?: string;
-    };
+    }>(`/api/persona/creation-projects/${projectId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "prepare_confirmation" }),
+    });
     if (!res.ok) throw new Error(data.error ?? "Bestätigung vorbereiten fehlgeschlagen");
     const token =
       data.confirmation?.confirmation_token ?? data.job?.confirmation_token ?? null;
@@ -325,12 +372,18 @@ export function usePersonaStudio() {
         costConfirmed: boolean;
         retryConfirmed?: boolean;
         confirmationToken?: string;
+        userConfirmedAt?: string;
+        attestation?: string;
       },
     ) => {
       const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate", ...opts }),
+        body: JSON.stringify({
+          action: "generate",
+          attestation: "ui_checkbox",
+          ...opts,
+        }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Generierung fehlgeschlagen");
@@ -590,6 +643,22 @@ export function usePersonaStudio() {
   const selectedPersona =
     personas.find((p) => p.id === state.selectedPersonaId) ?? null;
 
+  const createSafeTestRun = useCallback(async () => {
+    const res = await fetch("/api/persona/creation-projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create_safe_test_run" }),
+    });
+    const data = (await res.json()) as { error?: string; project?: { id: string } };
+    if (!res.ok) throw new Error(data.error ?? "Testprojekt konnte nicht angelegt werden");
+    if (data.project?.id) {
+      await loadProject(data.project.id);
+      setState((prev) => ({ ...prev, section: "creation_projects" }));
+    }
+    await refreshCreation();
+    return data.project;
+  }, [loadProject, refreshCreation]);
+
   return {
     ...state,
     counts: state.counts ?? EMPTY_COUNTS,
@@ -622,6 +691,7 @@ export function usePersonaStudio() {
     patchCandidate,
     convertCandidate,
     uploadCandidateAsset,
+    createSafeTestRun,
   };
 }
 

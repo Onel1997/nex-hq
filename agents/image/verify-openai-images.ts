@@ -58,6 +58,12 @@ async function tryLiveGeneration() {
     console.log("\nSkipping live API call — OPENAI_API_KEY not set");
     return;
   }
+  if (process.env.ALLOW_LIVE_OPENAI_IMAGE_VERIFY !== "true") {
+    console.log(
+      "\nSkipping live API call — set ALLOW_LIVE_OPENAI_IMAGE_VERIFY=true to run",
+    );
+    return;
+  }
 
   console.log("\n=== Live OpenAI Images API Call ===");
   try {

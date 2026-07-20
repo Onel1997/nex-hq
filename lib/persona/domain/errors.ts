@@ -13,7 +13,9 @@ export type PersonaErrorCode =
   | "STORAGE_UPLOAD_FAILED"
   | "STORAGE_DELETE_FAILED"
   | "RELATIONSHIP_INTEGRITY"
-  | "CONFIG";
+  | "CONFIG"
+  | "LIVE_PAID_TEST_NOT_AUTHORIZED"
+  | "PAID_GENERATION_DISABLED";
 
 export class PersonaDomainError extends Error {
   constructor(

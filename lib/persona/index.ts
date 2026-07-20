@@ -78,6 +78,17 @@ export { MemoryCreationRepository } from "./creation/memory-creation-repository"
 export { SupabaseCreationRepository } from "./creation/supabase-creation-repository";
 export type { PersonaCreationRepository } from "./creation/creation-repository";
 export * from "./creation/creation-service";
+export {
+  assertCreationProjectAction,
+  canPrepareManualSlots,
+  canPreparePaidConfirmation,
+  canStartPaidGeneration,
+  resolveCreationWorkflowStep,
+} from "./creation/creation-workflow";
+export type {
+  CreationWorkflowAction,
+  CreationWorkflowStep,
+} from "./creation/creation-workflow";
 export { PERSONA_CREATION_PRESETS, getCreationPreset } from "./creation/presets";
 export {
   getPersonaCandidateGenerator,
@@ -103,6 +114,26 @@ export {
   createConfirmationToken,
   estimateFingerprintFromCost,
 } from "./creation/paid-confirmation";
+export {
+  assertLivePaidProviderInvocationAllowed,
+  assertPaidGenerationEnabled,
+  getPaidGenerationSafetyStatus,
+  isConfirmationCancelledOrExpired,
+  isDebugOrUnattestedGenerationJob,
+  isDebugOrTestHttpRequest,
+  isPaidGenerationEnabled,
+  shouldUseFakePersonaProvider,
+  UI_CHECKBOX_ATTESTATION,
+  ALLOW_LIVE_PERSONA_GENERATION_TESTS_ENV,
+  EXPECTED_SUPABASE_PROJECT_REF_ENV,
+  LIVE_PERSONA_GENERATION_MAX_EUR_ENV,
+  PERSONA_PAID_GENERATION_ENABLED_ENV,
+  PERSONA_USE_FAKE_PROVIDER_ENV,
+} from "./creation/paid-generation-guard";
+export {
+  PERSONA_INCIDENT_PROJECT_ID,
+  INCIDENT_CLASSIFICATION,
+} from "./creation/incident-constants";
 
 export * from "./services/persona-service";
 export { resolvePersonaWorkspaceScope } from "./services/workspace-scope";

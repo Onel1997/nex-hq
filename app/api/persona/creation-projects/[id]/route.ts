@@ -1,10 +1,13 @@
 import { requirePersonaScope, jsonOk, jsonError, dict } from "../../_utils";
+import { PersonaDomainError } from "@/lib/persona";
+import { assertPaidGenerationHttpRequestAllowed } from "@/lib/persona/creation/paid-generation-guard";
 import {
   confirmAndStartCandidateGeneration,
   ensureManualCandidateSlots,
   estimateCreationCost,
   getCreationProject,
   getCreationProviderSetup,
+  getIncidentProjectSummary,
   listCandidates,
   listGenerationJobsForProject,
   preparePaidGenerationConfirmation,
@@ -13,6 +16,13 @@ import {
 import { getQualityModeProfile } from "@/lib/persona/creation/quality-modes";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+const PATCH_ACTIONS = new Set([
+  "estimate",
+  "prepare_confirmation",
+  "prepare_manual",
+  "generate",
+]);
 
 export async function GET(_request: Request, ctx: Ctx) {
   const gate = await requirePersonaScope();
@@ -41,8 +51,16 @@ export async function GET(_request: Request, ctx: Ctx) {
       const jobs = await listGenerationJobsForProject(gate.scope, id);
       return jsonOk({ project, jobs });
     }
+    if (url.searchParams.get("incident") === "1" || id === "f04d43f3-1a74-436d-a458-8e23658eebf1") {
+      const incident = await getIncidentProjectSummary(gate.scope, id);
+      if (url.searchParams.get("incident") === "1") {
+        return jsonOk({ project, incident });
+      }
+    }
     const candidates = await listCandidates(gate.scope, id);
-    return jsonOk({ project, candidates });
+    const jobs = await listGenerationJobsForProject(gate.scope, id);
+    const incident = await getIncidentProjectSummary(gate.scope, id);
+    return jsonOk({ project, candidates, jobs, incident });
   } catch (error) {
     return jsonError(error, dict.persona.errors.unexpected);
   }
@@ -66,13 +84,14 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
     if (body.action === "prepare_confirmation") {
       const prepared = await preparePaidGenerationConfirmation(gate.scope, id);
-      return jsonOk(prepared);
+      return jsonOk({ success: true, ...prepared });
     }
     if (body.action === "prepare_manual") {
       const candidates = await ensureManualCandidateSlots(gate.scope, id);
-      return jsonOk({ candidates });
+      return jsonOk({ success: true, candidates });
     }
     if (body.action === "generate") {
+      assertPaidGenerationHttpRequestAllowed(request);
       const result = await confirmAndStartCandidateGeneration(gate.scope, id, {
         costConfirmed: Boolean(body.costConfirmed),
         retryConfirmed: Boolean(body.retryConfirmed),
@@ -80,8 +99,24 @@ export async function PATCH(request: Request, ctx: Ctx) {
           typeof body.confirmationToken === "string"
             ? body.confirmationToken
             : undefined,
+        userConfirmedAt:
+          typeof body.userConfirmedAt === "string"
+            ? body.userConfirmedAt
+            : undefined,
+        attestation:
+          typeof body.attestation === "string" ? body.attestation : undefined,
+        httpRequest: request,
       });
-      return jsonOk(result);
+      return jsonOk({ success: true, ...result });
+    }
+    if (typeof body.action === "string") {
+      return jsonError(
+        new PersonaDomainError(
+          `Unbekannte Workflow-Aktion: ${body.action}`,
+          "VALIDATION",
+          { allowedActions: [...PATCH_ACTIONS] },
+        ),
+      );
     }
     const project = await updateCreationProject(gate.scope, id, body as never);
     return jsonOk({ project });

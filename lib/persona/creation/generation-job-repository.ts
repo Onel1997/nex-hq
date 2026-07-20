@@ -88,6 +88,18 @@ export interface PersonaGenerationJobRepository {
     scope: WorkspaceScope,
     token: string,
   ): Promise<PersonaGenerationConfirmation>;
+  listConfirmationsForProject(
+    scope: WorkspaceScope,
+    projectId: string,
+  ): Promise<PersonaGenerationConfirmation[]>;
+  updateConfirmationByToken(
+    scope: WorkspaceScope,
+    token: string,
+    patch: {
+      payload?: Record<string, unknown>;
+      consumed_at?: string | null;
+    },
+  ): Promise<PersonaGenerationConfirmation>;
 }
 
 /** Re-export for create project typing convenience. */

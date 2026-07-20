@@ -1,6 +1,7 @@
 import { requirePersonaScope, jsonOk, jsonError, dict } from "../_utils";
 import {
   createCreationProject,
+  createSafeTestRunProject,
   getCreationProviderSetup,
   listCreationPresets,
   listCreationProjects,
@@ -31,6 +32,10 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
+    if (body.action === "create_safe_test_run") {
+      const project = await createSafeTestRunProject(gate.scope);
+      return jsonOk({ success: true, project }, 201);
+    }
     const project = await createCreationProject(gate.scope, body as never);
     return jsonOk({ project }, 201);
   } catch (error) {
