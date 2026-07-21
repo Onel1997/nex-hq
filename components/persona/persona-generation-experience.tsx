@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 const LIVE_GENERATION_STEPS = [
-  "Preparing Brand DNA",
-  "Building Identity Prompt",
-  "Rendering Candidate 1",
-  "Rendering Candidate 2",
-  "Rendering Candidate 3",
-  "Rendering Candidate 4",
-  "Running AI Quality Analysis",
-  "Comparing Identity Consistency",
-  "Preparing Candidate Review",
+  "Preparing discovery casting",
+  "Building identity locks",
+  "Provider processing Candidate 1",
+  "Provider processing Candidate 2",
+  "Provider processing Candidate 3",
+  "Provider processing Candidate 4",
+  "Saving discovery assets",
+  "Computing brief-fit scores",
+  "Discovery ready",
 ] as const;
 
 function formatElapsed(seconds: number): string {
@@ -69,9 +69,14 @@ export function PersonaGenerationExperience({
 
   if (!active) return null;
 
-  const progress = Math.round(((stepIndex + 1) / steps.length) * 100);
+  // Never show 100% until the final "Discovery ready" step (cosmetic timeline only —
+  // real readiness is DB finalization on the server).
+  const rawProgress = Math.round(((stepIndex + 1) / steps.length) * 100);
+  const progress =
+    stepIndex >= steps.length - 1 ? 100 : Math.min(95, rawProgress);
   const remaining = Math.max(0, estimatedSeconds - elapsed);
   const currentStep = steps[stepIndex] ?? steps[0];
+  const stillWaiting = elapsed >= 90;
 
   return (
     <div className="ps-gen-live" role="status" aria-live="polite">
@@ -91,9 +96,11 @@ export function PersonaGenerationExperience({
         </div>
       </div>
 
-      <p className="ps-eyebrow">Premium Casting</p>
-      <h2 className="ps-gen-live-title">Generating Premium Brand Candidates</h2>
-      <p className="ps-gen-live-subtitle">Creating your official Milaene Brand Face...</p>
+      <p className="ps-eyebrow">Discovery casting</p>
+      <h2 className="ps-gen-live-title">Generate 4 discovery faces</h2>
+      <p className="ps-gen-live-subtitle">
+        One portrait per candidate — angle validation is a separate confirmed step.
+      </p>
 
       <div className="ps-gen-live-progress" aria-hidden>
         <div className="ps-gen-live-progress-track">
@@ -120,6 +127,11 @@ export function PersonaGenerationExperience({
         </div>
       </dl>
 
+      {stillWaiting ? (
+        <p className="ps-muted">
+          Provider is still processing. Your request remains active.
+        </p>
+      ) : null}
       <ol className="ps-gen-live-timeline">
         {steps.map((label, i) => {
           const state = i < stepIndex ? "done" : i === stepIndex ? "current" : "pending";

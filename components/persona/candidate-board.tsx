@@ -9,6 +9,12 @@ import type {
 import { CandidateStatusBadge } from "@/components/persona/candidate-status-badge";
 import { PersonaStatusChip } from "@/components/persona/persona-status-chip";
 import { readNotesHistory } from "@/lib/persona/creation/candidate-intelligence/notes";
+import {
+  readCandidateCastingScores,
+  readCandidateOverallScore,
+  selectTopCandidatesForDisplay,
+  ACTIVE_CASTING_POOL,
+} from "@/lib/persona/creation/candidate-intelligence";
 
 export function getCandidateVariationLabel(candidate: PersonaCandidate): string {
   const variation = candidate.generation_settings?.variation as
@@ -18,12 +24,57 @@ export function getCandidateVariationLabel(candidate: PersonaCandidate): string 
 }
 
 export function getCandidateOverallScore(candidate: PersonaCandidate): number | null {
-  const qa = candidate.generation_settings?.qualityAssessment as
-    | { dimensions?: { overall?: number } }
-    | undefined;
-  if (typeof qa?.dimensions?.overall === "number") return qa.dimensions.overall;
-  if (typeof candidate.brand_fit_score === "number") return candidate.brand_fit_score;
-  return null;
+  return readCandidateOverallScore(
+    candidate.generation_settings,
+    candidate.brand_fit_score,
+  );
+}
+
+export function getCandidateCastingScores(candidate: PersonaCandidate) {
+  return readCandidateCastingScores(candidate.generation_settings);
+}
+
+/**
+ * Rank board candidates by brief-fit score (best first).
+ * Recommended Brand Face is NEVER set from rule-based brief fit alone —
+ * only when a completed visual evaluation exists.
+ */
+export function rankCandidatesForBoard(
+  candidates: PersonaCandidate[],
+): Array<{
+  candidate: PersonaCandidate;
+  rank: number;
+  isRecommendedBrandFace: boolean;
+  overallScore: number;
+}> {
+  const rankable = candidates.map((candidate) => {
+    const scores = readCandidateCastingScores(candidate.generation_settings);
+    return {
+      id: candidate.id,
+      candidate_number: candidate.candidate_number,
+      overallScore: scores.briefFit ?? scores.overall ?? candidate.brand_fit_score ?? 0,
+      commercialFace: scores.commercialFace ?? undefined,
+      streetwearMatch: scores.streetwearMatch ?? undefined,
+      authenticity: scores.authenticity ?? undefined,
+      visualStatus: scores.visualStatus,
+      candidate,
+    };
+  });
+
+  const ranked = selectTopCandidatesForDisplay(rankable, ACTIVE_CASTING_POOL);
+  const anyVisual = ranked.some(
+    (row) => row.source.visualStatus === "completed",
+  );
+
+  return ranked.map((row) => ({
+    candidate: row.source.candidate,
+    rank: row.rank,
+    // Do not fabricate Recommended Brand Face from metadata-only scores.
+    isRecommendedBrandFace: anyVisual
+      ? row.isRecommendedBrandFace && row.source.visualStatus === "completed"
+      : false,
+    overallScore: row.overallScore,
+  }));
 }
 
 export function getCandidateDiversityWarning(
@@ -146,10 +197,6 @@ export function CandidateComparePanel({
   );
 }
 
-function formatEur(n: number): string {
-  return `${n.toFixed(2)} €`;
-}
-
 function formatWhen(iso: string): string {
   try {
     return new Date(iso).toLocaleString();
@@ -163,23 +210,35 @@ export function CandidateBoardCard({
   previewUrl,
   active,
   onSelect,
+  isRecommendedBrandFace = false,
 }: {
   candidate: PersonaCandidate;
   previewUrl: string | null;
   active: boolean;
   onSelect: () => void;
+  isRecommendedBrandFace?: boolean;
 }) {
   const overall = getCandidateOverallScore(candidate);
+  const casting = getCandidateCastingScores(candidate);
   const styleLabel = getCandidateVariationLabel(candidate);
   const qualityMode =
     typeof candidate.generation_settings?.quality === "string"
       ? candidate.generation_settings.quality
       : null;
+  const recommendedUse = casting.primaryUse ?? casting.bestFor[0] ?? null;
+  const costLabel =
+    typeof candidate.generation_settings?.costLabel === "string"
+      ? candidate.generation_settings.costLabel
+      : "allocated_estimate";
+  const visualLabel =
+    casting.visualStatus === "completed"
+      ? "Visual evaluated"
+      : "Not visually evaluated";
 
   return (
     <button
       type="button"
-      className={`ps-ci-card${active ? " is-active" : ""}`}
+      className={`ps-ci-card${active ? " is-active" : ""}${isRecommendedBrandFace ? " is-recommended" : ""}`}
       onClick={onSelect}
     >
       <div className="ps-ci-card-hero">
@@ -189,10 +248,15 @@ export function CandidateBoardCard({
         ) : (
           <div className="ps-ci-card-hero-empty">No preview</div>
         )}
+        {isRecommendedBrandFace ? (
+          <span className="ps-ci-recommended-badge">★ Recommended Brand Face</span>
+        ) : null}
         <div className="ps-ci-card-hero-meta">
           <CandidateStatusBadge candidate={candidate} />
           {overall != null ? (
-            <span className="ps-ci-score-pill">{overall}</span>
+            <span className="ps-ci-score-pill" title="Brief Fit (metadata — not visual)">
+              Brief {overall}
+            </span>
           ) : null}
         </div>
       </div>
@@ -212,20 +276,38 @@ export function CandidateBoardCard({
         </div>
         <dl className="ps-ci-card-stats">
           <div>
+            <dt>Brief Fit</dt>
+            <dd>{casting.briefFit ?? overall ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>Technical</dt>
+            <dd>{casting.technicalCompleteness ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>Visual</dt>
+            <dd>{visualLabel}</dd>
+          </div>
+          <div>
+            <dt>Recommended Use</dt>
+            <dd>{recommendedUse ?? "—"}</dd>
+          </div>
+          <div>
             <dt>Cost</dt>
-            <dd>{formatEur(candidate.actual_generation_cost ?? 0)}</dd>
+            <dd>
+              {candidate.actual_generation_cost != null
+                ? `${candidate.actual_generation_cost.toFixed(2)} €`
+                : "—"}
+            </dd>
           </div>
           <div>
-            <dt>Created</dt>
-            <dd>{formatWhen(candidate.created_at)}</dd>
-          </div>
-          <div>
-            <dt>Fit</dt>
-            <dd>{candidate.brand_fit_score ?? "—"}</dd>
-          </div>
-          <div>
-            <dt>Identity</dt>
-            <dd>{candidate.identity_consistency_score ?? "—"}</dd>
+            <dt>Cost status</dt>
+            <dd>
+              {costLabel === "allocated_estimate"
+                ? "Allocated estimate"
+                : costLabel === "estimated"
+                  ? "Estimated"
+                  : String(costLabel)}
+            </dd>
           </div>
         </dl>
       </div>
@@ -317,45 +399,107 @@ export function CandidateLightbox({
 }
 
 export function CandidateQualityPanel({ candidate }: { candidate: PersonaCandidate }) {
+  const casting = getCandidateCastingScores(candidate);
   const qa = candidate.generation_settings?.qualityAssessment as
     | {
+        method?: string;
+        briefFit?: number;
+        technicalCompleteness?: number;
         dimensions?: Record<string, number>;
         strengths?: string[];
         risks?: string[];
+        scoreHonesty?: {
+          briefFitLabel?: string;
+          technicalLabel?: string;
+          visualLabel?: string;
+        };
+        casting?: {
+          bestFor?: string[];
+          primaryUse?: string;
+          marketFitLabel?: string;
+          campaignReadinessLabel?: string;
+        };
+        reviews?: {
+          castingAnalysis?: string;
+          commercialPotential?: string;
+          brandCompatibility?: string;
+          campaignReadiness?: string;
+          marketFit?: string;
+          lifestylePresence?: string;
+          identityStrength?: string;
+          memorability?: string;
+        };
       }
     | undefined;
-  if (!qa?.dimensions) return null;
-  const dims = qa.dimensions;
+  if (!qa?.dimensions && casting.briefFit == null) return null;
+  const dims = qa?.dimensions ?? {};
+
   return (
     <div className="ps-ci-quality">
-      <h3>AI Quality Score</h3>
+      <h3>Casting Analysis</h3>
+      <p className="ps-muted ps-ci-quality-lede">
+        {qa?.scoreHonesty?.briefFitLabel ?? "Brief Fit"} ·{" "}
+        {qa?.scoreHonesty?.technicalLabel ?? "Technical Completeness"} ·{" "}
+        {qa?.scoreHonesty?.visualLabel ?? "Not visually evaluated"}
+        {qa?.method ? ` · ${qa.method}` : ""}
+      </p>
       <div className="ps-ci-quality-grid">
         {[
-          ["Overall", dims.overall],
-          ["Authenticity", dims.authenticity],
-          ["Relatability", dims.relatability],
-          ["Lifestyle Fit", dims.lifestyleFit],
-          ["Streetwear Match", dims.streetwearMatch],
-          ["Community", dims.communityAppeal],
-          ["Social Presence", dims.socialMediaPresence],
-          ["Brand Match", dims.brandMatch],
-          ["Commercial", dims.commercialQuality],
-          ["Face Consistency", dims.faceConsistency],
-          ["Lighting", dims.lighting],
-          ["Pose", dims.poseQuality],
-          ["Editorial", dims.editorialQuality],
+          ["Brief Fit", casting.briefFit ?? qa?.briefFit ?? dims.overall],
+          ["Technical Completeness", casting.technicalCompleteness ?? qa?.technicalCompleteness],
+          ["Visual evaluation", null],
+          ["Brief · Streetwear Match", dims.streetwearMatch],
+          ["Brief · Brand Match", dims.brandMatch],
+          ["Brief · Community", dims.communityAppeal],
+          ["Brief · Authenticity", dims.authenticity ?? dims.lifestyleAuthenticity],
         ].map(([label, value]) => (
           <div key={String(label)}>
             <span>{label}</span>
-            <strong>{value ?? "—"}</strong>
+            <strong>
+              {label === "Visual evaluation"
+                ? casting.visualStatus === "completed"
+                  ? "Completed"
+                  : "Not visually evaluated"
+                : (value ?? "—")}
+            </strong>
           </div>
         ))}
       </div>
-      {qa.strengths?.length ? (
-        <p className="ps-muted">Strengths: {qa.strengths.join(" · ")}</p>
+      <p className="ps-muted">
+        Brief-fit dimensions are metadata heuristics — not verified image analysis.
+        Commercial Face scores are not shown as visual judgments.
+      </p>
+
+      {qa?.casting?.bestFor?.length ? (
+        <div className="ps-ci-casting-rec">
+          <h4>Best for (brief-fit)</h4>
+          <ul>
+            {qa.casting.bestFor.map((channel) => (
+              <li key={channel}>{channel}</li>
+            ))}
+          </ul>
+        </div>
       ) : null}
-      {qa.risks?.length ? (
-        <p className="ps-callout ps-callout-warn">{qa.risks.join(" · ")}</p>
+
+      {qa?.strengths?.length ? (
+        <div className="ps-ci-strengths">
+          <h4>Strengths</h4>
+          <ul>
+            {qa.strengths.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {qa?.risks?.length ? (
+        <div className="ps-ci-risks">
+          <h4>Potential Risks</h4>
+          <ul>
+            {qa.risks.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </div>
   );

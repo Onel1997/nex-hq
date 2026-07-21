@@ -6,9 +6,12 @@ import type { CandidateAssetType, GenerationStage, QualityMode } from "../domain
 import {
   DEFAULT_CANDIDATE_COUNT,
   QUALITY_MODES,
-  STAGE_A_ASSET_TYPES,
   STAGE_B_ASSET_TYPES,
 } from "../domain/creation-types";
+import {
+  STAGE_A1_DISCOVERY_ASSET_TYPES,
+  STAGE_A2_VALIDATION_ASSET_TYPES,
+} from "./casting-funnel";
 
 export type { QualityMode };
 export { QUALITY_MODES };
@@ -40,7 +43,7 @@ export const QUALITY_MODE_PROFILES: Record<QualityMode, QualityModeProfile> = {
     expectedRealism: "Good for direction exploration",
     expectedIdentityConsistency: "Not identity-locked — exploration only",
     defaultCandidateCount: DEFAULT_CANDIDATE_COUNT,
-    imagesPerCandidateDiscovery: STAGE_A_ASSET_TYPES.length,
+    imagesPerCandidateDiscovery: STAGE_A1_DISCOVERY_ASSET_TYPES.length,
     estimatedMinutesPerCandidate: 0.6,
     imageSuitability: "Direction preview",
     videoSuitability: "Not suitable for video lock",
@@ -55,7 +58,7 @@ export const QUALITY_MODE_PROFILES: Record<QualityMode, QualityModeProfile> = {
     expectedRealism: "Commercial fashion-editorial realism",
     expectedIdentityConsistency: "Requires manual identity review",
     defaultCandidateCount: DEFAULT_CANDIDATE_COUNT,
-    imagesPerCandidateDiscovery: STAGE_A_ASSET_TYPES.length,
+    imagesPerCandidateDiscovery: STAGE_A1_DISCOVERY_ASSET_TYPES.length,
     estimatedMinutesPerCandidate: 1.1,
     imageSuitability: "Strong for image Brand Cast",
     videoSuitability: "Heuristic only — video lock is separate",
@@ -70,7 +73,7 @@ export const QUALITY_MODE_PROFILES: Record<QualityMode, QualityModeProfile> = {
     expectedRealism: "Highest available photoreal quality",
     expectedIdentityConsistency: "Requires manual identity review + reference package",
     defaultCandidateCount: DEFAULT_CANDIDATE_COUNT,
-    imagesPerCandidateDiscovery: STAGE_A_ASSET_TYPES.length,
+    imagesPerCandidateDiscovery: STAGE_A1_DISCOVERY_ASSET_TYPES.length,
     estimatedMinutesPerCandidate: 1.5,
     imageSuitability: "Best available for final image faces",
     videoSuitability: "Still requires separate video suitability review",
@@ -92,9 +95,14 @@ export function assetTypesForStageAndMode(
   stage: GenerationStage,
   _mode: QualityMode,
 ): CandidateAssetType[] {
-  if (stage === "discovery") return [...STAGE_A_ASSET_TYPES];
+  if (stage === "discovery") return [...STAGE_A1_DISCOVERY_ASSET_TYPES];
   if (stage === "shortlist_validation") return [...STAGE_B_ASSET_TYPES];
   return [];
+}
+
+/** Full Stage-A validation angles (A2) — not used for initial discovery cost. */
+export function stageAValidationTypesForMode(): CandidateAssetType[] {
+  return [...STAGE_A2_VALIDATION_ASSET_TYPES];
 }
 
 export const OPENAI_PROVIDER_CAPABILITY = {

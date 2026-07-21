@@ -56,6 +56,8 @@ export interface EstimateCandidateGenerationInput {
   imagesPerCandidate?: number;
   costMultiplier?: number;
   qualityMode?: string;
+  /** A1 discovery (1 image) vs A2 validation (missing angles). */
+  castingPhase?: "a1_discovery" | "a2_validation";
 }
 
 export interface CreateCandidateBatchInput {
@@ -71,6 +73,10 @@ export interface CreateCandidateBatchInput {
   assetTypes?: CandidateAssetType[];
   /** Distinct identity index for prompts. */
   candidateNumbers?: number[];
+  /** Casting funnel phase — defaults to A1 for discovery. */
+  castingPhase?: "a1_discovery" | "a2_validation";
+  /** Optional concurrency override (otherwise PERSONA_IMAGE_CONCURRENCY). */
+  concurrency?: number;
 }
 
 export interface PersonaCandidateGenerator {

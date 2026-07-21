@@ -1,10 +1,15 @@
 /**
  * Fake Persona candidate generator — never calls OpenAI.
  * Used in automated tests and when PERSONA_USE_FAKE_PROVIDER=true.
+ * Honors A1 discovery (1 image) and explicit assetTypes / castingPhase.
  */
 
 import { PersonaDomainError } from "../../domain/errors";
-import { estimateFromProject } from "./cost";
+import {
+  assetTypesForCastingPhase,
+  resolveCastingPhaseForGeneration,
+} from "../casting-funnel";
+import { assetTypesForStage, estimateFromProject } from "./cost";
 import type {
   CandidateBatchJob,
   CreateCandidateBatchInput,
@@ -18,6 +23,17 @@ const TINY_PNG = Buffer.from(
   "base64",
 );
 
+/** Test hook — increments when createCandidateBatch runs (never OpenAI). */
+let fakeBatchInvocationCount = 0;
+
+export function getFakeBatchInvocationCount(): number {
+  return fakeBatchInvocationCount;
+}
+
+export function resetFakeBatchInvocationCount(): void {
+  fakeBatchInvocationCount = 0;
+}
+
 export class FakeCandidateGenerator implements PersonaCandidateGenerator {
   readonly id = "fake";
   readonly providerMode = "image_provider" as const;
@@ -27,15 +43,11 @@ export class FakeCandidateGenerator implements PersonaCandidateGenerator {
   }
 
   async estimateCandidateGeneration(input: EstimateCandidateGenerationInput) {
-    return estimateFromProject(
-      input,
-      "image_provider",
-      "fake",
-      true,
-    );
+    return estimateFromProject(input, "image_provider", "fake", true);
   }
 
   async createCandidateBatch(input: CreateCandidateBatchInput): Promise<CandidateBatchJob> {
+    fakeBatchInvocationCount += 1;
     if (!input.costConfirmed) {
       throw new PersonaDomainError(
         "Kostenbestätigung erforderlich vor bezahlter Generierung.",
@@ -43,11 +55,16 @@ export class FakeCandidateGenerator implements PersonaCandidateGenerator {
       );
     }
 
+    const castingPhase = resolveCastingPhaseForGeneration({
+      stage: input.stage,
+      castingPhase: input.castingPhase,
+    });
+
     const assetTypes =
       input.assetTypes ??
-      (input.stage === "discovery"
-        ? (["portrait_front", "portrait_three_quarter", "half_body"] as const)
-        : []);
+      (input.castingPhase
+        ? assetTypesForCastingPhase(castingPhase)
+        : assetTypesForStage(input.stage));
 
     const numbers =
       input.candidateNumbers ??
@@ -58,18 +75,28 @@ export class FakeCandidateGenerator implements PersonaCandidateGenerator {
       seed: `fake-${candidateNumber}`,
       prompt: "fake-provider-test",
       negativePrompt: "",
-      settings: { provider: "fake", costLabel: "estimated" },
+      settings: {
+        provider: "fake",
+        costLabel: "allocated_estimate",
+        castingPhase,
+        fake: true,
+      },
       assets: assetTypes.map((assetType) => ({
         assetType,
         imageBytes: TINY_PNG,
         mimeType: "image/png",
         providerOutputId: null,
-        metadata: { provider: "fake", fake: true },
-        estimatedCostEur: 0,
+        metadata: {
+          provider: "fake",
+          fake: true,
+          costLabel: "allocated_estimate",
+          castingPhase,
+        },
+        estimatedCostEur: 0.056,
       })),
       identitySummary: "Fake candidate",
       distinguishingFeatures: "",
-      actualCostEur: 0,
+      actualCostEur: Number((assetTypes.length * 0.056).toFixed(4)),
       providerJobId: `fake-job-${Date.now()}`,
     }));
 
@@ -78,7 +105,7 @@ export class FakeCandidateGenerator implements PersonaCandidateGenerator {
       status: "completed",
       provider: "fake",
       results,
-      actualCostEur: 0,
+      actualCostEur: results.reduce((s, r) => s + r.actualCostEur, 0),
     };
   }
 

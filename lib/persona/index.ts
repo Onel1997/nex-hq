@@ -75,6 +75,19 @@ export {
   composeProviderPrompt,
   assessCandidateQuality,
   qualityFieldsForCandidate,
+  readCandidateOverallScore,
+  readCandidateCastingScores,
+  buildCastingRecommendation,
+  ACTIVE_CASTING_POOL,
+  FUTURE_CASTING_POOL_PRESETS,
+  rankCandidatesByCommercialScore,
+  selectTopCandidatesForDisplay,
+  resolveCastingGenerateCount,
+  assertCandidateIdentityDiversity,
+  auditCandidateIdentityDiversity,
+  emptyVisualEvaluation,
+  FakePersonaVisualEvaluator,
+  isPersonaVisualEvaluationEnabled,
   buildDiversityReport,
   appendCandidateNoteRevision,
   readNotesHistory,
@@ -85,9 +98,53 @@ export type {
   PromptBlocks,
   CandidateQualityAssessment,
   CandidateQualityDimensions,
+  CastingChannel,
+  CastingRecommendation,
+  CastingPoolConfig,
+  CastingPoolMode,
+  RankableCandidate,
+  RankedCastingCandidate,
+  IdentityDiversityAudit,
+  IdentityDiversityViolation,
+  VisualCastingEvaluation,
+  PersonaVisualEvaluator,
   CandidateDiversityReport,
   CandidateNoteRevision,
 } from "./creation/candidate-intelligence";
+
+export {
+  STAGE_A1_DISCOVERY_ASSET_TYPES,
+  STAGE_A2_VALIDATION_ASSET_TYPES,
+  DEFAULT_A2_MAX_SELECTED,
+  missingValidationAssetTypes,
+  clampA2Selection,
+  assetTypesForCastingPhase,
+  castingPhaseLabel,
+  type CastingFunnelPhase,
+} from "./creation/casting-funnel";
+
+export {
+  resolvePersonaImageConcurrency,
+  mapPool,
+  withTransientRetry,
+} from "./creation/provider/concurrency";
+
+export {
+  estimateSecondsFromRollingHistory,
+  recordCompletedImageDurationMs,
+  resetRollingImageDurationsForTests,
+} from "./creation/provider/generation-metrics";
+
+export {
+  getFakeBatchInvocationCount,
+  resetFakeBatchInvocationCount,
+} from "./creation/provider/fake-candidate-generator";
+
+export {
+  imagesPerCandidateForStage,
+  assetTypesForStage,
+  buildCostEstimate,
+} from "./creation/provider/cost";
 
 export {
   createProductionCreationRepository,

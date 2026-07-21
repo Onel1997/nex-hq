@@ -454,6 +454,16 @@ export interface CandidateGenerationCostEstimate {
   stage: GenerationStage;
   note: string;
   available: boolean;
+  /** A1 discovery vs A2 validation — optional for backward-compatible estimates. */
+  castingPhase?: "a1_discovery" | "a2_validation";
+  /** How the displayed EUR figures should be interpreted. */
+  costStatus?: "estimated" | "provider_confirmed" | "unknown" | "allocated_estimate";
+  /** Per-candidate share of the batch estimate (not provider-confirmed billing). */
+  allocatedPerCandidate?: {
+    estimatedMin: number;
+    estimatedMax: number;
+    label: "allocated_estimate";
+  };
 }
 
 export interface CreationProjectPreset {

@@ -37,6 +37,7 @@ import { PersonaGenerationExperience } from "@/components/persona/persona-genera
 import { PersonaStatusChip } from "@/components/persona/persona-status-chip";
 import {
   CandidateBoardCard,
+  rankCandidatesForBoard,
   CandidateComparePanel,
   CandidateDetailGallery,
   CandidateLightbox,
@@ -1202,7 +1203,10 @@ export function CreationProjectsView({
             <PersonaGenerationExperience
               active
               candidateCount={selected.candidate_count || 4}
-              estimatedSeconds={Math.max(60, (selected.candidate_count || 4) * 25)}
+              estimatedSeconds={Math.max(
+                90,
+                Math.ceil(((selected.candidate_count || 4) * 90) / 2),
+              )}
             />
           ) : null}
           {!generating ? (
@@ -1382,6 +1386,10 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     () => (candidatesInSync ? studio.candidates : []),
     [candidatesInSync, studio.candidates],
   );
+  const rankedBoard = useMemo(
+    () => rankCandidatesForBoard(visibleCandidates),
+    [visibleCandidates],
+  );
   const selected = useMemo(
     () => visibleCandidates.find((c) => c.id === studio.selectedCandidateId) ?? null,
     [visibleCandidates, studio.selectedCandidateId],
@@ -1393,6 +1401,15 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
   const diversityWarning = useMemo(
     () => getCandidateDiversityWarning(visibleCandidates),
     [visibleCandidates],
+  );
+  const selectedIsRecommended = useMemo(
+    () =>
+      Boolean(
+        selected &&
+          rankedBoard.find((row) => row.candidate.id === selected.id)
+            ?.isRecommendedBrandFace,
+      ),
+    [selected, rankedBoard],
   );
 
   useEffect(() => {
@@ -1414,11 +1431,11 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     <section className="ps-panel">
       <header className="ps-panel-header">
         <div>
-          <p className="ps-eyebrow">Selection</p>
-          <h1>Candidates</h1>
+          <p className="ps-eyebrow">Casting</p>
+          <h1>Brand Face Casting</h1>
           <p className="ps-muted">
-            Compare, shortlist, and select — selection creates a draft persona only, never
-            production approval.
+            Commercial casting analysis — ranked by Brand Face potential, not beauty alone.
+            Selection creates a draft persona only, never production approval.
           </p>
         </div>
       </header>
@@ -1447,12 +1464,13 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         />
       ) : (
         <div className="ps-ci-grid">
-          {visibleCandidates.map((c) => (
+          {rankedBoard.map(({ candidate: c, isRecommendedBrandFace }) => (
             <CandidateBoardCard
               key={c.id}
               candidate={c}
               previewUrl={studio.candidatePreviews[c.id] ?? null}
               active={studio.selectedCandidateId === c.id}
+              isRecommendedBrandFace={isRecommendedBrandFace}
               onSelect={() => void studio.loadCandidate(c.id)}
             />
           ))}
@@ -1467,6 +1485,9 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                 #{selected.candidate_number} {getCandidateVariationLabel(selected)}
               </h2>
               <p className="ps-muted">{selected.identity_summary}</p>
+              {selectedIsRecommended ? (
+                <p className="ps-ci-detail-recommended">★ Recommended Brand Face</p>
+              ) : null}
             </div>
             <CandidateStatusBadge candidate={selected} />
           </div>

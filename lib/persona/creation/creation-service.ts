@@ -56,7 +56,16 @@ import {
 import { defaultProviderModeForEnvironment } from "./provider/config";
 import { getPersonaCandidateGenerator, getProviderSetupState } from "./provider/registry";
 import { getCreationPreset, PERSONA_CREATION_PRESETS } from "./presets";
-import { assetTypesForStage } from "./provider/cost";
+import {
+  assetTypesForStage,
+  OPENAI_IMAGE_COST_EUR_MAX,
+  OPENAI_IMAGE_COST_EUR_MIN,
+} from "./provider/cost";
+import {
+  clampA2Selection,
+  missingValidationAssetTypes,
+  type CastingFunnelPhase,
+} from "./casting-funnel";
 import { assertCreationProjectAction } from "./creation-workflow";
 import {
   assertConfirmationMatchesGenerationRequest,
@@ -228,19 +237,89 @@ export async function updateCreationProject(
 export async function estimateCreationCost(
   scope: WorkspaceScope,
   projectId: string,
+  options?: {
+    castingPhase?: CastingFunnelPhase;
+    candidateIds?: string[];
+    imagesPerCandidate?: number;
+    candidateCount?: number;
+  },
 ): Promise<CandidateGenerationCostEstimate> {
   const project = await requireProject(scope, projectId);
   assertCreationProjectAction(project, "estimate");
   const qualityMode = project.quality_mode ?? DEFAULT_QUALITY_MODE;
   const profile = getQualityModeProfile(qualityMode);
   const generator = getPersonaCandidateGenerator(project.provider_mode);
+  const castingPhase =
+    options?.castingPhase ??
+    (project.generation_stage === "discovery" ? "a1_discovery" : undefined);
+
+  let candidateCount = options?.candidateCount ?? project.candidate_count;
+  let imagesPerCandidate = options?.imagesPerCandidate;
+
+  if (castingPhase === "a2_validation" && options?.candidateIds?.length) {
+    const selected = clampA2Selection(options.candidateIds);
+    candidateCount = selected.length;
+    let missingTotal = 0;
+    for (const id of selected) {
+      const assets = await creationRepo().listCandidateAssets(scope, id);
+      const missing = missingValidationAssetTypes(assets.map((a) => a.asset_type));
+      missingTotal += missing.length;
+    }
+    imagesPerCandidate =
+      candidateCount > 0 ? Math.max(1, Math.round(missingTotal / candidateCount)) : 2;
+    if (missingTotal === 0) {
+      imagesPerCandidate = 0;
+    } else {
+      // Prefer exact total via imagesPerCandidate * count ≈ missingTotal
+      imagesPerCandidate = missingTotal / candidateCount;
+    }
+  }
+
   const estimate = await generator.estimateCandidateGeneration({
     project,
     stage: project.generation_stage,
-    candidateCount: project.candidate_count,
+    candidateCount,
+    imagesPerCandidate:
+      imagesPerCandidate != null ? Math.ceil(imagesPerCandidate) : undefined,
     qualityMode,
     costMultiplier: profile.costMultiplier,
+    castingPhase,
   });
+
+  // For A2 with uneven missing angles, override totalImages to exact missing count.
+  if (
+    castingPhase === "a2_validation" &&
+    options?.candidateIds?.length &&
+    typeof imagesPerCandidate === "number"
+  ) {
+    const selected = clampA2Selection(options.candidateIds);
+    let missingTotal = 0;
+    for (const id of selected) {
+      const assets = await creationRepo().listCandidateAssets(scope, id);
+      missingTotal += missingValidationAssetTypes(assets.map((a) => a.asset_type)).length;
+    }
+    if (missingTotal > 0) {
+      const mult = profile.costMultiplier;
+      const estimatedMin = Number((missingTotal * OPENAI_IMAGE_COST_EUR_MIN * mult).toFixed(4));
+      const estimatedMax = Number((missingTotal * OPENAI_IMAGE_COST_EUR_MAX * mult).toFixed(4));
+      Object.assign(estimate, {
+        candidateCount: selected.length,
+        totalImages: missingTotal,
+        imagesPerCandidate: Number((missingTotal / selected.length).toFixed(2)),
+        estimatedMin,
+        estimatedMax,
+        estimatedTotal: Number(((estimatedMin + estimatedMax) / 2).toFixed(4)),
+        castingPhase: "a2_validation",
+        costStatus: "estimated",
+        note: `Angle validation (A2): ${selected.length} selected · ${missingTotal} missing angles. Separate confirmation required.`,
+        allocatedPerCandidate: {
+          estimatedMin: Number((estimatedMin / selected.length).toFixed(4)),
+          estimatedMax: Number((estimatedMax / selected.length).toFixed(4)),
+          label: "allocated_estimate" as const,
+        },
+      });
+    }
+  }
 
   const estimateHash = estimateFingerprintFromCost(projectId, qualityMode, estimate);
   await creationRepo().updateProject(scope, projectId, {
@@ -260,30 +339,77 @@ export async function estimateCreationCost(
 export async function preparePaidGenerationConfirmation(
   scope: WorkspaceScope,
   projectId: string,
+  options?: {
+    castingPhase?: CastingFunnelPhase;
+    candidateIds?: string[];
+  },
 ) {
   const project = await requireProject(scope, projectId);
   assertCreationProjectAction(project, "prepare_confirmation");
-  const estimate = await estimateCreationCost(scope, projectId);
+  const castingPhase =
+    options?.castingPhase ??
+    (project.generation_stage === "discovery" ? "a1_discovery" : "a2_validation");
+  const selectedIds =
+    castingPhase === "a2_validation" && options?.candidateIds?.length
+      ? clampA2Selection(options.candidateIds)
+      : undefined;
+
+  if (castingPhase === "a2_validation") {
+    if (!selectedIds?.length) {
+      throw new PersonaDomainError(
+        "A2 Angle Validation erfordert ausgewählte Kandidaten (max. 2 empfohlen).",
+        "VALIDATION",
+        { requiresCandidateSelection: true },
+      );
+    }
+  }
+
+  const estimate = await estimateCreationCost(scope, projectId, {
+    castingPhase,
+    candidateIds: selectedIds,
+  });
   if (!estimate.available) {
     throw new PersonaDomainError(
       "Kostenschätzung nicht verfügbar.",
       "CONFIG",
     );
   }
+  if (estimate.totalImages <= 0) {
+    throw new PersonaDomainError(
+      "Keine fehlenden Winkel — A2 Expansion nicht nötig.",
+      "WORKFLOW",
+    );
+  }
 
   const qualityMode = project.quality_mode ?? DEFAULT_QUALITY_MODE;
   const estimateHash = estimateFingerprintFromCost(projectId, qualityMode, estimate);
   const token = createConfirmationToken();
-  const assetTypes = assetTypesForStage(project.generation_stage);
+
+  let requestedAssetTypes = assetTypesForStage(project.generation_stage);
+  if (castingPhase === "a2_validation" && selectedIds) {
+    const missingSet = new Set<CandidateAssetType>();
+    for (const id of selectedIds) {
+      const assets = await creationRepo().listCandidateAssets(scope, id);
+      for (const t of missingValidationAssetTypes(assets.map((a) => a.asset_type))) {
+        missingSet.add(t);
+      }
+    }
+    requestedAssetTypes = [...missingSet];
+  }
+
   const confirmationIntent: PaidConfirmationIntent =
-    project.actual_cost > 0 ? "retry" : "initial";
+    castingPhase === "a2_validation"
+      ? "retry"
+      : project.actual_cost > 0
+        ? "retry"
+        : "initial";
 
   const job = await jobRepo().createJob(scope, {
     creation_project_id: projectId,
     stage: project.generation_stage,
     provider: estimate.provider,
     status: "pending_confirmation",
-    requested_asset_types: assetTypes,
+    requested_asset_types: requestedAssetTypes,
     quality_mode: qualityMode,
     estimated_cost_min: estimate.estimatedMin,
     estimated_cost_max: estimate.estimatedMax,
@@ -300,6 +426,8 @@ export async function preparePaidGenerationConfirmation(
       estimatedMax: estimate.estimatedMax,
       provider: estimate.provider,
       intent: confirmationIntent,
+      castingPhase,
+      selectedCandidateIds: selectedIds ?? [],
       timestamp: new Date().toISOString(),
     },
     created_by: scope.actorId,
@@ -320,6 +448,8 @@ export async function preparePaidGenerationConfirmation(
       ...job.confirmation_payload,
       intent: confirmationIntent,
       provider: estimate.provider,
+      castingPhase,
+      selectedCandidateIds: selectedIds ?? [],
     },
     created_by: scope.actorId,
   });
@@ -335,6 +465,11 @@ export async function preparePaidGenerationConfirmation(
     confirmation,
     quality: getQualityModeProfile(qualityMode),
     costLabel: "estimated" as const,
+    castingPhase,
+    castingPhaseLabel:
+      castingPhase === "a1_discovery"
+        ? "Discovery casting"
+        : "Expand selected candidates",
     paidExecutionLocked: isPaidProviderMode(project.provider_mode) && !isPaidGenerationEnabled(),
     paidExecutionLockedMessage: isPaidProviderMode(project.provider_mode) && !isPaidGenerationEnabled()
       ? "Kostenpflichtige Generierung ist derzeit gesperrt."
@@ -421,7 +556,45 @@ export async function confirmAndStartCandidateGeneration(
     );
   }
 
-  const estimate = await estimateCreationCost(scope, projectId);
+  const estimateOpts = (() => {
+    // Peek confirmation payload early for A2 estimate alignment.
+    return {} as {
+      castingPhase?: CastingFunnelPhase;
+      candidateIds?: string[];
+    };
+  })();
+
+  // Load confirmation first so estimate matches the confirmed casting phase.
+  if (!options.confirmationToken) {
+    throw new PersonaDomainError(
+      "Bestätigungstoken erforderlich.",
+      "WORKFLOW",
+      { requiresConfirmationToken: true },
+    );
+  }
+
+  const confirmationEarly = await jobRepo().getConfirmationByToken(
+    scope,
+    options.confirmationToken,
+  );
+  if (!confirmationEarly) {
+    throw new PersonaDomainError(
+      "Bestätigung ungültig — bitte Kostenschätzung erneut bestätigen.",
+      "WORKFLOW",
+    );
+  }
+
+  const earlyPayload = (confirmationEarly.payload ?? {}) as Record<string, unknown>;
+  if (earlyPayload.castingPhase === "a2_validation") {
+    estimateOpts.castingPhase = "a2_validation";
+    estimateOpts.candidateIds = Array.isArray(earlyPayload.selectedCandidateIds)
+      ? earlyPayload.selectedCandidateIds.filter((id): id is string => typeof id === "string")
+      : [];
+  } else {
+    estimateOpts.castingPhase = "a1_discovery";
+  }
+
+  const estimate = await estimateCreationCost(scope, projectId, estimateOpts);
   if (!estimate.available) {
     throw new PersonaDomainError(
       "Kostenschätzung nicht verfügbar — Generierung abgebrochen.",
@@ -437,24 +610,7 @@ export async function confirmAndStartCandidateGeneration(
     ReturnType<ReturnType<typeof jobRepo>["consumeConfirmation"]>
   > | null = null;
 
-  if (!options.confirmationToken) {
-    throw new PersonaDomainError(
-      "Bestätigungstoken erforderlich.",
-      "WORKFLOW",
-      { requiresConfirmationToken: true },
-    );
-  }
-
-  const confirmation = await jobRepo().getConfirmationByToken(
-    scope,
-    options.confirmationToken,
-  );
-  if (!confirmation) {
-    throw new PersonaDomainError(
-      "Bestätigung ungültig — bitte Kostenschätzung erneut bestätigen.",
-      "WORKFLOW",
-    );
-  }
+  const confirmation = confirmationEarly;
 
   assertConfirmationMatchesGenerationRequest({
     scope,
@@ -581,12 +737,54 @@ export async function confirmAndStartCandidateGeneration(
   });
 
   try {
+    const confirmationPayload = (consumedConfirmation?.payload ??
+      durableJob?.confirmation_payload ??
+      {}) as Record<string, unknown>;
+    const castingPhase: CastingFunnelPhase =
+      confirmationPayload.castingPhase === "a2_validation"
+        ? "a2_validation"
+        : "a1_discovery";
+    const selectedCandidateIds = Array.isArray(confirmationPayload.selectedCandidateIds)
+      ? confirmationPayload.selectedCandidateIds.filter(
+          (id): id is string => typeof id === "string",
+        )
+      : [];
+
+    let candidateNumbers: number[] | undefined;
+    let assetTypes: CandidateAssetType[] | undefined;
+
+    if (castingPhase === "a2_validation" && selectedCandidateIds.length > 0) {
+      const selected = await Promise.all(
+        selectedCandidateIds.map((id) => creationRepo().getCandidate(scope, id)),
+      );
+      candidateNumbers = selected
+        .filter((c): c is NonNullable<typeof c> => Boolean(c))
+        .map((c) => c.candidate_number);
+      const missingSet = new Set<CandidateAssetType>();
+      for (const id of selectedCandidateIds) {
+        const assets = await creationRepo().listCandidateAssets(scope, id);
+        for (const t of missingValidationAssetTypes(assets.map((a) => a.asset_type))) {
+          missingSet.add(t);
+        }
+      }
+      assetTypes = [...missingSet];
+      if (assetTypes.length === 0) {
+        throw new PersonaDomainError(
+          "Keine fehlenden Winkel für die Auswahl — nichts zu generieren.",
+          "WORKFLOW",
+        );
+      }
+    }
+
     const job = await generator.createCandidateBatch({
       project,
       stage: project.generation_stage,
       costConfirmed: true,
       retryConfirmed: options.retryConfirmed,
       qualityMode,
+      castingPhase,
+      candidateNumbers,
+      assetTypes,
     });
 
     const existing = await creationRepo().listCandidates(scope, projectId);

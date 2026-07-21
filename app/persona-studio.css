@@ -2386,12 +2386,36 @@
   font-size: 0.85rem;
 }
 
+.ps-ci-card.is-recommended {
+  border-color: rgb(196 165 116 / 0.55);
+}
+
+.ps-ci-recommended-badge {
+  position: absolute;
+  top: 0.65rem;
+  left: 0.65rem;
+  z-index: 2;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.28rem 0.5rem;
+  border-radius: 4px;
+  background: rgb(18 16 12 / 0.88);
+  color: #f0d9a8;
+  border: 1px solid rgb(196 165 116 / 0.55);
+  pointer-events: none;
+  max-width: calc(100% - 5.5rem);
+  line-height: 1.25;
+}
+
 .ps-ci-card-hero-meta {
   position: absolute;
-  inset: 0.65rem auto auto 0.65rem;
+  inset: 0.65rem 0.65rem auto auto;
   display: flex;
   gap: 0.4rem;
   align-items: center;
+  z-index: 1;
 }
 
 .ps-ci-score-pill {
@@ -2448,6 +2472,14 @@
   gap: 1rem;
   align-items: flex-start;
   margin-bottom: 0.75rem;
+}
+
+.ps-ci-detail-recommended {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #f0d9a8;
 }
 
 .ps-ci-hero {
@@ -2524,9 +2556,64 @@
 }
 
 .ps-ci-quality h3 {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.35rem;
   font-size: 0.95rem;
   font-weight: 500;
+}
+
+.ps-ci-quality-lede {
+  margin: 0 0 0.85rem;
+  font-size: 0.78rem;
+}
+
+.ps-ci-quality h4 {
+  margin: 0.85rem 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ps-muted);
+}
+
+.ps-ci-casting-rec ul,
+.ps-ci-strengths ul,
+.ps-ci-risks ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.88rem;
+}
+
+.ps-ci-risks ul {
+  color: #e8c4a0;
+}
+
+.ps-ci-agency-labels {
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ps-ci-agency-labels div {
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.18);
+}
+
+.ps-ci-agency-labels dt {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ps-muted);
+  margin-bottom: 0.2rem;
+}
+
+.ps-ci-agency-labels dd {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 .ps-ci-quality-grid {

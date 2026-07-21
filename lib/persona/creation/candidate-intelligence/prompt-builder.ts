@@ -1,13 +1,23 @@
 /**
- * Modular prompt composition for Persona candidate generation.
- * Blocks are composed deliberately — not one opaque string.
+ * Modular prompt composition for Persona Stage-A casting.
  *
  * Priority order:
- * 1. Brand DNA → 2. Lifestyle → 3. Authenticity (identity/appearance)
- * 4. Commercial appeal → 5. Editorial (supporting only)
+ * 1. Candidate-specific Identity Lock
+ * 2. Authentic Human Appearance
+ * 3. Calm / Friendly Commercial Presence
+ * 4. Milaene Premium Streetwear Brand DNA
+ * 5. Wardrobe and Fit
+ * 6. Camera Angle
+ * 7. Controlled Neutral Casting Environment
+ * 8. Natural Lighting
+ * 9. Editorial Support
+ * 10. Negative Constraints
  *
  * Identity lock is PER CANDIDATE (shared across that candidate's camera angles).
- * Candidates do NOT share a global face identity.
+ * Candidates do NOT share a global face recipe.
+ *
+ * Persona Studio = casting studio (face / presence / identity).
+ * Image Studio later = campaigns, locations, social scenes.
  */
 
 import type { CandidateAssetType, PersonaCreationProject } from "../../domain/creation-types";
@@ -17,16 +27,28 @@ import {
 } from "./variations";
 
 export interface PromptBlocks {
-  brandDna: string;
-  lifestyle: string;
+  /** 1 — Candidate-specific identity lock */
   identity: string;
+  /** 2 — Authentic human appearance / skin */
   appearance: string;
-  variation: string;
-  lighting: string;
+  /** 3 — Calm / friendly commercial presence */
+  presence: string;
+  /** 4 — Brand DNA */
+  brandDna: string;
+  /** 5 — Wardrobe and fit */
+  wardrobe: string;
+  /** 6 — Camera angle */
   camera: string;
-  /** Supporting polish only — never the dominant creative driver. */
+  /** 7+8 — Neutral casting environment + lighting */
+  lighting: string;
+  /** Candidate direction notes */
+  variation: string;
+  /** 9 — Supporting polish only */
   editorialRules: string;
+  /** 10 — Negatives */
   negative: string;
+  /** @deprecated Prefer presence — kept for older snapshot readers. */
+  lifestyle: string;
 }
 
 export interface BuiltCandidatePrompt {
@@ -42,97 +64,160 @@ export interface BuiltCandidatePrompt {
 function framingForAsset(assetType: CandidateAssetType): string {
   switch (assetType) {
     case "portrait_front":
-      return "Camera: natural front head-and-shoulders lifestyle portrait, soft eye contact, relaxed framing — not a passport photo.";
+      return [
+        "CAMERA — Stage A Front Portrait",
+        "Natural front head-and-shoulders casting portrait.",
+        "Soft natural eye contact, shoulders slightly relaxed — not stiff passport-front.",
+        "Friendly or calm-neutral facial muscles. No forced smile. No mugshot blankness.",
+        "Same identity as THIS candidate's Three Quarter and Half Body frames.",
+      ].join("\n");
     case "portrait_three_quarter":
-      return "Camera: easy three-quarter lifestyle portrait, clear face, same person as THIS candidate's front frame.";
+      return [
+        "CAMERA — Stage A Three Quarter Portrait",
+        "True 30–45 degree body/face turn — not a near-copy of the front frame.",
+        "Same person as THIS candidate's front portrait. Natural gaze. Slight posture variation.",
+        "Keep identity locked. Change only angle and subtle stance.",
+      ].join("\n");
     case "portrait_profile":
-      return "Camera: clean soft profile lifestyle portrait, ear visible, same person as THIS candidate's front frame.";
+      return [
+        "CAMERA — Soft profile casting portrait",
+        "Ear visible, same person as THIS candidate's front frame.",
+      ].join("\n");
     case "half_body":
-      return "Camera: waist-up lifestyle portrait, relaxed streetwear posture, loose arms, same face as THIS candidate's front frame.";
+      return [
+        "CAMERA — Stage A Half Body",
+        "Waist-up casting frame showing oversized premium streetwear fit.",
+        "Natural shoulder line, relaxed arms, slight weight shift — never runway or military stance.",
+        "Same face, hair, skin, and proportions as THIS candidate's front portrait.",
+      ].join("\n");
     case "full_body":
-      return "Camera: full-body lifestyle standing frame, natural stance, same person as THIS candidate.";
+      return [
+        "CAMERA — Full-body casting standing frame",
+        "Natural stance, same person as THIS candidate.",
+      ].join("\n");
     case "expression_variant":
-      return "Camera: close lifestyle portrait with a calm friendly expression, identical person to THIS candidate.";
+      return [
+        "CAMERA — Close casting portrait with calm friendly expression",
+        "Identical person to THIS candidate.",
+      ].join("\n");
     case "outfit_variant":
-      return "Camera: half-body lifestyle frame in premium streetwear basics, identical face and hair to THIS candidate.";
+      return [
+        "CAMERA — Half-body casting frame in premium streetwear basics",
+        "Identical face and hair to THIS candidate.",
+      ].join("\n");
     default:
-      return "Camera: premium streetwear lifestyle portrait, identity-locked to THIS candidate only.";
+      return "CAMERA — Premium streetwear casting portrait, identity-locked to THIS candidate only.";
   }
 }
 
-function buildBrandDnaBlock(project: PersonaCreationProject): string {
-  return [
-    "BRAND DNA — Milaene Premium Streetwear Lifestyle",
-    "Milaene is a modern premium streetwear lifestyle brand — not classic luxury fashion, not Vogue, not Fashion Week.",
-    `Lifestyle direction: ${project.fashion_style || "premium streetwear lifestyle"}.`,
-    `Brand role: ${project.brand_role}.`,
-    project.visual_keywords ? `Visual keywords: ${project.visual_keywords}.` : null,
-    project.preferred_outfits ? `Outfit direction: ${project.preferred_outfits}.` : null,
-    project.preferred_brand_looks ? `Brand look: ${project.preferred_brand_looks}.` : null,
-    project.additional_description ? `Creative notes: ${project.additional_description}.` : null,
-    "Shared cast DNA: modern, sympathisch, authentic, urban, relaxed confidence, warm olive skin range, premium streetwear basics.",
-    "NOT shared: face structure, jawline, eyes, nose, hair texture, stubble, body proportions.",
-    "Goal: future Milaene Brand Faces people would voluntarily follow on Instagram.",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function buildLifestyleBlock(variation: CandidateVariationProfile): string {
-  return [
-    "LIFESTYLE",
-    `Aesthetic: ${variation.aesthetic}.`,
-    "Feeling: seen on a street in Milan, Barcelona, or Copenhagen — not walking a runway tomorrow.",
-    "More community and identification. Less polished high-fashion model energy.",
-    "Premium streetwear campaign photography — soft daylight, real lifestyle presence.",
-    "The viewer should believe this person actually wears Milaene.",
-  ].join("\n");
-}
-
 /**
- * Per-candidate identity lock — biological uniqueness + authenticity.
- * Project brief only supplies age band + gender envelope.
+ * Per-candidate identity lock — biological uniqueness only.
+ * Project brief supplies age band + gender envelope; no global olive-face recipe.
  */
-function buildIdentityBlock(
+function buildIdentityLockBlock(
   project: PersonaCreationProject,
   variation: CandidateVariationProfile,
   candidateNumber: number,
 ): string {
   return [
-    `AUTHENTICITY / IDENTITY LOCK — Candidate ${candidateNumber} only (${variation.label}).`,
+    `1. CANDIDATE IDENTITY LOCK — Candidate ${candidateNumber} only (${variation.label}).`,
     variation.identityDescriptor,
-    `Adult age range band: ${project.age_range || "25-32"}.`,
+    `Adult age feel band: ${project.age_range || "23-30"} (target casting age ≈23–30).`,
     `Gender presentation: ${project.gender_presentation || "Male"}.`,
-    `Face structure: ${variation.faceStructure}.`,
-    `Jawline: ${variation.jawline}.`,
+    `Face geometry: ${variation.faceGeometry}.`,
+    `Jaw: ${variation.jawShape}.`,
+    `Chin: ${variation.chinShape}.`,
+    `Eyes: ${variation.eyeShape}; spacing: ${variation.eyeSpacing}.`,
+    `Nose: ${variation.noseShape}.`,
+    `Lips: ${variation.lipShape}.`,
     `Cheekbones: ${variation.cheekbones}.`,
-    `Eyes: ${variation.eyeShape}.`,
-    `Nose: ${variation.nose}.`,
-    `Hair: ${variation.hair}.`,
-    `Facial hair: ${variation.stubble}.`,
-    `Skin: ${variation.skinTone}.`,
-    "Natural skin texture with subtle pores. Natural lips. Friendly modern masculine features.",
+    `Hair texture: ${variation.hairTexture}.`,
+    `Haircut: ${variation.haircut}.`,
+    `Facial hair: ${variation.facialHair}.`,
+    `Skin tone: ${variation.skinTone}.`,
+    `Body build: ${variation.bodyBuild}; shoulders: ${variation.shoulderProfile}.`,
     "Across Front / Three Quarter / Half Body of THIS candidate: face, hair, eyes, skin, and proportions stay identical.",
     "Do not invent a different person between camera angles of THIS candidate.",
-    "Do NOT reuse facial geometry from any other candidate in this cast.",
+    "Do NOT reuse facial geometry, skin tone recipe, haircut, jaw, nose, or eye shape from any other candidate.",
   ].join("\n");
 }
 
-function buildAppearanceBlock(
+function buildAuthenticAppearanceBlock(
+  variation: CandidateVariationProfile,
+): string {
+  return [
+    "2. AUTHENTIC HUMAN APPEARANCE",
+    `Skin: ${variation.skinTone}.`,
+    "Allow visible but subtle skin texture, natural pores, slight under-eye detail, minor asymmetry.",
+    "Allow real beard density variation and a natural hairline.",
+    "Realistic complexion variation — photoreal adult human, not porcelain beauty skin.",
+    "Still groomed, premium, and commercially usable — authentic does not mean unkempt.",
+    "No airbrushed texture, no waxy / plastic AI finish, no unreal facial symmetry.",
+  ].join("\n");
+}
+
+function buildPresenceBlock(variation: CandidateVariationProfile): string {
+  return [
+    "3. CALM / FRIENDLY COMMERCIAL PRESENCE",
+    `Expression: ${variation.expression}.`,
+    `Posture: ${variation.posture}.`,
+    `Social presence: ${variation.socialPresence}.`,
+    `Styling direction: ${variation.stylingDirection}.`,
+    "Relaxed confidence. Approachable. Quiet self-assurance. Natural charisma.",
+    "Friendly eyes. Soft neutral expression. Effortless streetwear presence.",
+    "Contemporary social presence — casually memorable and camera-ready.",
+    "No angry eyes, no tough-guy stare, no hostile energy, no gangster styling.",
+  ].join("\n");
+}
+
+function buildBrandDnaBlock(project: PersonaCreationProject): string {
+  return [
+    "4. MILAENE PREMIUM STREETWEAR BRAND DNA",
+    "Milaene is a modern premium streetwear lifestyle brand — casting studio for official Brand Faces.",
+    "Stage A judges face, presence, identity strength, streetwear credibility, and multi-angle consistency.",
+    "Not a campaign shoot. No streets, cafés, cars, product sets, or social-media scene builds here.",
+    `Lifestyle direction: ${project.fashion_style || "Premium Streetwear Lifestyle Casting"}.`,
+    `Brand role: ${project.brand_role}.`,
+    project.visual_keywords ? `Visual keywords: ${project.visual_keywords}.` : null,
+    project.preferred_brand_looks ? `Brand look: ${project.preferred_brand_looks}.` : null,
+    project.additional_description ? `Creative notes: ${project.additional_description}.` : null,
+    "Shared cast DNA only: age band ≈23–30, Milaene premium streetwear context, calm commercial casting language.",
+    "NOT shared across candidates: face geometry, jaw, nose, eyes, lips, skin tone, hair texture, haircut, body build.",
+    "Goal: a person who could credibly represent Milaene on Instagram, TikTok, website, lookbook, and paid social.",
+    "Not: a perfect AI model against a wall. Not a magazine cover. Not a classic luxury-fashion cast.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildWardrobeBlock(
   project: PersonaCreationProject,
   variation: CandidateVariationProfile,
 ): string {
   return [
-    "APPEARANCE & PRESENCE",
-    `Height band: ${project.height_range || "178-187 cm"}.`,
-    `Body: ${variation.body} (brief cue: ${project.body_type || "lean athletic"}).`,
-    `Posture: ${variation.posture}.`,
-    `Expression: ${variation.expression}.`,
-    `Presence: ${variation.presence}.`,
-    `Wardrobe (streetwear basics only): ${variation.wardrobe}.`,
-    "Allowed clothing family: heavyweight oversized tee, hoodie, zip hoodie, sweatpants energy, minimal premium streetwear.",
-    "No turtlenecks, no blazer, no suit, no business wear, no classic editorial luxury outfits.",
-    "No visible logos, no loud prints, no fake brand marks, no flashy jewelry.",
+    "5. WARDROBE AND FIT",
+    `Candidate wardrobe: ${variation.wardrobe}.`,
+    project.preferred_outfits ? `Brief outfit cue: ${project.preferred_outfits}.` : null,
+    "Allowed family: washed black / charcoal / off-white heavyweight tee, faded grey or muted taupe hoodie, black zip hoodie.",
+    "Relaxed sweatpants cue allowed only as silhouette hint in Half Body — never a fashion-week outfit.",
+    "Oversized premium streetwear fit must read clearly in Half Body.",
+    "No visible logos, fantasy brands, suits, shirts, turtlenecks, jewelry overload, or luxury watches.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildEnvironmentLightingBlock(variation: CandidateVariationProfile): string {
+  return [
+    "7–8. CONTROLLED NEUTRAL CASTING ENVIRONMENT + NATURAL LIGHTING",
+    `Background (candidate-specific): ${variation.background}.`,
+    `Light: ${variation.lighting}.`,
+    "Keep Stage A controlled and neutral — not a campaign location.",
+    "No streets, cafés, parking garages, shops, clothing racks, cars, or product sets.",
+    "Soft natural daylight / diffused window light / subtle studio softbox.",
+    "Realistic skin tones, mild natural shadows — no beauty lighting, no dramatic fashion lighting, no harsh intimidation shadows.",
+    "Consistent lighting family across all angles of THIS candidate only.",
+    "Do not reuse the exact same beige wall recipe for every candidate.",
   ].join("\n");
 }
 
@@ -142,50 +227,42 @@ function buildVariationBlock(
 ): string {
   return [
     `CANDIDATE DIRECTION — Candidate ${candidateNumber}: ${variation.label}`,
+    `Aesthetic: ${variation.aesthetic}.`,
     ...variation.promptLines,
-  ].join("\n");
-}
-
-function buildLightingBlock(variation: CandidateVariationProfile): string {
-  return [
-    "PHOTOGRAPHY — Premium Streetwear Campaign",
-    `Light: ${variation.lighting}.`,
-    `Background: ${variation.background}.`,
-    "Prefer soft / warm daylight, neutral studio, concrete, minimal architecture, urban calm.",
-    "No extreme dramatic shadows. No beauty ring light. No passport flat white default.",
-    "Consistent lighting family across all angles of THIS candidate only.",
   ].join("\n");
 }
 
 function buildEditorialSupportBlock(): string {
   return [
-    "EDITORIAL SUPPORT (secondary only)",
+    "9. EDITORIAL SUPPORT (secondary only)",
     "Photorealistic adult casting photograph for a premium streetwear lifestyle brand.",
-    "Commercial usable, clean, natural — editorial polish supports, never dominates.",
-    "Clearly an adult human. Natural facial asymmetry. Realistic hair strands. Correct anatomy.",
+    "Editorial polish supports image quality only — never turn the face into high fashion.",
+    "Commercial usable, clean, natural. Clearly an adult human.",
+    "Natural facial asymmetry. Realistic hair strands. Correct anatomy.",
     "No over-retouching, no glossy beauty skin, no uncanny perfect symmetry.",
     "No brand logos, no copyrighted characters, no text, no watermark.",
-    "Single adult person only. Suitable as an official Milaene brand face reference.",
+    "Single adult person only. Suitable as an official Milaene Brand Face reference.",
   ].join("\n");
 }
 
 function buildNegativePrompt(project: PersonaCreationProject): string {
   return [
-    "cartoon, anime, illustration, 3d render, plastic skin, over-smoothed, glossy beauty skin,",
+    "cartoon, anime, illustration, 3d render, plastic skin, waxy skin, glossy beauty retouching,",
+    "over-smoothed, porcelain skin, airbrushed texture, exaggerated facial symmetry,",
     "deformed hands, extra fingers, bad anatomy, watermark, text, logo,",
     "collage, multiple people, child, minor, underage, age-ambiguous,",
-    "sexualized pose, exaggerated beauty filter, uncanny symmetry,",
-    "different person between angles, identity drift, hair color change, eye color change,",
-    "same face as other candidates, cloned identity, identical twins look,",
-    "fashion week, runway, luxury runway, Paris fashion week, Vogue, magazine cover,",
-    "luxury fashion campaign, Calvin Klein campaign energy, high fashion editorial,",
-    "fashion editorial pose, model catwalk pose, aggressive fashion pose, dominant body language,",
-    "businessman, CEO portrait, corporate headshot, corporate, suit, blazer, turtleneck,",
-    "intimidating expression, angry eyes, aggressive face, furrowed brows, scowl,",
-    "exaggerated masculinity, overstyled hair, perfectly combed hair, slicked business hair,",
-    "passport photo lighting, flat white backdrop as default, beauty ring light, heavy film-noir shadows,",
-    "orange fake tan, extreme vacation tan, bodybuilder, fitness influencer,",
-    "broad commercial smile, flashy jewelry, visible brand logos, loud prints,",
+    "sexualized pose, different person between angles, identity drift, hair color change, eye color change,",
+    "identical candidates, cloned facial identity, generic AI face, same face as other candidates,",
+    "aggressive expression, angry eyes, intimidating stare, deeply furrowed brows, hostile expression,",
+    "criminal stereotype, gangster styling, piercing stare, confrontational gaze, hard authority,",
+    "CEO portrait, corporate headshot, luxury realtor, businessman, suit, blazer, turtleneck, dress shirt,",
+    "runway model, fashion week, severe high-fashion face, high-fashion intensity, sharp fashion face,",
+    "extreme cheekbones, razor-sharp jawline, dominant body language, military stance, rigid posture,",
+    "passport photo, expressionless mugshot, bodybuilder physique, fitness influencer,",
+    "over-groomed hair, perfectly combed slick business hair,",
+    "identical beige background, beauty ring light, dramatic fashion lighting, harsh intimidation shadows,",
+    "street cafe campaign scene, parking garage, clothing rack set, product mockup, group shot,",
+    "broad commercial smile, flashy jewelry, visible brand logos, loud prints, luxury watch,",
     project.excluded_features || "",
   ]
     .filter(Boolean)
@@ -193,7 +270,7 @@ function buildNegativePrompt(project: PersonaCreationProject): string {
 }
 
 /**
- * Build a modular OpenAI prompt for one candidate × one camera asset.
+ * Build a modular OpenAI prompt for one candidate × one Stage-A camera asset.
  * Identity is unique per candidate; only the camera block changes per asset.
  */
 export function buildCandidatePrompt(params: {
@@ -204,41 +281,52 @@ export function buildCandidatePrompt(params: {
 }): BuiltCandidatePrompt {
   const variation =
     params.variation ?? resolveCandidateVariation(params.candidateNumber);
-  const brandDna = buildBrandDnaBlock(params.project);
-  const lifestyle = buildLifestyleBlock(variation);
-  const identity = buildIdentityBlock(
+  const identity = buildIdentityLockBlock(
     params.project,
     variation,
     params.candidateNumber,
   );
-  const appearance = buildAppearanceBlock(params.project, variation);
-  const variationBlock = buildVariationBlock(variation, params.candidateNumber);
-  const lighting = buildLightingBlock(variation);
+  const appearance = buildAuthenticAppearanceBlock(variation);
+  const presence = buildPresenceBlock(variation);
+  const brandDna = buildBrandDnaBlock(params.project);
+  const wardrobe = buildWardrobeBlock(params.project, variation);
   const camera = framingForAsset(params.assetType);
+  const lighting = buildEnvironmentLightingBlock(variation);
+  const variationBlock = buildVariationBlock(variation, params.candidateNumber);
   const editorialRules = buildEditorialSupportBlock();
   const negative = buildNegativePrompt(params.project);
 
+  // Legacy alias — older tests / readers looked for a lifestyle block.
+  const lifestyle = [
+    "LIFESTYLE CASTING CONTEXT",
+    `Aesthetic: ${variation.aesthetic}.`,
+    "Premium Streetwear Lifestyle Casting — controlled Stage A, not a campaign location.",
+    "More community and identification. Less polished high-fashion model energy.",
+  ].join("\n");
+
   const blocks: PromptBlocks = {
-    brandDna,
-    lifestyle,
     identity,
     appearance,
-    variation: variationBlock,
-    lighting,
+    presence,
+    brandDna,
+    wardrobe,
     camera,
+    lighting,
+    variation: variationBlock,
     editorialRules,
     negative,
+    lifestyle,
   };
 
-  // Priority: Brand DNA → Lifestyle → Authenticity → Commercial presence → Editorial support
   const prompt = [
-    blocks.brandDna,
-    blocks.lifestyle,
     blocks.identity,
     blocks.appearance,
-    blocks.variation,
-    blocks.lighting,
+    blocks.presence,
+    blocks.brandDna,
+    blocks.wardrobe,
     blocks.camera,
+    blocks.lighting,
+    blocks.variation,
     blocks.editorialRules,
   ].join("\n\n");
 

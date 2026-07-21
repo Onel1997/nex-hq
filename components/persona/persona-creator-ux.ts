@@ -12,8 +12,8 @@ import type {
 } from "@/lib/persona/domain/creation-types";
 import {
   MAX_DAILY_GENERATION_EUR,
-  STAGE_A_ASSET_TYPES,
 } from "@/lib/persona/domain/creation-types";
+import { STAGE_A1_DISCOVERY_ASSET_TYPES } from "@/lib/persona/creation/casting-funnel";
 
 /** Display-only mirrors of provider/cost.ts — UX preview, not billing authority. */
 const DISPLAY_COST_EUR_MIN = 0.04;
@@ -93,8 +93,8 @@ export const PRESET_CARD_META: Record<string, PresetCardMeta> = {
   milaene_street_luxury: {
     title: "Milaene Street Luxury",
     description:
-      "Authentic premium streetwear lifestyle — followable, urban, warm olive.",
-    usage: "Primary male · brand face",
+      "Premium Streetwear Lifestyle Casting — four distinct Brand Faces, calm and authentic.",
+    usage: "Primary male · brand face casting",
     icon: "urban",
     bestFor: ["Campaigns", "Social", "Editorial"],
   },
@@ -384,7 +384,7 @@ export function creatorPrimaryActionLabel(step: number, providerMode: ProviderMo
 
 export function computeCreatorCostPreview(form: CreatorFormState): CreatorCostPreview {
   const count = Math.min(8, Math.max(1, form.candidate_count || 1));
-  const imagesPerCandidate = STAGE_A_ASSET_TYPES.length;
+  const imagesPerCandidate = STAGE_A1_DISCOVERY_ASSET_TYPES.length;
   const totalImages = count * imagesPerCandidate;
   const mode = form.provider_mode;
 
@@ -425,7 +425,7 @@ export function computeCreatorCostPreview(form: CreatorFormState): CreatorCostPr
     provider: "OpenAI",
     candidateCount: count,
     imagesPerCandidate,
-    note: `Stage A discovery: ${count} × ${imagesPerCandidate} previews. Explicit cost confirmation required before generation.`,
+    note: `Discovery casting (A1): ${count} × ${imagesPerCandidate} face portrait. Angle validation (A2) is a separate confirmed step.`,
   };
 }
 

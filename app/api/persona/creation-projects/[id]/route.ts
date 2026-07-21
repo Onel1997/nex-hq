@@ -74,16 +74,36 @@ export async function PATCH(request: Request, ctx: Ctx) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     if (body.action === "estimate") {
-      const estimate = await estimateCreationCost(gate.scope, id);
+      const castingPhase =
+        body.castingPhase === "a2_validation"
+          ? "a2_validation"
+          : body.castingPhase === "a1_discovery"
+            ? "a1_discovery"
+            : undefined;
+      const candidateIds = Array.isArray(body.candidateIds)
+        ? body.candidateIds.filter((id): id is string => typeof id === "string")
+        : undefined;
+      const estimate = await estimateCreationCost(gate.scope, id, {
+        castingPhase,
+        candidateIds,
+      });
       const project = await getCreationProject(gate.scope, id);
       return jsonOk({
         estimate,
         quality: getQualityModeProfile(project.quality_mode),
-        costLabel: "estimated",
+        costLabel: estimate.costStatus ?? "estimated",
       });
     }
     if (body.action === "prepare_confirmation") {
-      const prepared = await preparePaidGenerationConfirmation(gate.scope, id);
+      const castingPhase =
+        body.castingPhase === "a2_validation" ? "a2_validation" : undefined;
+      const candidateIds = Array.isArray(body.candidateIds)
+        ? body.candidateIds.filter((id): id is string => typeof id === "string")
+        : undefined;
+      const prepared = await preparePaidGenerationConfirmation(gate.scope, id, {
+        castingPhase,
+        candidateIds,
+      });
       return jsonOk({ success: true, ...prepared });
     }
     if (body.action === "prepare_manual") {
