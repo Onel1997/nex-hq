@@ -34,6 +34,8 @@ import {
   type PresetCardMeta,
 } from "@/components/persona/persona-creator-ux";
 import { PersonaGenerationExperience } from "@/components/persona/persona-generation-experience";
+import { BrandArchetypeCastPanel } from "@/components/persona/brand-archetype-cast-panel";
+import { ReferenceBoardsPanel } from "@/components/persona/reference-boards-panel";
 import { PersonaStatusChip } from "@/components/persona/persona-status-chip";
 import {
   CandidateBoardCard,
@@ -836,6 +838,7 @@ export function PersonaCreatorView({
         </div>
 
         <aside className="ps-creator-aside" aria-label="Live Brand Cast summary">
+          <BrandArchetypeCastPanel />
           <div className="ps-live-summary">
             <div className="ps-live-summary-head">
               <span className="ps-eyebrow">Live Preview</span>
@@ -922,6 +925,8 @@ export function PersonaCreatorView({
               </div>
             ) : null}
           </div>
+
+          <ReferenceBoardsPanel />
 
           <div className="ps-cast-progress">
             <div className="ps-section-label">

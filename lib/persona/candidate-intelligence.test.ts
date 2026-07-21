@@ -155,11 +155,13 @@ describe("Milaene premium streetwear lifestyle casting", () => {
 
     assert.equal(c1Front.identityLock, c1Half.identityLock);
     assert.equal(c1Front.identityLock, c1Three.identityLock);
-    assert.match(c1Front.identityLock, /Candidate 1 only/);
-    assert.match(c1Front.identityLock, /Relaxed Mediterranean/);
+    assert.match(c1Front.identityLock, /IDENTITY DNA/);
+    assert.match(c1Front.identityLock, /Mediterranean Premium Hero/);
     assert.notEqual(c1Front.identityLock, c2Front.identityLock);
+    assert.equal(c1Front.brandArchetype.slug, "mediterranean-premium-hero");
+    assert.equal(c2Front.brandArchetype.slug, "urban-community-hero");
 
-    const locks = [1, 2, 3, 4].map(
+    const locks = [1, 2, 3].map(
       (n) =>
         buildCandidatePrompt({
           project,
@@ -167,7 +169,7 @@ describe("Milaene premium streetwear lifestyle casting", () => {
           candidateNumber: n,
         }).identityLock,
     );
-    assert.equal(new Set(locks).size, 4);
+    assert.equal(new Set(locks).size, 3);
   });
 
   it("prioritizes identity lock before brand DNA and editorial support", () => {
@@ -178,7 +180,7 @@ describe("Milaene premium streetwear lifestyle casting", () => {
       candidateNumber: 1,
     });
 
-    const identityIdx = built.prompt.indexOf("CANDIDATE IDENTITY LOCK");
+    const identityIdx = built.prompt.indexOf("IDENTITY DNA");
     const appearanceIdx = built.prompt.indexOf("AUTHENTIC HUMAN APPEARANCE");
     const presenceIdx = built.prompt.indexOf("CALM / FRIENDLY COMMERCIAL PRESENCE");
     const brandIdx = built.prompt.indexOf("BRAND DNA");
@@ -201,20 +203,34 @@ describe("Milaene premium streetwear lifestyle casting", () => {
     assert.match(built.negativePrompt, /fashion week|runway|CEO portrait|intimidating stare/i);
     assert.match(built.blocks.wardrobe, /heavyweight|tee|hoodie/i);
     assert.match(built.blocks.lighting, /plaster|studio|concrete|daylight/i);
+
+    // Phase 1.7A — Brand Memory is the SSOT for brand / editorial
+    assert.equal(built.brandMemory.brandName, "Milaene");
+    assert.ok(built.brandMemory.fit.labels.includes("Oversized"));
+    assert.match(built.blocks.brandDna, /Mission:|Visual identity:/i);
+    // Phase 1.7B — Product Intelligence owns wardrobe catalog constraints
+    assert.match(built.blocks.wardrobe, /PRODUCT INTELLIGENCE WARDROBE/);
+    assert.match(built.blocks.wardrobe, /oversized heavyweight tee|heavyweight hoodie/i);
+    assert.equal(built.productIntelligence.productConstraintSource, "seed");
+    // Phase 1.7C — zero approved refs is fine
+    assert.equal(built.blocks.referenceDirection, "");
+    assert.equal(built.referenceIntelligence.referenceIntelligenceVersion, "1.7C.1");
   });
 
   it("encodes calm authentic presence without a shared olive face recipe", () => {
     const project = streetLuxuryProject();
     const tones = new Set<string>();
-    for (const n of [1, 2, 3, 4]) {
+    const slugs = new Set<string>();
+    for (const n of [1, 2, 3]) {
       const built = buildCandidatePrompt({
         project,
         assetType: "portrait_front",
         candidateNumber: n,
       });
       tones.add(built.variation.skinTone);
+      slugs.add(built.brandArchetype.slug);
       assert.match(built.prompt, /friendly|approachable|authentic|relaxed|calm/i);
-      assert.match(built.prompt, /DIFFERENT/i);
+      assert.match(built.prompt, /IDENTITY DNA|Brand Archetype/i);
       assert.match(
         built.variation.expression,
         /friendly|calm|warm|easy|relaxed|soft|quiet/i,
@@ -222,9 +238,16 @@ describe("Milaene premium streetwear lifestyle casting", () => {
       assert.doesNotMatch(built.identityLock, AGGRESSIVE_PROMPT_TERMS);
       assert.match(built.prompt, /pores|skin texture|asymmetry/i);
     }
-    assert.equal(tones.size, 4);
-    assert.match(resolveCandidateVariation(4).skinTone, /deep brown|dark skin/i);
-    assert.doesNotMatch(resolveCandidateVariation(4).faceGeometry, /oval-rectangle/i);
+    assert.equal(tones.size, 3);
+    assert.equal(slugs.size, 3);
+    assert.match(
+      buildCandidatePrompt({
+        project,
+        assetType: "portrait_front",
+        candidateNumber: 2,
+      }).variation.skinTone,
+      /deep brown|dark skin/i,
+    );
   });
 
   it("scores authenticity heavily and keeps cast diversity healthy", () => {
@@ -365,7 +388,7 @@ describe("Phase 1.6A candidate identity diversity & Stage A direction", () => {
 
   it("removes aggressive and high-fashion direction from active casting prompts", () => {
     const project = streetLuxuryProject();
-    for (const n of [1, 2, 3, 4]) {
+    for (const n of [1, 2, 3]) {
       const built = buildCandidatePrompt({
         project,
         assetType: "portrait_front",

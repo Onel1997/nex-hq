@@ -1,51 +1,84 @@
 /**
  * Modular prompt composition for Persona Stage-A casting.
  *
- * Priority order:
- * 1. Candidate-specific Identity Lock
- * 2. Authentic Human Appearance
- * 3. Calm / Friendly Commercial Presence
- * 4. Milaene Premium Streetwear Brand DNA
- * 5. Wardrobe and Fit
- * 6. Camera Angle
- * 7. Controlled Neutral Casting Environment
- * 8. Natural Lighting
- * 9. Editorial Support
- * 10. Negative Constraints
+ * Priority order (Phase 1.7D):
+ * 1. Identity DNA (Brand Archetype — permanent)
+ * 2. Brand Memory
+ * 3. Product Intelligence wardrobe constraints
+ * 4. Approved Persona Casting Reference descriptors (optional)
+ * 5. Camera angle
+ * 6. Stage-A environment + lighting
+ * 7. Archetype direction + editorial support
+ * 8. Negative constraints
  *
- * Identity lock is PER CANDIDATE (shared across that candidate's camera angles).
- * Candidates do NOT share a global face recipe.
- *
- * Persona Studio = casting studio (face / presence / identity).
- * Image Studio later = campaigns, locations, social scenes.
+ * Identity DNA replaces legacy random face recipes.
+ * Archetypes behave like a professional casting agency.
  */
 
+import {
+  formatBrandMemoryEditorialForPersona,
+  formatBrandMemoryForPersona,
+  formatBrandMemoryWardrobeForPersona,
+  loadBrandMemory,
+  type BrandMemory,
+} from "@/lib/brand-memory";
+import {
+  createBrandArchetypeSnapshot,
+  formatArchetypeAppearancePrompt,
+  formatArchetypeDirectionPrompt,
+  formatArchetypePresencePrompt,
+  formatIdentityDnaPrompt,
+  getIdentityDnaForArchetype,
+  loadBrandArchetypeCatalog,
+  resolveArchetypeForCandidate,
+  type BrandArchetype,
+  type BrandArchetypeCatalog,
+  type BrandArchetypeSnapshot,
+  type IdentityDna,
+} from "@/lib/brand-archetypes";
+import {
+  formatProductWardrobeConstraintsForPersona,
+  createProductIntelligenceSnapshot,
+  loadProductCatalog,
+  type ProductCatalog,
+  type ProductIntelligenceSnapshot,
+} from "@/lib/product-intelligence";
+import {
+  createReferenceIntelligenceSnapshot,
+  formatPersonaReferenceDirection,
+  loadReferenceCatalog,
+  type ReferenceIntelligenceSnapshot,
+  type ReferenceWorkspaceCatalog,
+} from "@/lib/reference-intelligence";
 import type { CandidateAssetType, PersonaCreationProject } from "../../domain/creation-types";
+import { variationProfileFromArchetype } from "./archetype-bridge";
 import {
   resolveCandidateVariation,
   type CandidateVariationProfile,
 } from "./variations";
 
 export interface PromptBlocks {
-  /** 1 — Candidate-specific identity lock */
+  /** 1 — Identity DNA (Brand Archetype) */
   identity: string;
-  /** 2 — Authentic human appearance / skin */
+  /** 2 — Authentic human appearance from Identity DNA */
   appearance: string;
-  /** 3 — Calm / friendly commercial presence */
+  /** 3 — Commercial presence from Identity DNA */
   presence: string;
   /** 4 — Brand DNA */
   brandDna: string;
-  /** 5 — Wardrobe and fit */
+  /** 5 — Wardrobe and fit (Product Intelligence constraints) */
   wardrobe: string;
+  /** Optional approved persona casting reference direction */
+  referenceDirection: string;
   /** 6 — Camera angle */
   camera: string;
   /** 7+8 — Neutral casting environment + lighting */
   lighting: string;
-  /** Candidate direction notes */
+  /** Archetype direction notes */
   variation: string;
-  /** 9 — Supporting polish only */
+  /** Supporting polish only */
   editorialRules: string;
-  /** 10 — Negatives */
+  /** Negatives */
   negative: string;
   /** @deprecated Prefer presence — kept for older snapshot readers. */
   lifestyle: string;
@@ -53,15 +86,26 @@ export interface PromptBlocks {
 
 export interface BuiltCandidatePrompt {
   blocks: PromptBlocks;
-  /** Final OpenAI prompt (blocks joined with newlines). */
   prompt: string;
   negativePrompt: string;
   variation: CandidateVariationProfile;
-  /** Identity lock text shared across all camera angles for THIS candidate only. */
   identityLock: string;
+  brandMemory: BrandMemory;
+  productIntelligence: ProductIntelligenceSnapshot;
+  referenceIntelligence: ReferenceIntelligenceSnapshot;
+  /** Official Brand Archetype used for Identity DNA. */
+  brandArchetype: BrandArchetype;
+  identityDna: IdentityDna;
+  brandArchetypeSnapshot: BrandArchetypeSnapshot;
 }
 
-function framingForAsset(assetType: CandidateAssetType): string {
+function framingForAsset(
+  assetType: CandidateAssetType,
+  memory: BrandMemory,
+): string {
+  const fitLabel = memory.fit.labels[0] ?? "premium";
+  const brandFit = `${fitLabel.toLowerCase()} ${memory.brandName} streetwear fit`;
+
   switch (assetType) {
     case "portrait_front":
       return [
@@ -86,7 +130,7 @@ function framingForAsset(assetType: CandidateAssetType): string {
     case "half_body":
       return [
         "CAMERA — Stage A Half Body",
-        "Waist-up casting frame showing oversized premium streetwear fit.",
+        `Waist-up casting frame showing ${brandFit}.`,
         "Natural shoulder line, relaxed arms, slight weight shift — never runway or military stance.",
         "Same face, hair, skin, and proportions as THIS candidate's front portrait.",
       ].join("\n");
@@ -106,13 +150,12 @@ function framingForAsset(assetType: CandidateAssetType): string {
         "Identical face and hair to THIS candidate.",
       ].join("\n");
     default:
-      return "CAMERA — Premium streetwear casting portrait, identity-locked to THIS candidate only.";
+      return `CAMERA — ${memory.brandName} streetwear casting portrait, identity-locked to THIS candidate only.`;
   }
 }
 
 /**
- * Per-candidate identity lock — biological uniqueness only.
- * Project brief supplies age band + gender envelope; no global olive-face recipe.
+ * Legacy variation-based identity lock — only used when archetype inject is disabled.
  */
 function buildIdentityLockBlock(
   project: PersonaCreationProject,
@@ -142,110 +185,39 @@ function buildIdentityLockBlock(
   ].join("\n");
 }
 
-function buildAuthenticAppearanceBlock(
+function buildEnvironmentLightingBlock(
   variation: CandidateVariationProfile,
+  memory: BrandMemory,
+  archetype?: BrandArchetype,
 ): string {
-  return [
-    "2. AUTHENTIC HUMAN APPEARANCE",
-    `Skin: ${variation.skinTone}.`,
-    "Allow visible but subtle skin texture, natural pores, slight under-eye detail, minor asymmetry.",
-    "Allow real beard density variation and a natural hairline.",
-    "Realistic complexion variation — photoreal adult human, not porcelain beauty skin.",
-    "Still groomed, premium, and commercially usable — authentic does not mean unkempt.",
-    "No airbrushed texture, no waxy / plastic AI finish, no unreal facial symmetry.",
-  ].join("\n");
-}
-
-function buildPresenceBlock(variation: CandidateVariationProfile): string {
-  return [
-    "3. CALM / FRIENDLY COMMERCIAL PRESENCE",
-    `Expression: ${variation.expression}.`,
-    `Posture: ${variation.posture}.`,
-    `Social presence: ${variation.socialPresence}.`,
-    `Styling direction: ${variation.stylingDirection}.`,
-    "Relaxed confidence. Approachable. Quiet self-assurance. Natural charisma.",
-    "Friendly eyes. Soft neutral expression. Effortless streetwear presence.",
-    "Contemporary social presence — casually memorable and camera-ready.",
-    "No angry eyes, no tough-guy stare, no hostile energy, no gangster styling.",
-  ].join("\n");
-}
-
-function buildBrandDnaBlock(project: PersonaCreationProject): string {
-  return [
-    "4. MILAENE PREMIUM STREETWEAR BRAND DNA",
-    "Milaene is a modern premium streetwear lifestyle brand — casting studio for official Brand Faces.",
-    "Stage A judges face, presence, identity strength, streetwear credibility, and multi-angle consistency.",
-    "Not a campaign shoot. No streets, cafés, cars, product sets, or social-media scene builds here.",
-    `Lifestyle direction: ${project.fashion_style || "Premium Streetwear Lifestyle Casting"}.`,
-    `Brand role: ${project.brand_role}.`,
-    project.visual_keywords ? `Visual keywords: ${project.visual_keywords}.` : null,
-    project.preferred_brand_looks ? `Brand look: ${project.preferred_brand_looks}.` : null,
-    project.additional_description ? `Creative notes: ${project.additional_description}.` : null,
-    "Shared cast DNA only: age band ≈23–30, Milaene premium streetwear context, calm commercial casting language.",
-    "NOT shared across candidates: face geometry, jaw, nose, eyes, lips, skin tone, hair texture, haircut, body build.",
-    "Goal: a person who could credibly represent Milaene on Instagram, TikTok, website, lookbook, and paid social.",
-    "Not: a perfect AI model against a wall. Not a magazine cover. Not a classic luxury-fashion cast.",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function buildWardrobeBlock(
-  project: PersonaCreationProject,
-  variation: CandidateVariationProfile,
-): string {
-  return [
-    "5. WARDROBE AND FIT",
-    `Candidate wardrobe: ${variation.wardrobe}.`,
-    project.preferred_outfits ? `Brief outfit cue: ${project.preferred_outfits}.` : null,
-    "Allowed family: washed black / charcoal / off-white heavyweight tee, faded grey or muted taupe hoodie, black zip hoodie.",
-    "Relaxed sweatpants cue allowed only as silhouette hint in Half Body — never a fashion-week outfit.",
-    "Oversized premium streetwear fit must read clearly in Half Body.",
-    "No visible logos, fantasy brands, suits, shirts, turtlenecks, jewelry overload, or luxury watches.",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function buildEnvironmentLightingBlock(variation: CandidateVariationProfile): string {
   return [
     "7–8. CONTROLLED NEUTRAL CASTING ENVIRONMENT + NATURAL LIGHTING",
     `Background (candidate-specific): ${variation.background}.`,
-    `Light: ${variation.lighting}.`,
+    `Light: ${archetype?.lightingDirection ?? variation.lighting}.`,
     "Keep Stage A controlled and neutral — not a campaign location.",
     "No streets, cafés, parking garages, shops, clothing racks, cars, or product sets.",
     "Soft natural daylight / diffused window light / subtle studio softbox.",
+    `Photography direction: ${archetype?.photographyDirection ?? memory.photographyStyle}`,
     "Realistic skin tones, mild natural shadows — no beauty lighting, no dramatic fashion lighting, no harsh intimidation shadows.",
     "Consistent lighting family across all angles of THIS candidate only.",
     "Do not reuse the exact same beige wall recipe for every candidate.",
   ].join("\n");
 }
 
-function buildVariationBlock(
-  variation: CandidateVariationProfile,
-  candidateNumber: number,
+function buildNegativePrompt(
+  project: PersonaCreationProject,
+  memory: BrandMemory,
+  archetype?: BrandArchetype,
 ): string {
-  return [
-    `CANDIDATE DIRECTION — Candidate ${candidateNumber}: ${variation.label}`,
-    `Aesthetic: ${variation.aesthetic}.`,
-    ...variation.promptLines,
-  ].join("\n");
-}
+  const forbiddenProducts = memory.forbiddenProductTypes
+    .slice(0, 6)
+    .join(", ");
+  const forbiddenFits = memory.fit.forbidden.join(", ");
+  const forbiddenAesthetics = memory.visualIdentity.forbiddenAesthetics
+    .slice(0, 6)
+    .join(", ");
+  const archetypeAvoid = archetype?.avoid.join(", ") ?? "";
 
-function buildEditorialSupportBlock(): string {
-  return [
-    "9. EDITORIAL SUPPORT (secondary only)",
-    "Photorealistic adult casting photograph for a premium streetwear lifestyle brand.",
-    "Editorial polish supports image quality only — never turn the face into high fashion.",
-    "Commercial usable, clean, natural. Clearly an adult human.",
-    "Natural facial asymmetry. Realistic hair strands. Correct anatomy.",
-    "No over-retouching, no glossy beauty skin, no uncanny perfect symmetry.",
-    "No brand logos, no copyrighted characters, no text, no watermark.",
-    "Single adult person only. Suitable as an official Milaene Brand Face reference.",
-  ].join("\n");
-}
-
-function buildNegativePrompt(project: PersonaCreationProject): string {
   return [
     "cartoon, anime, illustration, 3d render, plastic skin, waxy skin, glossy beauty retouching,",
     "over-smoothed, porcelain skin, airbrushed texture, exaggerated facial symmetry,",
@@ -263,6 +235,10 @@ function buildNegativePrompt(project: PersonaCreationProject): string {
     "identical beige background, beauty ring light, dramatic fashion lighting, harsh intimidation shadows,",
     "street cafe campaign scene, parking garage, clothing rack set, product mockup, group shot,",
     "broad commercial smile, flashy jewelry, visible brand logos, loud prints, luxury watch,",
+    `${forbiddenProducts},`,
+    `${forbiddenFits},`,
+    `${forbiddenAesthetics},`,
+    archetypeAvoid,
     project.excluded_features || "",
   ]
     .filter(Boolean)
@@ -271,36 +247,114 @@ function buildNegativePrompt(project: PersonaCreationProject): string {
 
 /**
  * Build a modular OpenAI prompt for one candidate × one Stage-A camera asset.
- * Identity is unique per candidate; only the camera block changes per asset.
+ * Identity DNA from Brand Archetypes is the primary identity source.
  */
 export function buildCandidatePrompt(params: {
   project: PersonaCreationProject;
   assetType: CandidateAssetType;
   candidateNumber: number;
   variation?: CandidateVariationProfile;
+  brandMemory?: BrandMemory;
+  productCatalog?: ProductCatalog;
+  referenceCatalog?: ReferenceWorkspaceCatalog;
+  archetypeCatalog?: BrandArchetypeCatalog;
+  /** When false, fall back to legacy variation recipes (tests only). Default true. */
+  useBrandArchetypes?: boolean;
 }): BuiltCandidatePrompt {
-  const variation =
-    params.variation ?? resolveCandidateVariation(params.candidateNumber);
-  const identity = buildIdentityLockBlock(
-    params.project,
-    variation,
-    params.candidateNumber,
+  const brandMemory =
+    params.brandMemory ?? loadBrandMemory(params.project.workspace_id);
+  const productCatalog =
+    params.productCatalog ?? loadProductCatalog(params.project.workspace_id);
+  const productIntelligence =
+    createProductIntelligenceSnapshot(productCatalog);
+  const referenceCatalog =
+    params.referenceCatalog ?? loadReferenceCatalog(params.project.workspace_id);
+  const referenceIntelligence = createReferenceIntelligenceSnapshot(
+    referenceCatalog,
+    { usageFilter: "persona_casting" },
   );
-  const appearance = buildAuthenticAppearanceBlock(variation);
-  const presence = buildPresenceBlock(variation);
-  const brandDna = buildBrandDnaBlock(params.project);
-  const wardrobe = buildWardrobeBlock(params.project, variation);
-  const camera = framingForAsset(params.assetType);
-  const lighting = buildEnvironmentLightingBlock(variation);
-  const variationBlock = buildVariationBlock(variation, params.candidateNumber);
-  const editorialRules = buildEditorialSupportBlock();
-  const negative = buildNegativePrompt(params.project);
 
-  // Legacy alias — older tests / readers looked for a lifestyle block.
+  const archetypeCatalog =
+    params.archetypeCatalog ??
+    loadBrandArchetypeCatalog(params.project.workspace_id);
+  const useArchetypes = params.useBrandArchetypes !== false;
+  const brandArchetype = useArchetypes
+    ? resolveArchetypeForCandidate(archetypeCatalog, params.candidateNumber)
+    : resolveArchetypeForCandidate(archetypeCatalog, 1);
+  const identityDna = getIdentityDnaForArchetype(archetypeCatalog, brandArchetype);
+  const brandArchetypeSnapshot = createBrandArchetypeSnapshot({
+    archetype: brandArchetype,
+    dna: identityDna,
+    brandFaceMemory:
+      archetypeCatalog.brandFaceMemoryByArchetypeId[brandArchetype.id],
+  });
+
+  const variation =
+    params.variation ??
+    (useArchetypes
+      ? variationProfileFromArchetype(brandArchetype, identityDna)
+      : resolveCandidateVariation(params.candidateNumber));
+
+  const identity = useArchetypes
+    ? formatIdentityDnaPrompt(brandArchetype, identityDna)
+    : buildIdentityLockBlock(params.project, variation, params.candidateNumber);
+  const appearance = useArchetypes
+    ? formatArchetypeAppearancePrompt(identityDna)
+    : [
+        "2. AUTHENTIC HUMAN APPEARANCE",
+        `Skin: ${variation.skinTone}.`,
+        "Allow visible but subtle skin texture, natural pores, slight under-eye detail, minor asymmetry.",
+        "Photoreal adult human — not porcelain beauty skin.",
+      ].join("\n");
+  const presence = useArchetypes
+    ? formatArchetypePresencePrompt(identityDna)
+    : [
+        "3. CALM / FRIENDLY COMMERCIAL PRESENCE",
+        `Expression: ${variation.expression}.`,
+        `Posture: ${variation.posture}.`,
+        `Social presence: ${variation.socialPresence}.`,
+      ].join("\n");
+
+  const brandDna = formatBrandMemoryForPersona(brandMemory, {
+    lifestyleDirection: params.project.fashion_style,
+    brandRole: params.project.brand_role,
+    visualKeywords: params.project.visual_keywords,
+    preferredBrandLooks: params.project.preferred_brand_looks,
+    creativeNotes: params.project.additional_description,
+  });
+  const wardrobe = formatBrandMemoryWardrobeForPersona(brandMemory, {
+    candidateWardrobe: variation.wardrobe,
+    briefOutfitCue: params.project.preferred_outfits,
+    productWardrobeConstraints:
+      formatProductWardrobeConstraintsForPersona(productCatalog),
+  });
+  const referenceDirection = formatPersonaReferenceDirection(referenceCatalog);
+  const camera = framingForAsset(params.assetType, brandMemory);
+  const lighting = buildEnvironmentLightingBlock(
+    variation,
+    brandMemory,
+    useArchetypes ? brandArchetype : undefined,
+  );
+  const variationBlock = useArchetypes
+    ? formatArchetypeDirectionPrompt(brandArchetype)
+    : [
+        `CANDIDATE DIRECTION — Candidate ${params.candidateNumber}: ${variation.label}`,
+        `Aesthetic: ${variation.aesthetic}.`,
+        ...variation.promptLines,
+      ].join("\n");
+  const editorialRules = formatBrandMemoryEditorialForPersona(brandMemory);
+  const negative = buildNegativePrompt(
+    params.project,
+    brandMemory,
+    useArchetypes ? brandArchetype : undefined,
+  );
+
   const lifestyle = [
     "LIFESTYLE CASTING CONTEXT",
+    `Archetype: ${brandArchetype.name}.`,
     `Aesthetic: ${variation.aesthetic}.`,
-    "Premium Streetwear Lifestyle Casting — controlled Stage A, not a campaign location.",
+    `${brandMemory.brandName} — ${brandMemory.lifestyleKeywords[0] ?? brandMemory.positioning} — controlled Stage A, not a campaign location.`,
+    `Campaign role: ${brandArchetype.campaignRole}.`,
     "More community and identification. Less polished high-fashion model energy.",
   ].join("\n");
 
@@ -310,6 +364,7 @@ export function buildCandidatePrompt(params: {
     presence,
     brandDna,
     wardrobe,
+    referenceDirection,
     camera,
     lighting,
     variation: variationBlock,
@@ -324,11 +379,14 @@ export function buildCandidatePrompt(params: {
     blocks.presence,
     blocks.brandDna,
     blocks.wardrobe,
+    blocks.referenceDirection,
     blocks.camera,
     blocks.lighting,
     blocks.variation,
     blocks.editorialRules,
-  ].join("\n\n");
+  ]
+    .filter((block) => block.trim().length > 0)
+    .join("\n\n");
 
   return {
     blocks,
@@ -336,6 +394,12 @@ export function buildCandidatePrompt(params: {
     negativePrompt: negative,
     variation,
     identityLock: identity,
+    brandMemory,
+    productIntelligence,
+    referenceIntelligence,
+    brandArchetype,
+    identityDna,
+    brandArchetypeSnapshot,
   };
 }
 

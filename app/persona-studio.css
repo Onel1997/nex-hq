@@ -3049,3 +3049,163 @@
   margin: 0.2rem 0 0;
   font-size: 0.82rem;
 }
+
+/* Reference Boards foundation (Phase 1.7C) */
+.ps-ref-boards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.ps-ref-boards-lead {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.ps-ref-board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 14rem;
+  overflow: auto;
+}
+
+.ps-ref-board-item {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--ps-line);
+  background: var(--ps-surface);
+  color: inherit;
+  cursor: pointer;
+}
+
+.ps-ref-board-item.is-active {
+  border-color: rgb(196 165 116 / 0.45);
+  background: rgb(196 165 116 / 0.08);
+}
+
+.ps-ref-board-item strong {
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.ps-ref-board-meta,
+.ps-ref-board-updated {
+  font-size: 0.68rem;
+  color: var(--ps-muted);
+}
+
+.ps-ref-board-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.65rem;
+  border-radius: 12px;
+  border: 1px solid var(--ps-line);
+  background: rgb(0 0 0 / 0.12);
+}
+
+.ps-ref-board-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.ps-ref-board-empty {
+  padding: 1.25rem 0.85rem;
+}
+
+.ps-ref-board-empty strong {
+  font-size: 1rem;
+}
+
+.ps-ref-board-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ps-ref-board-actions .ps-btn {
+  font-size: 0.7rem;
+  padding: 0.35rem 0.55rem;
+  opacity: 0.72;
+}
+
+.ps-ref-vision-disabled {
+  margin: 0.15rem 0 0;
+}
+
+/* Brand Archetypes cast panel (Phase 1.7D) */
+.ps-archetype-cast {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.ps-archetype-lead {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.ps-archetype-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.ps-archetype-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid var(--ps-line);
+  background: var(--ps-surface);
+}
+
+.ps-archetype-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.ps-archetype-card-head strong {
+  font-size: 0.88rem;
+  font-weight: 520;
+}
+
+.ps-archetype-card-head em {
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--ps-muted);
+}
+
+.ps-archetype-purpose,
+.ps-archetype-platforms,
+.ps-archetype-campaign {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.ps-archetype-products {
+  list-style: none;
+  margin: 0.15rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.7rem;
+  color: var(--ps-muted);
+}
