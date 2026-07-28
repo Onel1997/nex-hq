@@ -211,16 +211,23 @@ export function CandidateBoardCard({
   active,
   onSelect,
   isRecommendedBrandFace = false,
+  primaryLabel,
+  secondaryLabel,
 }: {
   candidate: PersonaCandidate;
   previewUrl: string | null;
   active: boolean;
   onSelect: () => void;
   isRecommendedBrandFace?: boolean;
+  /** Integrity validation: Candidate A/B/C/D — never use variation as identity. */
+  primaryLabel?: string;
+  secondaryLabel?: string;
 }) {
   const overall = getCandidateOverallScore(candidate);
   const casting = getCandidateCastingScores(candidate);
-  const styleLabel = getCandidateVariationLabel(candidate);
+  const styleLabel = secondaryLabel ?? getCandidateVariationLabel(candidate);
+  const titleLabel =
+    primaryLabel ?? `#${candidate.candidate_number} ${styleLabel}`;
   const qualityMode =
     typeof candidate.generation_settings?.quality === "string"
       ? candidate.generation_settings.quality
@@ -244,7 +251,7 @@ export function CandidateBoardCard({
       <div className="ps-ci-card-hero">
         {previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt={candidate.candidate_name} />
+          <img src={previewUrl} alt={titleLabel} />
         ) : (
           <div className="ps-ci-card-hero-empty">No preview</div>
         )}
@@ -261,9 +268,12 @@ export function CandidateBoardCard({
         </div>
       </div>
       <div className="ps-ci-card-body">
-        <strong>
-          #{candidate.candidate_number} {styleLabel}
-        </strong>
+        <strong>{titleLabel}</strong>
+        {primaryLabel ? (
+          <p className="ps-muted" style={{ margin: "0.25rem 0 0" }}>
+            {styleLabel}
+          </p>
+        ) : null}
         <div className="ps-ci-card-chips">
           <PersonaStatusChip
             label={candidate.provider || "provider"}

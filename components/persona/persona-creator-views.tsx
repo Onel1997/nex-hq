@@ -57,12 +57,19 @@ import {
 } from "@/lib/persona/creation/creation-workflow";
 import {
   assertProjectSelectionSync,
+  canRenderProjectCandidates,
   DEBUG_MODE,
+  discoverySlotLabel,
   isProjectDetailReady,
   projectIdPrefix,
   projectScopedCandidatesCacheKey,
+  resolvePreviewUrlForCandidate,
 } from "@/components/persona/persona-studio-project-sync";
-import { resolveGenerationSource } from "@/lib/persona/creation/casting-data-integrity";
+import {
+  logCandidateRenderForensics,
+  resolveGenerationSource,
+  validateProjectCandidateBoardState,
+} from "@/lib/persona/creation/casting-data-integrity";
 import {
   Check,
   Circle,
@@ -1430,19 +1437,40 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  const projectOwnedOk = canRenderProjectCandidates({
+    activeCreationProjectId: studio.selectedProjectId,
+    projectCandidateState: studio.projectCandidateState,
+  });
   const candidatesInSync =
+    projectOwnedOk &&
     studio.selectedProjectId != null &&
     studio.loadedProjectId === studio.selectedProjectId;
-  const visibleCandidates = useMemo(
-    () => (candidatesInSync ? studio.candidates : []),
-    [candidatesInSync, studio.candidates],
-  );
-  const integrityMismatch = useMemo(() => {
-    if (!studio.selectedProjectId) return false;
-    return visibleCandidates.some(
-      (c) => c.creation_project_id !== studio.selectedProjectId,
+  const visibleCandidates = useMemo(() => {
+    if (!candidatesInSync || !studio.projectCandidateState) return [];
+    return studio.projectCandidateState.candidates.filter(
+      (c) => c.creation_project_id === studio.selectedProjectId,
     );
-  }, [visibleCandidates, studio.selectedProjectId]);
+  }, [candidatesInSync, studio.projectCandidateState, studio.selectedProjectId]);
+
+  const boardIntegrity = useMemo(
+    () =>
+      validateProjectCandidateBoardState({
+        activeCreationProjectId: studio.selectedProjectId,
+        stateProjectId: studio.projectCandidateState?.projectId ?? null,
+        candidates: visibleCandidates,
+        generationRunProjectId:
+          studio.generationJobs[0]?.creation_project_id ?? null,
+      }),
+    [
+      studio.selectedProjectId,
+      studio.projectCandidateState?.projectId,
+      visibleCandidates,
+      studio.generationJobs,
+    ],
+  );
+
+  const integrityMismatch = !boardIntegrity.ok && visibleCandidates.length > 0;
   const generationSource = useMemo(() => {
     const job = studio.generationJobs[0];
     if (!job) return "none";
@@ -1453,8 +1481,8 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     return resolveGenerationSource(job.provider);
   }, [studio.generationJobs]);
   const rankedBoard = useMemo(
-    () => rankCandidatesForBoard(visibleCandidates),
-    [visibleCandidates],
+    () => (integrityMismatch ? [] : rankCandidatesForBoard(visibleCandidates)),
+    [visibleCandidates, integrityMismatch],
   );
   const selected = useMemo(
     () => visibleCandidates.find((c) => c.id === studio.selectedCandidateId) ?? null,
@@ -1483,6 +1511,66 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     setLightboxIndex(null);
   }, [selected?.id, selected?.user_notes]);
 
+  useEffect(() => {
+    if (!DEBUG_MODE || !studio.selectedProjectId) return;
+    logCandidateRenderForensics(
+      "CandidateBoard.render",
+      visibleCandidates.map((c) => ({
+        activeCreationProjectId: studio.selectedProjectId,
+        candidateId: c.id,
+        candidateCreationProjectId: c.creation_project_id,
+        candidateNumber: c.candidate_number,
+        assetId: c.primary_preview_asset_id,
+        assetCreationProjectId: studio.projectCandidateState?.projectId ?? null,
+        assetStoragePath: null,
+        assetPublicUrl: resolvePreviewUrlForCandidate({
+          projectId: studio.selectedProjectId!,
+          candidate: c,
+          previews: studio.candidatePreviews,
+        }),
+        createdAt: c.created_at,
+        generationJobId: studio.generationJobs[0]?.id ?? c.provider_job_id,
+        generationSource,
+      })),
+    );
+  }, [
+    visibleCandidates,
+    studio.selectedProjectId,
+    studio.projectCandidateState?.projectId,
+    studio.candidatePreviews,
+    studio.generationJobs,
+    generationSource,
+  ]);
+
+  const debugPayload = useMemo(
+    () => ({
+      ACTIVE_PROJECT: studio.selectedProjectId,
+      LOADED_STATE_PROJECT: studio.projectCandidateState?.projectId ?? null,
+      CANDIDATE_COUNT: visibleCandidates.length,
+      CANDIDATE_IDS: visibleCandidates.map((c) => c.id),
+      ASSET_IDS: visibleCandidates.map((c) => c.primary_preview_asset_id),
+      ASSET_PATHS: visibleCandidates.map((c) =>
+        resolvePreviewUrlForCandidate({
+          projectId: studio.selectedProjectId ?? "",
+          candidate: c,
+          previews: studio.candidatePreviews,
+        }),
+      ),
+      GENERATION_RUN_ID: studio.generationJobs[0]?.id ?? null,
+      GENERATION_SOURCE: generationSource,
+      GENERATION_STARTED_AT: studio.generationJobs[0]?.started_at ?? null,
+      CANDIDATES_CREATED_AT: visibleCandidates.map((c) => c.created_at),
+    }),
+    [
+      studio.selectedProjectId,
+      studio.projectCandidateState?.projectId,
+      visibleCandidates,
+      studio.candidatePreviews,
+      studio.generationJobs,
+      generationSource,
+    ],
+  );
+
   const act = async (body: Record<string, unknown>) => {
     if (!selected) return;
     setError(null);
@@ -1490,6 +1578,14 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
       await studio.patchCandidate(selected.id, body);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Aktion fehlgeschlagen");
+    }
+  };
+
+  const copyDebug = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(debugPayload, null, 2));
+    } catch {
+      setError("Could not copy debug data");
     }
   };
 
@@ -1506,13 +1602,44 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         </div>
       </header>
 
+      {process.env.NODE_ENV !== "production" || DEBUG_MODE ? (
+        <div className="ps-callout ps-ci-integrity-debug" style={{ marginBottom: "1rem" }}>
+          <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px", margin: 0 }}>
+            {`ACTIVE PROJECT: ${debugPayload.ACTIVE_PROJECT ?? "—"}\n`}
+            {`LOADED STATE PROJECT: ${debugPayload.LOADED_STATE_PROJECT ?? "—"}\n`}
+            {`CANDIDATE COUNT: ${debugPayload.CANDIDATE_COUNT}\n`}
+            {`CANDIDATE IDs: ${(debugPayload.CANDIDATE_IDS as string[]).join(", ") || "—"}\n`}
+            {`ASSET IDs: ${(debugPayload.ASSET_IDS as (string | null)[]).join(", ") || "—"}\n`}
+            {`ASSET PATHS: ${(debugPayload.ASSET_PATHS as (string | null)[]).join(" | ") || "—"}\n`}
+            {`GENERATION RUN ID: ${debugPayload.GENERATION_RUN_ID ?? "—"}\n`}
+            {`GENERATION SOURCE: ${debugPayload.GENERATION_SOURCE}\n`}
+            {`GENERATION STARTED AT: ${debugPayload.GENERATION_STARTED_AT ?? "—"}\n`}
+            {`CANDIDATES CREATED AT: ${(debugPayload.CANDIDATES_CREATED_AT as string[]).join(", ") || "—"}`}
+          </pre>
+          <button type="button" className="ps-btn-secondary" onClick={() => void copyDebug()}>
+            Copy debug data
+          </button>
+        </div>
+      ) : null}
+
+      {studio.projectDetailLoading ? (
+        <div className="ps-empty">
+          <Loader2 className="size-6 animate-spin" />
+          <p>Loading candidates for this project…</p>
+        </div>
+      ) : null}
+
       {integrityMismatch ? (
-        <div className="ps-callout ps-callout-warn">
+        <div
+          className="ps-callout ps-callout-warn"
+          style={{ borderColor: "#c0392b", color: "#c0392b" }}
+          role="alert"
+        >
           <p>
-            Data integrity error — one or more candidates do not belong to the active creation
-            project ({projectIdPrefix(studio.selectedProjectId ?? "")}). Stale candidates were
-            blocked.
+            <strong>Data integrity error</strong> — candidate board blocked. State does not
+            match the active creation project.
           </p>
+          <pre style={{ fontSize: "12px" }}>{boardIntegrity.reasons.join("\n")}</pre>
         </div>
       ) : null}
 
@@ -1561,7 +1688,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         </details>
       ) : null}
 
-      {diversityWarning ? (
+      {diversityWarning && !integrityMismatch ? (
         <div className="ps-callout ps-callout-warn">
           <p>
             <strong>{diversityWarning}</strong> Consider regenerating with stronger variation
@@ -1570,12 +1697,12 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         </div>
       ) : null}
 
-      {visibleCandidates.length === 0 ? (
+      {!studio.projectDetailLoading && !integrityMismatch && visibleCandidates.length === 0 ? (
         <EmptyState
-          title="No candidates on the board yet."
+          title="No candidates exist for this project."
           body={
             candidatesInSync
-              ? "After a casting session generates or receives uploads, your Brand Faces will appear here for comparison."
+              ? "This creation project has no project-owned candidates. Start a new discovery generation for this project — never reuse another project's board."
               : "Select a creation project and wait for it to finish loading before viewing candidates."
           }
           actionLabel={candidatesInSync ? "Open Creation Projects" : undefined}
@@ -1583,29 +1710,43 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             candidatesInSync ? () => studio.setSection("creation_projects") : undefined
           }
         />
-      ) : (
+      ) : null}
+
+      {!studio.projectDetailLoading && !integrityMismatch && rankedBoard.length > 0 ? (
         <div className="ps-ci-grid">
           {rankedBoard.map(({ candidate: c, isRecommendedBrandFace }) => (
             <CandidateBoardCard
               key={c.id}
               candidate={c}
-              previewUrl={studio.candidatePreviews[c.id] ?? null}
+              previewUrl={
+                studio.selectedProjectId
+                  ? resolvePreviewUrlForCandidate({
+                      projectId: studio.selectedProjectId,
+                      candidate: c,
+                      previews: studio.candidatePreviews,
+                    })
+                  : null
+              }
               active={studio.selectedCandidateId === c.id}
               isRecommendedBrandFace={isRecommendedBrandFace}
+              primaryLabel={discoverySlotLabel(c.candidate_number)}
+              secondaryLabel={getCandidateVariationLabel(c)}
               onSelect={() => void studio.loadCandidate(c.id)}
             />
           ))}
         </div>
-      )}
+      ) : null}
 
-      {selected ? (
+      {selected && !integrityMismatch ? (
         <div className="ps-detail ps-ci-detail">
           <div className="ps-ci-detail-header">
             <div>
               <h2>
-                #{selected.candidate_number} {getCandidateVariationLabel(selected)}
+                {discoverySlotLabel(selected.candidate_number)}
               </h2>
-              <p className="ps-muted">{selected.identity_summary}</p>
+              <p className="ps-muted">
+                {getCandidateVariationLabel(selected)} · {selected.identity_summary}
+              </p>
               {selectedIsRecommended ? (
                 <p className="ps-ci-detail-recommended">★ Recommended Brand Face</p>
               ) : null}
@@ -1726,14 +1867,15 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             </label>
           </div>
           {error ? <p className="ps-error-inline">{error}</p> : null}
-          {lightboxIndex != null ? (
-            <CandidateLightbox
-              assets={studio.candidateAssets}
-              startIndex={lightboxIndex}
-              onClose={() => setLightboxIndex(null)}
-            />
-          ) : null}
         </div>
+      ) : null}
+
+      {lightboxIndex != null ? (
+        <CandidateLightbox
+          assets={studio.candidateAssets}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
       ) : null}
     </section>
   );

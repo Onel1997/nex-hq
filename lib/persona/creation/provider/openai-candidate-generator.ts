@@ -19,6 +19,7 @@ import {
   buildDiversityReport,
   composeProviderPrompt,
   resolveCandidateVariation,
+  resolveOfficialDiscoveryVariations,
   type CandidateVariationProfile,
 } from "../candidate-intelligence";
 import {
@@ -255,12 +256,36 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
     const concurrency = input.concurrency ?? resolvePersonaImageConcurrency();
     const timing = createBatchTimingTracker(concurrency);
 
-    const variations = numbers.map((n) => resolveCandidateVariation(n));
+    const resolved = resolveOfficialDiscoveryVariations({
+      project: input.project,
+      candidateNumbers: numbers,
+    });
+    const variations = resolved.variations;
     const diversity = buildDiversityReport({
       candidateNumbers: numbers,
       variations,
     });
 
+    if (resolved.officialBrandFace) {
+      const fingerprints = new Set<string>();
+      for (let i = 0; i < numbers.length; i += 1) {
+        const built = buildCandidatePrompt({
+          project: input.project,
+          assetType: "portrait_front",
+          candidateNumber: numbers[i]!,
+          variation: variations[i],
+          discoveryBlueprint: resolved.blueprints[i],
+        });
+        fingerprints.add(built.promptFingerprint);
+      }
+      if (fingerprints.size !== numbers.length) {
+        throw new PersonaDomainError(
+          "Official Brand Face discovery prompts are not unique across A–D.",
+          "CONFIG",
+          { fingerprintCount: fingerprints.size },
+        );
+      }
+    }
     jobs.set(jobId, {
       jobId,
       status: "generating",

@@ -67,3 +67,28 @@ export {
 } from "./prompt";
 
 export { createBrandArchetypeSnapshot } from "./snapshot";
+
+export {
+  ALL_DISCOVERY_BLUEPRINTS,
+  FEMALE_DISCOVERY_BLUEPRINTS,
+  MEDITERRANEAN_DISCOVERY_BLUEPRINTS,
+  URBAN_DISCOVERY_BLUEPRINTS,
+  DiscoveryBlueprintError,
+  assertBlueprintGenderMatchesArchetype,
+  assertDiscoveryCastBlueprintsUnique,
+  blueprintFaceTrio,
+  blueprintHairDescriptor,
+  blueprintIdentityDescriptor,
+  discoveryRunVariationToken,
+  formatBlueprintIdentityPrompt,
+  listDiscoveryBlueprintsForArchetype,
+  logDiscoveryBlueprintTrace,
+  promptFingerprint,
+  requiredGenderForArchetype,
+  resolveDiscoveryBlueprint,
+  slotForCandidateNumber,
+  variationProfileFromBlueprint,
+  type ArchetypeCandidateBlueprint,
+  type BlueprintGender,
+  type DiscoverySlot,
+} from "./discovery-blueprints";

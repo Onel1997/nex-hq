@@ -42,8 +42,10 @@ export function getIdentityDnaForArchetype(
 
 /**
  * Map Stage A candidate slots to official archetypes.
- * Slot 1 → Mediterranean, 2 → Urban, 3 → Female.
- * Additional slots cycle for compatibility with larger cast sizes.
+ *
+ * LEGACY Persona Creator only — cycles Mediterranean → Urban → Female by slot.
+ * Official Brand Face discovery must NOT use this: it contaminates gender/identity.
+ * OBF resolves a single archetype from the creation project description marker.
  */
 export function resolveArchetypeForCandidate(
   catalog: BrandArchetypeCatalog,

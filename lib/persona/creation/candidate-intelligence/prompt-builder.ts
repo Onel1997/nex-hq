@@ -1,18 +1,19 @@
 /**
  * Modular prompt composition for Persona Stage-A casting.
  *
- * Priority order (Phase 1.7D):
- * 1. Identity DNA (Brand Archetype — permanent)
- * 2. Brand Memory
- * 3. Product Intelligence wardrobe constraints
- * 4. Approved Persona Casting Reference descriptors (optional)
- * 5. Camera angle
- * 6. Stage-A environment + lighting
- * 7. Archetype direction + editorial support
- * 8. Negative constraints
+ * Official Brand Face discovery priority (Phase 1.8E):
+ * 1. strict archetype and gender lock
+ * 2. candidate-specific biological identity blueprint
+ * 3. age and body structure
+ * 4. expression and presence
+ * 5. Brand Memory
+ * 6. Product Intelligence wardrobe constraints
+ * 7. reference direction
+ * 8. camera and framing
+ * 9. lighting and background
+ * 10. negative constraints
  *
- * Identity DNA replaces legacy random face recipes.
- * Archetypes behave like a professional casting agency.
+ * Legacy generic Persona Creator may still use variation recipes.
  */
 
 import {
@@ -31,11 +32,23 @@ import {
   getIdentityDnaForArchetype,
   loadBrandArchetypeCatalog,
   resolveArchetypeForCandidate,
+  assertBlueprintGenderMatchesArchetype,
+  assertDiscoveryCastBlueprintsUnique,
+  discoveryRunVariationToken,
+  formatBlueprintIdentityPrompt,
+  listDiscoveryBlueprintsForArchetype,
+  logDiscoveryBlueprintTrace,
+  promptFingerprint,
+  requiredGenderForArchetype,
+  resolveDiscoveryBlueprint,
+  variationProfileFromBlueprint,
+  type ArchetypeCandidateBlueprint,
   type BrandArchetype,
   type BrandArchetypeCatalog,
   type BrandArchetypeSnapshot,
   type IdentityDna,
 } from "@/lib/brand-archetypes";
+import { parseArchetypeIdFromProjectDescription } from "@/lib/brand-face-selection/creation-project-mapper";
 import {
   formatProductWardrobeConstraintsForPersona,
   createProductIntelligenceSnapshot,
@@ -67,7 +80,7 @@ import {
 export interface PromptBlocks {
   /** 1 — Identity DNA (Brand Archetype) */
   identity: string;
-  /** 2 — Authentic human appearance from Identity DNA */
+  /** 2 — Authentic human appearance from Identity DNA / blueprint */
   appearance: string;
   /** 3 — Commercial presence from Identity DNA */
   presence: string;
@@ -89,6 +102,12 @@ export interface PromptBlocks {
   premiumCasting: string;
   /** Strict gender role enforcement */
   genderEnforcement: string;
+  /** Candidate-specific biological blueprint (OBF) */
+  biologicalIdentity: string;
+  /** Age / body from blueprint */
+  ageBody: string;
+  /** Run-specific non-identity variation token block (OBF) */
+  runVariation: string;
   /** @deprecated Prefer presence — kept for older snapshot readers. */
   lifestyle: string;
   /** Negatives */
@@ -108,6 +127,11 @@ export interface BuiltCandidatePrompt {
   brandArchetype: BrandArchetype;
   identityDna: IdentityDna;
   brandArchetypeSnapshot: BrandArchetypeSnapshot;
+  /** Present for Official Brand Face discovery. */
+  discoveryBlueprint: ArchetypeCandidateBlueprint | null;
+  promptFingerprint: string;
+  runVariationToken: string | null;
+  officialBrandFace: boolean;
 }
 
 function framingForAsset(
@@ -260,7 +284,8 @@ function buildNegativePrompt(
 
 /**
  * Build a modular OpenAI prompt for one candidate × one Stage-A camera asset.
- * Identity DNA from Brand Archetypes is the primary identity source.
+ * Official Brand Face: archetype-scoped blueprints own biology (Phase 1.8E).
+ * Legacy Creator: may still use global variation recipes when not OBF.
  */
 export function buildCandidatePrompt(params: {
   project: PersonaCreationProject;
@@ -271,6 +296,7 @@ export function buildCandidatePrompt(params: {
   productCatalog?: ProductCatalog;
   referenceCatalog?: ReferenceWorkspaceCatalog;
   archetypeCatalog?: BrandArchetypeCatalog;
+  discoveryBlueprint?: ArchetypeCandidateBlueprint;
   /** When false, fall back to legacy variation recipes (tests only). Default true. */
   useBrandArchetypes?: boolean;
   /** Internal quality-regeneration suffix (Phase 1.8A). */
@@ -293,9 +319,44 @@ export function buildCandidatePrompt(params: {
     params.archetypeCatalog ??
     loadBrandArchetypeCatalog(params.project.workspace_id);
   const useArchetypes = params.useBrandArchetypes !== false;
-  const brandArchetype = useArchetypes
-    ? resolveArchetypeForCandidate(archetypeCatalog, params.candidateNumber)
-    : resolveArchetypeForCandidate(archetypeCatalog, 1);
+
+  const officialArchetypeId = parseArchetypeIdFromProjectDescription(
+    params.project.description,
+  );
+  const officialBrandFace = Boolean(officialArchetypeId);
+
+  let brandArchetype: BrandArchetype;
+  let discoveryBlueprint: ArchetypeCandidateBlueprint | null = null;
+  let runVariationToken: string | null = null;
+
+  if (officialBrandFace && officialArchetypeId) {
+    const found = archetypeCatalog.archetypes.find((a) => a.id === officialArchetypeId);
+    if (!found) {
+      throw new Error(
+        `Official Brand Face archetype not found for project: ${officialArchetypeId}`,
+      );
+    }
+    brandArchetype = found;
+    const cast = listDiscoveryBlueprintsForArchetype(brandArchetype.id);
+    assertDiscoveryCastBlueprintsUnique(cast);
+    discoveryBlueprint =
+      params.discoveryBlueprint ??
+      resolveDiscoveryBlueprint({
+        archetypeId: brandArchetype.id,
+        candidateNumber: params.candidateNumber,
+      });
+    assertBlueprintGenderMatchesArchetype(discoveryBlueprint, brandArchetype);
+    runVariationToken = discoveryRunVariationToken(params.project.id);
+  } else if (useArchetypes) {
+    // Legacy multi-archetype slot mapping (non-OBF Creator only).
+    brandArchetype = resolveArchetypeForCandidate(
+      archetypeCatalog,
+      params.candidateNumber,
+    );
+  } else {
+    brandArchetype = resolveArchetypeForCandidate(archetypeCatalog, 1);
+  }
+
   const identityDna = getIdentityDnaForArchetype(archetypeCatalog, brandArchetype);
   const brandArchetypeSnapshot = createBrandArchetypeSnapshot({
     archetype: brandArchetype,
@@ -306,29 +367,78 @@ export function buildCandidatePrompt(params: {
 
   const variation =
     params.variation ??
-    (useArchetypes
-      ? variationProfileFromArchetype(brandArchetype, identityDna)
-      : resolveCandidateVariation(params.candidateNumber));
+    (discoveryBlueprint
+      ? variationProfileFromBlueprint(discoveryBlueprint, brandArchetype)
+      : useArchetypes
+        ? variationProfileFromArchetype(brandArchetype, identityDna)
+        : resolveCandidateVariation(params.candidateNumber));
+
+  // When a caller still passes a global variation into an OBF project, replace biology.
+  const effectiveVariation =
+    discoveryBlueprint &&
+    params.variation &&
+    !params.variation.id.startsWith("med-") &&
+    !params.variation.id.startsWith("urban-") &&
+    !params.variation.id.startsWith("female-")
+      ? variationProfileFromBlueprint(discoveryBlueprint, brandArchetype)
+      : variation;
 
   const identity = useArchetypes
     ? formatIdentityDnaPrompt(brandArchetype, identityDna)
-    : buildIdentityLockBlock(params.project, variation, params.candidateNumber);
-  const appearance = useArchetypes
-    ? formatArchetypeAppearancePrompt(identityDna)
-    : [
-        "2. AUTHENTIC HUMAN APPEARANCE",
-        `Skin: ${variation.skinTone}.`,
-        "Allow visible but subtle skin texture, natural pores, slight under-eye detail, minor asymmetry.",
+    : buildIdentityLockBlock(
+        params.project,
+        effectiveVariation,
+        params.candidateNumber,
+      );
+
+  const genderEnforcement = useArchetypes
+    ? genderEnforcementBlock(brandArchetype)
+    : `Gender presentation: ${params.project.gender_presentation || "Male"}.`;
+
+  const biologicalIdentity = discoveryBlueprint
+    ? formatBlueprintIdentityPrompt(discoveryBlueprint)
+    : "";
+
+  const ageBody = discoveryBlueprint
+    ? [
+        "3. AGE AND BODY STRUCTURE",
+        `Age feel: ${discoveryBlueprint.ageRange}.`,
+        `Body: ${discoveryBlueprint.bodyStructure}.`,
+        "Photoreal adult proportions only — never childlike, never bodybuilder.",
+      ].join("\n")
+    : "";
+
+  const appearance = discoveryBlueprint
+    ? [
+        "AUTHENTIC HUMAN APPEARANCE (from candidate blueprint)",
+        `Skin: ${discoveryBlueprint.skinTone}.`,
+        "Allow visible but subtle skin texture, natural pores, slight under-eye detail, mild asymmetry.",
         "Photoreal adult human — not porcelain beauty skin.",
-      ].join("\n");
-  const presence = useArchetypes
-    ? formatArchetypePresencePrompt(identityDna)
-    : [
-        "3. CALM / FRIENDLY COMMERCIAL PRESENCE",
-        `Expression: ${variation.expression}.`,
-        `Posture: ${variation.posture}.`,
-        `Social presence: ${variation.socialPresence}.`,
-      ].join("\n");
+      ].join("\n")
+    : useArchetypes
+      ? formatArchetypeAppearancePrompt(identityDna)
+      : [
+          "2. AUTHENTIC HUMAN APPEARANCE",
+          `Skin: ${effectiveVariation.skinTone}.`,
+          "Allow visible but subtle skin texture, natural pores, slight under-eye detail, minor asymmetry.",
+          "Photoreal adult human — not porcelain beauty skin.",
+        ].join("\n");
+
+  const presence = discoveryBlueprint
+    ? [
+        "4. EXPRESSION AND PRESENCE",
+        `Expression: ${discoveryBlueprint.expression}.`,
+        `Styling presence: ${discoveryBlueprint.stylingDirection}.`,
+        formatArchetypePresencePrompt(identityDna),
+      ].join("\n")
+    : useArchetypes
+      ? formatArchetypePresencePrompt(identityDna)
+      : [
+          "3. CALM / FRIENDLY COMMERCIAL PRESENCE",
+          `Expression: ${effectiveVariation.expression}.`,
+          `Posture: ${effectiveVariation.posture}.`,
+          `Social presence: ${effectiveVariation.socialPresence}.`,
+        ].join("\n");
 
   const brandDna = formatBrandMemoryForPersona(brandMemory, {
     lifestyleDirection: params.project.fashion_style,
@@ -338,7 +448,7 @@ export function buildCandidatePrompt(params: {
     creativeNotes: params.project.additional_description,
   });
   const wardrobe = formatBrandMemoryWardrobeForPersona(brandMemory, {
-    candidateWardrobe: variation.wardrobe,
+    candidateWardrobe: effectiveVariation.wardrobe,
     briefOutfitCue: params.project.preferred_outfits,
     productWardrobeConstraints:
       formatProductWardrobeConstraintsForPersona(productCatalog),
@@ -346,21 +456,25 @@ export function buildCandidatePrompt(params: {
   const referenceDirection = formatPersonaReferenceDirection(referenceCatalog);
   const camera = framingForAsset(params.assetType, brandMemory);
   const lighting = buildEnvironmentLightingBlock(
-    variation,
+    effectiveVariation,
     brandMemory,
     useArchetypes ? brandArchetype : undefined,
   );
-  const variationBlock = useArchetypes
-    ? formatArchetypeDirectionPrompt(brandArchetype)
-    : [
-        `CANDIDATE DIRECTION — Candidate ${params.candidateNumber}: ${variation.label}`,
-        `Aesthetic: ${variation.aesthetic}.`,
-        ...variation.promptLines,
-      ].join("\n");
+  const variationBlock = discoveryBlueprint
+    ? [
+        `CANDIDATE BLUEPRINT — ${discoveryBlueprint.name} (Slot ${discoveryBlueprint.slot})`,
+        `Aesthetic: ${effectiveVariation.aesthetic}.`,
+        ...effectiveVariation.promptLines,
+        formatArchetypeDirectionPrompt(brandArchetype),
+      ].join("\n")
+    : useArchetypes
+      ? formatArchetypeDirectionPrompt(brandArchetype)
+      : [
+          `CANDIDATE DIRECTION — Candidate ${params.candidateNumber}: ${effectiveVariation.label}`,
+          `Aesthetic: ${effectiveVariation.aesthetic}.`,
+          ...effectiveVariation.promptLines,
+        ].join("\n");
   const editorialRules = formatBrandMemoryEditorialForPersona(brandMemory);
-  const genderEnforcement = useArchetypes
-    ? genderEnforcementBlock(brandArchetype)
-    : `Gender presentation: ${params.project.gender_presentation || "Male"}.`;
   const premiumCasting = useArchetypes
     ? [
         premiumArchetypeCastingBlock(brandArchetype),
@@ -374,10 +488,18 @@ export function buildCandidatePrompt(params: {
     useArchetypes ? brandArchetype : undefined,
   );
 
+  const runVariation = runVariationToken
+    ? [
+        "DISCOVERY RUN VARIATION",
+        `Discovery variation token: ${runVariationToken}`,
+        "Keep identity requirements fixed. Allow only small non-identity styling/light nuance for this run.",
+      ].join("\n")
+    : "";
+
   const lifestyle = [
     "LUXURY CAMPAIGN CASTING CONTEXT",
     `Archetype: ${brandArchetype.name}.`,
-    `Aesthetic: ${variation.aesthetic}.`,
+    `Aesthetic: ${effectiveVariation.aesthetic}.`,
     `${brandMemory.brandName} — premium international streetwear editorial — campaign-ready Brand Face.`,
     `Campaign role: ${brandArchetype.campaignRole}.`,
     "Editorial fashion presence with authentic modern energy — reusable across Image, Video, Shopify and campaigns for years.",
@@ -396,33 +518,79 @@ export function buildCandidatePrompt(params: {
     editorialRules,
     premiumCasting,
     genderEnforcement,
+    biologicalIdentity,
+    ageBody,
+    runVariation,
     negative,
     lifestyle,
   };
 
-  const prompt = [
-    blocks.identity,
-    blocks.genderEnforcement,
-    blocks.premiumCasting,
-    blocks.appearance,
-    blocks.presence,
-    blocks.brandDna,
-    blocks.wardrobe,
-    blocks.referenceDirection,
-    blocks.camera,
-    blocks.lighting,
-    blocks.variation,
-    blocks.editorialRules,
-    params.premiumRetrySuffix ?? "",
-  ]
-    .filter((block) => block.trim().length > 0)
-    .join("\n\n");
+  const prompt = officialBrandFace
+    ? [
+        // 1. strict archetype + gender lock
+        blocks.identity,
+        blocks.genderEnforcement,
+        blocks.premiumCasting,
+        // 2. candidate-specific biological identity blueprint
+        blocks.biologicalIdentity,
+        blocks.appearance,
+        // 3. age and body
+        blocks.ageBody,
+        // 4. expression and presence
+        blocks.presence,
+        // 5. Brand Memory
+        blocks.brandDna,
+        // 6. Product Intelligence wardrobe
+        blocks.wardrobe,
+        // 7. reference direction
+        blocks.referenceDirection,
+        // 8. camera
+        blocks.camera,
+        // 9. lighting / background
+        blocks.lighting,
+        blocks.variation,
+        blocks.editorialRules,
+        // run token (non-identity)
+        blocks.runVariation,
+        // 10. negatives appended via composeProviderPrompt
+        params.premiumRetrySuffix ?? "",
+      ]
+        .filter((block) => block.trim().length > 0)
+        .join("\n\n")
+    : [
+        blocks.identity,
+        blocks.genderEnforcement,
+        blocks.premiumCasting,
+        blocks.appearance,
+        blocks.presence,
+        blocks.brandDna,
+        blocks.wardrobe,
+        blocks.referenceDirection,
+        blocks.camera,
+        blocks.lighting,
+        blocks.variation,
+        blocks.editorialRules,
+        params.premiumRetrySuffix ?? "",
+      ]
+        .filter((block) => block.trim().length > 0)
+        .join("\n\n");
+
+  const fingerprint = promptFingerprint(prompt);
+  if (discoveryBlueprint && runVariationToken) {
+    logDiscoveryBlueprintTrace({
+      archetypeId: brandArchetype.id,
+      blueprintId: discoveryBlueprint.id,
+      promptFingerprint: fingerprint,
+      creationProjectId: params.project.id,
+      requiredGender: requiredGenderForArchetype(brandArchetype),
+    });
+  }
 
   return {
     blocks,
     prompt,
     negativePrompt: negative,
-    variation,
+    variation: effectiveVariation,
     identityLock: identity,
     brandMemory,
     productIntelligence,
@@ -430,10 +598,70 @@ export function buildCandidatePrompt(params: {
     brandArchetype,
     identityDna,
     brandArchetypeSnapshot,
+    discoveryBlueprint,
+    promptFingerprint: fingerprint,
+    runVariationToken,
+    officialBrandFace,
   };
 }
 
 /** Compose final provider string (prompt + negative). */
 export function composeProviderPrompt(built: BuiltCandidatePrompt): string {
   return `${built.prompt}\n\nAvoid: ${built.negativePrompt}`;
+}
+
+/**
+ * Resolve casting identities for an Official Brand Face A1 batch.
+ * Replaces global CANDIDATE_VARIATION_PROFILES for OBF projects.
+ */
+export function resolveOfficialDiscoveryVariations(input: {
+  project: PersonaCreationProject;
+  candidateNumbers: number[];
+  archetypeCatalog?: BrandArchetypeCatalog;
+}): {
+  officialBrandFace: boolean;
+  archetype: BrandArchetype | null;
+  blueprints: ArchetypeCandidateBlueprint[];
+  variations: CandidateVariationProfile[];
+  runVariationToken: string | null;
+} {
+  const catalog =
+    input.archetypeCatalog ??
+    loadBrandArchetypeCatalog(input.project.workspace_id);
+  const archetypeId = parseArchetypeIdFromProjectDescription(
+    input.project.description,
+  );
+  if (!archetypeId) {
+    return {
+      officialBrandFace: false,
+      archetype: null,
+      blueprints: [],
+      variations: input.candidateNumbers.map((n) => resolveCandidateVariation(n)),
+      runVariationToken: null,
+    };
+  }
+  const archetype = catalog.archetypes.find((a) => a.id === archetypeId) ?? null;
+  if (!archetype) {
+    throw new Error(`Official Brand Face archetype missing: ${archetypeId}`);
+  }
+  const blueprints = input.candidateNumbers.map((n) => {
+    const blueprint = resolveDiscoveryBlueprint({
+      archetypeId: archetype.id,
+      candidateNumber: n,
+    });
+    assertBlueprintGenderMatchesArchetype(blueprint, archetype);
+    return blueprint;
+  });
+  assertDiscoveryCastBlueprintsUnique(
+    listDiscoveryBlueprintsForArchetype(archetype.id),
+  );
+  return {
+    officialBrandFace: true,
+    archetype,
+    blueprints,
+    variations: blueprints.map((b) =>
+      variationProfileFromBlueprint(b, archetype),
+    ),
+    runVariationToken: discoveryRunVariationToken(input.project.id),
+  };
 }

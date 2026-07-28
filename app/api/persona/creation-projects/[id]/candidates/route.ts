@@ -19,7 +19,12 @@ export async function GET(_request: Request, ctx: Ctx) {
   try {
     const candidates = await listCandidatesForProject(gate.scope, projectId);
     const jobs = await listGenerationJobsForProject(gate.scope, projectId);
-    return jsonOk({ projectId, candidates, jobs });
+    return jsonOk({
+      projectId,
+      candidates,
+      jobs,
+      cache: "no-store",
+    });
   } catch (error) {
     return jsonError(error, dict.persona.errors.unexpected);
   }

@@ -3,10 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEBUG_MODE,
+  buildProjectCandidateState,
   emptyProjectDetailState,
   filterLoadedCandidatesForProject,
   projectScopedCandidatesCacheKey,
+  type ProjectCandidateState,
 } from "@/components/persona/persona-studio-project-sync";
+import {
+  logCandidateRenderForensics,
+  logCastingFlowTrace,
+  resolveGenerationSource,
+} from "@/lib/persona/creation/casting-data-integrity";
 
 /**
  * Safe JSON fetch: validates status and content-type before parsing.
@@ -16,7 +23,13 @@ async function fetchJson<T>(
   url: string,
   init?: RequestInit,
 ): Promise<{ res: Response; data: T }> {
-  const res = await fetch(url, init);
+  const res = await fetch(url, {
+    cache: "no-store",
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+    },
+  });
   const contentType = res.headers.get("content-type") ?? "";
   const isJson = contentType.includes("application/json");
 
@@ -120,6 +133,8 @@ interface StudioState {
   generationJobs: import("@/lib/persona/domain/creation-types").PersonaGenerationJob[];
   incidentSummary: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
   candidatePreviews: Record<string, string | null>;
+  projectCandidateState: ProjectCandidateState | null;
+  projectDetailLoading: boolean;
   presets: CreationProjectPreset[];
   providerSetupMessage: string | null;
 }
@@ -139,6 +154,8 @@ const EMPTY_COUNTS: PersonaStudioDashboardCounts = {
 
 export function usePersonaStudio() {
   const loadProjectRequestRef = useRef(0);
+  const activeProjectIdRef = useRef<string | null>(null);
+  const loadAbortRef = useRef<AbortController | null>(null);
   const workspaceIdRef = useRef<string | null>(null);
 
   const [state, setState] = useState<StudioState>({
@@ -165,6 +182,8 @@ export function usePersonaStudio() {
     generationJobs: [],
     incidentSummary: null,
     candidatePreviews: {},
+    projectCandidateState: null,
+    projectDetailLoading: false,
     presets: [],
     providerSetupMessage: null,
   });
@@ -202,10 +221,10 @@ export function usePersonaStudio() {
   const refreshCreation = useCallback(async () => {
     try {
       const [projectsRes, brandRes, presetsRes, setupRes] = await Promise.all([
-        fetch("/api/persona/creation-projects"),
-        fetch("/api/persona/brand-cast"),
-        fetch("/api/persona/creation-projects?presets=1"),
-        fetch("/api/persona/creation-projects?setup=1"),
+        fetch("/api/persona/creation-projects", { cache: "no-store" }),
+        fetch("/api/persona/brand-cast", { cache: "no-store" }),
+        fetch("/api/persona/creation-projects?presets=1", { cache: "no-store" }),
+        fetch("/api/persona/creation-projects?setup=1", { cache: "no-store" }),
       ]);
       const projectsData = (await projectsRes.json()) as {
         projects?: PersonaCreationProject[];
@@ -277,57 +296,76 @@ export function usePersonaStudio() {
       console.log("[persona] Clicked project id:", projectId);
     }
 
-    const requestId = ++loadProjectRequestRef.current;
+    const loadVersion = ++loadProjectRequestRef.current;
+    activeProjectIdRef.current = projectId;
+    loadAbortRef.current?.abort();
+    const abortController = new AbortController();
+    loadAbortRef.current = abortController;
 
-    setState((prev) => {
-      const switching = prev.selectedProjectId !== projectId;
-      return {
-        ...prev,
-        selectedProjectId: projectId,
-        ...(switching ? emptyProjectDetailState() : {}),
-      };
-    });
+    // Always clear previous project-owned candidate state immediately.
+    setState((prev) => ({
+      ...prev,
+      selectedProjectId: projectId,
+      ...emptyProjectDetailState(),
+      projectDetailLoading: true,
+      projectCandidateState: null,
+      costEstimate:
+        prev.selectedProjectId === projectId ? prev.costEstimate : null,
+      paidConfirmationToken:
+        prev.selectedProjectId === projectId ? prev.paidConfirmationToken : null,
+      paidConfirmationProjectId:
+        prev.selectedProjectId === projectId
+          ? prev.paidConfirmationProjectId
+          : null,
+    }));
 
-    const res = await fetch(`/api/persona/creation-projects/${projectId}`);
-    const data = (await res.json()) as {
-      error?: string;
-      project?: PersonaCreationProject;
-      candidates?: PersonaCandidate[];
-      jobs?: import("@/lib/persona/domain/creation-types").PersonaGenerationJob[];
-      incident?: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
-      candidatePreviews?: Record<string, string | null>;
-    };
-    if (!res.ok) throw new Error(data.error ?? "Projekt laden fehlgeschlagen");
-
-    if (data.project && data.project.id !== projectId) {
-      console.error("[persona] API returned a different project id than requested", {
-        requestedProjectId: projectId,
-        returnedProjectId: data.project.id,
+    try {
+      const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
+        cache: "no-store",
+        signal: abortController.signal,
       });
-      throw new Error("Projekt-Antwort passt nicht zur angeforderten ID");
-    }
+      const data = (await res.json()) as {
+        error?: string;
+        project?: PersonaCreationProject;
+        candidates?: PersonaCandidate[];
+        jobs?: import("@/lib/persona/domain/creation-types").PersonaGenerationJob[];
+        incident?: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
+        candidatePreviews?: Record<string, string | null>;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Projekt laden fehlgeschlagen");
 
-    if (requestId !== loadProjectRequestRef.current) {
-      if (DEBUG_MODE) {
-        console.log("[persona] Ignoring stale loadProject response", {
+      if (data.project && data.project.id !== projectId) {
+        console.error("[persona] API returned a different project id than requested", {
           requestedProjectId: projectId,
-          requestId,
-          latestRequestId: loadProjectRequestRef.current,
+          returnedProjectId: data.project.id,
         });
-      }
-      return;
-    }
-
-    if (DEBUG_MODE) {
-      console.log("[persona] Loaded project id:", data.project?.id ?? projectId);
-    }
-
-    setState((prev) => {
-      if (prev.selectedProjectId !== projectId) {
-        return prev;
+        throw new Error("Projekt-Antwort passt nicht zur angeforderten ID");
       }
 
-      const projectChanged = prev.loadedProjectId !== projectId;
+      if (loadVersion !== loadProjectRequestRef.current) {
+        if (DEBUG_MODE) {
+          console.log("[persona] Ignoring stale loadProject response", {
+            requestedProjectId: projectId,
+            loadVersion,
+            latestRequestId: loadProjectRequestRef.current,
+          });
+        }
+        return;
+      }
+      if (projectId !== activeProjectIdRef.current) {
+        if (DEBUG_MODE) {
+          console.log("[persona] Ignoring loadProject for inactive project", {
+            requestedProjectId: projectId,
+            activeProjectId: activeProjectIdRef.current,
+          });
+        }
+        return;
+      }
+
+      if (DEBUG_MODE) {
+        console.log("[persona] Loaded project id:", data.project?.id ?? projectId);
+      }
+
       const rawCandidates = data.candidates ?? [];
       const candidates = filterLoadedCandidatesForProject(rawCandidates, projectId);
       if (rawCandidates.length !== candidates.length) {
@@ -337,37 +375,93 @@ export function usePersonaStudio() {
         });
       }
 
-      return {
-        ...prev,
-        selectedProjectId: projectId,
-        loadedProjectId: projectId,
-        loadedProject: data.project ?? null,
+      const projectCandidateState = buildProjectCandidateState({
+        projectId,
         candidates,
+        candidatePreviews: data.candidatePreviews ?? {},
         generationJobs: data.jobs ?? [],
         incidentSummary: data.incident ?? null,
-        candidatePreviews: data.candidatePreviews ?? {},
-        creationProjects: prev.creationProjects.map((p) =>
-          p.id === projectId && data.project ? data.project : p,
-        ),
-        costEstimate: projectChanged ? null : prev.costEstimate,
-        paidConfirmationToken: projectChanged
-          ? (data.project?.last_confirmation_token ?? null)
-          : prev.paidConfirmationToken,
-        paidConfirmationProjectId: projectChanged
-          ? data.project?.last_confirmation_token
-            ? projectId
-            : null
-          : prev.paidConfirmationProjectId,
-        section: opts?.openCandidates ? "candidates" : prev.section,
-      };
-    });
-    if (data.project?.last_estimate_at) {
-      void estimateProjectCost(projectId).catch(() => undefined);
+      });
+
+      logCandidateRenderForensics(
+        "client.loadProject",
+        projectCandidateState.candidates.map((c) => ({
+          activeCreationProjectId: projectId,
+          candidateId: c.id,
+          candidateCreationProjectId: c.creation_project_id,
+          candidateNumber: c.candidate_number,
+          assetId: c.primary_preview_asset_id,
+          assetCreationProjectId: projectId,
+          assetStoragePath: null,
+          assetPublicUrl:
+            projectCandidateState.candidatePreviews[c.id] ?? null,
+          createdAt: c.created_at,
+          generationJobId: c.provider_job_id,
+          generationSource: resolveGenerationSource(c.provider),
+        })),
+      );
+
+      if (DEBUG_MODE) {
+        logCastingFlowTrace("client.state_assignment", {
+          creationProjectId: projectId,
+          workspaceId: workspaceIdRef.current,
+          candidateIds: projectCandidateState.candidates.map((c) => c.id),
+          source: "cached",
+        });
+      }
+
+      setState((prev) => {
+        if (prev.selectedProjectId !== projectId) {
+          return prev;
+        }
+        if (loadVersion !== loadProjectRequestRef.current) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          selectedProjectId: projectId,
+          loadedProjectId: projectId,
+          loadedProject: data.project ?? null,
+          candidates: projectCandidateState.candidates,
+          generationJobs: projectCandidateState.generationJobs,
+          incidentSummary: projectCandidateState.incidentSummary,
+          candidatePreviews: projectCandidateState.candidatePreviews,
+          projectCandidateState,
+          projectDetailLoading: false,
+          selectedCandidateId: null,
+          candidateAssets: [],
+          creationProjects: prev.creationProjects.map((p) =>
+            p.id === projectId && data.project ? data.project : p,
+          ),
+          costEstimate: prev.selectedProjectId === projectId ? prev.costEstimate : null,
+          paidConfirmationToken:
+            prev.paidConfirmationProjectId === projectId
+              ? prev.paidConfirmationToken
+              : (data.project?.last_confirmation_token ?? null),
+          paidConfirmationProjectId:
+            prev.paidConfirmationProjectId === projectId
+              ? projectId
+              : data.project?.last_confirmation_token
+                ? projectId
+                : null,
+          section: opts?.openCandidates ? "candidates" : prev.section,
+        };
+      });
+      if (data.project?.last_estimate_at) {
+        void estimateProjectCost(projectId).catch(() => undefined);
+      }
+    } catch (error) {
+      if (abortController.signal.aborted) return;
+      if (loadVersion !== loadProjectRequestRef.current) return;
+      throw error;
     }
   }, [estimateProjectCost]);
 
   const loadCandidate = useCallback(async (candidateId: string) => {
-    const res = await fetch(`/api/persona/candidates/${candidateId}`);
+    const res = await fetch(`/api/persona/candidates/${candidateId}`, {
+      cache: "no-store",
+    });
     const data = (await res.json()) as {
       error?: string;
       candidate?: PersonaCandidate;
@@ -387,23 +481,41 @@ export function usePersonaStudio() {
         });
         return prev;
       }
+      const nextCandidates = prev.candidates.map((c) =>
+        c.id === candidateId && data.candidate ? data.candidate : c,
+      );
+      const nextState =
+        prev.projectCandidateState &&
+        prev.selectedProjectId &&
+        prev.projectCandidateState.projectId === prev.selectedProjectId
+          ? {
+              ...prev.projectCandidateState,
+              candidates: filterLoadedCandidatesForProject(
+                nextCandidates,
+                prev.selectedProjectId,
+              ),
+            }
+          : prev.projectCandidateState;
       return {
         ...prev,
         selectedCandidateId: candidateId,
         candidateAssets: data.assets ?? [],
-        candidates: prev.candidates.map((c) =>
-          c.id === candidateId && data.candidate ? data.candidate : c,
-        ),
+        candidates: nextCandidates,
+        projectCandidateState: nextState,
       };
     });
   }, []);
 
   const bindDiscoveryProject = useCallback((projectId: string) => {
     loadProjectRequestRef.current += 1;
+    loadAbortRef.current?.abort();
+    activeProjectIdRef.current = projectId;
     setState((prev) => ({
       ...prev,
       selectedProjectId: projectId,
       ...emptyProjectDetailState(),
+      projectDetailLoading: true,
+      projectCandidateState: null,
     }));
     if (DEBUG_MODE) {
       console.info("[persona-casting] bindDiscoveryProject", {
@@ -426,11 +538,32 @@ export function usePersonaStudio() {
         if (prev.loadedProjectId !== projectId) {
           return prev;
         }
-        const synced = filterLoadedCandidatesForProject(prev.candidates, projectId);
+        if (
+          !prev.projectCandidateState ||
+          prev.projectCandidateState.projectId !== projectId
+        ) {
+          return {
+            ...prev,
+            selectedProjectId: projectId,
+            candidates: [],
+            candidatePreviews: {},
+            selectedCandidateId: null,
+            candidateAssets: [],
+            section: "candidates",
+          };
+        }
+        const synced = filterLoadedCandidatesForProject(
+          prev.projectCandidateState.candidates,
+          projectId,
+        );
         return {
           ...prev,
           selectedProjectId: projectId,
           candidates: synced,
+          projectCandidateState: {
+            ...prev.projectCandidateState,
+            candidates: synced,
+          },
           selectedCandidateId: null,
           candidateAssets: [],
           section: "candidates",
@@ -447,6 +580,7 @@ export function usePersonaStudio() {
     ) => {
       const res = await fetch("/api/persona/creation-projects", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -506,6 +640,7 @@ export function usePersonaStudio() {
     ) => {
       const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
         method: "PATCH",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "generate",
@@ -513,13 +648,26 @@ export function usePersonaStudio() {
           ...opts,
         }),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as {
+        error?: string;
+        candidates?: PersonaCandidate[];
+      };
       if (!res.ok) throw new Error(data.error ?? "Generierung fehlgeschlagen");
+      if (DEBUG_MODE) {
+        logCastingFlowTrace("client.generation_completion", {
+          creationProjectId: projectId,
+          candidateIds: (data.candidates ?? []).map((c) => c.id),
+          source: "live_openai",
+        });
+      }
       setState((prev) => ({
         ...prev,
         costEstimate: null,
         paidConfirmationToken: null,
         paidConfirmationProjectId: null,
+        projectCandidateState: null,
+        candidates: [],
+        candidatePreviews: {},
       }));
       await loadProject(projectId);
       await refreshCreation();
@@ -531,6 +679,7 @@ export function usePersonaStudio() {
     async (projectId: string) => {
       const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
         method: "PATCH",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "prepare_manual" }),
       });
@@ -545,6 +694,7 @@ export function usePersonaStudio() {
     async (candidateId: string, body: Record<string, unknown>) => {
       const res = await fetch(`/api/persona/candidates/${candidateId}`, {
         method: "PATCH",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -560,6 +710,7 @@ export function usePersonaStudio() {
     async (candidateId: string) => {
       const res = await fetch(`/api/persona/candidates/${candidateId}`, {
         method: "PATCH",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "convert" }),
       });
@@ -585,6 +736,7 @@ export function usePersonaStudio() {
     async (candidateId: string, form: FormData) => {
       const res = await fetch(`/api/persona/candidates/${candidateId}`, {
         method: "POST",
+        cache: "no-store",
         body: form,
       });
       const data = (await res.json()) as { error?: string };

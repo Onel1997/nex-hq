@@ -144,6 +144,108 @@ export type DiscoveryCompletionVerdict = {
   reasons: string[];
 };
 
+export const DISCOVERY_NO_NEW_CANDIDATES_MESSAGE =
+  "Discovery generation did not create new project-owned candidates.";
+
+/** Preview map key — never candidate_number / variation alone. */
+export function projectScopedPreviewKey(
+  creationProjectId: string,
+  candidateId: string,
+  assetId: string,
+): string {
+  return `${creationProjectId}:${candidateId}:${assetId}`;
+}
+
+export function appendAssetCacheBust(url: string, assetId: string): string {
+  if (!url || !assetId) return url;
+  const join = url.includes("?") ? "&" : "?";
+  return `${url}${join}asset=${encodeURIComponent(assetId)}`;
+}
+
+export function storagePathContainsProjectId(
+  storagePath: string,
+  creationProjectId: string,
+): boolean {
+  if (!storagePath || !creationProjectId) return false;
+  return (
+    storagePath.includes(`/${creationProjectId}/`) ||
+    storagePath.includes(`persona-creation/${creationProjectId}/`)
+  );
+}
+
+export type CandidateRenderForensics = {
+  activeCreationProjectId: string | null;
+  candidateId: string;
+  candidateCreationProjectId: string;
+  candidateNumber: number;
+  assetId: string | null;
+  assetCreationProjectId: string | null;
+  assetStoragePath: string | null;
+  assetPublicUrl: string | null;
+  createdAt: string | null;
+  generationJobId: string | null;
+  generationSource: string | null;
+};
+
+export function logCandidateRenderForensics(
+  stage: string,
+  rows: CandidateRenderForensics[],
+): void {
+  if (process.env.NODE_ENV === "production") return;
+  if (typeof console === "undefined") return;
+  for (const row of rows) {
+    console.info(`[persona-casting-forensics] ${stage}`, row);
+  }
+}
+
+export function validateProjectCandidateBoardState(input: {
+  activeCreationProjectId: string | null;
+  stateProjectId: string | null;
+  candidates: PersonaCandidate[];
+  assets?: Array<
+    Pick<PersonaCandidateAsset, "id" | "candidate_id" | "storage_path">
+  >;
+  generationRunProjectId?: string | null;
+}): { ok: boolean; reasons: string[] } {
+  const reasons: string[] = [];
+  const active = input.activeCreationProjectId;
+  if (!active) {
+    reasons.push("No active creation project");
+    return { ok: false, reasons };
+  }
+  if (input.stateProjectId !== active) {
+    reasons.push(
+      `State project ${input.stateProjectId ?? "null"} !== active ${active}`,
+    );
+  }
+  for (const c of input.candidates) {
+    if (c.creation_project_id !== active) {
+      reasons.push(`Candidate ${c.id} belongs to ${c.creation_project_id}`);
+    }
+  }
+  if (input.assets) {
+    const candidateIds = new Set(input.candidates.map((c) => c.id));
+    for (const asset of input.assets) {
+      if (!candidateIds.has(asset.candidate_id)) {
+        reasons.push(`Asset ${asset.id} candidate mismatch`);
+      }
+      if (
+        !storagePathContainsProjectId(asset.storage_path, active) &&
+        !asset.storage_path.includes(asset.id)
+      ) {
+        reasons.push(`Asset ${asset.id} storage path not project-scoped`);
+      }
+    }
+  }
+  if (
+    input.generationRunProjectId != null &&
+    input.generationRunProjectId !== active
+  ) {
+    reasons.push("Generation run does not belong to active project");
+  }
+  return { ok: reasons.length === 0, reasons };
+}
+
 export function validateA1DiscoveryCompletion(input: {
   projectId: string;
   candidates: PersonaCandidate[];
@@ -151,6 +253,11 @@ export function validateA1DiscoveryCompletion(input: {
   expectedCount: number;
   generationSource?: GenerationSource;
   requireProviderExecution?: boolean;
+  generationStartedAt?: string | null;
+  assets?: PersonaCandidateAsset[];
+  priorCandidateIds?: string[];
+  priorAssetIds?: string[];
+  priorStoragePaths?: string[];
 }): DiscoveryCompletionVerdict {
   const reasons: string[] = [];
   const projectCandidates = filterCandidatesForProject(
@@ -195,6 +302,61 @@ export function validateA1DiscoveryCompletion(input: {
       if (!candidate.primary_preview_asset_id && candidate.status !== "queued") {
         reasons.push(
           `Candidate ${candidate.id} missing portrait_front primary asset`,
+        );
+      }
+    }
+  }
+
+  if (input.generationStartedAt && input.assets) {
+    const startedMs = Date.parse(input.generationStartedAt);
+    const candidateIds = new Set(projectCandidates.map((c) => c.id));
+    for (const asset of input.assets) {
+      if (!candidateIds.has(asset.candidate_id)) continue;
+      if (asset.asset_type !== "portrait_front") continue;
+      const createdMs = Date.parse(asset.created_at);
+      if (!Number.isNaN(startedMs) && !Number.isNaN(createdMs) && createdMs < startedMs - 2000) {
+        reasons.push(
+          `Asset ${asset.id} createdAt predates generation startedAt`,
+        );
+      }
+    }
+  }
+
+  const priorCandidateIds = new Set(input.priorCandidateIds ?? []);
+  for (const candidate of projectCandidates) {
+    if (priorCandidateIds.has(candidate.id)) {
+      reasons.push(`Candidate ID reused from a prior run: ${candidate.id}`);
+    }
+  }
+
+  if (input.assets) {
+    const candidateIds = new Set(projectCandidates.map((c) => c.id));
+    const portraitAssets = input.assets.filter(
+      (a) =>
+        candidateIds.has(a.candidate_id) && a.asset_type === "portrait_front",
+    );
+    if (portraitAssets.length < input.expectedCount) {
+      reasons.push(
+        `Expected ${input.expectedCount} portrait assets, found ${portraitAssets.length}`,
+      );
+    }
+    const priorAssetIds = new Set(input.priorAssetIds ?? []);
+    const priorPaths = new Set(input.priorStoragePaths ?? []);
+    const seenPaths = new Set<string>();
+    for (const asset of portraitAssets) {
+      if (priorAssetIds.has(asset.id)) {
+        reasons.push(`Asset ID reused from a prior run: ${asset.id}`);
+      }
+      if (priorPaths.has(asset.storage_path)) {
+        reasons.push(`Storage path reused from a prior run: ${asset.storage_path}`);
+      }
+      if (seenPaths.has(asset.storage_path)) {
+        reasons.push(`Duplicate storage path in run: ${asset.storage_path}`);
+      }
+      seenPaths.add(asset.storage_path);
+      if (!storagePathContainsProjectId(asset.storage_path, input.projectId)) {
+        reasons.push(
+          `Storage path missing creationProjectId: ${asset.storage_path}`,
         );
       }
     }

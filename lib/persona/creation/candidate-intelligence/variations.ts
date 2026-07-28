@@ -4,9 +4,11 @@
  * Stage A = casting studio for face / presence / identity / streetwear credibility.
  * Campaign locations and social scenes belong in Image Studio — not here.
  *
- * Each slot is a DIFFERENT real adult person (≈23–28) within shared brand DNA.
- * No shared Mediterranean face recipe across the cast.
- * Candidate 4 must never read as Candidate 1 with darker skin.
+ * IMPORTANT (Phase 1.8E):
+ * These global profiles are LEGACY styling directions for generic Persona Creator only.
+ * Official Brand Face discovery MUST use archetype-scoped blueprints in
+ * lib/brand-archetypes/discovery-blueprints.ts — never these profiles for
+ * gender, ethnicity, face biology, or identity.
  */
 
 export interface CandidateVariationProfile {

@@ -1,7 +1,29 @@
-import type { PersonaCreationProject } from "@/lib/persona/domain/creation-types";
+import type {
+  PersonaCandidate,
+  PersonaCandidateAsset,
+  PersonaCandidateAssetView,
+  PersonaCreationProject,
+  PersonaGenerationJob,
+} from "@/lib/persona/domain/creation-types";
+import type { IncidentProjectSummary } from "@/lib/persona/creation/creation-service";
+import type { CandidateGenerationCostEstimate } from "@/lib/persona/domain/creation-types";
+import {
+  projectScopedPreviewKey,
+  validateProjectCandidateBoardState,
+} from "@/lib/persona/creation/casting-data-integrity";
 
 /** Enable with NEXT_PUBLIC_DEBUG_MODE=true in .env.local */
 export const DEBUG_MODE = process.env.NEXT_PUBLIC_DEBUG_MODE === "true";
+
+export type ProjectCandidateState = {
+  projectId: string;
+  candidates: PersonaCandidate[];
+  assets: PersonaCandidateAsset[];
+  loadedAt: string;
+  candidatePreviews: Record<string, string | null>;
+  generationJobs: PersonaGenerationJob[];
+  incidentSummary: IncidentProjectSummary | null;
+};
 
 export function projectScopedCandidatesCacheKey(
   workspaceId: string,
@@ -20,6 +42,12 @@ export function projectIdPrefix(id: string): string {
   return id.slice(0, 8);
 }
 
+export function discoverySlotLabel(candidateNumber: number): string {
+  const letters = ["A", "B", "C", "D", "E", "F", "G", "H"] as const;
+  const letter = letters[Math.max(0, candidateNumber - 1)] ?? String(candidateNumber);
+  return `Candidate ${letter}`;
+}
+
 export function isProjectDetailReady(args: {
   selectedProjectId: string | null;
   loadedProjectId: string | null;
@@ -31,6 +59,31 @@ export function isProjectDetailReady(args: {
     args.loadedProject != null &&
     args.loadedProject.id === args.selectedProjectId
   );
+}
+
+export function canRenderProjectCandidates(args: {
+  activeCreationProjectId: string | null;
+  projectCandidateState: ProjectCandidateState | null;
+}): boolean {
+  return (
+    args.projectCandidateState != null &&
+    args.activeCreationProjectId != null &&
+    args.projectCandidateState.projectId === args.activeCreationProjectId
+  );
+}
+
+export function resolvePreviewUrlForCandidate(args: {
+  projectId: string;
+  candidate: PersonaCandidate;
+  previews: Record<string, string | null>;
+}): string | null {
+  const assetId = args.candidate.primary_preview_asset_id;
+  if (assetId) {
+    const scoped =
+      args.previews[projectScopedPreviewKey(args.projectId, args.candidate.id, assetId)];
+    if (scoped) return scoped;
+  }
+  return args.previews[args.candidate.id] ?? null;
 }
 
 export function assertProjectSelectionSync(args: {
@@ -78,18 +131,79 @@ export function assertProjectSelectionSync(args: {
   }
 }
 
+export function buildProjectCandidateState(input: {
+  projectId: string;
+  candidates: PersonaCandidate[];
+  assets?: PersonaCandidateAsset[];
+  candidatePreviews?: Record<string, string | null>;
+  generationJobs?: PersonaGenerationJob[];
+  incidentSummary?: IncidentProjectSummary | null;
+}): ProjectCandidateState {
+  const candidates = filterLoadedCandidatesForProject(input.candidates, input.projectId);
+  const verdict = validateProjectCandidateBoardState({
+    activeCreationProjectId: input.projectId,
+    stateProjectId: input.projectId,
+    candidates,
+    assets: input.assets,
+  });
+  if (!verdict.ok) {
+    console.error("[persona] Refusing invalid project candidate state", {
+      projectId: input.projectId,
+      reasons: verdict.reasons,
+    });
+    return {
+      projectId: input.projectId,
+      candidates: [],
+      assets: [],
+      loadedAt: new Date().toISOString(),
+      candidatePreviews: {},
+      generationJobs: input.generationJobs ?? [],
+      incidentSummary: input.incidentSummary ?? null,
+    };
+  }
+  return {
+    projectId: input.projectId,
+    candidates,
+    assets: input.assets ?? [],
+    loadedAt: new Date().toISOString(),
+    candidatePreviews: input.candidatePreviews ?? {},
+    generationJobs: input.generationJobs ?? [],
+    incidentSummary: input.incidentSummary ?? null,
+  };
+}
+
+/**
+ * Pure reducer for project-switch race tests.
+ * Late Project A responses must never overwrite Project B.
+ */
+export function applyProjectLoadResult(input: {
+  activeProjectId: string;
+  loadVersion: number;
+  currentLoadVersion: number;
+  requestedProjectId: string;
+  previous: ProjectCandidateState | null;
+  next: ProjectCandidateState;
+}): ProjectCandidateState | null {
+  if (input.loadVersion !== input.currentLoadVersion) return input.previous;
+  if (input.requestedProjectId !== input.activeProjectId) return input.previous;
+  if (input.next.projectId !== input.activeProjectId) return input.previous;
+  return input.next;
+}
+
 export function emptyProjectDetailState() {
   return {
     loadedProjectId: null as string | null,
     loadedProject: null as PersonaCreationProject | null,
-    candidates: [] as import("@/lib/persona/domain/creation-types").PersonaCandidate[],
-    generationJobs: [] as import("@/lib/persona/domain/creation-types").PersonaGenerationJob[],
-    incidentSummary: null as import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null,
+    candidates: [] as PersonaCandidate[],
+    generationJobs: [] as PersonaGenerationJob[],
+    incidentSummary: null as IncidentProjectSummary | null,
     candidatePreviews: {} as Record<string, string | null>,
     selectedCandidateId: null as string | null,
-    candidateAssets: [] as import("@/lib/persona/domain/creation-types").PersonaCandidateAssetView[],
-    costEstimate: null as import("@/lib/persona/domain/creation-types").CandidateGenerationCostEstimate | null,
+    candidateAssets: [] as PersonaCandidateAssetView[],
+    costEstimate: null as CandidateGenerationCostEstimate | null,
     paidConfirmationToken: null as string | null,
     paidConfirmationProjectId: null as string | null,
+    projectCandidateState: null as ProjectCandidateState | null,
+    projectDetailLoading: true,
   };
 }

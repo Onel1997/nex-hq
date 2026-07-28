@@ -84,6 +84,7 @@ import {
   assessCandidateQuality,
   qualityFieldsForCandidate,
   resolveCandidateVariation,
+  resolveOfficialDiscoveryVariations,
 } from "./candidate-intelligence";
 import {
   INCIDENT_CLASSIFICATION,
@@ -91,10 +92,14 @@ import {
 } from "./incident-constants";
 import { executeIncidentCleanup } from "./incident-cleanup";
 import {
+  assertAssetsBelongToCandidateProject,
   assertCandidatesBelongToProject,
   assertLiveCastingProviderNotFake,
+  appendAssetCacheBust,
+  DISCOVERY_NO_NEW_CANDIDATES_MESSAGE,
   filterCandidatesForProject,
   logCastingFlowTrace,
+  projectScopedPreviewKey,
   resolveGenerationSource,
   validateA1DiscoveryCompletion,
   type GenerationSource,
@@ -814,8 +819,24 @@ export async function confirmAndStartCandidateGeneration(
     });
 
     const existing = await creationRepo().listCandidates(scope, projectId);
+    const priorAssetIds: string[] = [];
+    const priorStoragePaths: string[] = [];
+    for (const c of existing) {
+      const priorAssets = await creationRepo().listCandidateAssets(scope, c.id);
+      for (const a of priorAssets) {
+        priorAssetIds.push(a.id);
+        priorStoragePaths.push(a.storage_path);
+      }
+    }
+    const officialCast = resolveOfficialDiscoveryVariations({
+      project,
+      candidateNumbers: job.results.map((r) => r.candidateNumber),
+    });
     for (const result of job.results) {
-      const variation = resolveCandidateVariation(result.candidateNumber);
+      const variation =
+        (officialCast.officialBrandFace
+          ? officialCast.variations[result.candidateNumber - 1]
+          : null) ?? resolveCandidateVariation(result.candidateNumber);
       const qualityAssessment = assessCandidateQuality({
         project,
         variation,
@@ -956,6 +977,13 @@ export async function confirmAndStartCandidateGeneration(
     assertCandidatesBelongToProject(persistedCandidates, projectId);
 
     const persistedJobs = await jobRepo().listJobsForProject(scope, projectId);
+    const persistedAssets: PersonaCandidateAsset[] = [];
+    for (const candidate of persistedCandidates) {
+      const assets = await creationRepo().listCandidateAssets(scope, candidate.id);
+      assertAssetsBelongToCandidateProject(assets, candidate, projectId);
+      persistedAssets.push(...assets);
+    }
+
     if (castingPhase === "a1_discovery" && job.results.length > 0) {
       const completion = validateA1DiscoveryCompletion({
         projectId,
@@ -964,10 +992,15 @@ export async function confirmAndStartCandidateGeneration(
         expectedCount: project.candidate_count,
         generationSource,
         requireProviderExecution: true,
+        generationStartedAt: durableJob.started_at ?? now,
+        assets: persistedAssets,
+        priorCandidateIds: [],
+        priorAssetIds,
+        priorStoragePaths,
       });
       if (!completion.complete) {
         throw new PersonaDomainError(
-          "Discovery konnte nicht abgeschlossen werden — fehlende oder ungültige Kandidaten für dieses Projekt.",
+          DISCOVERY_NO_NEW_CANDIDATES_MESSAGE,
           "WORKFLOW",
           { reasons: completion.reasons, projectId },
         );
@@ -980,6 +1013,8 @@ export async function confirmAndStartCandidateGeneration(
       provider: job.provider,
       generationRequestId: durableJob.id,
       candidateIds: persistedCandidates.map((c) => c.id),
+      assetIds: persistedAssets.map((a) => a.id),
+      createdAt: persistedCandidates.map((c) => c.created_at),
       source:
         generationSource === "openai_live"
           ? "live_openai"
@@ -1474,6 +1509,7 @@ export async function listCandidateBoardPreviews(
   projectId: string,
 ): Promise<Record<string, string | null>> {
   const candidates = await creationRepo().listCandidates(scope, projectId);
+  assertCandidatesBelongToProject(candidates, projectId);
   const previews: Record<string, string | null> = {};
   for (const candidate of candidates) {
     previews[candidate.id] = null;
@@ -1483,9 +1519,13 @@ export async function listCandidateBoardPreviews(
         scope,
         candidate.primary_preview_asset_id,
       );
-      if (!asset) continue;
+      if (!asset || asset.candidate_id !== candidate.id) continue;
       const signed = await createPersonaCandidateSignedUrl(asset.storage_path);
-      previews[candidate.id] = signed.signedUrl;
+      const url = appendAssetCacheBust(signed.signedUrl, asset.id);
+      previews[candidate.id] = url;
+      previews[
+        projectScopedPreviewKey(projectId, candidate.id, asset.id)
+      ] = url;
     } catch {
       previews[candidate.id] = null;
     }

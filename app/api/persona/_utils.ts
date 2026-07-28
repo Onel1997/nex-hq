@@ -9,7 +9,13 @@ import type { WorkspaceScope } from "@/lib/persona/domain/types";
 const dict = getDictionary(DEFAULT_LOCALE);
 
 export function jsonOk<T>(data: T, status = 200) {
-  return NextResponse.json(data, { status });
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      Pragma: "no-cache",
+    },
+  });
 }
 
 export function jsonError(error: unknown, fallback = dict.persona.errors.unexpected) {

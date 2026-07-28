@@ -8,6 +8,7 @@ export {
 export {
   buildCandidatePrompt,
   composeProviderPrompt,
+  resolveOfficialDiscoveryVariations,
   type BuiltCandidatePrompt,
   type PromptBlocks,
 } from "./prompt-builder";
