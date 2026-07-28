@@ -44,7 +44,7 @@ const NAV: Array<{
 }> = [
   { id: "dashboard", label: "Dashboard", icon: Layers },
   { id: "brand_cast", label: "Brand Cast", icon: CheckCircle2 },
-  { id: "creator", label: "Persona Creator", icon: UserPlus },
+  { id: "creator", label: "Brand Face Casting", icon: UserPlus },
   { id: "creation_projects", label: "Creation Projects", icon: Clapperboard },
   { id: "candidates", label: "Candidates", icon: Users },
   { id: "personas", label: "Reference Library", icon: UserRound },
@@ -74,7 +74,7 @@ export function PersonaStudio() {
         </nav>
         <div className="ps-header-meta">
           <span className="ps-badge">Milaene Brand Cast</span>
-          <span className="ps-badge ps-badge-muted">Phase 1.2 · Creator</span>
+          <span className="ps-badge ps-badge-muted">Phase 1.8 · Brand Faces</span>
           {studio.health ? (
             <span
               className={`ps-badge ps-health-badge ps-health-${studio.health.status}`}
@@ -321,7 +321,7 @@ function PersonasView({ studio }: { studio: PersonaStudioController }) {
             <li className="ps-empty-state ps-empty-state--inline">
               <p className="ps-eyebrow">Cast</p>
               <strong>No Brand Cast has been approved yet.</strong>
-              <p>Create a draft face or open Persona Creator to begin casting.</p>
+              <p>Create a draft face or open Brand Face Casting to begin discovery.</p>
             </li>
           ) : (
             studio.personas.map((persona) => (

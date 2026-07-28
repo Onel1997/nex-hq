@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEBUG_MODE,
   emptyProjectDetailState,
+  filterLoadedCandidatesForProject,
+  projectScopedCandidatesCacheKey,
 } from "@/components/persona/persona-studio-project-sync";
 
 /**
@@ -137,6 +139,7 @@ const EMPTY_COUNTS: PersonaStudioDashboardCounts = {
 
 export function usePersonaStudio() {
   const loadProjectRequestRef = useRef(0);
+  const workspaceIdRef = useRef<string | null>(null);
 
   const [state, setState] = useState<StudioState>({
     loading: true,
@@ -171,6 +174,7 @@ export function usePersonaStudio() {
       const res = await fetch("/api/persona/health");
       const data = (await res.json()) as PersonaHealthReport;
       setState((prev) => ({ ...prev, health: data }));
+      workspaceIdRef.current = data.workspaceId ?? null;
     } catch {
       setState((prev) => ({
         ...prev,
@@ -324,12 +328,21 @@ export function usePersonaStudio() {
       }
 
       const projectChanged = prev.loadedProjectId !== projectId;
+      const rawCandidates = data.candidates ?? [];
+      const candidates = filterLoadedCandidatesForProject(rawCandidates, projectId);
+      if (rawCandidates.length !== candidates.length) {
+        console.error("[persona] Dropped cross-project candidates from loadProject response", {
+          requestedProjectId: projectId,
+          dropped: rawCandidates.length - candidates.length,
+        });
+      }
+
       return {
         ...prev,
         selectedProjectId: projectId,
         loadedProjectId: projectId,
         loadedProject: data.project ?? null,
-        candidates: data.candidates ?? [],
+        candidates,
         generationJobs: data.jobs ?? [],
         incidentSummary: data.incident ?? null,
         candidatePreviews: data.candidatePreviews ?? {},
@@ -361,18 +374,77 @@ export function usePersonaStudio() {
       assets?: PersonaCandidateAssetView[];
     };
     if (!res.ok) throw new Error(data.error ?? "Kandidat laden fehlgeschlagen");
-    setState((prev) => ({
-      ...prev,
-      selectedCandidateId: candidateId,
-      candidateAssets: data.assets ?? [],
-      candidates: prev.candidates.map((c) =>
-        c.id === candidateId && data.candidate ? data.candidate : c,
-      ),
-    }));
+    setState((prev) => {
+      if (
+        data.candidate &&
+        prev.selectedProjectId &&
+        data.candidate.creation_project_id !== prev.selectedProjectId
+      ) {
+        console.error("[persona] Candidate project mismatch — refusing stale candidate", {
+          candidateId,
+          candidateProjectId: data.candidate.creation_project_id,
+          activeProjectId: prev.selectedProjectId,
+        });
+        return prev;
+      }
+      return {
+        ...prev,
+        selectedCandidateId: candidateId,
+        candidateAssets: data.assets ?? [],
+        candidates: prev.candidates.map((c) =>
+          c.id === candidateId && data.candidate ? data.candidate : c,
+        ),
+      };
+    });
   }, []);
 
+  const bindDiscoveryProject = useCallback((projectId: string) => {
+    loadProjectRequestRef.current += 1;
+    setState((prev) => ({
+      ...prev,
+      selectedProjectId: projectId,
+      ...emptyProjectDetailState(),
+    }));
+    if (DEBUG_MODE) {
+      console.info("[persona-casting] bindDiscoveryProject", {
+        creationProjectId: projectId,
+        cacheKey: projectScopedCandidatesCacheKey(
+          workspaceIdRef.current ?? "unknown",
+          projectId,
+        ),
+      });
+    }
+  }, []);
+
+  const openCandidatesForProject = useCallback(
+    async (projectId: string) => {
+      if (!projectId.trim()) {
+        throw new Error("Candidates view requires an explicit creation project id");
+      }
+      await loadProject(projectId, { openCandidates: true });
+      setState((prev) => {
+        if (prev.loadedProjectId !== projectId) {
+          return prev;
+        }
+        const synced = filterLoadedCandidatesForProject(prev.candidates, projectId);
+        return {
+          ...prev,
+          selectedProjectId: projectId,
+          candidates: synced,
+          selectedCandidateId: null,
+          candidateAssets: [],
+          section: "candidates",
+        };
+      });
+    },
+    [loadProject],
+  );
+
   const createProject = useCallback(
-    async (body: Record<string, unknown>) => {
+    async (
+      body: Record<string, unknown>,
+      opts?: { navigate?: boolean },
+    ) => {
       const res = await fetch("/api/persona/creation-projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -385,12 +457,15 @@ export function usePersonaStudio() {
       if (!res.ok) throw new Error(data.error ?? "Projekt erstellen fehlgeschlagen");
       await refreshCreation();
       if (data.project) {
+        bindDiscoveryProject(data.project.id);
         await loadProject(data.project.id);
-        setState((prev) => ({ ...prev, section: "creation_projects" }));
+        if (opts?.navigate !== false) {
+          setState((prev) => ({ ...prev, section: "creation_projects" }));
+        }
       }
       return data.project;
     },
-    [loadProject, refreshCreation],
+    [bindDiscoveryProject, loadProject, refreshCreation],
   );
 
   const preparePaidConfirmation = useCallback(async (projectId: string) => {
@@ -735,6 +810,8 @@ export function usePersonaStudio() {
     removeReference,
     refreshCreation,
     loadProject,
+    bindDiscoveryProject,
+    openCandidatesForProject,
     loadCandidate,
     createProject,
     estimateProjectCost,

@@ -56,6 +56,13 @@ import {
   resolveCandidateVariation,
   type CandidateVariationProfile,
 } from "./variations";
+import {
+  genderEnforcementBlock,
+  premiumArchetypeCastingBlock,
+  premiumFashionPresenceBlock,
+  premiumNegativePromptAdditions,
+  premiumPhotographyBlock,
+} from "./premium-casting-direction";
 
 export interface PromptBlocks {
   /** 1 — Identity DNA (Brand Archetype) */
@@ -78,10 +85,14 @@ export interface PromptBlocks {
   variation: string;
   /** Supporting polish only */
   editorialRules: string;
-  /** Negatives */
-  negative: string;
+  /** Premium editorial casting direction (Phase 1.8A) */
+  premiumCasting: string;
+  /** Strict gender role enforcement */
+  genderEnforcement: string;
   /** @deprecated Prefer presence — kept for older snapshot readers. */
   lifestyle: string;
+  /** Negatives */
+  negative: string;
 }
 
 export interface BuiltCandidatePrompt {
@@ -109,11 +120,12 @@ function framingForAsset(
   switch (assetType) {
     case "portrait_front":
       return [
-        "CAMERA — Stage A Front Portrait",
-        "Natural front head-and-shoulders casting portrait.",
-        "Soft natural eye contact, shoulders slightly relaxed — not stiff passport-front.",
-        "Friendly or calm-neutral facial muscles. No forced smile. No mugshot blankness.",
-        "Same identity as THIS candidate's Three Quarter and Half Body frames.",
+        "CAMERA — Premium Editorial Front Portrait (Stage A Discovery)",
+        "Luxury streetwear campaign casting frame — head-and-shoulders to upper chest.",
+        "Fashion agency model presence: editorial bone structure, strong facial harmony, campaign-ready.",
+        "Soft natural eye contact, relaxed shoulders — confident calm luxury energy.",
+        "NOT passport photo, NOT LinkedIn headshot, NOT ID mugshot, NOT flat stock portrait.",
+        "Photorealistic premium skin texture with natural pores. Same identity across all angles.",
       ].join("\n");
     case "portrait_three_quarter":
       return [
@@ -191,16 +203,16 @@ function buildEnvironmentLightingBlock(
   archetype?: BrandArchetype,
 ): string {
   return [
-    "7–8. CONTROLLED NEUTRAL CASTING ENVIRONMENT + NATURAL LIGHTING",
+    premiumPhotographyBlock(),
+    "",
+    "7–8. CONTROLLED NEUTRAL CASTING ENVIRONMENT",
     `Background (candidate-specific): ${variation.background}.`,
     `Light: ${archetype?.lightingDirection ?? variation.lighting}.`,
     "Keep Stage A controlled and neutral — not a campaign location.",
     "No streets, cafés, parking garages, shops, clothing racks, cars, or product sets.",
-    "Soft natural daylight / diffused window light / subtle studio softbox.",
     `Photography direction: ${archetype?.photographyDirection ?? memory.photographyStyle}`,
-    "Realistic skin tones, mild natural shadows — no beauty lighting, no dramatic fashion lighting, no harsh intimidation shadows.",
+    "Soft luxury editorial lighting — premium skin texture, mild natural shadows.",
     "Consistent lighting family across all angles of THIS candidate only.",
-    "Do not reuse the exact same beige wall recipe for every candidate.",
   ].join("\n");
 }
 
@@ -240,6 +252,7 @@ function buildNegativePrompt(
     `${forbiddenAesthetics},`,
     archetypeAvoid,
     project.excluded_features || "",
+    premiumNegativePromptAdditions(),
   ]
     .filter(Boolean)
     .join(" ");
@@ -260,6 +273,8 @@ export function buildCandidatePrompt(params: {
   archetypeCatalog?: BrandArchetypeCatalog;
   /** When false, fall back to legacy variation recipes (tests only). Default true. */
   useBrandArchetypes?: boolean;
+  /** Internal quality-regeneration suffix (Phase 1.8A). */
+  premiumRetrySuffix?: string;
 }): BuiltCandidatePrompt {
   const brandMemory =
     params.brandMemory ?? loadBrandMemory(params.project.workspace_id);
@@ -343,6 +358,16 @@ export function buildCandidatePrompt(params: {
         ...variation.promptLines,
       ].join("\n");
   const editorialRules = formatBrandMemoryEditorialForPersona(brandMemory);
+  const genderEnforcement = useArchetypes
+    ? genderEnforcementBlock(brandArchetype)
+    : `Gender presentation: ${params.project.gender_presentation || "Male"}.`;
+  const premiumCasting = useArchetypes
+    ? [
+        premiumArchetypeCastingBlock(brandArchetype),
+        "",
+        premiumFashionPresenceBlock(),
+      ].join("\n")
+    : premiumFashionPresenceBlock();
   const negative = buildNegativePrompt(
     params.project,
     brandMemory,
@@ -350,12 +375,12 @@ export function buildCandidatePrompt(params: {
   );
 
   const lifestyle = [
-    "LIFESTYLE CASTING CONTEXT",
+    "LUXURY CAMPAIGN CASTING CONTEXT",
     `Archetype: ${brandArchetype.name}.`,
     `Aesthetic: ${variation.aesthetic}.`,
-    `${brandMemory.brandName} — ${brandMemory.lifestyleKeywords[0] ?? brandMemory.positioning} — controlled Stage A, not a campaign location.`,
+    `${brandMemory.brandName} — premium international streetwear editorial — campaign-ready Brand Face.`,
     `Campaign role: ${brandArchetype.campaignRole}.`,
-    "More community and identification. Less polished high-fashion model energy.",
+    "Editorial fashion presence with authentic modern energy — reusable across Image, Video, Shopify and campaigns for years.",
   ].join("\n");
 
   const blocks: PromptBlocks = {
@@ -369,12 +394,16 @@ export function buildCandidatePrompt(params: {
     lighting,
     variation: variationBlock,
     editorialRules,
+    premiumCasting,
+    genderEnforcement,
     negative,
     lifestyle,
   };
 
   const prompt = [
     blocks.identity,
+    blocks.genderEnforcement,
+    blocks.premiumCasting,
     blocks.appearance,
     blocks.presence,
     blocks.brandDna,
@@ -384,6 +413,7 @@ export function buildCandidatePrompt(params: {
     blocks.lighting,
     blocks.variation,
     blocks.editorialRules,
+    params.premiumRetrySuffix ?? "",
   ]
     .filter((block) => block.trim().length > 0)
     .join("\n\n");

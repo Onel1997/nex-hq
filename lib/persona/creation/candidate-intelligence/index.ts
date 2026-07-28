@@ -13,6 +13,26 @@ export {
 } from "./prompt-builder";
 
 export {
+  PREMIUM_CASTING_QUALITY_REFERENCE,
+  buildPremiumRetryPromptSuffix,
+  genderEnforcementBlock,
+  isOfficialArchetypeSlug,
+  premiumArchetypeCastingBlock,
+  premiumFashionPresenceBlock,
+  premiumNegativePromptAdditions,
+  premiumPhotographyBlock,
+  type OfficialArchetypeSlug,
+} from "./premium-casting-direction";
+
+export {
+  DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS,
+  DISCOVERY_QUALITY_MIN_BRIEF_FIT,
+  evaluateDiscoveryCastingQuality,
+  passesDiscoveryQualityGate,
+  type DiscoveryQualityVerdict,
+} from "./discovery-quality-filter";
+
+export {
   assertCandidateIdentityDiversity,
   auditCandidateIdentityDiversity,
   type IdentityDiversityAudit,

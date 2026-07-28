@@ -49,7 +49,9 @@ export function variationProfileFromArchetype(
       `Official archetype: ${archetype.name}.`,
       `Purpose: ${archetype.purpose.join(", ")}.`,
       `Campaign role: ${archetype.campaignRole}.`,
-      "Never: corporate authority, intimidation, overstyled glam.",
+      "Premium editorial fashion agency casting — luxury streetwear campaign-ready.",
+      "Editorial bone structure, fashion presence, photorealistic premium skin texture.",
+      "Calm confident luxury energy — never corporate, never passport, never average.",
     ],
   };
 }

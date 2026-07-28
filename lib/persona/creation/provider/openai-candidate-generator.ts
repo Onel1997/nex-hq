@@ -22,6 +22,11 @@ import {
   type CandidateVariationProfile,
 } from "../candidate-intelligence";
 import {
+  buildPremiumRetryPromptSuffix,
+  DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS,
+  passesDiscoveryQualityGate,
+} from "../candidate-intelligence/discovery-quality-filter";
+import {
   assetTypesForCastingPhase,
   resolveCastingPhaseForGeneration,
   type CastingFunnelPhase,
@@ -49,6 +54,117 @@ import type {
   EstimateCandidateGenerationInput,
   PersonaCandidateGenerator,
 } from "./types";
+
+/** Reject obviously invalid/truncated provider payloads before surfacing. */
+const MIN_DISCOVERY_IMAGE_BYTES = 8_000;
+
+function isDiscoveryPortraitWork(
+  castingPhase: CastingFunnelPhase,
+  assetType: CandidateAssetType,
+): boolean {
+  return castingPhase === "a1_discovery" && assetType === "portrait_front";
+}
+
+async function generateWithDiscoveryQualityFilter(input: {
+  project: PersonaCreationProject;
+  item: WorkItem;
+  quality: ReturnType<typeof resolveQuality>;
+  castingPhase: CastingFunnelPhase;
+}): Promise<{
+  built: ReturnType<typeof buildCandidatePrompt>;
+  generated: Awaited<ReturnType<typeof generateOpenAiImage>>;
+  attempts: number;
+  qualityAttempts: number;
+  qualityVerdictReasons: string[];
+}> {
+  let qualityAttempts = 0;
+  let lastReasons: string[] = [];
+  let built!: ReturnType<typeof buildCandidatePrompt>;
+  let generated!: Awaited<ReturnType<typeof generateOpenAiImage>>;
+  let attempts = 0;
+
+  const applyFilter = isDiscoveryPortraitWork(input.castingPhase, input.item.assetType);
+
+  for (let qualityAttempt = 1; qualityAttempt <= DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS; qualityAttempt += 1) {
+    qualityAttempts = qualityAttempt;
+    const retrySuffix =
+      qualityAttempt > 1 ? buildPremiumRetryPromptSuffix(qualityAttempt) : undefined;
+    built = buildCandidatePrompt({
+      project: input.project,
+      assetType: input.item.assetType,
+      candidateNumber: input.item.candidateNumber,
+      variation: input.item.variation,
+      premiumRetrySuffix: retrySuffix,
+    });
+
+    const { value: gen, attempts: providerAttempts } = await withTransientRetry(
+      () =>
+        generateOpenAiImage({
+          prompt: composeProviderPrompt(built),
+          dimensions: "1024x1024",
+          assetType: "persona_candidate",
+          qualityOverride: input.quality,
+        }),
+      {
+        maxAttempts: 3,
+        baseDelayMs: 800,
+        isTransient: isLikelyTransientProviderError,
+      },
+    );
+    attempts = providerAttempts;
+    generated = gen;
+
+    if (!applyFilter) {
+      return {
+        built,
+        generated,
+        attempts,
+        qualityAttempts: 1,
+        qualityVerdictReasons: [],
+      };
+    }
+
+    const verdict = passesDiscoveryQualityGate({
+      built,
+      project: input.project,
+      variation: input.item.variation,
+      assetTypes: [input.item.assetType],
+      attempt: qualityAttempt,
+    });
+    lastReasons = [...verdict.reasons];
+
+    const bytes = generated.imageBytes?.length ?? 0;
+    if (bytes > 0 && bytes < MIN_DISCOVERY_IMAGE_BYTES) {
+      lastReasons.push(`Image payload too small (${bytes} bytes) — likely truncated`);
+    }
+
+    const imageOk = bytes === 0 || bytes >= MIN_DISCOVERY_IMAGE_BYTES;
+    if (verdict.pass && imageOk) {
+      return {
+        built,
+        generated,
+        attempts,
+        qualityAttempts,
+        qualityVerdictReasons: [],
+      };
+    }
+
+    if (!verdict.shouldRegenerate && qualityAttempt >= DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS) {
+      break;
+    }
+    if (!verdict.shouldRegenerate) {
+      break;
+    }
+  }
+
+  return {
+    built: built!,
+    generated: generated!,
+    attempts,
+    qualityAttempts,
+    qualityVerdictReasons: lastReasons,
+  };
+}
 
 /** In-process cache only — durable status lives in persona_generation_jobs. */
 const jobs = new Map<string, CandidateBatchJob>();
@@ -207,34 +323,22 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
         let ok = false;
 
         try {
-          const built = buildCandidatePrompt({
+          const genResult = await generateWithDiscoveryQualityFilter({
             project: input.project,
-            assetType: item.assetType,
-            candidateNumber: item.candidateNumber,
-            variation: item.variation,
+            item,
+            quality,
+            castingPhase,
           });
+          const built = genResult.built;
+          retryCount = Math.max(0, genResult.attempts - 1);
+          const generated = genResult.generated;
+
           const bucket = assetsByCandidate.get(item.candidateNumber)!;
           if (!bucket.prompt || item.assetType === "portrait_front") {
             bucket.prompt = built.prompt;
             bucket.negative = built.negativePrompt;
             bucket.identityLock = built.identityLock;
           }
-
-          const { value: generated, attempts } = await withTransientRetry(
-            () =>
-              generateOpenAiImage({
-                prompt: composeProviderPrompt(built),
-                dimensions: "1024x1024",
-                assetType: "persona_candidate",
-                qualityOverride: quality,
-              }),
-            {
-              maxAttempts: 3,
-              baseDelayMs: 800,
-              isTransient: isLikelyTransientProviderError,
-            },
-          );
-          retryCount = Math.max(0, attempts - 1);
 
           if (!generated.imageBytes) {
             throw new Error("OpenAI lieferte keine Bilddaten");
@@ -255,9 +359,16 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
               variationId: item.variation.id,
               variationLabel: item.variation.label,
               identityLock: built.identityLock,
+              discoveryQualityAttempts: genResult.qualityAttempts,
+              discoveryQualityFilter: isDiscoveryPortraitWork(
+                castingPhase,
+                item.assetType,
+              ),
+              discoveryQualityReasons: genResult.qualityVerdictReasons,
               promptBlocks: {
                 camera: built.blocks.camera,
                 variation: item.variation.id,
+                premiumCasting: true,
               },
             },
             estimatedCostEur: unitCost,

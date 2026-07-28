@@ -21,7 +21,7 @@ export function createBrandArchetypeSnapshot(params: {
     identityDnaVersion: params.dna.version,
     identityDnaFingerprint: params.dna.fingerprint,
     brandFaceVersion:
-      params.brandFaceMemory?.brandFaceVersion ?? "0.0.0-architecture",
+      params.brandFaceMemory?.brandFaceVersion ?? "1.8.0",
     capturedAt: params.capturedAt ?? params.archetype.updatedAt,
     productAffinityProductTypes: params.archetype.productAffinity
       .map((a) => a.productType)

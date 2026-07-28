@@ -158,7 +158,8 @@ function emptyBrandFaceMemory(archetypeId: string): BrandFaceMemory {
     brandFaceHistoryIds: [],
     retiredFaceIds: [],
     identityLockVersion: null,
-    brandFaceVersion: "0.0.0-architecture",
+    /** Phase 1.8 — registry starts empty; filled on Official Brand Face approval. */
+    brandFaceVersion: "1.8.0",
   };
 }
 

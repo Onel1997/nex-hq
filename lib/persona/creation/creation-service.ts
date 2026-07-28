@@ -90,6 +90,15 @@ import {
   PERSONA_INCIDENT_PROJECT_ID,
 } from "./incident-constants";
 import { executeIncidentCleanup } from "./incident-cleanup";
+import {
+  assertCandidatesBelongToProject,
+  assertLiveCastingProviderNotFake,
+  filterCandidatesForProject,
+  logCastingFlowTrace,
+  resolveGenerationSource,
+  validateA1DiscoveryCompletion,
+  type GenerationSource,
+} from "./casting-data-integrity";
 
 function creationRepo() {
   return getCreationRepository();
@@ -680,6 +689,12 @@ export async function confirmAndStartCandidateGeneration(
   }
 
   const generator = getPersonaCandidateGenerator(project.provider_mode);
+  assertLiveCastingProviderNotFake(generator.id, {
+    liveUiAttestation: options.attestation === UI_CHECKBOX_ATTESTATION,
+  });
+  const generationSource: GenerationSource = resolveGenerationSource(
+    generator.id === "fake" ? "fake" : estimate.provider,
+  );
   const now = new Date().toISOString();
 
   let durableJob = durableJobId
@@ -702,6 +717,17 @@ export async function confirmAndStartCandidateGeneration(
       confirmed_at: now,
       started_at: now,
       created_by: scope.actorId,
+      confirmation_payload: {
+        generationSource,
+        castingPhase: estimateOpts.castingPhase ?? "a1_discovery",
+        providerExecution: {
+          provider: estimate.provider,
+          requestCount: 0,
+          successCount: 0,
+          retryCount: 0,
+          startedAt: now,
+        },
+      },
     });
   } else {
     durableJob = await jobRepo().updateJob(scope, durableJob.id, {
@@ -907,6 +933,57 @@ export async function confirmAndStartCandidateGeneration(
       error_message: job.errorMessage ?? null,
       error_code: job.results.length === 0 ? "GENERATION_FAILED" : partial ? "PARTIAL" : null,
       completed_at: new Date().toISOString(),
+      confirmation_payload: {
+        ...(durableJob.confirmation_payload ?? {}),
+        generationSource,
+        providerExecution: {
+          provider: job.provider,
+          model:
+            typeof job.results[0]?.settings?.model === "string"
+              ? job.results[0].settings.model
+              : estimate.provider,
+          startedAt: durableJob.started_at ?? now,
+          completedAt: new Date().toISOString(),
+          requestCount: job.results.length,
+          successCount: job.results.length,
+          retryCount: 0,
+          creationProjectId: projectId,
+        },
+      },
+    });
+
+    const persistedCandidates = await creationRepo().listCandidates(scope, projectId);
+    assertCandidatesBelongToProject(persistedCandidates, projectId);
+
+    const persistedJobs = await jobRepo().listJobsForProject(scope, projectId);
+    if (castingPhase === "a1_discovery" && job.results.length > 0) {
+      const completion = validateA1DiscoveryCompletion({
+        projectId,
+        candidates: persistedCandidates,
+        jobs: persistedJobs,
+        expectedCount: project.candidate_count,
+        generationSource,
+        requireProviderExecution: true,
+      });
+      if (!completion.complete) {
+        throw new PersonaDomainError(
+          "Discovery konnte nicht abgeschlossen werden — fehlende oder ungültige Kandidaten für dieses Projekt.",
+          "WORKFLOW",
+          { reasons: completion.reasons, projectId },
+        );
+      }
+    }
+
+    logCastingFlowTrace("generation.completed", {
+      creationProjectId: projectId,
+      workspaceId: scope.workspaceId,
+      provider: job.provider,
+      generationRequestId: durableJob.id,
+      candidateIds: persistedCandidates.map((c) => c.id),
+      source:
+        generationSource === "openai_live"
+          ? "live_openai"
+          : generationSource,
     });
 
     await creationRepo().updateProject(scope, projectId, {
@@ -1220,7 +1297,17 @@ export async function listGenerationJobsForProject(
 }
 
 export async function listCandidates(scope: WorkspaceScope, projectId: string) {
-  return creationRepo().listCandidates(scope, projectId);
+  await requireProject(scope, projectId);
+  const candidates = await creationRepo().listCandidates(scope, projectId);
+  assertCandidatesBelongToProject(candidates, projectId);
+  return candidates;
+}
+
+export async function listCandidatesForProject(
+  scope: WorkspaceScope,
+  projectId: string,
+) {
+  return listCandidates(scope, projectId);
 }
 
 export async function getCandidate(scope: WorkspaceScope, id: string) {

@@ -3,6 +3,19 @@ import type { PersonaCreationProject } from "@/lib/persona/domain/creation-types
 /** Enable with NEXT_PUBLIC_DEBUG_MODE=true in .env.local */
 export const DEBUG_MODE = process.env.NEXT_PUBLIC_DEBUG_MODE === "true";
 
+export function projectScopedCandidatesCacheKey(
+  workspaceId: string,
+  creationProjectId: string,
+): string {
+  return `persona-candidates:${workspaceId}:${creationProjectId}`;
+}
+
+export function filterLoadedCandidatesForProject<
+  T extends { creation_project_id: string },
+>(candidates: T[], creationProjectId: string): T[] {
+  return candidates.filter((c) => c.creation_project_id === creationProjectId);
+}
+
 export function projectIdPrefix(id: string): string {
   return id.slice(0, 8);
 }

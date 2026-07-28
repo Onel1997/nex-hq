@@ -20,6 +20,7 @@ import {
   resolveCastingGenerateCount,
   selectTopCandidatesForDisplay,
   variationFingerprint,
+  passesDiscoveryQualityGate,
 } from "./creation/candidate-intelligence";
 import type { CandidateVariationProfile } from "./creation/candidate-intelligence";
 
@@ -545,6 +546,130 @@ describe("Commercial Brand Casting Intelligence", () => {
     assert.equal(
       resolveCastingGenerateCount(4, FUTURE_CASTING_POOL_PRESETS.generate_40_show_5),
       40,
+    );
+  });
+});
+
+describe("Phase 1.8A Premium Fashion Casting Quality", () => {
+  it("injects premium editorial casting blocks for all three official archetypes", () => {
+    const project = streetLuxuryProject();
+    const slugs = [
+      "mediterranean-premium-hero",
+      "urban-community-hero",
+      "female-lifestyle-hero",
+    ] as const;
+
+    for (const [n, slug] of slugs.entries()) {
+      const built = buildCandidatePrompt({
+        project,
+        assetType: "portrait_front",
+        candidateNumber: n + 1,
+      });
+      assert.equal(built.brandArchetype.slug, slug);
+      assert.match(built.prompt, /PREMIUM CASTING/);
+      assert.match(built.prompt, /STRICT CASTING ROLE/);
+      assert.match(built.prompt, /campaign-ready/i);
+      assert.match(built.prompt, /editorial/i);
+      assert.match(built.prompt, /photorealistic/i);
+      assert.match(built.prompt, /FASHION MODEL QUALITY BAR/);
+      assert.match(built.blocks.camera, /NOT passport photo/i);
+      assert.match(built.blocks.lighting, /PREMIUM EDITORIAL PHOTOGRAPHY/);
+      assert.match(built.negativePrompt, /LinkedIn portrait/i);
+      assert.match(built.negativePrompt, /passport photo/i);
+      assert.match(built.negativePrompt, /AI face/i);
+    }
+  });
+
+  it("enforces strict gender roles per archetype", () => {
+    const project = streetLuxuryProject();
+    const med = buildCandidatePrompt({
+      project,
+      assetType: "portrait_front",
+      candidateNumber: 1,
+    });
+    const urban = buildCandidatePrompt({
+      project,
+      assetType: "portrait_front",
+      candidateNumber: 2,
+    });
+    const female = buildCandidatePrompt({
+      project,
+      assetType: "portrait_front",
+      candidateNumber: 3,
+    });
+
+    assert.match(med.prompt, /ONLY adult male/i);
+    assert.match(urban.prompt, /ONLY adult male/i);
+    assert.match(female.prompt, /ONLY adult female/i);
+    assert.match(med.prompt, /Mediterranean Premium Hero/);
+    assert.match(urban.prompt, /Urban Community Hero/);
+    assert.match(female.prompt, /Female Lifestyle Hero/);
+  });
+
+  it("discovery quality gate passes premium prompts and rejects sub-premium simulation", () => {
+    const project = streetLuxuryProject();
+    const variation = resolveCandidateVariation(1);
+    const built = buildCandidatePrompt({
+      project,
+      assetType: "portrait_front",
+      candidateNumber: 1,
+    });
+
+    const pass = passesDiscoveryQualityGate({
+      built,
+      project,
+      variation,
+      assetTypes: ["portrait_front"],
+    });
+    assert.equal(pass.pass, true, pass.reasons.join("; "));
+    assert.equal(pass.shouldRegenerate, false);
+
+    const fail = passesDiscoveryQualityGate({
+      built,
+      project,
+      variation,
+      assetTypes: ["portrait_front"],
+      simulateFailUntilAttempt: 2,
+      attempt: 1,
+    });
+    assert.equal(fail.pass, false);
+    assert.equal(fail.shouldRegenerate, true);
+  });
+
+  it("appends premium retry suffix on internal regeneration attempts", () => {
+    const project = streetLuxuryProject();
+    const base = buildCandidatePrompt({
+      project,
+      assetType: "portrait_front",
+      candidateNumber: 1,
+    });
+    const retry = buildCandidatePrompt({
+      project,
+      assetType: "portrait_front",
+      candidateNumber: 1,
+      premiumRetrySuffix: "PREMIUM CASTING QUALITY RETRY (2)",
+    });
+    assert.ok(retry.prompt.length > base.prompt.length);
+    assert.match(retry.prompt, /PREMIUM CASTING QUALITY RETRY/);
+  });
+
+  it("fashion-week clone fails discovery quality bar", () => {
+    const project = streetLuxuryProject();
+    const built = buildCandidatePrompt({
+      project,
+      assetType: "portrait_front",
+      candidateNumber: 1,
+      variation: fashionWeekVariation(),
+    });
+    const verdict = passesDiscoveryQualityGate({
+      built,
+      project,
+      variation: fashionWeekVariation(),
+      assetTypes: ["portrait_front"],
+    });
+    assert.equal(verdict.pass, false);
+    assert.ok(
+      verdict.reasons.some((r) => /fashion-week|high-fashion|Brief fit/i.test(r)),
     );
   });
 });

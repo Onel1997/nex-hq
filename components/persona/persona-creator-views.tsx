@@ -35,6 +35,8 @@ import {
 } from "@/components/persona/persona-creator-ux";
 import { PersonaGenerationExperience } from "@/components/persona/persona-generation-experience";
 import { BrandArchetypeCastPanel } from "@/components/persona/brand-archetype-cast-panel";
+import { OfficialBrandFaceMilestonePanel } from "@/components/persona/official-brand-face-milestone-panel";
+import { OfficialBrandFaceCastingView } from "@/components/persona/official-brand-face-casting-view";
 import { ReferenceBoardsPanel } from "@/components/persona/reference-boards-panel";
 import { PersonaStatusChip } from "@/components/persona/persona-status-chip";
 import {
@@ -58,7 +60,9 @@ import {
   DEBUG_MODE,
   isProjectDetailReady,
   projectIdPrefix,
+  projectScopedCandidatesCacheKey,
 } from "@/components/persona/persona-studio-project-sync";
+import { resolveGenerationSource } from "@/lib/persona/creation/casting-data-integrity";
 import {
   Check,
   Circle,
@@ -291,6 +295,7 @@ export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
         />
       ) : (
         <div className="ps-brand-cast">
+          <OfficialBrandFaceMilestonePanel />
           <div className={`ps-milestone${p.milestone_reached ? " is-done" : ""}`}>
             <span className="ps-milestone-label">{p.milestone_label}</span>
             <strong>{p.milestone_reached ? "Reached" : "In progress"}</strong>
@@ -298,7 +303,7 @@ export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
           {!p.milestone_reached && p.male_approved === 0 && p.female_approved === 0 ? (
             <EmptyState
               title="No Brand Cast has been approved yet."
-              body="Cast your first official faces in Persona Creator — then lock identity and approve."
+              body="Cast your first official faces in Brand Face Casting — then lock identity and approve."
             />
           ) : null}
           <div className="ps-stat-grid">
@@ -370,6 +375,36 @@ export function PersonaCreatorView({
   studio,
 }: {
   studio: PersonaStudioController;
+}) {
+  const [mode, setMode] = useState<"official" | "legacy_debug">("official");
+
+  if (mode === "official") {
+    return (
+      <OfficialBrandFaceCastingView
+        studio={studio}
+        onOpenDebugWizard={() => setMode("legacy_debug")}
+      />
+    );
+  }
+
+  return (
+    <LegacyPersonaCreatorWizard
+      studio={studio}
+      onBackToOfficial={() => setMode("official")}
+    />
+  );
+}
+
+/**
+ * Legacy manual wizard — debug / custom personas only.
+ * Not the default Milaene Official Brand Face workflow.
+ */
+function LegacyPersonaCreatorWizard({
+  studio,
+  onBackToOfficial,
+}: {
+  studio: PersonaStudioController;
+  onBackToOfficial: () => void;
 }) {
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -474,13 +509,23 @@ export function PersonaCreatorView({
     <section className="ps-panel ps-creator">
       <header className="ps-panel-header">
         <div>
-          <p className="ps-eyebrow">Official Brand Faces</p>
-          <h1>Persona Creator</h1>
+          <p className="ps-eyebrow">Debug / Custom</p>
+          <h1>Legacy Persona Wizard</h1>
           <p className="ps-muted">
-            Cast the faces of your fashion brand — editorial direction, not admin config.
+            Manual Brand Role → Body → Face wizard for debug or future custom personas.
+            Official Milaene Brand Faces use Brand Face Casting instead.
           </p>
         </div>
+        <button type="button" className="ps-btn-secondary" onClick={onBackToOfficial}>
+          Back to Brand Face Casting
+        </button>
       </header>
+
+      <div className="ps-callout ps-callout-warn">
+        This wizard is not the default Milaene workflow. Face, body, hair and fashion for
+        Official Brand Faces must come from Brand Memory, Archetype, Product and Reference
+        Intelligence.
+      </div>
 
       <nav className="ps-visual-flow" aria-label="Brand Cast journey">
         {VISUAL_FLOW.map((node, i) => {
@@ -838,6 +883,7 @@ export function PersonaCreatorView({
         </div>
 
         <aside className="ps-creator-aside" aria-label="Live Brand Cast summary">
+          <OfficialBrandFaceMilestonePanel />
           <BrandArchetypeCastPanel />
           <div className="ps-live-summary">
             <div className="ps-live-summary-head">
@@ -1139,7 +1185,7 @@ export function CreationProjectsView({
           </p>
         </div>
         <button type="button" onClick={() => studio.setSection("creator")}>
-          New casting
+          New casting session
         </button>
         <button
           type="button"
@@ -1167,8 +1213,8 @@ export function CreationProjectsView({
         {studio.creationProjects.length === 0 ? (
           <EmptyState
             title="No casting sessions yet."
-            body="Open Persona Creator to define your first official Brand Cast brief."
-            actionLabel="New casting"
+            body="Open Brand Face Casting to start A1 Discovery for an official archetype."
+            actionLabel="Start casting"
             onAction={() => studio.setSection("creator")}
           />
         ) : (
@@ -1391,6 +1437,21 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     () => (candidatesInSync ? studio.candidates : []),
     [candidatesInSync, studio.candidates],
   );
+  const integrityMismatch = useMemo(() => {
+    if (!studio.selectedProjectId) return false;
+    return visibleCandidates.some(
+      (c) => c.creation_project_id !== studio.selectedProjectId,
+    );
+  }, [visibleCandidates, studio.selectedProjectId]);
+  const generationSource = useMemo(() => {
+    const job = studio.generationJobs[0];
+    if (!job) return "none";
+    const payload = job.confirmation_payload as
+      | { generationSource?: string }
+      | undefined;
+    if (payload?.generationSource) return payload.generationSource;
+    return resolveGenerationSource(job.provider);
+  }, [studio.generationJobs]);
   const rankedBoard = useMemo(
     () => rankCandidatesForBoard(visibleCandidates),
     [visibleCandidates],
@@ -1444,6 +1505,61 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
           </p>
         </div>
       </header>
+
+      {integrityMismatch ? (
+        <div className="ps-callout ps-callout-warn">
+          <p>
+            Data integrity error — one or more candidates do not belong to the active creation
+            project ({projectIdPrefix(studio.selectedProjectId ?? "")}). Stale candidates were
+            blocked.
+          </p>
+        </div>
+      ) : null}
+
+      {DEBUG_MODE ? (
+        <details className="ps-tech ps-ci-debug-panel">
+          <summary>Casting debug (development only)</summary>
+          <dl>
+            <div>
+              <dt>Active creation project</dt>
+              <dd>{studio.selectedProjectId ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Loaded project</dt>
+              <dd>{studio.loadedProjectId ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Cache key</dt>
+              <dd>
+                {studio.selectedProjectId && studio.health?.workspaceId
+                  ? projectScopedCandidatesCacheKey(
+                      studio.health.workspaceId,
+                      studio.selectedProjectId,
+                    )
+                  : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt>Generation source</dt>
+              <dd>{generationSource}</dd>
+            </div>
+            <div>
+              <dt>Candidate IDs</dt>
+              <dd>{visibleCandidates.map((c) => c.id).join(", ") || "—"}</dd>
+            </div>
+            <div>
+              <dt>Provider run</dt>
+              <dd>{studio.generationJobs[0]?.id ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Created at</dt>
+              <dd>
+                {visibleCandidates.map((c) => c.created_at).join(", ") || "—"}
+              </dd>
+            </div>
+          </dl>
+        </details>
+      ) : null}
 
       {diversityWarning ? (
         <div className="ps-callout ps-callout-warn">

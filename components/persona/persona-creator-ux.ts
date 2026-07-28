@@ -61,7 +61,7 @@ export const CREATOR_STEPS = [
 
 export const VISUAL_FLOW = [
   { id: "brand_cast", label: "Brand Cast" },
-  { id: "creator", label: "Persona Creator" },
+  { id: "creator", label: "Brand Face Casting" },
   { id: "candidates", label: "Candidates" },
   { id: "reference", label: "Reference Package" },
   { id: "identity", label: "Identity Lock" },

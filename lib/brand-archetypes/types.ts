@@ -141,7 +141,8 @@ export type BrandArchetype = {
 };
 
 /**
- * Future Brand Face memory — architecture only (no image persistence yet).
+ * Official Brand Face memory per archetype — Phase 1.8 registry projection.
+ * Only one currentActiveFaceId per archetype.
  */
 export type BrandFaceMemory = {
   archetypeId: string;
