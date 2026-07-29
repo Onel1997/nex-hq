@@ -104,6 +104,20 @@ import {
   validateA1DiscoveryCompletion,
   type GenerationSource,
 } from "./casting-data-integrity";
+import {
+  buildIdentityFingerprint,
+  buildVisualFingerprint,
+  MemoryNoveltyRepository,
+  SupabaseNoveltyRepository,
+  SupabaseEmbeddingRepository,
+  checkAndRegisterCandidate,
+  markCandidateShown,
+  loadDiscoveryHistory,
+} from "../face-novelty-memory";
+import {
+  buildLiveFaceEvaluator,
+  assertLiveFaceEvaluatorNotNull,
+} from "../face-novelty-memory/live-evaluator";
 
 function creationRepo() {
   return getCreationRepository();
@@ -832,6 +846,53 @@ export async function confirmAndStartCandidateGeneration(
       project,
       candidateNumbers: job.results.map((r) => r.candidateNumber),
     });
+
+    // -----------------------------------------------------------------------
+    // Face Novelty Memory — build live evaluator once per generation batch.
+    // Only active for A1 discovery with live providers (not memory/fake).
+    // -----------------------------------------------------------------------
+    const isLiveProvider = creationRepo().kind !== "memory";
+    const archetypeIdForNovelty = officialCast.archetype?.id ?? "unknown";
+    const noveltyRepo = isLiveProvider
+      ? new SupabaseNoveltyRepository()
+      : new MemoryNoveltyRepository();
+    const embeddingRepo = isLiveProvider ? new SupabaseEmbeddingRepository() : null;
+
+    let liveEvaluator: import("../face-novelty-memory/types").FaceSimilarityEvaluator | null =
+      null;
+    let noveltyHistory: import("../face-novelty-memory/types").DiscoveryHistory | null = null;
+    if (isLiveProvider && castingPhase === "a1_discovery") {
+      try {
+        noveltyHistory = await loadDiscoveryHistory(
+          noveltyRepo,
+          scope.workspaceId,
+          archetypeIdForNovelty,
+        );
+        liveEvaluator = await buildLiveFaceEvaluator({
+          workspaceId: scope.workspaceId,
+          archetypeId: archetypeIdForNovelty,
+        });
+        assertLiveFaceEvaluatorNotNull(
+          liveEvaluator,
+          `a1_discovery project=${projectId}`,
+        );
+      } catch (initErr) {
+        // Surface clearly — do not silently fall back to null evaluator.
+        logCastingFlowTrace("novelty.evaluator_init_failed", {
+          creationProjectId: projectId,
+          workspaceId: scope.workspaceId,
+          source: "unknown",
+        } as import("./casting-data-integrity").CastingFlowTracePayload);
+        // Re-throw so the generation does not proceed with unverified novelty.
+        throw new PersonaDomainError(
+          `Face novelty evaluator failed to initialize: ${initErr instanceof Error ? initErr.message : String(initErr)}`,
+          "CONFIG",
+          { noveltyEvaluatorInitFailed: true },
+        );
+      }
+    }
+    // -----------------------------------------------------------------------
+
     for (const result of job.results) {
       const variation =
         (officialCast.officialBrandFace
@@ -949,6 +1010,123 @@ export async function confirmAndStartCandidateGeneration(
           primary_preview_asset_id: primaryId,
         });
       }
+
+      // -----------------------------------------------------------------------
+      // Face Novelty Check — run BEFORE candidate is visible on Candidate Board.
+      // -----------------------------------------------------------------------
+      if (
+        isLiveProvider &&
+        castingPhase === "a1_discovery" &&
+        liveEvaluator !== null &&
+        noveltyHistory !== null &&
+        primaryId !== null
+      ) {
+        const variation =
+          (officialCast.officialBrandFace
+            ? officialCast.variations[result.candidateNumber - 1]
+            : null) ?? resolveCandidateVariation(result.candidateNumber);
+        const identityFingerprint = buildIdentityFingerprint({
+          archetypeId: archetypeIdForNovelty,
+          blueprintId:
+            officialCast.blueprints[result.candidateNumber - 1]?.id ?? undefined,
+          runVariationToken: officialCast.runVariationToken ?? undefined,
+          faceGeometry: variation.faceGeometry,
+          jawShape: variation.jawShape,
+          noseShape: variation.noseShape,
+          eyeShape: variation.eyeShape,
+          lipShape: variation.lipShape,
+          hairTexture: variation.hairTexture,
+          haircut: variation.haircut,
+          facialHair: variation.facialHair,
+          bodyStructure: variation.bodyBuild,
+          skinTone: variation.skinTone,
+          ancestryDirection: variation.identityDescriptor,
+        });
+
+        // Obtain a short-lived signed URL for the primary portrait (server-side only).
+        let signedUrl: string | undefined;
+        try {
+          const primaryAssetRecord = result.assets.find(
+            (a) => a.assetType === "portrait_front",
+          );
+          if (primaryAssetRecord) {
+            // Refresh evaluator with image source map
+            const imgMap = new Map<string, string>();
+            // Use raw bytes directly via data URL — avoids a round-trip signed URL
+            const dataUrl = `data:${primaryAssetRecord.mimeType};base64,${Buffer.from(primaryAssetRecord.imageBytes).toString("base64")}`;
+            imgMap.set(primaryId!, dataUrl);
+            signedUrl = dataUrl;
+            liveEvaluator = await buildLiveFaceEvaluator({
+              workspaceId: scope.workspaceId,
+              archetypeId: archetypeIdForNovelty,
+              imageSourceMap: imgMap,
+            });
+          }
+        } catch {
+          // Non-fatal: evaluator proceeds without image source (returns not_available)
+        }
+
+        const checkOpts: import("../face-novelty-memory/novelty-service").CheckCandidateOptions =
+          {
+            evaluator: liveEvaluator,
+            embeddingRepo: embeddingRepo ?? undefined,
+          };
+
+        const noveltyCheck = await checkAndRegisterCandidate(
+          noveltyRepo,
+          noveltyHistory,
+          {
+            workspaceId: scope.workspaceId,
+            archetypeId: archetypeIdForNovelty,
+            creationProjectId: projectId,
+            candidateId: candidate.id,
+            assetId: primaryId!,
+            identityFingerprint,
+            visualFingerprint: buildVisualFingerprint({
+              imageChecksum: result.assets.find((a) => a.assetType === "portrait_front")
+                ? undefined
+                : undefined,
+            }),
+            signedUrl,
+            sourceProvider: job.provider,
+            sourceModel:
+              typeof result.settings?.model === "string"
+                ? result.settings.model
+                : job.provider,
+          },
+          checkOpts,
+        );
+
+        logCastingFlowTrace("novelty.candidate_evaluated", {
+          creationProjectId: projectId,
+          workspaceId: scope.workspaceId,
+          candidateIds: [candidate.id],
+          // Do NOT log similarity scores or embedding vectors.
+        });
+
+        if (noveltyCheck.hardReject) {
+          // Mark candidate rejected — it must not appear on the Candidate Board.
+          await creationRepo().updateCandidate(scope, candidate.id, {
+            status: "rejected",
+            rejection_reason: noveltyCheck.replacementMessage ?? "novelty_protection",
+            user_notes: `[novelty] ${noveltyCheck.hardRejectReason ?? "duplicate"}`,
+          });
+          // Record that this candidate was shown (as rejected) so it is excluded
+          // from future discovery too.
+          await markCandidateShown(noveltyRepo, noveltyCheck.recordId, scope.workspaceId);
+        } else {
+          // Candidate passed novelty — mark as shown once it's on the board.
+          await markCandidateShown(noveltyRepo, noveltyCheck.recordId, scope.workspaceId);
+        }
+
+        // Update history for subsequent candidates in this same batch.
+        noveltyHistory = await loadDiscoveryHistory(
+          noveltyRepo,
+          scope.workspaceId,
+          archetypeIdForNovelty,
+        );
+      }
+      // -----------------------------------------------------------------------
     }
 
     const partial = Boolean(job.errorMessage) && job.results.length > 0;
