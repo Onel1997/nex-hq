@@ -1,9 +1,9 @@
 /**
- * Phase 1.8A — Discovery quality filter for A1 casting portraits.
+ * Phase 1.8A / 1.9 — Discovery quality filter for A1 casting portraits.
  *
- * Rejects sub-premium candidates before they surface in the UI.
- * Uses prompt-compliance + brief-fit heuristics (no live vision model).
- * Providers may internally regenerate until the bar is met or attempts exhaust.
+ * Flags sub-premium prompt compliance for honesty logging.
+ * Phase 1.9: does NOT paid-regenerate based on metadata/beauty heuristics.
+ * Provider may only retry on technical failure / corrupt image.
  */
 
 import type {
@@ -23,6 +23,7 @@ import type { CandidateVariationProfile } from "./variations";
 export const DISCOVERY_QUALITY_MIN_BRIEF_FIT = 58;
 export const DISCOVERY_QUALITY_MIN_PREMIUM_PRESENCE = 55;
 export const DISCOVERY_QUALITY_MIN_EDITORIAL = 52;
+/** Technical corrupt-image retries only — not beauty regeneration. */
 export const DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS = 3;
 
 export type DiscoveryQualityVerdict = {
@@ -31,6 +32,10 @@ export type DiscoveryQualityVerdict = {
   premiumPresence: number;
   editorialQuality: number;
   reasons: string[];
+  /**
+   * Phase 1.9 — always false for metadata/beauty heuristics.
+   * Paid regeneration is reserved for technical failures in the provider adapter.
+   */
   shouldRegenerate: boolean;
   attempt: number;
 };
@@ -71,7 +76,6 @@ export function evaluateDiscoveryCastingQuality(params: {
     }
   }
 
-  // --- Brief-fit heuristics with premium editorial thresholds ---
   const assessment = assessCandidateQuality({
     project: params.project,
     variation: params.variation,
@@ -105,8 +109,6 @@ export function evaluateDiscoveryCastingQuality(params: {
       `Premium presence ${premiumPresence} below bar ${DISCOVERY_QUALITY_MIN_PREMIUM_PRESENCE}`,
     );
   }
-  // Legacy editorial heuristic under-scores premium campaign prompts — require
-  // either compliant premium injection OR minimum editorial brief-fit dimension.
   if (
     !premiumPromptCompliant &&
     editorialQuality < DISCOVERY_QUALITY_MIN_EDITORIAL
@@ -116,14 +118,11 @@ export function evaluateDiscoveryCastingQuality(params: {
     );
   }
 
-  // Fashion-week runway clones fail discovery even if generation succeeded.
   if (assessment.risks.some((r) => /fashion-week|high-fashion cues/i.test(r))) {
     reasons.push("High-fashion runway cues — not premium streetwear editorial");
   }
 
   const pass = reasons.length === 0;
-  const shouldRegenerate =
-    !pass && attempt < DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS;
 
   return {
     pass,
@@ -131,7 +130,8 @@ export function evaluateDiscoveryCastingQuality(params: {
     premiumPresence,
     editorialQuality,
     reasons,
-    shouldRegenerate,
+    // Phase 1.9 — never paid-regenerate for metadata/beauty heuristics.
+    shouldRegenerate: false,
     attempt,
   };
 }
@@ -139,6 +139,7 @@ export function evaluateDiscoveryCastingQuality(params: {
 /**
  * Simulated post-generation quality gate for providers without vision.
  * Uses prompt metadata + brief-fit — never claims visual verification.
+ * Never triggers paid beauty regeneration.
  */
 export function passesDiscoveryQualityGate(params: {
   built: BuiltCandidatePrompt;
@@ -147,7 +148,7 @@ export function passesDiscoveryQualityGate(params: {
   assetTypes: CandidateAssetType[];
   qualityMode?: string | null;
   attempt?: number;
-  /** Test hook — force fail on attempt 1 to verify regeneration path. */
+  /** Test hook — force fail on attempt 1 to verify honesty (no paid regen). */
   simulateFailUntilAttempt?: number;
 }): DiscoveryQualityVerdict {
   if (
@@ -160,7 +161,7 @@ export function passesDiscoveryQualityGate(params: {
       premiumPresence: 40,
       editorialQuality: 40,
       reasons: ["Simulated sub-premium generation for test"],
-      shouldRegenerate: (params.attempt ?? 1) < DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS,
+      shouldRegenerate: false,
       attempt: params.attempt ?? 1,
     };
   }

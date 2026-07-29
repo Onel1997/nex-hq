@@ -58,7 +58,9 @@ export interface CandidateQualityDimensions {
 export interface CandidateQualityScoreHonesty {
   briefFitLabel: "Brief Fit";
   technicalLabel: "Technical Completeness";
-  visualLabel: "Not visually evaluated";
+  visualLabel: "Visual Casting Evaluation";
+  visualStatusDefault: "not_performed";
+  visualDecisionMaker: "manual_review_required";
 }
 
 export interface CandidateQualityAssessment {
@@ -94,7 +96,9 @@ export interface CandidateQualityAssessment {
 const SCORE_HONESTY: CandidateQualityScoreHonesty = {
   briefFitLabel: "Brief Fit",
   technicalLabel: "Technical Completeness",
-  visualLabel: "Not visually evaluated",
+  visualLabel: "Visual Casting Evaluation",
+  visualStatusDefault: "not_performed",
+  visualDecisionMaker: "manual_review_required",
 };
 
 /** Soft ceiling so complete briefs land roughly in the 45–85 band. */

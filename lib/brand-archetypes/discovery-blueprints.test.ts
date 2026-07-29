@@ -27,7 +27,11 @@ import {
 } from "@/lib/brand-archetypes";
 import { ARCHETYPE_PROJECT_MARKER } from "@/lib/brand-face-selection/creation-project-mapper";
 import {
+  assessCandidateQuality,
   buildCandidatePrompt,
+  defaultA1VisualCastingEvaluation,
+  emptyVisualEvaluation,
+  passesDiscoveryQualityGate,
   resolveCandidateVariation,
   resolveOfficialDiscoveryVariations,
   CANDIDATE_VARIATION_PROFILES,
@@ -51,6 +55,8 @@ import {
 } from "@/lib/persona/creation/creation-service";
 import type { WorkspaceScope } from "@/lib/persona/domain/types";
 import { afterEach, beforeEach } from "node:test";
+import { STAGE_A1_DISCOVERY_ASSET_TYPES } from "@/lib/persona/creation/casting-funnel";
+import { imagesPerCandidateForStage } from "@/lib/persona/creation/provider/cost";
 
 const ARCH_MED = "arch-mediterranean-premium-hero";
 const ARCH_URBAN = "arch-urban-community-hero";
@@ -392,5 +398,344 @@ describe("Phase 1.8E variationProfileFromBlueprint", () => {
     assert.equal(profile.skinTone, blueprint.skinTone);
     assert.equal(profile.faceGeometry, blueprint.faceGeometry);
     assert.match(profile.identityDescriptor, /male/i);
+  });
+});
+
+describe("Phase 1.9 premium streetwear casting quality engine", () => {
+  const GLOBAL_LABELS = [
+    "Weekend Community",
+    "Modern Creator",
+    "Relaxed Mediterranean",
+    "Clean Street Athletic",
+  ];
+
+  function mediterraneanPrompts() {
+    const project = projectForArchetype(ARCH_MED, "proj-phase19-med");
+    return [1, 2, 3, 4].map((n) => {
+      const built = buildCandidatePrompt({
+        project,
+        assetType: "portrait_front",
+        candidateNumber: n,
+      });
+      return { n, built, prompt: built.prompt, negative: built.negativePrompt };
+    });
+  }
+
+  it("1. each Mediterranean candidate has a distinct FashionCastingProfile", () => {
+    const profiles = MEDITERRANEAN_DISCOVERY_BLUEPRINTS.map((b) => b.fashionCasting);
+    assert.equal(profiles.length, 4);
+    for (const p of profiles) {
+      assert.ok(p.modelBuild);
+      assert.ok(p.modelHeightDirection);
+      assert.ok(p.shoulderLine);
+      assert.ok(p.fashionPresence);
+      assert.ok(p.microExpression);
+      assert.ok(p.castingRiskExclusions.length > 0);
+    }
+  });
+
+  it("2. all four have distinct model presence directions", () => {
+    const presence = MEDITERRANEAN_DISCOVERY_BLUEPRINTS.map(
+      (b) => b.fashionCasting.fashionPresence,
+    );
+    assert.equal(new Set(presence).size, 4);
+  });
+
+  it("3–5. upper-torso fashion casting composition — no passport/ID framing", () => {
+    for (const { prompt, negative } of mediterraneanPrompts()) {
+      assert.match(prompt, /mid-torso|chest upward|upper torso/i);
+      assert.match(prompt, /shoulders?\s+(fully\s+)?visible/i);
+      assert.match(prompt, /10–20|10-20|body rotation/i);
+      assert.ok(!/head-and-shoulders to upper chest/i.test(prompt));
+      assert.match(negative, /passport photo/i);
+      assert.match(negative, /ID-card portrait|employee headshot|LinkedIn/i);
+      assert.match(prompt, /garment|heavyweight|hoodie|T-shirt|tee/i);
+    }
+  });
+
+  it("6–8. correct Product Intelligence garments — no invented products or logos", () => {
+    const expected = [
+      /washed-black.*oversized.*T-shirt/i,
+      /zip hoodie/i,
+      /off-white|muted stone/i,
+      /charcoal.*hoodie|washed-dark.*T-shirt/i,
+    ];
+    const rows = mediterraneanPrompts();
+    rows.forEach(({ prompt, negative }, i) => {
+      assert.match(prompt, expected[i]!);
+      assert.match(prompt, /Product Intelligence/i);
+      assert.match(prompt, /no logos|No visible third-party logos/i);
+      assert.match(
+        prompt,
+        /Only Oversized Heavyweight T-Shirt, Heavyweight Hoodie, or Zip Hoodie/i,
+      );
+      assert.match(
+        prompt,
+        /No caps, jackets, jewelry, suits, cargo pants, footwear, or accessories/i,
+      );
+      assert.match(negative, /invented product|third-party branding|jewelry focus/i);
+    });
+  });
+
+  it("9. no female candidate in Mediterranean", () => {
+    for (const { built, prompt } of mediterraneanPrompts()) {
+      assert.equal(built.discoveryBlueprint?.gender, "male");
+      assert.match(prompt, /ONLY adult male/i);
+      assert.ok(!/ONLY adult female/i.test(prompt));
+      assert.ok(!/female subject/i.test(prompt.split("Avoid:")[0] ?? ""));
+    }
+  });
+
+  it("10. no aggressive expression direction", () => {
+    for (const { prompt } of mediterraneanPrompts()) {
+      assert.match(prompt, /calm|approachable|quiet confidence|soft focused/i);
+      assert.match(prompt, /NOT AGGRESSION|never aggressive|no aggression/i);
+      const positive = prompt.toLowerCase();
+      assert.ok(!/\bangry eyebrows\b/.test(positive) || /avoid/.test(positive));
+      assert.ok(!positive.includes("gangster energy") || positive.includes("avoid"));
+    }
+  });
+
+  it("11–12. premium model-quality and realistic-skin blocks exist", () => {
+    for (const { prompt } of mediterraneanPrompts()) {
+      assert.match(prompt, /FASHION MODEL QUALITY BAR|agency-castable|commercially memorable/i);
+      assert.match(prompt, /natural pores|realistic.*skin|authentic skin/i);
+      assert.match(prompt, /not an idealized AI beauty clone|not porcelain|not waxy/i);
+    }
+  });
+
+  it("13–14. candidate-specific backgrounds and lighting are unique", () => {
+    const backgrounds = MEDITERRANEAN_DISCOVERY_BLUEPRINTS.map((b) => b.backgroundDirection);
+    const lightings = MEDITERRANEAN_DISCOVERY_BLUEPRINTS.map((b) => b.lightingDirection);
+    assert.equal(new Set(backgrounds).size, 4);
+    assert.equal(new Set(lightings).size, 4);
+    for (const { prompt, built } of mediterraneanPrompts()) {
+      assert.ok(prompt.includes(built.discoveryBlueprint!.backgroundDirection));
+      assert.ok(prompt.includes(built.discoveryBlueprint!.lightingDirection));
+    }
+  });
+
+  it("15. prompt fingerprints remain unique", () => {
+    const fps = mediterraneanPrompts().map((r) => r.built.promptFingerprint);
+    assert.equal(new Set(fps).size, 4);
+  });
+
+  it("16–17. A1 remains exactly four provider images — no beauty-regen loop", () => {
+    assert.equal(MEDITERRANEAN_DISCOVERY_BLUEPRINTS.length, 4);
+    assert.deepEqual(STAGE_A1_DISCOVERY_ASSET_TYPES, ["portrait_front"]);
+    assert.equal(imagesPerCandidateForStage("discovery"), 1);
+    const project = projectForArchetype(ARCH_MED, "proj-cost-a1");
+    const built = buildCandidatePrompt({
+      project,
+      assetType: "portrait_front",
+      candidateNumber: 1,
+    });
+    const verdict = passesDiscoveryQualityGate({
+      built,
+      project,
+      variation: built.variation,
+      assetTypes: ["portrait_front"],
+      simulateFailUntilAttempt: 2,
+      attempt: 1,
+    });
+    assert.equal(verdict.shouldRegenerate, false);
+  });
+
+  it("18. visual evaluation remains honest and not_performed", () => {
+    const project = projectForArchetype(ARCH_MED, "proj-visual-honest");
+    const built = buildCandidatePrompt({
+      project,
+      assetType: "portrait_front",
+      candidateNumber: 1,
+    });
+    const assessment = assessCandidateQuality({
+      project,
+      variation: built.variation,
+      assetTypes: ["portrait_front"],
+    });
+    assert.equal(assessment.visualEvaluation.status, "not_performed");
+    assert.equal(assessment.scoreHonesty.visualStatusDefault, "not_performed");
+    assert.equal(assessment.scoreHonesty.visualDecisionMaker, "manual_review_required");
+    assert.equal(emptyVisualEvaluation().status, "not_performed");
+    assert.equal(defaultA1VisualCastingEvaluation().status, "not_performed");
+    assert.equal(assessment.dimensions.overall, assessment.briefFit);
+  });
+
+  it("snapshot: each Mediterranean prompt contains identity, fashion, garment, photo, composition, presence, negatives, PI, male lock", () => {
+    const rows = mediterraneanPrompts();
+    const blueprints = MEDITERRANEAN_DISCOVERY_BLUEPRINTS;
+    rows.forEach(({ prompt, negative, built }, i) => {
+      const bp = blueprints[i]!;
+      assert.equal(built.discoveryBlueprint?.id, bp.id);
+      assert.ok(prompt.includes(bp.name));
+      assert.ok(prompt.includes(bp.ancestryDirection));
+      assert.ok(prompt.includes(bp.faceGeometry));
+      assert.ok(prompt.includes(bp.fashionCasting.fashionPresence));
+      assert.ok(prompt.includes(bp.garmentDirection) || prompt.includes(bp.garmentDirection.slice(0, 40)));
+      assert.ok(prompt.includes(bp.backgroundDirection));
+      assert.match(prompt, /premium European streetwear casting test|fashion agency photography|50mm–85mm/i);
+      assert.match(prompt, /mid-torso|upper torso|shoulders FULLY visible/i);
+      assert.match(prompt, /calm|approachable|quietly confident/i);
+      assert.match(negative, /passport photo/);
+      assert.match(prompt, /PRODUCT INTELLIGENCE|Product Intelligence/);
+      assert.match(prompt, /ONLY adult male/);
+      assert.ok(built.promptFingerprint.length >= 8);
+      for (const other of blueprints) {
+        if (other.id === bp.id) continue;
+        assert.ok(
+          !prompt.includes(other.faceGeometry),
+          `${bp.slot} must not contain ${other.slot} faceGeometry`,
+        );
+      }
+      assert.ok(!/ONLY adult female/i.test(prompt));
+      assert.match(prompt, /not a campaign location|Keep Stage A controlled/i);
+      assert.doesNotMatch(
+        prompt,
+        /set in (a )?(parking garage|street cafe|clothing rack|shop interior)/i,
+      );
+      for (const label of GLOBAL_LABELS) {
+        assert.ok(!prompt.includes(label));
+      }
+    });
+    assert.equal(new Set(rows.map((r) => r.built.promptFingerprint)).size, 4);
+  });
+
+  it("intended-use labels match A–D card metadata", () => {
+    assert.deepEqual(
+      MEDITERRANEAN_DISCOVERY_BLUEPRINTS.map((b) => b.intendedUseLabel),
+      [
+        "Homepage · Shopify · Premium Campaign",
+        "Social · Zip Hoodie · Community Campaign",
+        "Lifestyle · Editorial Social · Storytelling",
+        "Flagship Campaign · Product Hero · Video",
+      ],
+    );
+  });
+});
+
+describe("Phase 1.9A character diversity — permanent anatomy", () => {
+  it("Mediterranean slots differ across all required anatomical axes", () => {
+    const list = MEDITERRANEAN_DISCOVERY_BLUEPRINTS;
+    assertDiscoveryCastBlueprintsUnique(list);
+    for (const key of [
+      "faceGeometry",
+      "jaw",
+      "forehead",
+      "eyebrowDensity",
+      "eyes",
+      "nose",
+      "lips",
+      "cheekbones",
+      "earShape",
+      "facialProportions",
+      "hairline",
+      "facialHair",
+    ] as const) {
+      assert.equal(
+        new Set(list.map((b) => b[key])).size,
+        4,
+        `expected unique ${key}`,
+      );
+    }
+    assert.equal(
+      new Set(list.map((b) => b.fashionCasting.neckProportions)).size,
+      4,
+    );
+  });
+
+  it("Mediterranean prompts carry permanent anatomy and anti-clone language", () => {
+    const project = projectForArchetype(ARCH_MED, "proj-phase19a");
+    for (const n of [1, 2, 3, 4]) {
+      const built = buildCandidatePrompt({
+        project,
+        assetType: "portrait_front",
+        candidateNumber: n,
+      });
+      const bp = built.discoveryBlueprint!;
+      assert.ok(built.prompt.includes(bp.forehead));
+      assert.ok(built.prompt.includes(bp.eyebrowDensity));
+      assert.ok(built.prompt.includes(bp.earShape));
+      assert.ok(built.prompt.includes(bp.hairline));
+      assert.ok(built.prompt.includes(bp.facialProportions));
+      assert.match(built.prompt, /instantly recognizable|memorable premium identity/i);
+      assert.match(built.prompt, /brother|clone|repetitive Mediterranean template|generic handsome/i);
+      assert.match(built.prompt, /Distinct facial anatomy|Permanent unique human identity/i);
+    }
+  });
+
+  it("no Mediterranean prompt reuses another slot's jaw or nose", () => {
+    const project = projectForArchetype(ARCH_MED, "proj-phase19a-cross");
+    const rows = [1, 2, 3, 4].map((n) =>
+      buildCandidatePrompt({
+        project,
+        assetType: "portrait_front",
+        candidateNumber: n,
+      }),
+    );
+    for (const row of rows) {
+      const self = row.discoveryBlueprint!;
+      for (const other of MEDITERRANEAN_DISCOVERY_BLUEPRINTS) {
+        if (other.id === self.id) continue;
+        assert.ok(!row.prompt.includes(other.jaw), `${self.slot} contains ${other.slot} jaw`);
+        assert.ok(!row.prompt.includes(other.nose), `${self.slot} contains ${other.slot} nose`);
+        assert.ok(
+          !row.prompt.includes(other.forehead),
+          `${self.slot} contains ${other.slot} forehead`,
+        );
+      }
+    }
+  });
+});
+
+describe("Phase 1.9A.1 discovery diversity sampling", () => {
+  it("Mediterranean cast uses four distinct regional clusters", () => {
+    const clusters = MEDITERRANEAN_DISCOVERY_BLUEPRINTS.map(
+      (b) => b.diversitySampling.regionalCluster,
+    );
+    assert.equal(new Set(clusters).size, 4);
+    assert.match(clusters[0]!, /Spanish|Iberian/i);
+    assert.match(clusters[1]!, /North African|Maghrebi/i);
+    assert.match(clusters[2]!, /Greek|Balkan/i);
+    assert.match(clusters[3]!, /Lebanese|Levantine/i);
+  });
+
+  it("Diversity Brief appears before biology and mandates maximum distance", () => {
+    const project = projectForArchetype(ARCH_MED, "proj-phase19a1");
+    for (const n of [1, 2, 3, 4]) {
+      const built = buildCandidatePrompt({
+        project,
+        assetType: "portrait_front",
+        candidateNumber: n,
+      });
+      assert.match(
+        built.prompt,
+        /Generate four biologically distinct premium agency models with maximum facial diversity/i,
+      );
+      assert.match(built.blocks.diversityBrief, /DISCOVERY DIVERSITY BRIEF/i);
+      assert.match(built.blocks.diversityBrief, /SLOT [ABCD] DIVERSITY INSTRUCTION/i);
+      const briefIdx = built.prompt.indexOf("DISCOVERY DIVERSITY BRIEF");
+      const bioIdx = built.prompt.indexOf("CANDIDATE-SPECIFIC BIOLOGICAL IDENTITY");
+      assert.ok(briefIdx >= 0 && bioIdx > briefIdx);
+      assert.ok(
+        built.prompt.includes(built.discoveryBlueprint!.diversitySampling.regionalCluster),
+      );
+      assert.ok(
+        built.prompt.includes(
+          built.discoveryBlueprint!.diversitySampling.slotDiversityInstruction,
+        ),
+      );
+    }
+  });
+
+  it("diversity axes and anti-relative negatives are present", () => {
+    const project = projectForArchetype(ARCH_MED, "proj-phase19a1-neg");
+    const built = buildCandidatePrompt({
+      project,
+      assetType: "portrait_front",
+      candidateNumber: 2,
+    });
+    assert.match(built.prompt, /skull proportions|chin shape|nose bridge|eyebrow angle/i);
+    assert.match(built.negativePrompt, /brothers|cousins|twins|similar relatives|same nose template/i);
+    assertDiscoveryCastBlueprintsUnique(MEDITERRANEAN_DISCOVERY_BLUEPRINTS);
   });
 });

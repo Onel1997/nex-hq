@@ -274,7 +274,9 @@ describe("Phase 1.6B Stage-A efficiency & honest scores", () => {
     assert.ok(assessment.technicalCompleteness <= 40);
     assert.equal(assessment.visualEvaluation.status, "not_performed");
     assert.equal(assessment.scoreHonesty.briefFitLabel, "Brief Fit");
-    assert.equal(assessment.scoreHonesty.visualLabel, "Not visually evaluated");
+    assert.equal(assessment.scoreHonesty.visualLabel, "Visual Casting Evaluation");
+    assert.equal(assessment.scoreHonesty.visualStatusDefault, "not_performed");
+    assert.equal(assessment.scoreHonesty.visualDecisionMaker, "manual_review_required");
     assert.ok(assessment.briefFit < 100);
   });
 

@@ -150,12 +150,12 @@ async function generateWithDiscoveryQualityFilter(input: {
       };
     }
 
-    if (!verdict.shouldRegenerate && qualityAttempt >= DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS) {
-      break;
+    // Phase 1.9: never paid-regenerate for metadata/beauty heuristics.
+    // Only retry when the provider returned an unusable/corrupt image payload.
+    if (!imageOk && qualityAttempt < DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS) {
+      continue;
     }
-    if (!verdict.shouldRegenerate) {
-      break;
-    }
+    break;
   }
 
   return {
@@ -449,7 +449,12 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             identityDescriptor: variation.identityDescriptor,
             skinTone: variation.skinTone,
             wardrobe: variation.wardrobe,
+            presence: variation.presence,
           },
+          intendedUseLabel:
+            typeof variation.aesthetic === "string" && variation.aesthetic.includes("·")
+              ? variation.aesthetic.split("·").map((p) => p.trim()).at(-1) ?? null
+              : null,
           identityLock: bucket.identityLock,
           identitySeed: variation.identityDescriptor,
           diversity: {

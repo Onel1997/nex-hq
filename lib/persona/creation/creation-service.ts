@@ -844,9 +844,17 @@ export async function confirmAndStartCandidateGeneration(
         qualityMode,
       });
       const qualityFields = qualityFieldsForCandidate(qualityAssessment);
+      const blueprint = officialCast.blueprints[result.candidateNumber - 1];
       const enrichedSettings = {
         ...result.settings,
         qualityAssessment,
+        ...(blueprint
+          ? {
+              intendedUseLabel: blueprint.intendedUseLabel,
+              discoveryBlueprintId: blueprint.id,
+              fashionPresence: blueprint.fashionCasting.fashionPresence,
+            }
+          : {}),
       };
       const displayName =
         typeof (result.settings as { variation?: { label?: string } }).variation?.label ===

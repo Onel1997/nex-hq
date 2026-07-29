@@ -15,6 +15,9 @@ export {
 
 export {
   PREMIUM_CASTING_QUALITY_REFERENCE,
+  a1CastingCompositionBlock,
+  a1CastingPhotographyBlock,
+  a1PresenceRulesBlock,
   buildPremiumRetryPromptSuffix,
   genderEnforcementBlock,
   isOfficialArchetypeSlug,
@@ -42,6 +45,7 @@ export {
 
 export {
   emptyVisualEvaluation,
+  defaultA1VisualCastingEvaluation,
   FakePersonaVisualEvaluator,
   isPersonaVisualEvaluationEnabled,
   resolvePersonaVisualEvaluator,

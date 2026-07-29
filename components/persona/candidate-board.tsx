@@ -15,6 +15,7 @@ import {
   selectTopCandidatesForDisplay,
   ACTIVE_CASTING_POOL,
 } from "@/lib/persona/creation/candidate-intelligence";
+import { discoveryIntendedUseLabel } from "@/components/persona/persona-studio-project-sync";
 
 export function getCandidateVariationLabel(candidate: PersonaCandidate): string {
   const variation = candidate.generation_settings?.variation as
@@ -233,6 +234,7 @@ export function CandidateBoardCard({
       ? candidate.generation_settings.quality
       : null;
   const recommendedUse = casting.primaryUse ?? casting.bestFor[0] ?? null;
+  const intendedUse = discoveryIntendedUseLabel(candidate);
   const costLabel =
     typeof candidate.generation_settings?.costLabel === "string"
       ? candidate.generation_settings.costLabel
@@ -240,7 +242,9 @@ export function CandidateBoardCard({
   const visualLabel =
     casting.visualStatus === "completed"
       ? "Visual evaluated"
-      : "Not visually evaluated";
+      : casting.visualStatus === "manual_review_required"
+        ? "Manual review required"
+        : "not_performed";
 
   return (
     <button
@@ -294,12 +298,12 @@ export function CandidateBoardCard({
             <dd>{casting.technicalCompleteness ?? "—"}</dd>
           </div>
           <div>
-            <dt>Visual</dt>
+            <dt>Visual Casting</dt>
             <dd>{visualLabel}</dd>
           </div>
           <div>
-            <dt>Recommended Use</dt>
-            <dd>{recommendedUse ?? "—"}</dd>
+            <dt>Intended Use</dt>
+            <dd>{intendedUse ?? recommendedUse ?? "—"}</dd>
           </div>
           <div>
             <dt>Cost</dt>

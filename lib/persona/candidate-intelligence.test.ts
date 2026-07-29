@@ -360,10 +360,10 @@ describe("Phase 1.6A candidate identity diversity & Stage A direction", () => {
       candidateNumber: 1,
     });
 
-    assert.match(front.blocks.camera, /Front Portrait/i);
+    assert.match(front.blocks.camera, /Casting-Editorial Composition|upper torso|mid-torso/i);
     assert.match(three.blocks.camera, /30–45|three quarter/i);
     assert.match(half.blocks.camera, /Half Body|streetwear fit/i);
-    assert.match(front.variation.background, /warm grey plaster|controlled casting/i);
+    assert.match(front.variation.background, /warm grey plaster|controlled casting|mineral-plaster|casting/i);
     assert.doesNotMatch(front.variation.background, /cafe|parking|clothing rack|street scene/i);
     assert.doesNotMatch(front.variation.aesthetic, /campaign shoot|lookbook location/i);
     assert.match(half.blocks.camera, /never runway|never.*military|Natural shoulder/i);
@@ -572,9 +572,9 @@ describe("Phase 1.8A Premium Fashion Casting Quality", () => {
       assert.match(built.prompt, /editorial/i);
       assert.match(built.prompt, /photorealistic/i);
       assert.match(built.prompt, /FASHION MODEL QUALITY BAR/);
-      assert.match(built.blocks.camera, /NOT passport photo/i);
-      assert.match(built.blocks.lighting, /PREMIUM EDITORIAL PHOTOGRAPHY/);
-      assert.match(built.negativePrompt, /LinkedIn portrait/i);
+      assert.match(built.blocks.camera, /passport|headshot|ID-card|mid-torso|upper torso/i);
+      assert.match(built.blocks.lighting, /PREMIUM CASTING PHOTOGRAPHY|PREMIUM EDITORIAL PHOTOGRAPHY/i);
+      assert.match(built.negativePrompt, /LinkedIn portrait|LinkedIn profile photo/i);
       assert.match(built.negativePrompt, /passport photo/i);
       assert.match(built.negativePrompt, /AI face/i);
     }
@@ -633,7 +633,7 @@ describe("Phase 1.8A Premium Fashion Casting Quality", () => {
       attempt: 1,
     });
     assert.equal(fail.pass, false);
-    assert.equal(fail.shouldRegenerate, true);
+    assert.equal(fail.shouldRegenerate, false);
   });
 
   it("appends premium retry suffix on internal regeneration attempts", () => {

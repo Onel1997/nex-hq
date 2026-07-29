@@ -36,12 +36,15 @@ import {
   assertDiscoveryCastBlueprintsUnique,
   discoveryRunVariationToken,
   formatBlueprintIdentityPrompt,
+  formatDiscoveryDiversityBrief,
   listDiscoveryBlueprintsForArchetype,
   logDiscoveryBlueprintTrace,
   promptFingerprint,
   requiredGenderForArchetype,
   resolveDiscoveryBlueprint,
   variationProfileFromBlueprint,
+  formatBlueprintGarmentPrompt,
+  formatFashionCastingProfilePrompt,
   type ArchetypeCandidateBlueprint,
   type BrandArchetype,
   type BrandArchetypeCatalog,
@@ -70,6 +73,9 @@ import {
   type CandidateVariationProfile,
 } from "./variations";
 import {
+  a1CastingCompositionBlock,
+  a1CastingPhotographyBlock,
+  a1PresenceRulesBlock,
   genderEnforcementBlock,
   premiumArchetypeCastingBlock,
   premiumFashionPresenceBlock,
@@ -104,8 +110,16 @@ export interface PromptBlocks {
   genderEnforcement: string;
   /** Candidate-specific biological blueprint (OBF) */
   biologicalIdentity: string;
+  /** Diversity Brief — maximize biological distance (Phase 1.9A.1) */
+  diversityBrief: string;
   /** Age / body from blueprint */
   ageBody: string;
+  /** Fashion casting profile (Phase 1.9) */
+  fashionCasting: string;
+  /** Per-candidate Product Intelligence garment (Phase 1.9) */
+  garmentDirection: string;
+  /** A1 presence / anti-aggression rules */
+  presenceRules: string;
   /** Run-specific non-identity variation token block (OBF) */
   runVariation: string;
   /** @deprecated Prefer presence — kept for older snapshot readers. */
@@ -137,6 +151,7 @@ export interface BuiltCandidatePrompt {
 function framingForAsset(
   assetType: CandidateAssetType,
   memory: BrandMemory,
+  discoveryBlueprint?: ArchetypeCandidateBlueprint | null,
 ): string {
   const fitLabel = memory.fit.labels[0] ?? "premium";
   const brandFit = `${fitLabel.toLowerCase()} ${memory.brandName} streetwear fit`;
@@ -144,17 +159,17 @@ function framingForAsset(
   switch (assetType) {
     case "portrait_front":
       return [
-        "CAMERA — Premium Editorial Front Portrait (Stage A Discovery)",
-        "Luxury streetwear campaign casting frame — head-and-shoulders to upper chest.",
-        "Fashion agency model presence: editorial bone structure, strong facial harmony, campaign-ready.",
-        "Soft natural eye contact, relaxed shoulders — confident calm luxury energy.",
-        "NOT passport photo, NOT LinkedIn headshot, NOT ID mugshot, NOT flat stock portrait.",
+        a1CastingCompositionBlock(),
+        discoveryBlueprint
+          ? `Posture for this slot: ${discoveryBlueprint.fashionCasting.postureDirection}.`
+          : "Relaxed shoulders, slight body rotation — never passport-square.",
         "Photorealistic premium skin texture with natural pores. Same identity across all angles.",
       ].join("\n");
     case "portrait_three_quarter":
       return [
         "CAMERA — Stage A Three Quarter Portrait",
         "True 30–45 degree body/face turn — not a near-copy of the front frame.",
+        "Upper torso and shoulders still fully visible — same casting-editorial crop family.",
         "Same person as THIS candidate's front portrait. Natural gaze. Slight posture variation.",
         "Keep identity locked. Change only angle and subtle stance.",
       ].join("\n");
@@ -225,17 +240,21 @@ function buildEnvironmentLightingBlock(
   variation: CandidateVariationProfile,
   memory: BrandMemory,
   archetype?: BrandArchetype,
+  discoveryBlueprint?: ArchetypeCandidateBlueprint | null,
 ): string {
   return [
     premiumPhotographyBlock(),
     "",
-    "7–8. CONTROLLED NEUTRAL CASTING ENVIRONMENT",
-    `Background (candidate-specific): ${variation.background}.`,
-    `Light: ${archetype?.lightingDirection ?? variation.lighting}.`,
+    discoveryBlueprint
+      ? a1CastingPhotographyBlock(discoveryBlueprint)
+      : [
+          "7–8. CONTROLLED NEUTRAL CASTING ENVIRONMENT",
+          `Background (candidate-specific): ${variation.background}.`,
+          `Light: ${archetype?.lightingDirection ?? variation.lighting}.`,
+        ].join("\n"),
     "Keep Stage A controlled and neutral — not a campaign location.",
     "No streets, cafés, parking garages, shops, clothing racks, cars, or product sets.",
     `Photography direction: ${archetype?.photographyDirection ?? memory.photographyStyle}`,
-    "Soft luxury editorial lighting — premium skin texture, mild natural shadows.",
     "Consistent lighting family across all angles of THIS candidate only.",
   ].join("\n");
 }
@@ -266,11 +285,14 @@ function buildNegativePrompt(
     "CEO portrait, corporate headshot, luxury realtor, businessman, suit, blazer, turtleneck, dress shirt,",
     "runway model, fashion week, severe high-fashion face, high-fashion intensity, sharp fashion face,",
     "extreme cheekbones, razor-sharp jawline, dominant body language, military stance, rigid posture,",
-    "passport photo, expressionless mugshot, bodybuilder physique, fitness influencer,",
-    "over-groomed hair, perfectly combed slick business hair,",
+    "passport photo, ID-card portrait, employee headshot, LinkedIn profile photo,",
+    "casting-database mugshot, expressionless mugshot, flat centered framing, stiff squared shoulders,",
+    "head-only crop, cropped shoulders, ordinary random person, bland stock-model face,",
+    "bodybuilder physique, fitness influencer, over-groomed hair, perfectly combed slick business hair,",
     "identical beige background, beauty ring light, dramatic fashion lighting, harsh intimidation shadows,",
     "street cafe campaign scene, parking garage, clothing rack set, product mockup, group shot,",
     "broad commercial smile, flashy jewelry, visible brand logos, loud prints, luxury watch,",
+    "invented product, third-party branding, jewelry focus, wrong gender,",
     `${forbiddenProducts},`,
     `${forbiddenFits},`,
     `${forbiddenAesthetics},`,
@@ -399,21 +421,40 @@ export function buildCandidatePrompt(params: {
     ? formatBlueprintIdentityPrompt(discoveryBlueprint)
     : "";
 
+  const diversityBrief = discoveryBlueprint
+    ? formatDiscoveryDiversityBrief({
+        archetypeId: brandArchetype.id,
+        slot: discoveryBlueprint.slot,
+      })
+    : "";
+
   const ageBody = discoveryBlueprint
     ? [
         "3. AGE AND BODY STRUCTURE",
         `Age feel: ${discoveryBlueprint.ageRange}.`,
         `Body: ${discoveryBlueprint.bodyStructure}.`,
-        "Photoreal adult proportions only — never childlike, never bodybuilder.",
+        `Height / build direction: ${discoveryBlueprint.fashionCasting.modelHeightDirection}; ${discoveryBlueprint.fashionCasting.modelBuild}.`,
+        "Photoreal adult fashion-model proportions only — never childlike, never bodybuilder, never ordinary desk-job frame.",
       ].join("\n")
     : "";
+
+  const fashionCasting = discoveryBlueprint
+    ? formatFashionCastingProfilePrompt(discoveryBlueprint)
+    : "";
+
+  const garmentDirection = discoveryBlueprint
+    ? formatBlueprintGarmentPrompt(discoveryBlueprint)
+    : "";
+
+  const presenceRules = a1PresenceRulesBlock();
 
   const appearance = discoveryBlueprint
     ? [
         "AUTHENTIC HUMAN APPEARANCE (from candidate blueprint)",
         `Skin: ${discoveryBlueprint.skinTone}.`,
         "Allow visible but subtle skin texture, natural pores, slight under-eye detail, mild asymmetry.",
-        "Photoreal adult human — not porcelain beauty skin.",
+        "Realistic facial hair texture when specified — never fake beard, never beauty-filter skin.",
+        "Photoreal adult human — not porcelain beauty skin, not waxy AI clone.",
       ].join("\n")
     : useArchetypes
       ? formatArchetypeAppearancePrompt(identityDna)
@@ -428,7 +469,9 @@ export function buildCandidatePrompt(params: {
     ? [
         "4. EXPRESSION AND PRESENCE",
         `Expression: ${discoveryBlueprint.expression}.`,
-        `Styling presence: ${discoveryBlueprint.stylingDirection}.`,
+        `Fashion presence: ${discoveryBlueprint.fashionCasting.fashionPresence}.`,
+        `Micro-expression: ${discoveryBlueprint.fashionCasting.microExpression}.`,
+        `Camera presence: ${discoveryBlueprint.fashionCasting.cameraPresence}.`,
         formatArchetypePresencePrompt(identityDna),
       ].join("\n")
     : useArchetypes
@@ -454,11 +497,16 @@ export function buildCandidatePrompt(params: {
       formatProductWardrobeConstraintsForPersona(productCatalog),
   });
   const referenceDirection = formatPersonaReferenceDirection(referenceCatalog);
-  const camera = framingForAsset(params.assetType, brandMemory);
+  const camera = framingForAsset(
+    params.assetType,
+    brandMemory,
+    discoveryBlueprint,
+  );
   const lighting = buildEnvironmentLightingBlock(
     effectiveVariation,
     brandMemory,
     useArchetypes ? brandArchetype : undefined,
+    discoveryBlueprint,
   );
   const variationBlock = discoveryBlueprint
     ? [
@@ -519,7 +567,11 @@ export function buildCandidatePrompt(params: {
     premiumCasting,
     genderEnforcement,
     biologicalIdentity,
+    diversityBrief,
     ageBody,
+    fashionCasting,
+    garmentDirection,
+    presenceRules,
     runVariation,
     negative,
     lifestyle,
@@ -531,20 +583,25 @@ export function buildCandidatePrompt(params: {
         blocks.identity,
         blocks.genderEnforcement,
         blocks.premiumCasting,
+        // 1b. Diversity Brief before biology (Phase 1.9A.1)
+        blocks.diversityBrief,
         // 2. candidate-specific biological identity blueprint
         blocks.biologicalIdentity,
         blocks.appearance,
-        // 3. age and body
+        // 3. age and body + fashion casting profile
         blocks.ageBody,
+        blocks.fashionCasting,
         // 4. expression and presence
         blocks.presence,
+        blocks.presenceRules,
         // 5. Brand Memory
         blocks.brandDna,
-        // 6. Product Intelligence wardrobe
+        // 6. Product Intelligence wardrobe + per-candidate garment
         blocks.wardrobe,
+        blocks.garmentDirection,
         // 7. reference direction
         blocks.referenceDirection,
-        // 8. camera
+        // 8. camera / A1 composition
         blocks.camera,
         // 9. lighting / background
         blocks.lighting,
@@ -563,6 +620,7 @@ export function buildCandidatePrompt(params: {
         blocks.premiumCasting,
         blocks.appearance,
         blocks.presence,
+        blocks.presenceRules,
         blocks.brandDna,
         blocks.wardrobe,
         blocks.referenceDirection,

@@ -14,6 +14,7 @@ export function isPersonaVisualEvaluationEnabled(
 
 export type VisualEvaluationStatus =
   | "not_performed"
+  | "manual_review_required"
   | "pending"
   | "completed"
   | "failed"
@@ -58,17 +59,33 @@ export interface PersonaVisualEvaluator {
 export function emptyVisualEvaluation(
   status: VisualEvaluationStatus = "not_performed",
 ): VisualCastingEvaluation {
+  const summaryByStatus: Record<VisualEvaluationStatus, string> = {
+    not_performed:
+      "Visual Casting Evaluation: not_performed — no image-capable evaluator has analyzed this candidate.",
+    manual_review_required:
+      "Visual Casting Evaluation: manual_review_required — user remains the visual decision-maker.",
+    pending: "Visual Casting Evaluation: pending.",
+    completed: "Visual Casting Evaluation: completed.",
+    failed: "Visual Casting Evaluation: failed.",
+    disabled:
+      "Visual evaluation disabled (PERSONA_VISUAL_EVALUATION_ENABLED=false).",
+  };
   return {
     status,
     method: "none",
     dimensions: null,
-    summary:
-      status === "disabled"
-        ? "Visual evaluation disabled (PERSONA_VISUAL_EVALUATION_ENABLED=false)."
-        : "Not visually evaluated — no image-capable evaluator has analyzed this candidate.",
+    summary: summaryByStatus[status],
     evaluatedAt: null,
     costLabel: "not_applicable",
   };
+}
+
+/**
+ * Default A1 visual evaluation — honest interface for future vision scoring.
+ * Never fabricates attractiveness or fashion-presence scores.
+ */
+export function defaultA1VisualCastingEvaluation(): VisualCastingEvaluation {
+  return emptyVisualEvaluation("not_performed");
 }
 
 /** Fake evaluator for tests — never calls a live model. */

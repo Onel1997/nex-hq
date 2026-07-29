@@ -48,6 +48,32 @@ export function discoverySlotLabel(candidateNumber: number): string {
   return `Candidate ${letter}`;
 }
 
+/** Concise intended-use chips for Official Brand Face A1 card review. */
+export function discoveryIntendedUseLabel(
+  candidate: Pick<PersonaCandidate, "candidate_number" | "generation_settings">,
+): string | null {
+  const fromSettings = candidate.generation_settings?.intendedUseLabel;
+  if (typeof fromSettings === "string" && fromSettings.trim()) {
+    return fromSettings;
+  }
+  const aesthetic = (
+    candidate.generation_settings?.variation as { aesthetic?: string } | undefined
+  )?.aesthetic;
+  if (typeof aesthetic === "string" && aesthetic.includes("·")) {
+    const parts = aesthetic.split("·").map((p) => p.trim());
+    const last = parts[parts.length - 1];
+    if (
+      last &&
+      /(Homepage|Social|Lifestyle|Flagship|Shopify|Campaign|Video|Storytelling|Community|Editorial)/i.test(
+        last,
+      )
+    ) {
+      return last;
+    }
+  }
+  return null;
+}
+
 export function isProjectDetailReady(args: {
   selectedProjectId: string | null;
   loadedProjectId: string | null;
