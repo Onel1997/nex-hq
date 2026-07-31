@@ -6,7 +6,7 @@
  * weights — no external downloads, no paid provider calls.
  *
  * SERVER-SIDE ONLY.  Never import this module in client bundles.
- * Add 'use server' or load it exclusively from API routes / server actions.
+ * (Do not add `import "server-only"` — it breaks Node test runners.)
  *
  * Security:
  *   - Image bytes are loaded transiently, never logged or persisted.
@@ -23,7 +23,6 @@
  *   See similarity-threshold.ts for documented calibration guidance.
  */
 
-import * as path from "path";
 import type { CandidateAssetReference, FaceSimilarityEvaluator, FaceSimilarityResult } from "./types";
 import type { FaceEmbeddingRecord, EmbeddingComparisonResult } from "./face-embedding-types";
 import type { FaceDetectionStatus } from "./similarity-threshold";
@@ -38,47 +37,109 @@ import {
   euclideanDistance,
   euclideanToCosineSimilarity,
 } from "./similarity-threshold";
-
-/** Models path — resolved lazily to avoid webpack build-time require.resolve issues. */
-function getModelsPath(): string {
-  // In webpack bundled environments require.resolve returns a numeric module ID.
-  // Use a fallback that works in both contexts.
-  try {
-    const packageJsonPath = require.resolve("@vladmandic/face-api/package.json");
-    if (typeof packageJsonPath !== "string") throw new Error("non-string");
-    return path.join(path.dirname(packageJsonPath), "model");
-  } catch {
-    // Fallback: resolve relative to node_modules conventionally.
-    return path.join(process.cwd(), "node_modules/@vladmandic/face-api/model");
-  }
-}
+import {
+  assertFaceApiModelsPresent,
+  validateFaceApiModelFiles,
+} from "./model-assets";
 
 let _faceapiModule: typeof import("@vladmandic/face-api") | null = null;
 let _modelsLoaded = false;
 let _loadPromise: Promise<void> | null = null;
+let _canvasPatched = false;
 
-/** Load models once and cache. */
+/** Test/dev helper — clear cached model load so a failed init can be retried. */
+export function resetFaceApiModelLoadCacheForTests(): void {
+  _faceapiModule = null;
+  _modelsLoaded = false;
+  _loadPromise = null;
+}
+
+/**
+ * Register node-canvas types with face-api.
+ * Without this, detectAllFaces throws:
+ *   "toNetInput - expected media to be of type HTMLImageElement | ..."
+ * which was the live Phase 2.0B.2 failure on all four candidates.
+ */
+async function ensureCanvasMonkeyPatch(
+  faceapi: typeof import("@vladmandic/face-api"),
+): Promise<void> {
+  if (_canvasPatched) return;
+  const canvas = await import("canvas");
+  faceapi.env.monkeyPatch({
+    Canvas: canvas.Canvas as unknown as typeof HTMLCanvasElement,
+    Image: canvas.Image as unknown as typeof HTMLImageElement,
+    ImageData: canvas.ImageData as unknown as typeof ImageData,
+  });
+  _canvasPatched = true;
+}
+
+/**
+ * Load models once from the stable server-assets directory and cache.
+ * Failed initialization clears the promise so a later retry can succeed
+ * after model files are fixed (does not permanently poison the cache).
+ */
 async function ensureModelsLoaded(): Promise<typeof import("@vladmandic/face-api")> {
   if (_faceapiModule && _modelsLoaded) return _faceapiModule;
 
   if (_loadPromise) {
     await _loadPromise;
-    return _faceapiModule!;
+    if (!_faceapiModule || !_modelsLoaded) {
+      throw new Error(
+        "Face-api model initialization previously failed and was not recovered",
+      );
+    }
+    return _faceapiModule;
   }
 
   _loadPromise = (async () => {
-    const modelsPath = getModelsPath();
+    const startedAt = Date.now();
+    const validation = validateFaceApiModelFiles();
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[persona.face-api.models] resolve", {
+        modelsDir: validation.modelsDir,
+        requiredFilesPresent: validation.ok,
+        missing: validation.missing,
+      });
+    }
+    const modelsPath = assertFaceApiModelsPresent();
+
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[persona.face-api.models] initialization_started", {
+        modelsDir: modelsPath,
+      });
+    }
+
     // Dynamic import so this module only loads in server contexts.
     await import("@tensorflow/tfjs-node");
     const faceapi = await import("@vladmandic/face-api");
+    await ensureCanvasMonkeyPatch(faceapi);
     await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelsPath);
     await faceapi.nets.faceLandmark68Net.loadFromDisk(modelsPath);
     await faceapi.nets.faceRecognitionNet.loadFromDisk(modelsPath);
     _faceapiModule = faceapi;
     _modelsLoaded = true;
+
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[persona.face-api.models] initialization_completed", {
+        modelsDir: modelsPath,
+        durationMs: Date.now() - startedAt,
+      });
+    }
   })();
 
-  await _loadPromise;
+  try {
+    await _loadPromise;
+  } catch (err) {
+    // Allow a later retry after fixing missing weights / native deps.
+    _loadPromise = null;
+    _modelsLoaded = false;
+    _faceapiModule = null;
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Face-api model loading failed: ${message}`, {
+      cause: err instanceof Error ? err : undefined,
+    });
+  }
+
   return _faceapiModule!;
 }
 
@@ -92,17 +153,63 @@ export interface FaceExtractionResult {
   embeddingModel: string;
   embeddingDimension: number;
   similarityThresholdVersion: string;
+  /** Safe, non-sensitive error code when status === "error". */
+  safeErrorCode?: string;
+  /** Safe, non-sensitive error message (no paths with secrets / URLs with tokens). */
+  safeErrorMessage?: string;
+  /** Development-only stack when status === "error". */
+  safeErrorStack?: string;
+}
+
+function sanitizeEvaluatorError(err: unknown): {
+  code: string;
+  message: string;
+  stack?: string;
+} {
+  const raw = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack : undefined;
+  const message = raw
+    .replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g, "[redacted-data-url]")
+    .replace(/https?:\/\/[^\s]+/g, "[redacted-url]")
+    .replace(/\?token=[^\s&]+/g, "?token=[redacted]")
+    .slice(0, 400);
+  if (message.includes("toNetInput")) {
+    return {
+      code: "faceapi_canvas_not_patched_or_invalid_media",
+      message,
+      stack,
+    };
+  }
+  if (message.toLowerCase().includes("canvas")) {
+    return { code: "canvas_image_decode_failed", message, stack };
+  }
+  if (message.toLowerCase().includes("tensorflow") || message.toLowerCase().includes("tfjs")) {
+    return { code: "tensorflow_init_failed", message, stack };
+  }
+  return { code: "face_extraction_error", message, stack };
+}
+
+function retryTraceEnabled(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env["PERSONA_FACE_NOVELTY_RETRY_TRACE"] === "1"
+  );
+}
+
+function retryTrace(checkpoint: string, detail?: Record<string, unknown>): void {
+  if (!retryTraceEnabled()) return;
+  console.info(`[persona.novelty.retry] ${checkpoint}`, detail ?? "");
 }
 
 /**
- * Load an image from a URL or file path (server-side only) and extract the
- * 128-dim face embedding.
+ * Load an image from a URL, file path, or data URL (server-side only) and
+ * extract the 128-dim face embedding.
  *
  * Returns status codes for all failure cases — never throws for expected
- * detection failures.
+ * detection failures. Errors are captured as safeErrorCode/safeErrorMessage.
  */
 export async function extractFaceEmbedding(
-  imageSource: string,
+  imageSource: string | Buffer,
 ): Promise<FaceExtractionResult> {
   const base: Omit<FaceExtractionResult, "status" | "embedding"> = {
     detectionConfidence: 0,
@@ -115,11 +222,14 @@ export async function extractFaceEmbedding(
 
   try {
     const faceapi = await ensureModelsLoaded();
+    await ensureCanvasMonkeyPatch(faceapi);
+    retryTrace("5.canvas_created", { monkeyPatched: true });
     // canvas is a peer dep of @vladmandic/face-api in node environments
     const { loadImage } = await import("canvas");
 
     const img = await loadImage(imageSource);
     const imgWidth = img.width;
+    retryTrace("5b.image_decoded", { width: imgWidth, height: img.height });
 
     // Detect all faces to check for multiple
     const allDetections = await faceapi.detectAllFaces(
@@ -128,6 +238,10 @@ export async function extractFaceEmbedding(
     );
 
     base.faceCount = allDetections.length;
+    retryTrace("7.face_detection_completed", {
+      faceCount: allDetections.length,
+      topScore: allDetections[0]?.score,
+    });
 
     if (allDetections.length === 0) {
       return { ...base, status: "no_face" };
@@ -160,6 +274,10 @@ export async function extractFaceEmbedding(
     }
 
     const embedding = Array.from(fullResult.descriptor);
+    retryTrace("8.embedding_extracted", {
+      embeddingDimension: embedding.length,
+      detectionConfidence: fullResult.detection.score,
+    });
 
     return {
       ...base,
@@ -167,8 +285,20 @@ export async function extractFaceEmbedding(
       embedding,
       detectionConfidence: fullResult.detection.score,
     };
-  } catch {
-    return { ...base, status: "error" };
+  } catch (err) {
+    const safe = sanitizeEvaluatorError(err);
+    retryTrace("EXTRACT_FAILED", {
+      errorCode: safe.code,
+      errorMessage: safe.message,
+      errorStack: safe.stack,
+    });
+    return {
+      ...base,
+      status: "error",
+      safeErrorCode: safe.code,
+      safeErrorMessage: safe.message,
+      safeErrorStack: process.env.NODE_ENV !== "production" ? safe.stack : undefined,
+    };
   }
 }
 
@@ -275,11 +405,19 @@ export class LocalFaceEmbeddingEvaluator implements FaceSimilarityEvaluator {
         similarity: undefined,
         threshold: FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD,
         // We attach extraction metadata for the caller to persist.
+        _detectionStatus: extraction.status,
+        _faceCount: extraction.faceCount,
+        _detectionConfidence: extraction.detectionConfidence,
+        ...(extraction.safeErrorCode
+          ? {
+              _safeErrorCode: extraction.safeErrorCode,
+              _safeErrorMessage: extraction.safeErrorMessage,
+              _safeErrorStack: extraction.safeErrorStack,
+            }
+          : {}),
         ...(extraction.embedding
           ? {
               _embedding: extraction.embedding,
-              _detectionConfidence: extraction.detectionConfidence,
-              _faceCount: extraction.faceCount,
             }
           : {}),
       } as FaceSimilarityResult & Record<string, unknown>;
@@ -289,11 +427,18 @@ export class LocalFaceEmbeddingEvaluator implements FaceSimilarityEvaluator {
 
     if (extraction.status !== "performed" || !extraction.embedding) {
       return {
-        status: extraction.status === "error" ? "not_available" : "not_available",
+        status: "not_available",
         method: this.method,
         // Attach detection status for debug.
-        ...(extraction.status !== "performed"
-          ? { _detectionStatus: extraction.status, _faceCount: extraction.faceCount }
+        _detectionStatus: extraction.status,
+        _faceCount: extraction.faceCount,
+        _detectionConfidence: extraction.detectionConfidence,
+        ...(extraction.safeErrorCode
+          ? {
+              _safeErrorCode: extraction.safeErrorCode,
+              _safeErrorMessage: extraction.safeErrorMessage,
+              _safeErrorStack: extraction.safeErrorStack,
+            }
           : {}),
       } as FaceSimilarityResult & Record<string, unknown>;
     }
@@ -314,6 +459,7 @@ export class LocalFaceEmbeddingEvaluator implements FaceSimilarityEvaluator {
       _embedding: extraction.embedding,
       _detectionConfidence: extraction.detectionConfidence,
       _faceCount: extraction.faceCount,
+      _detectionStatus: "performed",
       _closestMatchCandidateId: comparison.closestMatchCandidateId,
       _closestDistance: comparison.closestDistance,
       _isWarning: comparison.isWarning,

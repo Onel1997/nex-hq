@@ -53,6 +53,8 @@ export const CANDIDATE_STATUSES = [
   "archived",
   "needs_manual_references",
   "identity_validation_failed",
+  "novelty_blocked",
+  "novelty_failed",
 ] as const;
 export type CandidateStatus = (typeof CANDIDATE_STATUSES)[number];
 

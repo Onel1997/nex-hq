@@ -303,23 +303,30 @@ describe("8. cross-workspace isolation", () => {
 // ---------------------------------------------------------------------------
 describe("9. no_face detection status", () => {
   it("evaluator returning no face status makes evaluation not_available", async () => {
-    const repo = new MemoryNoveltyRepository();
-    const noFaceEval = new FakeEmbeddingEvaluator({
-      status: "not_available",
-      method: "local-face-embedding-v1",
-      _detectionStatus: "no_face",
-      _faceCount: 0,
-    });
-    const history = await loadDiscoveryHistory(repo, WS, ARCH);
-    const check = await checkAndRegisterCandidate(
-      repo, history,
-      { workspaceId: WS, archetypeId: ARCH, creationProjectId: PROJECT, candidateId: "cand-noface", assetId: "asset-noface", identityFingerprint: makeFp("noface"), sourceProvider: PROVIDER, sourceModel: MODEL },
-      { evaluator: noFaceEval },
-    );
-    // no_face alone should NOT hard-reject (image checks also pass)
-    assert.equal(check.hardReject, false);
-    assert.equal(check.softWarning, true);
-    assert.ok(check.softWarningReason?.includes("not_available"));
+    const prev = process.env.FACE_EVALUATOR_FAILURE_MODE;
+    process.env.FACE_EVALUATOR_FAILURE_MODE = "fail_open_with_warning";
+    try {
+      const repo = new MemoryNoveltyRepository();
+      const noFaceEval = new FakeEmbeddingEvaluator({
+        status: "not_available",
+        method: "local-face-embedding-v1",
+        _detectionStatus: "no_face",
+        _faceCount: 0,
+      });
+      const history = await loadDiscoveryHistory(repo, WS, ARCH);
+      const check = await checkAndRegisterCandidate(
+        repo, history,
+        { workspaceId: WS, archetypeId: ARCH, creationProjectId: PROJECT, candidateId: "cand-noface", assetId: "asset-noface", identityFingerprint: makeFp("noface"), sourceProvider: PROVIDER, sourceModel: MODEL },
+        { evaluator: noFaceEval },
+      );
+      // fail_open: no_face alone should NOT hard-reject (image checks also pass)
+      assert.equal(check.hardReject, false);
+      assert.equal(check.softWarning, true);
+      assert.ok(check.softWarningReason?.includes("not_available"));
+    } finally {
+      if (prev === undefined) delete process.env.FACE_EVALUATOR_FAILURE_MODE;
+      else process.env.FACE_EVALUATOR_FAILURE_MODE = prev;
+    }
   });
 });
 
@@ -328,21 +335,28 @@ describe("9. no_face detection status", () => {
 // ---------------------------------------------------------------------------
 describe("10. multiple_faces detection produces soft warning", () => {
   it("multiple_faces status produces not_available result → soft warning", async () => {
-    const repo = new MemoryNoveltyRepository();
-    const multiFaceEval = new FakeEmbeddingEvaluator({
-      status: "not_available",
-      method: "local-face-embedding-v1",
-      _detectionStatus: "multiple_faces",
-      _faceCount: 3,
-    });
-    const history = await loadDiscoveryHistory(repo, WS, ARCH);
-    const check = await checkAndRegisterCandidate(
-      repo, history,
-      { workspaceId: WS, archetypeId: ARCH, creationProjectId: PROJECT, candidateId: "cand-multi", assetId: "asset-multi", identityFingerprint: makeFp("multi"), sourceProvider: PROVIDER, sourceModel: MODEL },
-      { evaluator: multiFaceEval },
-    );
-    assert.equal(check.hardReject, false);
-    assert.equal(check.softWarning, true);
+    const prev = process.env.FACE_EVALUATOR_FAILURE_MODE;
+    process.env.FACE_EVALUATOR_FAILURE_MODE = "fail_open_with_warning";
+    try {
+      const repo = new MemoryNoveltyRepository();
+      const multiFaceEval = new FakeEmbeddingEvaluator({
+        status: "not_available",
+        method: "local-face-embedding-v1",
+        _detectionStatus: "multiple_faces",
+        _faceCount: 3,
+      });
+      const history = await loadDiscoveryHistory(repo, WS, ARCH);
+      const check = await checkAndRegisterCandidate(
+        repo, history,
+        { workspaceId: WS, archetypeId: ARCH, creationProjectId: PROJECT, candidateId: "cand-multi", assetId: "asset-multi", identityFingerprint: makeFp("multi"), sourceProvider: PROVIDER, sourceModel: MODEL },
+        { evaluator: multiFaceEval },
+      );
+      assert.equal(check.hardReject, false);
+      assert.equal(check.softWarning, true);
+    } finally {
+      if (prev === undefined) delete process.env.FACE_EVALUATOR_FAILURE_MODE;
+      else process.env.FACE_EVALUATOR_FAILURE_MODE = prev;
+    }
   });
 });
 
@@ -351,22 +365,29 @@ describe("10. multiple_faces detection produces soft warning", () => {
 // ---------------------------------------------------------------------------
 describe("11. low-confidence face is not silently approved", () => {
   it("low_confidence evaluator returns not_available → soft warning, not hardReject", async () => {
-    const repo = new MemoryNoveltyRepository();
-    const lowConfEval = new FakeEmbeddingEvaluator({
-      status: "not_available",
-      method: "local-face-embedding-v1",
-      _detectionStatus: "low_confidence",
-      _faceCount: 1,
-    });
-    const history = await loadDiscoveryHistory(repo, WS, ARCH);
-    const check = await checkAndRegisterCandidate(
-      repo, history,
-      { workspaceId: WS, archetypeId: ARCH, creationProjectId: PROJECT, candidateId: "cand-lc", assetId: "asset-lc", identityFingerprint: makeFp("lc"), sourceProvider: PROVIDER, sourceModel: MODEL },
-      { evaluator: lowConfEval },
-    );
-    // No prior faces, image checks pass — soft warning because not_available
-    assert.equal(check.hardReject, false);
-    assert.equal(check.softWarning, true);
+    const prev = process.env.FACE_EVALUATOR_FAILURE_MODE;
+    process.env.FACE_EVALUATOR_FAILURE_MODE = "fail_open_with_warning";
+    try {
+      const repo = new MemoryNoveltyRepository();
+      const lowConfEval = new FakeEmbeddingEvaluator({
+        status: "not_available",
+        method: "local-face-embedding-v1",
+        _detectionStatus: "low_confidence",
+        _faceCount: 1,
+      });
+      const history = await loadDiscoveryHistory(repo, WS, ARCH);
+      const check = await checkAndRegisterCandidate(
+        repo, history,
+        { workspaceId: WS, archetypeId: ARCH, creationProjectId: PROJECT, candidateId: "cand-lc", assetId: "asset-lc", identityFingerprint: makeFp("lc"), sourceProvider: PROVIDER, sourceModel: MODEL },
+        { evaluator: lowConfEval },
+      );
+      // fail_open: soft warning because not_available
+      assert.equal(check.hardReject, false);
+      assert.equal(check.softWarning, true);
+    } finally {
+      if (prev === undefined) delete process.env.FACE_EVALUATOR_FAILURE_MODE;
+      else process.env.FACE_EVALUATOR_FAILURE_MODE = prev;
+    }
   });
 });
 
@@ -500,16 +521,23 @@ describe("16. embedding vectors not in debug output", () => {
 // ---------------------------------------------------------------------------
 describe("17. evaluator failure reported honestly", () => {
   it("ErrorEvaluator produces softWarning, not hardReject", async () => {
-    const repo = new MemoryNoveltyRepository();
-    const history = await loadDiscoveryHistory(repo, WS, ARCH);
-    const check = await checkAndRegisterCandidate(
-      repo, history,
-      { workspaceId: WS, archetypeId: ARCH, creationProjectId: PROJECT, candidateId: "cand-err", assetId: "asset-err", identityFingerprint: makeFp("err"), sourceProvider: PROVIDER, sourceModel: MODEL },
-      { evaluator: new ErrorEvaluator() as FaceSimilarityEvaluator },
-    );
-    // Evaluator error → soft warning (image checks pass, first ever candidate)
-    assert.equal(check.hardReject, false);
-    assert.equal(check.softWarning, true);
+    const prev = process.env.FACE_EVALUATOR_FAILURE_MODE;
+    process.env.FACE_EVALUATOR_FAILURE_MODE = "fail_open_with_warning";
+    try {
+      const repo = new MemoryNoveltyRepository();
+      const history = await loadDiscoveryHistory(repo, WS, ARCH);
+      const check = await checkAndRegisterCandidate(
+        repo, history,
+        { workspaceId: WS, archetypeId: ARCH, creationProjectId: PROJECT, candidateId: "cand-err", assetId: "asset-err", identityFingerprint: makeFp("err"), sourceProvider: PROVIDER, sourceModel: MODEL },
+        { evaluator: new ErrorEvaluator() as FaceSimilarityEvaluator },
+      );
+      // fail_open: Evaluator error → soft warning
+      assert.equal(check.hardReject, false);
+      assert.equal(check.softWarning, true);
+    } finally {
+      if (prev === undefined) delete process.env.FACE_EVALUATOR_FAILURE_MODE;
+      else process.env.FACE_EVALUATOR_FAILURE_MODE = prev;
+    }
   });
 });
 

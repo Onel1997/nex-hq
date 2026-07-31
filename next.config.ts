@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Ensure face-api weight files under server-assets are included in
+  // serverless/output file tracing (Vercel / standalone).
+  outputFileTracingIncludes: {
+    "/api/**/*": ["./server-assets/face-api-models/**/*"],
+    "/*": ["./server-assets/face-api-models/**/*"],
+  },
   webpack(config) {
     // @tensorflow/tfjs-node and canvas are native Node binaries with
     // native addons (.node files). They cannot be bundled by webpack.

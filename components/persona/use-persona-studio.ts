@@ -331,6 +331,7 @@ export function usePersonaStudio() {
         jobs?: import("@/lib/persona/domain/creation-types").PersonaGenerationJob[];
         incident?: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
         candidatePreviews?: Record<string, string | null>;
+        noveltyFailureSlots?: import("@/lib/persona/face-novelty-memory/board-visibility").NoveltyFailureSlotDto[];
       };
       if (!res.ok) throw new Error(data.error ?? "Projekt laden fehlgeschlagen");
 
@@ -379,6 +380,7 @@ export function usePersonaStudio() {
         projectId,
         candidates,
         candidatePreviews: data.candidatePreviews ?? {},
+        noveltyFailureSlots: data.noveltyFailureSlots ?? [],
         generationJobs: data.jobs ?? [],
         incidentSummary: data.incident ?? null,
       });

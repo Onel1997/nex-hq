@@ -5,41 +5,31 @@
  * so that misconfiguration surfaces at startup rather than silently
  * causing missed evaluations during discovery.
  *
+ * Model directory MUST match LocalFaceEmbeddingEvaluator
+ * (server-assets/face-api-models via model-assets.ts).
+ *
  * Server-only.  Call from API route startup or instrumentation hooks.
  */
 
 import * as path from "path";
 import * as fs from "fs";
+import {
+  resolveFaceApiModelsDirectory,
+  validateFaceApiModelFiles,
+} from "./model-assets";
 
 export interface FaceNoveltyStartupReport {
   ok: boolean;
   tensorflowLoaded: boolean;
   modelWeightsPresent: boolean;
+  /** Absolute filesystem path used for model weights (same as evaluator). */
+  modelsDirectory: string;
   evaluatorModuleReachable: boolean;
   embeddingRepoReachable: boolean;
   migrationAvailable: boolean;
   warnings: string[];
   errors: string[];
 }
-
-function getModelsPath(): string | null {
-  try {
-    const resolved = require.resolve("@vladmandic/face-api/package.json");
-    if (typeof resolved !== "string") return null;
-    return path.join(path.dirname(resolved), "model");
-  } catch {
-    const fallback = path.join(process.cwd(), "node_modules/@vladmandic/face-api/model");
-    return fallback;
-  }
-}
-
-const MODELS_PATH = getModelsPath();
-
-const REQUIRED_MODEL_FILES = [
-  "ssd_mobilenetv1_model-weights_manifest.json",
-  "face_landmark_68_model-weights_manifest.json",
-  "face_recognition_model-weights_manifest.json",
-];
 
 const MIGRATION_FILE = path.join(
   process.cwd(),
@@ -61,18 +51,28 @@ export async function runFaceNoveltyStartupValidation(): Promise<FaceNoveltyStar
     );
   }
 
-  // 2. Model weights on disk
+  // 2. Model weights — same directory as LocalFaceEmbeddingEvaluator.
   let modelWeightsPresent = false;
-  if (!MODELS_PATH) {
-    errors.push("@vladmandic/face-api not found — model weights path unresolvable");
-  } else {
-    const missing = REQUIRED_MODEL_FILES.filter(
-      (f) => !fs.existsSync(path.join(MODELS_PATH, f)),
-    );
-    if (missing.length > 0) {
-      errors.push(`Missing face model weight files: ${missing.join(", ")}`);
+  let modelsDirectory = "";
+  try {
+    modelsDirectory = resolveFaceApiModelsDirectory();
+    const validation = validateFaceApiModelFiles();
+    modelsDirectory = validation.modelsDir;
+    if (!validation.ok) {
+      errors.push(
+        `Missing face model weight files under ${validation.modelsDir}: ${validation.missing.join(", ")}. Run: npm run copy:face-api-models`,
+      );
     } else {
       modelWeightsPresent = true;
+    }
+  } catch (err) {
+    errors.push(
+      `Face-api model path validation failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    try {
+      modelsDirectory = resolveFaceApiModelsDirectory();
+    } catch {
+      modelsDirectory = path.join(process.cwd(), "server-assets", "face-api-models");
     }
   }
 
@@ -117,7 +117,7 @@ export async function runFaceNoveltyStartupValidation(): Promise<FaceNoveltyStar
   if (!ok) {
     console.warn(
       "[FaceNovelty] Startup validation FAILED — face similarity will not protect discovery.",
-      { errors, warnings },
+      { errors, warnings, modelsDirectory },
     );
   }
 
@@ -125,6 +125,7 @@ export async function runFaceNoveltyStartupValidation(): Promise<FaceNoveltyStar
     ok,
     tensorflowLoaded,
     modelWeightsPresent,
+    modelsDirectory,
     evaluatorModuleReachable,
     embeddingRepoReachable,
     migrationAvailable,

@@ -11,13 +11,24 @@ import type { NoveltyRepository } from "./novelty-repository";
 /**
  * Load the discovery history for a given workspace + archetype.
  * Builds the forbidden sets used by evaluateDiscoveryNovelty.
+ *
+ * @param excludeCandidateIds — omit these candidates from forbidden sets
+ *   (used by retry evaluation so a candidate is not compared against itself).
  */
 export async function loadDiscoveryHistory(
   repo: NoveltyRepository,
   workspaceId: string,
   archetypeId: string,
+  options?: { excludeCandidateIds?: ReadonlySet<string> | string[] },
 ): Promise<DiscoveryHistory> {
   const allRecords = await repo.findMany({ workspaceId, archetypeId });
+  const exclude = options?.excludeCandidateIds
+    ? new Set(
+        Array.isArray(options.excludeCandidateIds)
+          ? options.excludeCandidateIds
+          : [...options.excludeCandidateIds],
+      )
+    : null;
 
   const forbiddenIdentityFingerprints = new Set<string>();
   const forbiddenImageChecksums = new Set<string>();
@@ -32,6 +43,8 @@ export async function loadDiscoveryHistory(
   let totalRejected = 0;
 
   for (const record of allRecords) {
+    if (exclude?.has(record.candidateId)) continue;
+
     switch (record.state) {
       case "shown":
         totalShown++;

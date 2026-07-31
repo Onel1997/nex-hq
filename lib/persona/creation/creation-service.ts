@@ -118,6 +118,14 @@ import {
   buildLiveFaceEvaluator,
   assertLiveFaceEvaluatorNotNull,
 } from "../face-novelty-memory/live-evaluator";
+import { MemoryLiveDiagnosticStore } from "../face-novelty-memory/diagnostic-store";
+import { SupabaseLiveDiagnosticStore } from "../face-novelty-memory/supabase-diagnostic-store";
+import { assertCandidateMayBecomeReady } from "../face-novelty-memory/visibility-assertion";
+import { maybeAttachNoveltyDebugToSettings } from "../face-novelty-memory/live-debug";
+import {
+  partitionBoardCandidates,
+  type NoveltyFailureSlotDto,
+} from "../face-novelty-memory/board-visibility";
 
 function creationRepo() {
   return getCreationRepository();
@@ -857,10 +865,14 @@ export async function confirmAndStartCandidateGeneration(
       ? new SupabaseNoveltyRepository()
       : new MemoryNoveltyRepository();
     const embeddingRepo = isLiveProvider ? new SupabaseEmbeddingRepository() : null;
+    const diagnosticStore = isLiveProvider
+      ? new SupabaseLiveDiagnosticStore()
+      : new MemoryLiveDiagnosticStore();
 
     let liveEvaluator: import("../face-novelty-memory/types").FaceSimilarityEvaluator | null =
       null;
     let noveltyHistory: import("../face-novelty-memory/types").DiscoveryHistory | null = null;
+    let priorEmbeddingsLoaded = 0;
     if (isLiveProvider && castingPhase === "a1_discovery") {
       try {
         noveltyHistory = await loadDiscoveryHistory(
@@ -876,6 +888,13 @@ export async function confirmAndStartCandidateGeneration(
           liveEvaluator,
           `a1_discovery project=${projectId}`,
         );
+        const embCountRepo = new SupabaseEmbeddingRepository();
+        priorEmbeddingsLoaded = (
+          await embCountRepo.loadEmbeddingsForWorkspace(
+            scope.workspaceId,
+            archetypeIdForNovelty,
+          )
+        ).length;
       } catch (initErr) {
         // Surface clearly — do not silently fall back to null evaluator.
         logCastingFlowTrace("novelty.evaluator_init_failed", {
@@ -923,13 +942,18 @@ export async function confirmAndStartCandidateGeneration(
           ? (result.settings as { variation: { label: string } }).variation.label
           : variation.label;
 
+      // A1 live novelty path: create as generating until evaluation completes.
+      // Prevents ready/visible status before performed + allowed novelty decision.
+      const initialStatus =
+        isLiveProvider && castingPhase === "a1_discovery" ? "generating" : "ready";
+
       let candidate = existing.find((c) => c.candidate_number === result.candidateNumber);
       if (!candidate) {
         candidate = await creationRepo().createCandidate(scope, {
           creation_project_id: projectId,
           candidate_number: result.candidateNumber,
           candidate_name: displayName,
-          status: "ready",
+          status: initialStatus,
           provider: job.provider,
           provider_job_id: durableJob.id,
           generation_seed: result.seed,
@@ -946,7 +970,7 @@ export async function confirmAndStartCandidateGeneration(
         });
       } else {
         candidate = await creationRepo().updateCandidate(scope, candidate.id, {
-          status: "ready",
+          status: initialStatus,
           candidate_name: displayName,
           provider: job.provider,
           provider_job_id: durableJob.id,
@@ -1070,6 +1094,10 @@ export async function confirmAndStartCandidateGeneration(
           {
             evaluator: liveEvaluator,
             embeddingRepo: embeddingRepo ?? undefined,
+            diagnosticStore,
+            priorEmbeddingsLoaded,
+            slot: result.candidateNumber,
+            evaluatorActive: true,
           };
 
         const noveltyCheck = await checkAndRegisterCandidate(
@@ -1104,20 +1132,39 @@ export async function confirmAndStartCandidateGeneration(
           // Do NOT log similarity scores or embedding vectors.
         });
 
-        if (noveltyCheck.hardReject) {
-          // Mark candidate rejected — it must not appear on the Candidate Board.
-          await creationRepo().updateCandidate(scope, candidate.id, {
-            status: "rejected",
-            rejection_reason: noveltyCheck.replacementMessage ?? "novelty_protection",
-            user_notes: `[novelty] ${noveltyCheck.hardRejectReason ?? "duplicate"}`,
-          });
-          // Record that this candidate was shown (as rejected) so it is excluded
-          // from future discovery too.
-          await markCandidateShown(noveltyRepo, noveltyCheck.recordId, scope.workspaceId);
-        } else {
-          // Candidate passed novelty — mark as shown once it's on the board.
+        const nextStatus = noveltyCheck.candidateStatus;
+        assertCandidateMayBecomeReady({
+          proposedStatus: nextStatus,
+          evaluationStatus: noveltyCheck.evaluationStatus,
+          finalDecision: noveltyCheck.finalDecision,
+          detectionStatus: noveltyCheck.detectionStatus,
+        });
+
+        const settingsWithDebug = maybeAttachNoveltyDebugToSettings(
+          {
+            ...(candidate.generation_settings ?? {}),
+            ...enrichedSettings,
+          },
+          noveltyCheck.liveDebug ?? null,
+        );
+
+        await creationRepo().updateCandidate(scope, candidate.id, {
+          status: nextStatus,
+          generation_settings: settingsWithDebug,
+          rejection_reason:
+            nextStatus === "ready"
+              ? ""
+              : noveltyCheck.replacementMessage ?? "novelty_protection",
+          user_notes:
+            nextStatus === "ready"
+              ? ""
+              : `[novelty] ${noveltyCheck.hardRejectReason ?? noveltyCheck.finalDecision}`,
+        });
+
+        if (noveltyCheck.finalDecision === "allowed") {
           await markCandidateShown(noveltyRepo, noveltyCheck.recordId, scope.workspaceId);
         }
+        // Failed / blocked stay exhausted — never mark shown (a shown face is consumed).
 
         // Update history for subsequent candidates in this same batch.
         noveltyHistory = await loadDiscoveryHistory(
@@ -1125,6 +1172,21 @@ export async function confirmAndStartCandidateGeneration(
           scope.workspaceId,
           archetypeIdForNovelty,
         );
+        if (embeddingRepo) {
+          priorEmbeddingsLoaded = (
+            await embeddingRepo.loadEmbeddingsForWorkspace(
+              scope.workspaceId,
+              archetypeIdForNovelty,
+            )
+          ).length;
+        }
+      } else if (initialStatus === "generating") {
+        // Novelty path skipped unexpectedly — fail closed, never leave as generating→ready.
+        await creationRepo().updateCandidate(scope, candidate.id, {
+          status: "novelty_failed",
+          rejection_reason: "novelty_evaluation_skipped",
+          user_notes: "[novelty] evaluation_not_performed",
+        });
       }
       // -----------------------------------------------------------------------
     }
@@ -1521,14 +1583,54 @@ export async function listCandidates(scope: WorkspaceScope, projectId: string) {
   await requireProject(scope, projectId);
   const candidates = await creationRepo().listCandidates(scope, projectId);
   assertCandidatesBelongToProject(candidates, projectId);
-  return candidates;
+  return candidates.map((c) => {
+    const existingDebug = c.generation_settings?.faceNoveltyLiveDebug as
+      | import("../face-novelty-memory/live-debug").SafeFaceNoveltyLiveDebug
+      | undefined;
+    return {
+      ...c,
+      generation_settings: maybeAttachNoveltyDebugToSettings(
+        c.generation_settings ?? {},
+        existingDebug ?? null,
+      ),
+    };
+  });
+}
+
+/**
+ * Candidate Board payload — fail-closed.
+ * Only ready + performed + allowed candidates include images / selectable payload.
+ * Failed/blocked return as safe failure-slot DTOs (no signed URLs).
+ */
+export async function listCandidateBoardPayload(
+  scope: WorkspaceScope,
+  projectId: string,
+): Promise<{
+  candidates: PersonaCandidate[];
+  noveltyFailureSlots: NoveltyFailureSlotDto[];
+  candidatePreviews: Record<string, string | null>;
+}> {
+  const all = await listCandidates(scope, projectId);
+  const { visibleCandidates, failureSlots } = partitionBoardCandidates(all);
+  const candidatePreviews = await signPreviewsForVisibleCandidates(
+    scope,
+    projectId,
+    visibleCandidates,
+  );
+  return {
+    candidates: visibleCandidates,
+    noveltyFailureSlots: failureSlots,
+    candidatePreviews,
+  };
 }
 
 export async function listCandidatesForProject(
   scope: WorkspaceScope,
   projectId: string,
 ) {
-  return listCandidates(scope, projectId);
+  // Board-facing listing: never return non-visible novelty candidates as cards.
+  const board = await listCandidateBoardPayload(scope, projectId);
+  return board.candidates;
 }
 
 export async function getCandidate(scope: WorkspaceScope, id: string) {
@@ -1562,6 +1664,15 @@ export async function updateCandidateReview(
   }
 
   if (patch.status === "shortlisted") {
+    if (
+      candidate.status === "novelty_failed" ||
+      candidate.status === "novelty_blocked"
+    ) {
+      throw new PersonaDomainError(
+        "Novelty-blocked or failed candidates cannot be shortlisted.",
+        "WORKFLOW",
+      );
+    }
     if (!["ready", "archived"].includes(candidate.status)) {
       throw new PersonaDomainError(
         "Nur bereite Kandidaten können auf die Shortlist.",
@@ -1613,6 +1724,15 @@ export async function updateCandidateReview(
     if (candidate.status === "rejected") {
       throw new PersonaDomainError(
         "Abgelehnte Kandidaten müssen zuerst wiederhergestellt werden.",
+        "WORKFLOW",
+      );
+    }
+    if (
+      candidate.status === "novelty_failed" ||
+      candidate.status === "novelty_blocked"
+    ) {
+      throw new PersonaDomainError(
+        "Novelty-blocked or failed candidates cannot be selected.",
         "WORKFLOW",
       );
     }
@@ -1668,6 +1788,15 @@ export async function listCandidateAssetViews(
   scope: WorkspaceScope,
   candidateId: string,
 ): Promise<PersonaCandidateAssetView[]> {
+  const candidate = await requireCandidate(scope, candidateId);
+  // Fail-closed: never return signed image URLs for novelty failed/blocked faces.
+  if (
+    candidate.status === "novelty_failed" ||
+    candidate.status === "novelty_blocked"
+  ) {
+    return [];
+  }
+
   const assets = await creationRepo().listCandidateAssets(scope, candidateId);
   const views: PersonaCandidateAssetView[] = [];
   for (const asset of assets) {
@@ -1689,15 +1818,13 @@ export async function listCandidateAssetViews(
   return views;
 }
 
-/** Primary portrait signed URLs for the candidate board (additive API field). */
-export async function listCandidateBoardPreviews(
+async function signPreviewsForVisibleCandidates(
   scope: WorkspaceScope,
   projectId: string,
+  visibleCandidates: PersonaCandidate[],
 ): Promise<Record<string, string | null>> {
-  const candidates = await creationRepo().listCandidates(scope, projectId);
-  assertCandidatesBelongToProject(candidates, projectId);
   const previews: Record<string, string | null> = {};
-  for (const candidate of candidates) {
+  for (const candidate of visibleCandidates) {
     previews[candidate.id] = null;
     if (!candidate.primary_preview_asset_id) continue;
     try {
@@ -1717,6 +1844,15 @@ export async function listCandidateBoardPreviews(
     }
   }
   return previews;
+}
+
+/** Primary portrait signed URLs for the candidate board (additive API field). */
+export async function listCandidateBoardPreviews(
+  scope: WorkspaceScope,
+  projectId: string,
+): Promise<Record<string, string | null>> {
+  const board = await listCandidateBoardPayload(scope, projectId);
+  return board.candidatePreviews;
 }
 
 export async function uploadManualCandidateAsset(

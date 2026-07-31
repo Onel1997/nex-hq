@@ -269,7 +269,11 @@ describe("7. startup validation", () => {
 
   it("model weights are present", async () => {
     const report = await runFaceNoveltyStartupValidation();
-    assert.ok(report.modelWeightsPresent, "Face model weights must be present in @vladmandic/face-api/model/");
+    assert.ok(report.modelWeightsPresent, "Face model weights must be present in server-assets/face-api-models/");
+    assert.ok(
+      report.modelsDirectory.includes("server-assets"),
+      "startup validation must use application-owned model directory",
+    );
   });
 
   it("evaluator module is reachable", async () => {

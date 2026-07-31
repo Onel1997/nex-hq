@@ -21,6 +21,7 @@ export type ProjectCandidateState = {
   assets: PersonaCandidateAsset[];
   loadedAt: string;
   candidatePreviews: Record<string, string | null>;
+  noveltyFailureSlots: import("@/lib/persona/face-novelty-memory/board-visibility").NoveltyFailureSlotDto[];
   generationJobs: PersonaGenerationJob[];
   incidentSummary: IncidentProjectSummary | null;
 };
@@ -162,6 +163,7 @@ export function buildProjectCandidateState(input: {
   candidates: PersonaCandidate[];
   assets?: PersonaCandidateAsset[];
   candidatePreviews?: Record<string, string | null>;
+  noveltyFailureSlots?: import("@/lib/persona/face-novelty-memory/board-visibility").NoveltyFailureSlotDto[];
   generationJobs?: PersonaGenerationJob[];
   incidentSummary?: IncidentProjectSummary | null;
 }): ProjectCandidateState {
@@ -183,6 +185,7 @@ export function buildProjectCandidateState(input: {
       assets: [],
       loadedAt: new Date().toISOString(),
       candidatePreviews: {},
+      noveltyFailureSlots: [],
       generationJobs: input.generationJobs ?? [],
       incidentSummary: input.incidentSummary ?? null,
     };
@@ -193,6 +196,7 @@ export function buildProjectCandidateState(input: {
     assets: input.assets ?? [],
     loadedAt: new Date().toISOString(),
     candidatePreviews: input.candidatePreviews ?? {},
+    noveltyFailureSlots: input.noveltyFailureSlots ?? [],
     generationJobs: input.generationJobs ?? [],
     incidentSummary: input.incidentSummary ?? null,
   };

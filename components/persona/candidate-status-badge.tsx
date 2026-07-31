@@ -14,6 +14,8 @@ const STATUS_LABEL: Record<string, string> = {
   failed: "FAILED",
   archived: "ARCHIVED",
   identity_validation_failed: "IDENTITY FAIL",
+  novelty_blocked: "NOVELTY BLOCKED",
+  novelty_failed: "NOVELTY FAILED",
 };
 
 export function candidateStatusLabel(status: CandidateStatus | string): string {
@@ -29,7 +31,10 @@ export function candidateStatusTone(status: CandidateStatus | string): PersonaCh
     case "selected":
       return "selected";
     case "rejected":
+    case "novelty_blocked":
       return "rejected";
+    case "novelty_failed":
+      return "muted";
     case "needs_manual_references":
       return "reference";
     case "generating":

@@ -37,10 +37,12 @@ import { PersonaGenerationExperience } from "@/components/persona/persona-genera
 import { BrandArchetypeCastPanel } from "@/components/persona/brand-archetype-cast-panel";
 import { OfficialBrandFaceMilestonePanel } from "@/components/persona/official-brand-face-milestone-panel";
 import { OfficialBrandFaceCastingView } from "@/components/persona/official-brand-face-casting-view";
+import { FaceNoveltyLiveCheckPanel } from "@/components/persona/face-novelty-live-check-panel";
 import { ReferenceBoardsPanel } from "@/components/persona/reference-boards-panel";
 import { PersonaStatusChip } from "@/components/persona/persona-status-chip";
 import {
   CandidateBoardCard,
+  NoveltyFailureSlotCard,
   rankCandidatesForBoard,
   CandidateComparePanel,
   CandidateDetailGallery,
@@ -65,6 +67,7 @@ import {
   projectScopedCandidatesCacheKey,
   resolvePreviewUrlForCandidate,
 } from "@/components/persona/persona-studio-project-sync";
+import { redactAssetPathForDebug, assertNoSignedUrlLeakage } from "@/lib/persona/face-novelty-memory/safe-debug-redact";
 import {
   logCandidateRenderForensics,
   resolveGenerationSource,
@@ -1542,30 +1545,47 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     generationSource,
   ]);
 
+  const failureSlots = useMemo(
+    () => studio.projectCandidateState?.noveltyFailureSlots ?? [],
+    [studio.projectCandidateState?.noveltyFailureSlots],
+  );
+
   const debugPayload = useMemo(
-    () => ({
-      ACTIVE_PROJECT: studio.selectedProjectId,
-      LOADED_STATE_PROJECT: studio.projectCandidateState?.projectId ?? null,
-      CANDIDATE_COUNT: visibleCandidates.length,
-      CANDIDATE_IDS: visibleCandidates.map((c) => c.id),
-      ASSET_IDS: visibleCandidates.map((c) => c.primary_preview_asset_id),
-      ASSET_PATHS: visibleCandidates.map((c) =>
-        resolvePreviewUrlForCandidate({
-          projectId: studio.selectedProjectId ?? "",
-          candidate: c,
-          previews: studio.candidatePreviews,
-        }),
-      ),
-      GENERATION_RUN_ID: studio.generationJobs[0]?.id ?? null,
-      GENERATION_SOURCE: generationSource,
-      GENERATION_STARTED_AT: studio.generationJobs[0]?.started_at ?? null,
-      CANDIDATES_CREATED_AT: visibleCandidates.map((c) => c.created_at),
-    }),
+    () => {
+      const payload = {
+        ACTIVE_PROJECT: studio.selectedProjectId,
+        LOADED_STATE_PROJECT: studio.projectCandidateState?.projectId ?? null,
+        CANDIDATE_COUNT: visibleCandidates.length,
+        CANDIDATE_IDS: visibleCandidates.map((c) => c.id),
+        ASSET_IDS: visibleCandidates.map((c) => c.primary_preview_asset_id),
+        // Never include signed storage URLs in copied debug.
+        ASSET_PATHS: visibleCandidates.map((c) =>
+          redactAssetPathForDebug(
+            // Prefer asset id + redacted key hint — never preview signed URL.
+            c.primary_preview_asset_id
+              ? `asset:${c.primary_preview_asset_id}`
+              : null,
+          ),
+        ),
+        FAILURE_SLOTS: failureSlots.map((s) => ({
+          slot: s.slot,
+          candidateId: s.candidateId,
+          status: s.status,
+          reason: s.reason,
+        })),
+        GENERATION_RUN_ID: studio.generationJobs[0]?.id ?? null,
+        GENERATION_SOURCE: generationSource,
+        GENERATION_STARTED_AT: studio.generationJobs[0]?.started_at ?? null,
+        CANDIDATES_CREATED_AT: visibleCandidates.map((c) => c.created_at),
+      };
+      assertNoSignedUrlLeakage(JSON.stringify(payload));
+      return payload;
+    },
     [
       studio.selectedProjectId,
       studio.projectCandidateState?.projectId,
       visibleCandidates,
-      studio.candidatePreviews,
+      failureSlots,
       studio.generationJobs,
       generationSource,
     ],
@@ -1688,6 +1708,13 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         </details>
       ) : null}
 
+      {studio.selectedProjectId ? (
+        <FaceNoveltyLiveCheckPanel
+          projectId={studio.selectedProjectId}
+          candidates={visibleCandidates}
+        />
+      ) : null}
+
       {diversityWarning && !integrityMismatch ? (
         <div className="ps-callout ps-callout-warn">
           <p>
@@ -1697,7 +1724,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         </div>
       ) : null}
 
-      {!studio.projectDetailLoading && !integrityMismatch && visibleCandidates.length === 0 ? (
+      {!studio.projectDetailLoading && !integrityMismatch && visibleCandidates.length === 0 && failureSlots.length === 0 ? (
         <EmptyState
           title="No candidates exist for this project."
           body={
@@ -1710,6 +1737,46 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             candidatesInSync ? () => studio.setSection("creation_projects") : undefined
           }
         />
+      ) : null}
+
+      {!studio.projectDetailLoading && !integrityMismatch && failureSlots.length > 0 ? (
+        <div className="ps-ci-grid" style={{ marginBottom: "1rem" }}>
+          {failureSlots.map((slot) => (
+            <NoveltyFailureSlotCard
+              key={slot.candidateId}
+              slot={slot}
+              onRetryEvaluation={
+                process.env.NODE_ENV !== "production"
+                  ? async () => {
+                      setError(null);
+                      try {
+                        const res = await fetch(
+                          `/api/persona/creation-projects/${studio.selectedProjectId}/novelty-debug`,
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "retry_evaluation",
+                              candidateId: slot.candidateId,
+                            }),
+                          },
+                        );
+                        const data = (await res.json()) as { error?: string };
+                        if (!res.ok) throw new Error(data.error ?? "Retry evaluation failed");
+                        if (studio.selectedProjectId) {
+                          await studio.loadProject(studio.selectedProjectId, {
+                            openCandidates: true,
+                          });
+                        }
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Retry failed");
+                      }
+                    }
+                  : undefined
+              }
+            />
+          ))}
+        </div>
       ) : null}
 
       {!studio.projectDetailLoading && !integrityMismatch && rankedBoard.length > 0 ? (

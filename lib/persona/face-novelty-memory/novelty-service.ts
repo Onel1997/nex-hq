@@ -17,7 +17,25 @@ import { evaluateDiscoveryNovelty, type NoveltyPolicyInput } from "./novelty-pol
 import { resolveFaceSimilarityEvaluator } from "./face-similarity-adapter";
 import { NOVELTY_REPLACEMENT_POLICY } from "./types";
 import type { EmbeddingRepository } from "./embedding-repository";
-import { FACE_SIMILARITY_THRESHOLD_VERSION, FACE_SIMILARITY_EVALUATOR_VERSION } from "./similarity-threshold";
+import {
+  FACE_SIMILARITY_THRESHOLD_VERSION,
+  FACE_SIMILARITY_EVALUATOR_VERSION,
+  FACE_SIMILARITY_EMBEDDING_DIMENSION,
+  FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD,
+  FACE_SIMILARITY_EUCLIDEAN_WARNING_THRESHOLD,
+  FACE_SIMILARITY_MODEL,
+} from "./similarity-threshold";
+import { resolveEvaluatorFailureMode } from "./local-face-embedding-evaluator";
+import {
+  buildSafeFaceNoveltyLiveDebug,
+  isPersonaFaceNoveltyDebugEnabled,
+  type SafeFaceNoveltyLiveDebug,
+} from "./live-debug";
+import type { LiveDiagnosticStore } from "./diagnostic-store";
+import {
+  resolveNoveltyCandidateStatus,
+  type NoveltyVisibilityDecision,
+} from "./visibility-assertion";
 
 export const NOVELTY_REPLACEMENT_CONFIRMATION_MESSAGE =
   "Candidate rejected by novelty protection. Confirm replacement generation.";
@@ -137,6 +155,23 @@ export interface CandidateNoveltyCheck {
   similarity?: number;
   /** Whether evaluator returned a warning (possible near-duplicate). */
   isWarning?: boolean;
+  /** Final visibility decision after fail_closed mapping. */
+  finalDecision: NoveltyVisibilityDecision;
+  /** Candidate status that must be persisted (ready / novelty_blocked / novelty_failed). */
+  candidateStatus: import("../domain/creation-types").CandidateStatus;
+  /** Safe debug DTO — only populated when PERSONA_FACE_NOVELTY_DEBUG is on in development. */
+  liveDebug?: SafeFaceNoveltyLiveDebug;
+  evaluationStatus?: "performed" | "not_available";
+  faceCount?: number;
+  detectionConfidence?: number;
+  embeddingStatus?: "created" | "reused" | "missing";
+  embeddingDimension?: number;
+  priorEmbeddingsCompared?: number;
+  closestPriorAssetId?: string;
+  evaluationDurationMs?: number;
+  evaluatedAt?: string;
+  comparisonExecuted?: boolean;
+  evaluatorActive?: boolean;
 }
 
 export interface CheckCandidateOptions {
@@ -144,6 +179,14 @@ export interface CheckCandidateOptions {
   evaluator?: FaceSimilarityEvaluator;
   /** Embedding repository for persisting/loading face vectors (server-only). */
   embeddingRepo?: EmbeddingRepository;
+  /** Diagnostic store for non-sensitive live evidence (survives refresh). */
+  diagnosticStore?: LiveDiagnosticStore;
+  /** Prior embedding count loaded into the evaluator. */
+  priorEmbeddingsLoaded?: number;
+  /** Candidate slot number for debug UI. */
+  slot?: number;
+  /** Whether LocalFaceEmbeddingEvaluator (or live equivalent) is active. */
+  evaluatorActive?: boolean;
 }
 
 /**
@@ -166,9 +209,16 @@ export async function checkAndRegisterCandidate(
   input: RegisterCandidateInput,
   options?: CheckCandidateOptions,
 ): Promise<CandidateNoveltyCheck> {
+  const startedAt = Date.now();
+  const evaluatedAt = new Date().toISOString();
+
   // Prefer injected evaluator (e.g. LocalFaceEmbeddingEvaluator with prior embeddings loaded)
   // over the null fallback from the adapter.
   const evaluator = options?.evaluator ?? resolveFaceSimilarityEvaluator();
+  const evaluatorActive =
+    options?.evaluatorActive ??
+    (evaluator.constructor?.name === "LocalFaceEmbeddingEvaluator" ||
+      (evaluator as { method?: string }).method === "local-face-embedding-v1");
 
   const policyInput: NoveltyPolicyInput = {
     candidateId: input.candidateId,
@@ -195,12 +245,28 @@ export async function checkAndRegisterCandidate(
   const detectionConfidence = rawResult?._detectionConfidence as number | undefined;
   const faceCount = rawResult?._faceCount as number | undefined;
   const detectionStatus = rawResult?._detectionStatus as string | undefined;
+  const safeErrorCode = rawResult?._safeErrorCode as string | undefined;
+  const safeErrorMessage = rawResult?._safeErrorMessage as string | undefined;
   const isWarning = rawResult?._isWarning as boolean | undefined;
   const thresholdVersion = rawResult?._thresholdVersion as string | undefined;
+  const closestPriorAssetId =
+    (rawResult?._closestMatchAssetId as string | undefined) ??
+    evaluation.faceSimilarity?.closestMatchAssetId;
+  const closestPriorCandidateId =
+    evaluation.closestPriorCandidateId ??
+    (rawResult?._closestMatchCandidateId as string | undefined);
+  const priorCompared =
+    options?.priorEmbeddingsLoaded ?? history.priorAssetReferences.length;
+  const comparisonExecuted =
+    evaluation.faceSimilarity?.status === "performed" && priorCompared > 0;
+  const evaluationStatus = evaluation.faceSimilarity?.status;
 
   // Register the candidate regardless of result so the failed attempt is
   // recorded safely (never lost).
   const record = await registerGeneratedCandidate(repo, input);
+
+  let embeddingStatus: "created" | "reused" | "missing" = "missing";
+  let embeddingDimension: number | undefined;
 
   // Persist embedding if extracted — once per record, never re-extracted.
   if (embeddingVector && embeddingVector.length > 0 && options?.embeddingRepo) {
@@ -220,7 +286,15 @@ export async function checkAndRegisterCandidate(
           : (detectionStatus ?? "unavailable")) as import("./similarity-threshold").FaceDetectionStatus,
         similarityThresholdVersion: thresholdVersion ?? FACE_SIMILARITY_THRESHOLD_VERSION,
       });
+      embeddingStatus = "created";
+      embeddingDimension = embeddingVector.length;
+    } else {
+      embeddingStatus = "reused";
+      embeddingDimension = embeddingVector.length;
     }
+  } else if (evaluationStatus === "performed") {
+    embeddingStatus = embeddingVector ? "created" : "missing";
+    embeddingDimension = embeddingVector?.length;
   }
 
   if (evaluation.hardReject) {
@@ -233,23 +307,101 @@ export async function checkAndRegisterCandidate(
   const isFaceSimilarityReject =
     evaluation.hardRejectReason === "face_similarity_duplicate";
 
-  return {
-    recordId: record.id,
+  const statusResult = resolveNoveltyCandidateStatus({
     hardReject: evaluation.hardReject,
     hardRejectReason: evaluation.hardRejectReason,
     softWarning: evaluation.softWarning,
     softWarningReason: evaluation.softWarningReason,
-    requiresReplacementConfirmation: evaluation.hardReject,
-    replacementMessage: evaluation.hardReject
-      ? isFaceSimilarityReject
+    evaluationStatus,
+    detectionStatus:
+      detectionStatus ??
+      (evaluationStatus === "performed" ? "performed" : undefined),
+    evaluatorActive,
+  });
+
+  const evaluationDurationMs = Date.now() - startedAt;
+  const effectiveHardReject =
+    evaluation.hardReject || statusResult.finalDecision !== "allowed";
+  const effectiveHardRejectReason =
+    statusResult.hardRejectReason ?? evaluation.hardRejectReason;
+
+  const liveDebugBase = buildSafeFaceNoveltyLiveDebug({
+    evaluatorStatus: evaluatorActive ? "active" : "failed",
+    evaluatorModel: FACE_SIMILARITY_MODEL,
+    evaluatorVersion: FACE_SIMILARITY_EVALUATOR_VERSION,
+    failureMode: resolveEvaluatorFailureMode(),
+    thresholdVersion: thresholdVersion ?? FACE_SIMILARITY_THRESHOLD_VERSION,
+    duplicateThreshold: FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD,
+    warningThreshold: FACE_SIMILARITY_EUCLIDEAN_WARNING_THRESHOLD,
+    priorEmbeddingsLoaded: priorCompared,
+    comparisonExecuted,
+    faceDetectionStatus:
+      detectionStatus ??
+      (evaluationStatus === "performed" ? "performed" : evaluationStatus),
+    faceCount,
+    detectionConfidence,
+    embeddingStatus,
+    embeddingDimension:
+      embeddingDimension ??
+      (embeddingStatus !== "missing" ? FACE_SIMILARITY_EMBEDDING_DIMENSION : undefined),
+    closestPriorCandidateId,
+    closestPriorAssetId,
+    similarity: evaluation.faceSimilarity?.similarity,
+    finalDecision: statusResult.finalDecision,
+    hardRejectReason: effectiveHardRejectReason,
+    requiresReplacementConfirmation: statusResult.requiresReplacementConfirmation,
+    evaluationDurationMs,
+    evaluatedAt,
+    slot: options?.slot,
+    candidateId: input.candidateId,
+    assetId: input.assetId,
+    candidateProjectId: input.creationProjectId,
+    evaluatorActive,
+    duplicateDecision: isFaceSimilarityReject || evaluation.hardRejectReason === "exact_checksum",
+    safeErrorCode,
+    safeErrorMessage,
+  });
+
+  // Always persist non-sensitive evidence so refresh survives — no embedding vectors.
+  if (options?.diagnosticStore) {
+    await options.diagnosticStore.saveEvidence(record.id, input.workspaceId, liveDebugBase);
+  }
+
+  const liveDebug = isPersonaFaceNoveltyDebugEnabled() ? liveDebugBase : undefined;
+
+  return {
+    recordId: record.id,
+    hardReject: effectiveHardReject,
+    hardRejectReason: effectiveHardRejectReason,
+    softWarning: effectiveHardReject ? false : evaluation.softWarning,
+    softWarningReason: effectiveHardReject ? undefined : evaluation.softWarningReason,
+    requiresReplacementConfirmation: statusResult.requiresReplacementConfirmation,
+    replacementMessage: effectiveHardReject
+      ? isFaceSimilarityReject || effectiveHardRejectReason === "face_similarity_duplicate"
         ? FACE_SIMILARITY_REPLACEMENT_CONFIRMATION_MESSAGE
         : NOVELTY_REPLACEMENT_CONFIRMATION_MESSAGE
       : undefined,
-    closestPriorCandidateId: evaluation.closestPriorCandidateId,
+    closestPriorCandidateId,
     evaluatorMethod: evaluation.evaluatorMethod,
-    detectionStatus: detectionStatus,
+    detectionStatus:
+      detectionStatus ??
+      (evaluationStatus === "performed" ? "performed" : evaluationStatus),
     similarity: evaluation.faceSimilarity?.similarity,
     isWarning,
+    finalDecision: statusResult.finalDecision,
+    candidateStatus: statusResult.status,
+    liveDebug,
+    evaluationStatus,
+    faceCount,
+    detectionConfidence,
+    embeddingStatus,
+    embeddingDimension: liveDebugBase.embeddingDimension,
+    priorEmbeddingsCompared: priorCompared,
+    closestPriorAssetId,
+    evaluationDurationMs,
+    evaluatedAt,
+    comparisonExecuted,
+    evaluatorActive,
   };
 }
 

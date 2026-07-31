@@ -1,10 +1,12 @@
 import { requirePersonaScope, jsonOk, jsonError, dict } from "../../../_utils";
 import {
-  listCandidatesForProject,
+  listCandidateBoardPayload,
   listGenerationJobsForProject,
 } from "@/lib/persona/creation/creation-service";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+export const runtime = "nodejs";
 
 /** Project-scoped candidate retrieval — never returns cross-project rows. */
 export async function GET(_request: Request, ctx: Ctx) {
@@ -17,11 +19,13 @@ export async function GET(_request: Request, ctx: Ctx) {
   }
 
   try {
-    const candidates = await listCandidatesForProject(gate.scope, projectId);
+    const board = await listCandidateBoardPayload(gate.scope, projectId);
     const jobs = await listGenerationJobsForProject(gate.scope, projectId);
     return jsonOk({
       projectId,
-      candidates,
+      candidates: board.candidates,
+      noveltyFailureSlots: board.noveltyFailureSlots,
+      candidatePreviews: board.candidatePreviews,
       jobs,
       cache: "no-store",
     });

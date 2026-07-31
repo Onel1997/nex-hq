@@ -13,6 +13,8 @@ import type { CandidateAssetType } from "@/lib/persona/domain/creation-types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+export const runtime = "nodejs";
+
 export async function GET(_request: Request, ctx: Ctx) {
   const gate = await requirePersonaScope();
   if (!gate.ok) return gate.response;
@@ -21,7 +23,12 @@ export async function GET(_request: Request, ctx: Ctx) {
   try {
     const candidate = await getCandidate(gate.scope, id);
     const assets = await listCandidateAssetViews(gate.scope, id);
-    return jsonOk({ candidate, assets });
+    // Fail-closed: strip primary preview id from board-facing payload when novelty blocked/failed.
+    const safeCandidate =
+      candidate.status === "novelty_failed" || candidate.status === "novelty_blocked"
+        ? { ...candidate, primary_preview_asset_id: null }
+        : candidate;
+    return jsonOk({ candidate: safeCandidate, assets });
   } catch (error) {
     return jsonError(error, dict.persona.errors.unexpected);
   }

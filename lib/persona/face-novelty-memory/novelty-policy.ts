@@ -8,9 +8,11 @@
  *   - identity fingerprint already consumed in a prior run
  *   - candidate asset belongs to an old project (cross-project reuse guard)
  *   - real face evaluator marks it duplicate (when available)
+ *   - under fail_closed: live evaluator detection failures / errors
  *
  * Soft warning only:
- *   - face evaluator is not available (not_available)
+ *   - null/adapter evaluator is not available (method "none")
+ *   - fail_open_with_warning mode for detection failures
  *   - metadata suggests closely reused identity recipe
  *
  * The Candidate Board must never display hard-rejected candidates.
@@ -23,6 +25,8 @@ import type {
   NoveltyEvaluation,
 } from "./types";
 import { detectImageDuplicate } from "./image-duplicate-detection";
+import { resolveEvaluatorFailureMode } from "./local-face-embedding-evaluator";
+import { FAIL_CLOSED_BLOCKING_DETECTION_STATUSES } from "./visibility-assertion";
 
 export interface NoveltyPolicyInput {
   candidateId: string;
@@ -85,11 +89,12 @@ export async function evaluateDiscoveryNovelty(
     }
   }
 
-  // 4. Face-similarity evaluation (real biometric layer — will be not_available
-  //    until a real provider is wired).
+  // 4. Face-similarity evaluation (real biometric layer).
   // Always invoke the evaluator when present so embedding extraction can be
   // persisted even for the very first candidate (no priors yet).
   let faceSimilarityResult = undefined;
+  const failureMode = resolveEvaluatorFailureMode();
+
   if (faceSimilarityEvaluator) {
     try {
       faceSimilarityResult = await faceSimilarityEvaluator.evaluate({
@@ -97,9 +102,29 @@ export async function evaluateDiscoveryNovelty(
         comparisonAssets: history.priorAssetReferences,
       });
       evaluatorMethod = faceSimilarityResult.method;
+      const raw = faceSimilarityResult as FaceSimilarityResultWithSideChannel;
+      const detectionStatus = raw._detectionStatus as string | undefined;
+
       if (faceSimilarityResult.status === "not_available") {
-        // Honest soft warning — cannot confirm visual uniqueness.
-        if (!hardReject) {
+        const isLiveLocalEvaluator = evaluatorMethod === "local-face-embedding-v1";
+        const blockingDetection =
+          detectionStatus != null &&
+          FAIL_CLOSED_BLOCKING_DETECTION_STATUSES.has(detectionStatus);
+
+        if (
+          failureMode === "fail_closed" &&
+          isLiveLocalEvaluator &&
+          (blockingDetection || !detectionStatus)
+        ) {
+          if (!hardReject) {
+            hardReject = true;
+            hardRejectReason =
+              detectionStatus === "error"
+                ? "face_similarity_evaluator_error"
+                : detectionStatus ?? "unavailable";
+          }
+        } else if (!hardReject) {
+          // Honest soft warning — null adapter or fail_open mode.
           softWarning = true;
           softWarningReason =
             "face_similarity_evaluator_not_available — cannot confirm visual novelty; image-level checks passed only";
@@ -107,11 +132,31 @@ export async function evaluateDiscoveryNovelty(
       } else if (faceSimilarityResult.isDuplicate && !hardReject) {
         hardReject = true;
         hardRejectReason = "face_similarity_duplicate";
-        closestPriorCandidateId = faceSimilarityResult.closestMatchAssetId;
+        closestPriorCandidateId =
+          (raw._closestMatchCandidateId as string | undefined) ??
+          faceSimilarityResult.closestMatchAssetId;
       }
-    } catch {
-      softWarning = true;
-      softWarningReason = "face_similarity_evaluator_error";
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      const safeMessage = raw
+        .replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+/g, "[redacted-data-url]")
+        .replace(/https?:\/\/[^\s]+/g, "[redacted-url]")
+        .replace(/\?token=[^\s&]+/g, "?token=[redacted]")
+        .slice(0, 400);
+      faceSimilarityResult = {
+        status: "not_available",
+        method: (faceSimilarityEvaluator as { method?: string }).method ?? "unknown",
+        _detectionStatus: "error",
+        _safeErrorCode: "face_similarity_evaluator_error",
+        _safeErrorMessage: safeMessage,
+      } as NoveltyEvaluation["faceSimilarity"] & Record<string, unknown>;
+      if (failureMode === "fail_closed" && !hardReject) {
+        hardReject = true;
+        hardRejectReason = "face_similarity_evaluator_error";
+      } else {
+        softWarning = true;
+        softWarningReason = "face_similarity_evaluator_error";
+      }
     }
   } else if (!hardReject) {
     // No evaluator available.
@@ -137,3 +182,8 @@ export async function evaluateDiscoveryNovelty(
     evaluatorVersion,
   };
 }
+
+type FaceSimilarityResultWithSideChannel = NonNullable<
+  NoveltyEvaluation["faceSimilarity"]
+> &
+  Record<string, unknown>;

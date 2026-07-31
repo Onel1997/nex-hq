@@ -136,6 +136,28 @@ export async function createPersonaCandidateSignedUrl(
   return createPersonaReferenceSignedUrl(storagePath, expiresIn);
 }
 
+/** Download private candidate asset bytes — server-only; never logs contents. */
+export async function downloadPersonaCandidateBytes(
+  storagePath: string,
+): Promise<Buffer> {
+  await ensurePersonaReferencesBucket();
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.storage
+    .from(PERSONA_REFERENCES_BUCKET)
+    .download(storagePath);
+
+  if (error || !data) {
+    throw new PersonaDomainError(
+      `Download fehlgeschlagen: ${error?.message ?? "unknown"}`,
+      "STORAGE_UPLOAD_FAILED",
+      { storagePath },
+    );
+  }
+
+  const arrayBuffer = await data.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 /** Copy/link candidate object into persona reference path (same private bucket). */
 export async function copyCandidateAssetToPersonaReference(params: {
   sourceStoragePath: string;

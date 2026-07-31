@@ -8,8 +8,7 @@ import {
   getCreationProject,
   getCreationProviderSetup,
   getIncidentProjectSummary,
-  listCandidateBoardPreviews,
-  listCandidates,
+  listCandidateBoardPayload,
   listGenerationJobsForProject,
   preparePaidGenerationConfirmation,
   updateCreationProject,
@@ -17,6 +16,8 @@ import {
 import { getQualityModeProfile } from "@/lib/persona/creation/quality-modes";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+export const runtime = "nodejs";
 
 const PATCH_ACTIONS = new Set([
   "estimate",
@@ -56,11 +57,17 @@ export async function GET(_request: Request, ctx: Ctx) {
       const incident = await getIncidentProjectSummary(gate.scope, id);
       return jsonOk({ project, incident });
     }
-    const candidates = await listCandidates(gate.scope, id);
+    const board = await listCandidateBoardPayload(gate.scope, id);
     const jobs = await listGenerationJobsForProject(gate.scope, id);
     const incident = await getIncidentProjectSummary(gate.scope, id);
-    const candidatePreviews = await listCandidateBoardPreviews(gate.scope, id);
-    return jsonOk({ project, candidates, jobs, incident, candidatePreviews });
+    return jsonOk({
+      project,
+      candidates: board.candidates,
+      noveltyFailureSlots: board.noveltyFailureSlots,
+      jobs,
+      incident,
+      candidatePreviews: board.candidatePreviews,
+    });
   } catch (error) {
     return jsonError(error, dict.persona.errors.unexpected);
   }

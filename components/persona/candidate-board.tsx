@@ -329,6 +329,51 @@ export function CandidateBoardCard({
   );
 }
 
+export function NoveltyFailureSlotCard({
+  slot,
+  onRetryEvaluation,
+}: {
+  slot: import("@/lib/persona/face-novelty-memory/board-visibility").NoveltyFailureSlotDto;
+  onRetryEvaluation?: () => void | Promise<void>;
+}) {
+  const isBlocked = slot.status === "novelty_blocked";
+  return (
+    <div className="ps-ci-card" data-novelty-slot={slot.status}>
+      <div className="ps-ci-card-hero">
+        <div className="ps-ci-card-hero-empty">
+          {isBlocked ? "Blocked slot" : "Failed slot"}
+        </div>
+      </div>
+      <div className="ps-ci-card-body">
+        <strong>Candidate {["A", "B", "C", "D"][slot.slot - 1] ?? slot.slot}</strong>
+        <p className="ps-muted" style={{ marginTop: "0.5rem" }}>
+          {isBlocked
+            ? "Candidate blocked by face novelty protection."
+            : "Face novelty evaluation failed. No candidate was shown."}
+        </p>
+        <p className="ps-muted" style={{ fontSize: "12px" }}>
+          {slot.reason}
+        </p>
+        {isBlocked && slot.requiresReplacementConfirmation ? (
+          <p className="ps-muted" style={{ fontSize: "12px" }}>
+            Replacement generation requires explicit confirmation.
+          </p>
+        ) : null}
+        {onRetryEvaluation ? (
+          <button
+            type="button"
+            className="ps-btn"
+            style={{ marginTop: "0.75rem" }}
+            onClick={() => void onRetryEvaluation()}
+          >
+            Retry Face Evaluation
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 const GALLERY_ORDER: CandidateAssetType[] = [
   "portrait_front",
   "portrait_three_quarter",

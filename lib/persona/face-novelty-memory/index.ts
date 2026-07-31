@@ -66,8 +66,20 @@ export {
   compareEmbeddings,
   LocalFaceEmbeddingEvaluator,
   resolveEvaluatorFailureMode,
+  resetFaceApiModelLoadCacheForTests,
 } from "./local-face-embedding-evaluator";
 export type { FaceExtractionResult, StoredEmbeddingRef, EvaluatorFailureMode } from "./local-face-embedding-evaluator";
+
+export {
+  FACE_API_MODELS_RELATIVE_DIR,
+  REQUIRED_FACE_API_MODEL_FILES,
+  resolveFaceApiModelsDirectory,
+  validateFaceApiModelFiles,
+  assertFaceApiModelsPresent,
+  assertRealFilesystemModelPath,
+  listMissingFaceApiModelFiles,
+} from "./model-assets";
+export type { FaceApiModelValidation } from "./model-assets";
 
 export {
   FACE_SIMILARITY_THRESHOLD_VERSION,
@@ -92,3 +104,78 @@ export { SupabaseEmbeddingRepository } from "./supabase-embedding-repository";
 
 export { runCalibration } from "./calibration";
 export type { CalibrationPair, CalibrationReport } from "./calibration";
+
+// Phase 2.0B.2 — controlled live novelty test mode
+export {
+  PERSONA_FACE_NOVELTY_DEBUG_ENV,
+  isPersonaFaceNoveltyDebugEnabled,
+  buildSafeFaceNoveltyLiveDebug,
+  buildRunLiveDebug,
+  calculateHistoricalEmbeddingCoverage,
+  buildCopyDebugPayload,
+  stripNoveltyDebugFromCandidateSettings,
+  maybeAttachNoveltyDebugToSettings,
+  assertSafeFaceNoveltyDebugDto,
+} from "./live-debug";
+export {
+  assertNoSignedUrlLeakage,
+  redactAssetPathForDebug,
+} from "./safe-debug-redact";
+export type {
+  SafeFaceNoveltyLiveDebug,
+  FaceNoveltyRunLiveDebug,
+  FaceNoveltyPipelineStatus,
+  HistoricalFaceProtectionSummary,
+  FaceNoveltyCopyDebugPayload,
+} from "./live-debug";
+
+export {
+  resolveNoveltyCandidateStatus,
+  assertCandidateMayBecomeReady,
+  isCandidateVisibleOnBoard,
+  FAIL_CLOSED_BLOCKING_DETECTION_STATUSES,
+  NON_VISIBLE_NOVELTY_STATUSES,
+} from "./visibility-assertion";
+export type {
+  NoveltyVisibilityDecision,
+  NoveltyCandidateStatusResult,
+  ResolveNoveltyCandidateStatusInput,
+} from "./visibility-assertion";
+
+export { runFaceNoveltyPreflight, failingPreflightChecks } from "./preflight";
+export type {
+  FaceNoveltyPreflightCheck,
+  FaceNoveltyPreflightReport,
+  PreflightHistoryCounts,
+} from "./preflight";
+
+export { MemoryLiveDiagnosticStore } from "./diagnostic-store";
+export type { LiveDiagnosticStore, LiveEvaluationEvidence } from "./diagnostic-store";
+export { SupabaseLiveDiagnosticStore } from "./supabase-diagnostic-store";
+
+export { runFaceNoveltyStartupValidation } from "./startup-validation";
+export type { FaceNoveltyStartupReport } from "./startup-validation";
+
+export {
+  buildLiveFaceEvaluator,
+  assertLiveFaceEvaluatorNotNull,
+} from "./live-evaluator";
+export type { LiveEvaluatorConfig } from "./live-evaluator";
+
+export {
+  partitionBoardCandidates,
+  isNoveltyBoardVisible,
+  toNoveltyFailureSlot,
+  canSelectCandidateOnBoard,
+} from "./board-visibility";
+export type {
+  NoveltyFailureSlotDto,
+  NoveltyFailureSlotStatus,
+  BoardCandidatePartition,
+} from "./board-visibility";
+
+export { retryFaceNoveltyEvaluation } from "./retry-evaluation";
+export type {
+  RetryFaceEvaluationResult,
+  RetryFaceEvaluationDeps,
+} from "./retry-evaluation";
