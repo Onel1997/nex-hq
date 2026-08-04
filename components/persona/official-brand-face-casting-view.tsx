@@ -313,7 +313,7 @@ export function OfficialBrandFaceCastingView({
           creationProjectId: sessionProjectId,
           archetypeId: archetype.id,
           workspaceId: archetype.workspaceId,
-          source: "cached",
+          source: "live_openai",
         });
       }
 

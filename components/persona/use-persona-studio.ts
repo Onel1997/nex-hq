@@ -135,6 +135,8 @@ interface StudioState {
   candidatePreviews: Record<string, string | null>;
   projectCandidateState: ProjectCandidateState | null;
   projectDetailLoading: boolean;
+  /** Server-resolved current completed generation run for the loaded project. */
+  activeGenerationRunId: string | null;
   presets: CreationProjectPreset[];
   providerSetupMessage: string | null;
 }
@@ -184,6 +186,7 @@ export function usePersonaStudio() {
     candidatePreviews: {},
     projectCandidateState: null,
     projectDetailLoading: false,
+    activeGenerationRunId: null,
     presets: [],
     providerSetupMessage: null,
   });
@@ -332,6 +335,14 @@ export function usePersonaStudio() {
         incident?: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
         candidatePreviews?: Record<string, string | null>;
         noveltyFailureSlots?: import("@/lib/persona/face-novelty-memory/board-visibility").NoveltyFailureSlotDto[];
+        generationRunId?: string | null;
+        freshness?: {
+          creationProjectId: string;
+          generationRunId: string | null;
+          candidateIds: string[];
+          assetIds: (string | null)[];
+          providerJobIds: (string | null)[];
+        };
       };
       if (!res.ok) throw new Error(data.error ?? "Projekt laden fehlgeschlagen");
 
@@ -408,7 +419,7 @@ export function usePersonaStudio() {
           creationProjectId: projectId,
           workspaceId: workspaceIdRef.current,
           candidateIds: projectCandidateState.candidates.map((c) => c.id),
-          source: "cached",
+          source: "live_openai",
         });
       }
 
@@ -431,6 +442,7 @@ export function usePersonaStudio() {
           candidatePreviews: projectCandidateState.candidatePreviews,
           projectCandidateState,
           projectDetailLoading: false,
+          activeGenerationRunId: data.generationRunId ?? null,
           selectedCandidateId: null,
           candidateAssets: [],
           creationProjects: prev.creationProjects.map((p) =>
@@ -518,6 +530,7 @@ export function usePersonaStudio() {
       ...emptyProjectDetailState(),
       projectDetailLoading: true,
       projectCandidateState: null,
+      activeGenerationRunId: null,
     }));
     if (DEBUG_MODE) {
       console.info("[persona-casting] bindDiscoveryProject", {
@@ -526,6 +539,29 @@ export function usePersonaStudio() {
           workspaceIdRef.current ?? "unknown",
           projectId,
         ),
+      });
+    }
+  }, []);
+
+  /** Clears any prior casting project/board so New casting session cannot show old faces. */
+  const startNewCastingSession = useCallback(() => {
+    loadProjectRequestRef.current += 1;
+    loadAbortRef.current?.abort();
+    activeProjectIdRef.current = null;
+    setState((prev) => ({
+      ...prev,
+      selectedProjectId: null,
+      ...emptyProjectDetailState(),
+      projectDetailLoading: false,
+      projectCandidateState: null,
+      activeGenerationRunId: null,
+      section: "creator",
+    }));
+    if (DEBUG_MODE) {
+      logCastingFlowTrace("discovery.new_casting_session", {
+        creationProjectId: "(cleared)",
+        workspaceId: workspaceIdRef.current,
+        source: "unknown",
       });
     }
   }, []);
@@ -965,6 +1001,7 @@ export function usePersonaStudio() {
     refreshCreation,
     loadProject,
     bindDiscoveryProject,
+    startNewCastingSession,
     openCandidatesForProject,
     loadCandidate,
     createProject,

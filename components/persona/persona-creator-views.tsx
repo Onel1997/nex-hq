@@ -1194,7 +1194,7 @@ export function CreationProjectsView({
             Casting sessions with cost control — generation never starts without confirmation.
           </p>
         </div>
-        <button type="button" onClick={() => studio.setSection("creator")}>
+        <button type="button" onClick={() => studio.startNewCastingSession()}>
           New casting session
         </button>
         <button
@@ -1225,7 +1225,7 @@ export function CreationProjectsView({
             title="No casting sessions yet."
             body="Open Brand Face Casting to start A1 Discovery for an official archetype."
             actionLabel="Start casting"
-            onAction={() => studio.setSection("creator")}
+            onAction={() => studio.startNewCastingSession()}
           />
         ) : (
           studio.creationProjects.map((p) => (
@@ -1462,10 +1462,19 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     studio.loadedProjectId === studio.selectedProjectId;
   const visibleCandidates = useMemo(() => {
     if (!candidatesInSync || !studio.projectCandidateState) return [];
-    return studio.projectCandidateState.candidates.filter(
-      (c) => c.creation_project_id === studio.selectedProjectId,
-    );
-  }, [candidatesInSync, studio.projectCandidateState, studio.selectedProjectId]);
+    const runId = studio.activeGenerationRunId;
+    return studio.projectCandidateState.candidates.filter((c) => {
+      if (c.creation_project_id !== studio.selectedProjectId) return false;
+      // Fail-closed: board only renders the current completed generation run.
+      if (!runId) return false;
+      return c.provider_job_id === runId;
+    });
+  }, [
+    candidatesInSync,
+    studio.projectCandidateState,
+    studio.selectedProjectId,
+    studio.activeGenerationRunId,
+  ]);
 
   const boardIntegrity = useMemo(
     () =>
@@ -1474,26 +1483,36 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         stateProjectId: studio.projectCandidateState?.projectId ?? null,
         candidates: visibleCandidates,
         generationRunProjectId:
-          studio.generationJobs[0]?.creation_project_id ?? null,
+          studio.generationJobs.find((j) => j.id === studio.activeGenerationRunId)
+            ?.creation_project_id ??
+          studio.generationJobs.find(
+            (j) => j.status === "completed" || j.status === "partially_completed",
+          )?.creation_project_id ??
+          null,
       }),
     [
       studio.selectedProjectId,
       studio.projectCandidateState?.projectId,
       visibleCandidates,
       studio.generationJobs,
+      studio.activeGenerationRunId,
     ],
   );
 
   const integrityMismatch = !boardIntegrity.ok && visibleCandidates.length > 0;
   const generationSource = useMemo(() => {
-    const job = studio.generationJobs[0];
+    const job =
+      studio.generationJobs.find((j) => j.id === studio.activeGenerationRunId) ??
+      studio.generationJobs.find(
+        (j) => j.status === "completed" || j.status === "partially_completed",
+      );
     if (!job) return "none";
     const payload = job.confirmation_payload as
       | { generationSource?: string }
       | undefined;
     if (payload?.generationSource) return payload.generationSource;
     return resolveGenerationSource(job.provider);
-  }, [studio.generationJobs]);
+  }, [studio.generationJobs, studio.activeGenerationRunId]);
   const rankedBoard = useMemo(
     () => (integrityMismatch ? [] : rankCandidatesForBoard(visibleCandidates)),
     [visibleCandidates, integrityMismatch],
@@ -1543,7 +1562,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
           previews: studio.candidatePreviews,
         }),
         createdAt: c.created_at,
-        generationJobId: studio.generationJobs[0]?.id ?? c.provider_job_id,
+        generationJobId: studio.activeGenerationRunId ?? c.provider_job_id,
         generationSource,
       })),
     );
@@ -1552,7 +1571,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     studio.selectedProjectId,
     studio.projectCandidateState?.projectId,
     studio.candidatePreviews,
-    studio.generationJobs,
+    studio.activeGenerationRunId,
     generationSource,
   ]);
 
@@ -1563,6 +1582,9 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
 
   const debugPayload = useMemo(
     () => {
+      const activeJob =
+        studio.generationJobs.find((j) => j.id === studio.activeGenerationRunId) ??
+        null;
       const payload = {
         ACTIVE_PROJECT: studio.selectedProjectId,
         LOADED_STATE_PROJECT: studio.projectCandidateState?.projectId ?? null,
@@ -1584,10 +1606,11 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
           status: s.status,
           reason: s.reason,
         })),
-        GENERATION_RUN_ID: studio.generationJobs[0]?.id ?? null,
+        GENERATION_RUN_ID: studio.activeGenerationRunId,
         GENERATION_SOURCE: generationSource,
-        GENERATION_STARTED_AT: studio.generationJobs[0]?.started_at ?? null,
+        GENERATION_STARTED_AT: activeJob?.started_at ?? null,
         CANDIDATES_CREATED_AT: visibleCandidates.map((c) => c.created_at),
+        PROVIDER_JOB_IDS: visibleCandidates.map((c) => c.provider_job_id),
       };
       assertNoSignedUrlLeakage(JSON.stringify(payload));
       return payload;
@@ -1598,6 +1621,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
       visibleCandidates,
       failureSlots,
       studio.generationJobs,
+      studio.activeGenerationRunId,
       generationSource,
     ],
   );
@@ -1707,7 +1731,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             </div>
             <div>
               <dt>Provider run</dt>
-              <dd>{studio.generationJobs[0]?.id ?? "—"}</dd>
+              <dd>{studio.activeGenerationRunId ?? "—"}</dd>
             </div>
             <div>
               <dt>Created at</dt>
@@ -1730,15 +1754,31 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
 
       {!studio.projectDetailLoading && !integrityMismatch && visibleCandidates.length === 0 && failureSlots.length === 0 ? (
         <EmptyState
-          title="No candidates exist for this project."
-          body={
-            candidatesInSync
-              ? "This creation project has no project-owned candidates. Start a new discovery generation for this project — never reuse another project's board."
-              : "Select a creation project and wait for it to finish loading before viewing candidates."
+          title={
+            studio.selectedProjectId
+              ? "No candidates exist for this project."
+              : "No active casting session."
           }
-          actionLabel={candidatesInSync ? "Open Creation Projects" : undefined}
+          body={
+            !studio.selectedProjectId
+              ? "Click New casting session, then Start New Discovery and confirm paid generation — the board only shows faces from the current generation run."
+              : candidatesInSync
+                ? "This creation project has no candidates for the current completed generation run. Start a new discovery — never reuse another project's board."
+                : "Select a creation project and wait for it to finish loading before viewing candidates."
+          }
+          actionLabel={
+            !studio.selectedProjectId
+              ? "Start casting"
+              : candidatesInSync
+                ? "Open Creation Projects"
+                : undefined
+          }
           onAction={
-            candidatesInSync ? () => studio.setSection("creation_projects") : undefined
+            !studio.selectedProjectId
+              ? () => studio.startNewCastingSession()
+              : candidatesInSync
+                ? () => studio.setSection("creation_projects")
+                : undefined
           }
         />
       ) : null}

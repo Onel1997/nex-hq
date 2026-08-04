@@ -23,8 +23,10 @@ import {
   assertCandidatesBelongToProject,
   assertLiveCastingProviderNotFake,
   assertUniqueDiscoveryRunIds,
+  filterCandidatesForGenerationRun,
   filterCandidatesForProject,
   projectScopedCandidatesCacheKey,
+  resolveCurrentGenerationRunId,
   resolveGenerationSource,
   validateA1DiscoveryCompletion,
 } from "@/lib/persona/creation/casting-data-integrity";
@@ -385,5 +387,33 @@ describe("Phase 1.8C Casting Data Integrity", () => {
       candidateRow("proj-b", 2),
     ];
     assert.equal(filterCandidatesForProject(rows, "proj-a").length, 1);
+  });
+
+  it("12. resolveCurrentGenerationRunId ignores newer pending_confirmation jobs", () => {
+    const now = new Date().toISOString();
+    const later = new Date(Date.now() + 60_000).toISOString();
+    const runId = resolveCurrentGenerationRunId([
+      {
+        id: "pending-newer",
+        status: "pending_confirmation",
+        created_at: later,
+      },
+      {
+        id: "completed-older",
+        status: "completed",
+        created_at: now,
+      },
+    ]);
+    assert.equal(runId, "completed-older");
+  });
+
+  it("13. board freshness filters candidates to the current generation run only", () => {
+    const runA = candidateRow("proj-1", 1, "cand-old");
+    runA.provider_job_id = "job-old";
+    const runB = candidateRow("proj-1", 2, "cand-new");
+    runB.provider_job_id = "job-new";
+    const filtered = filterCandidatesForGenerationRun([runA, runB], "job-new");
+    assert.equal(filtered.length, 1);
+    assert.equal(filtered[0]!.id, "cand-new");
   });
 });

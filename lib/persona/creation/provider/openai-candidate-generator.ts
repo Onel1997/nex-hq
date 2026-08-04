@@ -373,7 +373,7 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             assetType: item.assetType,
             imageBytes: generated.imageBytes,
             mimeType: "image/png",
-            providerOutputId: null,
+            providerOutputId: generated.providerRequestId ?? null,
             metadata: {
               provider: this.id,
               stage: input.stage,
@@ -384,6 +384,7 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
               variationId: item.variation.id,
               variationLabel: item.variation.label,
               identityLock: built.identityLock,
+              providerRequestId: generated.providerRequestId ?? null,
               discoveryQualityAttempts: genResult.qualityAttempts,
               discoveryQualityFilter: isDiscoveryPortraitWork(
                 castingPhase,

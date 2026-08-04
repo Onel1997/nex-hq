@@ -97,9 +97,11 @@ import {
   assertLiveCastingProviderNotFake,
   appendAssetCacheBust,
   DISCOVERY_NO_NEW_CANDIDATES_MESSAGE,
+  filterCandidatesForGenerationRun,
   filterCandidatesForProject,
   logCastingFlowTrace,
   projectScopedPreviewKey,
+  resolveCurrentGenerationRunId,
   resolveGenerationSource,
   validateA1DiscoveryCompletion,
   type GenerationSource,
@@ -1369,7 +1371,11 @@ export async function confirmAndStartCandidateGeneration(
       project: await requireProject(scope, projectId),
       job,
       durableJob: await jobRepo().getJob(scope, durableJob.id),
-      candidates: await creationRepo().listCandidates(scope, projectId),
+      candidates: filterCandidatesForGenerationRun(
+        await creationRepo().listCandidates(scope, projectId),
+        durableJob.id,
+      ),
+      generationRunId: durableJob.id,
       costLabel: "estimated" as const,
     };
   } catch (error) {
@@ -1673,6 +1679,7 @@ export async function listCandidates(scope: WorkspaceScope, projectId: string) {
 
 /**
  * Candidate Board payload — fail-closed.
+ * Only candidates belonging to the current completed generation run are eligible.
  * Only ready + performed + allowed candidates include images / selectable payload.
  * Failed/blocked return as safe failure-slot DTOs (no signed URLs).
  */
@@ -1683,18 +1690,48 @@ export async function listCandidateBoardPayload(
   candidates: PersonaCandidate[];
   noveltyFailureSlots: NoveltyFailureSlotDto[];
   candidatePreviews: Record<string, string | null>;
+  generationRunId: string | null;
+  freshness: {
+    creationProjectId: string;
+    generationRunId: string | null;
+    candidateIds: string[];
+    assetIds: (string | null)[];
+    providerJobIds: (string | null)[];
+  };
 }> {
+  const jobs = await jobRepo().listJobsForProject(scope, projectId);
+  const generationRunId = resolveCurrentGenerationRunId(jobs);
   const all = await listCandidates(scope, projectId);
-  const { visibleCandidates, failureSlots } = partitionBoardCandidates(all);
+  const runScoped = generationRunId
+    ? filterCandidatesForGenerationRun(all, generationRunId)
+    : [];
+  const { visibleCandidates, failureSlots } = partitionBoardCandidates(runScoped);
   const candidatePreviews = await signPreviewsForVisibleCandidates(
     scope,
     projectId,
     visibleCandidates,
   );
+  const freshness = {
+    creationProjectId: projectId,
+    generationRunId,
+    candidateIds: visibleCandidates.map((c) => c.id),
+    assetIds: visibleCandidates.map((c) => c.primary_preview_asset_id),
+    providerJobIds: visibleCandidates.map((c) => c.provider_job_id),
+  };
+  logCastingFlowTrace("board.payload", {
+    creationProjectId: projectId,
+    workspaceId: scope.workspaceId,
+    generationRequestId: generationRunId,
+    candidateIds: freshness.candidateIds,
+    assetIds: freshness.assetIds.filter((id): id is string => Boolean(id)),
+    source: generationRunId ? "live_openai" : "unknown",
+  });
   return {
     candidates: visibleCandidates,
     noveltyFailureSlots: failureSlots,
     candidatePreviews,
+    generationRunId,
+    freshness,
   };
 }
 

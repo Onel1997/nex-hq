@@ -91,6 +91,41 @@ export function filterCandidatesForProject(
   return candidates.filter((c) => c.creation_project_id === creationProjectId);
 }
 
+const COMPLETED_GENERATION_RUN_STATUSES = new Set([
+  "completed",
+  "partially_completed",
+]);
+
+/**
+ * Latest executed generation run for a project.
+ * Ignores newer pending_confirmation / queued jobs created by prepare_confirmation.
+ */
+export function resolveCurrentGenerationRunId(
+  jobs: Array<Pick<PersonaGenerationJob, "id" | "status" | "created_at">>,
+): string | null {
+  const completed = jobs
+    .filter((j) => COMPLETED_GENERATION_RUN_STATUSES.has(j.status))
+    .slice()
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return completed[0]?.id ?? null;
+}
+
+export function resolveCurrentGenerationRun(
+  jobs: PersonaGenerationJob[],
+): PersonaGenerationJob | null {
+  const id = resolveCurrentGenerationRunId(jobs);
+  if (!id) return null;
+  return jobs.find((j) => j.id === id) ?? null;
+}
+
+/** Board freshness — only candidates produced by the current generation run. */
+export function filterCandidatesForGenerationRun(
+  candidates: PersonaCandidate[],
+  generationRunId: string,
+): PersonaCandidate[] {
+  return candidates.filter((c) => c.provider_job_id === generationRunId);
+}
+
 export function assertCandidatesBelongToProject(
   candidates: PersonaCandidate[],
   creationProjectId: string,

@@ -235,5 +235,6 @@ export function emptyProjectDetailState() {
     paidConfirmationProjectId: null as string | null,
     projectCandidateState: null as ProjectCandidateState | null,
     projectDetailLoading: true,
+    activeGenerationRunId: null as string | null,
   };
 }

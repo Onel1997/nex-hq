@@ -53,7 +53,7 @@ export function isOpenAiImagesConfigured(): boolean {
 
 export async function generateOpenAiImage(
   request: ImageGenerationRequest,
-): Promise<ImageGenerationResult & { imageBytes?: Buffer }> {
+): Promise<ImageGenerationResult & { imageBytes?: Buffer; providerRequestId?: string | null }> {
   const openai = getOpenAIClient();
   const payload = stripUnknownOpenAiImagePayloadFields(buildOpenAiImageRequest(request));
 
@@ -71,6 +71,10 @@ export async function generateOpenAiImage(
 
   try {
     const response = await openai.images.generate(payload);
+    const providerRequestId =
+      typeof (response as { _request_id?: unknown })._request_id === "string"
+        ? (response as { _request_id: string })._request_id
+        : null;
 
     const item = response.data?.[0];
     if (!item) {
@@ -87,6 +91,7 @@ export async function generateOpenAiImage(
       providerId: "openai",
       url: item.url,
       imageBytes,
+      providerRequestId,
     };
   } catch (error) {
     const quotaError = toOpenAiQuotaError(error, payload.model);

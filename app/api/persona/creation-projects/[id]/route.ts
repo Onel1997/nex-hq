@@ -67,6 +67,8 @@ export async function GET(_request: Request, ctx: Ctx) {
       jobs,
       incident,
       candidatePreviews: board.candidatePreviews,
+      generationRunId: board.generationRunId,
+      freshness: board.freshness,
     });
   } catch (error) {
     return jsonError(error, dict.persona.errors.unexpected);

@@ -26,6 +26,8 @@ export async function GET(_request: Request, ctx: Ctx) {
       candidates: board.candidates,
       noveltyFailureSlots: board.noveltyFailureSlots,
       candidatePreviews: board.candidatePreviews,
+      generationRunId: board.generationRunId,
+      freshness: board.freshness,
       jobs,
       cache: "no-store",
     });
