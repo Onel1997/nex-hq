@@ -567,6 +567,80 @@ export async function confirmAndStartCandidateGeneration(
     assertPaidGenerationEnabled();
   }
 
+  // Phase 2.0C — development-safe historical coverage gate (paid discovery).
+  // Skipped in automated unit tests unless PERSONA_FORCE_COVERAGE_GATE=1.
+  // Never silently spend money while processable historical faces lack embeddings.
+  if (
+    process.env.NODE_ENV !== "production" &&
+    isPaidProviderMode(project.provider_mode) &&
+    !(
+      (process.env.NODE_TEST_CONTEXT ||
+        process.env.npm_lifecycle_event === "test" ||
+        process.argv.includes("--test")) &&
+      process.env.PERSONA_FORCE_COVERAGE_GATE !== "1"
+    )
+  ) {
+    const { isPersonaFaceNoveltyDebugEnabled } = await import(
+      "../face-novelty-memory/live-debug"
+    );
+    const { loadHistoricalProtectionSnapshot } = await import(
+      "../face-novelty-memory/historical-backfill-service"
+    );
+    const {
+      evaluateDiscoveryCoverageGate,
+      resolveMinimumProcessableCoveragePercent,
+    } = await import("../face-novelty-memory/discovery-coverage-gate");
+
+    try {
+      const archetypeId = project.brand_role || "unknown";
+      const snapshot = await loadHistoricalProtectionSnapshot(scope, {
+        archetypeId,
+      });
+      const required = resolveMinimumProcessableCoveragePercent();
+      const needsGate =
+        isPersonaFaceNoveltyDebugEnabled() ||
+        snapshot.processableCoveragePercentage < required ||
+        snapshot.failedProcessing > 0 ||
+        snapshot.missingEmbedding - snapshot.missingAsset > 0;
+
+      if (needsGate) {
+        const { runFaceNoveltyPreflight } = await import(
+          "../face-novelty-memory/preflight"
+        );
+        const preflight = await runFaceNoveltyPreflight();
+        const coverageGate = evaluateDiscoveryCoverageGate({
+          evaluatorReady:
+            preflight.ready &&
+            preflight.verdict === "READY FOR CONTROLLED LIVE TEST",
+          coverage: snapshot,
+          runningBackfillJob:
+            snapshot.lastBackfillJob?.status === "running" ||
+            snapshot.lastBackfillJob?.status === "pending"
+              ? snapshot.lastBackfillJob
+              : null,
+          acknowledgeUnresolvedFailures: Boolean(
+            (options as { acknowledgeUnresolvedFailures?: boolean })
+              .acknowledgeUnresolvedFailures,
+          ),
+        });
+        if (coverageGate.blocked) {
+          throw new PersonaDomainError(
+            coverageGate.message ??
+              "Historical face protection coverage is incomplete — paid discovery blocked.",
+            "WORKFLOW",
+            {
+              discoveryCoverageGate: coverageGate,
+              requiresHistoricalBackfill: true,
+            },
+          );
+        }
+      }
+    } catch (err) {
+      if (err instanceof PersonaDomainError) throw err;
+      // Snapshot infra unavailable — do not block unrelated flows.
+    }
+  }
+
   if (project.candidate_count > MAX_CANDIDATE_BATCH_SIZE) {
     throw new PersonaDomainError(
       `Maximale Batch-Größe ist ${MAX_CANDIDATE_BATCH_SIZE}.`,

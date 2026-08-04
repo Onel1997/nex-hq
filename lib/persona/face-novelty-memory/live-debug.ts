@@ -95,6 +95,33 @@ export type HistoricalFaceProtectionSummary = {
   protectedOnlyByChecksumOrPHash: number;
   unprotectedForBiologicalSimilarity: number;
   coveragePercentage: number;
+  /** Phase 2.0C — extended coverage fields (optional for older payloads). */
+  missingEmbedding?: number;
+  failedProcessing?: number;
+  missingAsset?: number;
+  processableCoveragePercentage?: number;
+  processableTotal?: number;
+  lastBackfillJob?: {
+    id: string;
+    status: string;
+    totalRecords: number;
+    processedRecords: number;
+    embeddedRecords: number;
+    skippedRecords: number;
+    failedRecords: number;
+    startedAt: string | null;
+    completedAt: string | null;
+    evaluatorModel: string | null;
+    evaluatorVersion: string | null;
+    retryFailedOnly: boolean;
+  } | null;
+  currentProgress?: {
+    status: string;
+    processedRecords: number;
+    totalRecords: number;
+    embeddedRecords: number;
+    failedRecords: number;
+  } | null;
 };
 
 export type FaceNoveltyCopyDebugPayload = {
@@ -257,10 +284,24 @@ export function calculateHistoricalEmbeddingCoverage(records: Array<{
     void r.missingAssetAccess;
   }
 
+  let missingEmbedding = 0;
+  let failedProcessing = 0;
+  let missingAsset = 0;
+  for (const r of records) {
+    if (!r.hasEmbedding) missingEmbedding += 1;
+    if (r.detectionFailed) failedProcessing += 1;
+    if (r.missingAssetAccess) missingAsset += 1;
+  }
+
+  const processableTotal = Math.max(0, forbiddenFacesTotal - missingAsset);
   const coveragePercentage =
     forbiddenFacesTotal === 0
       ? 100
       : Math.round((protectedByEmbedding / forbiddenFacesTotal) * 1000) / 10;
+  const processableCoveragePercentage =
+    processableTotal === 0
+      ? 100
+      : Math.round((protectedByEmbedding / processableTotal) * 1000) / 10;
 
   return {
     forbiddenFacesTotal,
@@ -268,6 +309,13 @@ export function calculateHistoricalEmbeddingCoverage(records: Array<{
     protectedOnlyByChecksumOrPHash,
     unprotectedForBiologicalSimilarity,
     coveragePercentage,
+    missingEmbedding,
+    failedProcessing,
+    missingAsset,
+    processableCoveragePercentage,
+    processableTotal,
+    lastBackfillJob: null,
+    currentProgress: null,
   };
 }
 

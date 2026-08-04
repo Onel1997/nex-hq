@@ -8,7 +8,6 @@ import {
   buildCopyDebugPayload,
   buildRunLiveDebug,
   calculateHistoricalEmbeddingCoverage,
-  isPersonaFaceNoveltyDebugEnabled,
   type FaceNoveltyCopyDebugPayload,
   type FaceNoveltyPipelineStatus,
   type FaceNoveltyRunLiveDebug,
@@ -20,6 +19,11 @@ import { SupabaseNoveltyRepository } from "./supabase-novelty-repository";
 import { SupabaseEmbeddingRepository } from "./supabase-embedding-repository";
 import { runFaceNoveltyPreflight, type FaceNoveltyPreflightReport } from "./preflight";
 import { FACE_NOVELTY_STATES } from "./types";
+import { loadHistoricalProtectionSnapshot } from "./historical-backfill-service";
+import { evaluateDiscoveryCoverageGate } from "./discovery-coverage-gate";
+import type { DiscoveryCoverageGateResult } from "./discovery-coverage-gate";
+import type { HistoricalBackfillPreflightSummary } from "./historical-backfill-types";
+import { loadHistoricalBackfillPreflight } from "./historical-backfill-service";
 
 export type ProjectNoveltyLiveDebugResponse = {
   enabled: true;
@@ -27,6 +31,8 @@ export type ProjectNoveltyLiveDebugResponse = {
   historicalCoverage: HistoricalFaceProtectionSummary;
   candidates: SafeFaceNoveltyLiveDebug[];
   copyPayload: FaceNoveltyCopyDebugPayload;
+  discoveryCoverageGate?: DiscoveryCoverageGateResult;
+  backfillPreflight?: HistoricalBackfillPreflightSummary | null;
 } | {
   enabled: false;
   reason: "flag_disabled" | "production";
@@ -47,11 +53,10 @@ export async function loadProjectNoveltyLiveDebug(
   projectId: string,
   archetypeId: string,
 ): Promise<ProjectNoveltyLiveDebugResponse> {
+  // Phase 2.0C.1 — Historical Face Protection is always available in development.
+  // PERSONA_FACE_NOVELTY_DEBUG is no longer required to mount the panel.
   if (process.env.NODE_ENV === "production") {
     return { enabled: false, reason: "production" };
-  }
-  if (!isPersonaFaceNoveltyDebugEnabled()) {
-    return { enabled: false, reason: "flag_disabled" };
   }
 
   const diagnosticStore = new SupabaseLiveDiagnosticStore();
@@ -77,7 +82,7 @@ export async function loadProjectNoveltyLiveDebug(
     embeddings.map((e) => `${e.candidateId}:${e.assetId}`),
   );
 
-  const coverage = calculateHistoricalEmbeddingCoverage(
+  const baseCoverage = calculateHistoricalEmbeddingCoverage(
     allRecords.map((r) => {
       const hasEmbedding =
         embeddingIds.has(`${r.candidateId}:${r.assetId}`) ||
@@ -91,6 +96,48 @@ export async function loadProjectNoveltyLiveDebug(
       };
     }),
   );
+
+  let coverage: HistoricalFaceProtectionSummary = baseCoverage;
+  let discoveryCoverageGate: DiscoveryCoverageGateResult | undefined;
+  let backfillPreflight: HistoricalBackfillPreflightSummary | null = null;
+  try {
+    const snapshot = await loadHistoricalProtectionSnapshot(scope, {
+      archetypeId,
+    });
+    coverage = {
+      ...baseCoverage,
+      ...snapshot,
+      // Prefer snapshot totals when available (workspace-wide forbidden set).
+      forbiddenFacesTotal: snapshot.forbiddenFacesTotal,
+      protectedByEmbedding: snapshot.protectedByEmbedding,
+      protectedOnlyByChecksumOrPHash: snapshot.protectedOnlyByChecksumOrPHash,
+      unprotectedForBiologicalSimilarity:
+        snapshot.unprotectedForBiologicalSimilarity,
+      coveragePercentage: snapshot.coveragePercentage,
+    };
+    const preflight = await runFaceNoveltyPreflight({
+      historyCounts: {
+        priorNoveltyHistoryCount: allRecords.length,
+        priorEmbeddingCount: embeddings.length,
+      },
+    });
+    discoveryCoverageGate = evaluateDiscoveryCoverageGate({
+      evaluatorReady:
+        preflight.ready && preflight.verdict === "READY FOR CONTROLLED LIVE TEST",
+      coverage: snapshot,
+      runningBackfillJob:
+        snapshot.lastBackfillJob?.status === "running" ||
+        snapshot.lastBackfillJob?.status === "pending"
+          ? snapshot.lastBackfillJob
+          : null,
+    });
+    backfillPreflight = await loadHistoricalBackfillPreflight(scope, {
+      archetypeId,
+      deps: { evaluatorReady: preflight.ready },
+    });
+  } catch {
+    // Coverage snapshot is best-effort for the Live Check panel.
+  }
 
   const lastEvaluationTime = candidates
     .map((c) => c.evaluatedAt)
@@ -114,6 +161,8 @@ export async function loadProjectNoveltyLiveDebug(
     run,
     historicalCoverage: coverage,
     candidates,
+    discoveryCoverageGate,
+    backfillPreflight,
     copyPayload: buildCopyDebugPayload({
       projectId,
       archetypeId,
@@ -130,9 +179,6 @@ export async function runProjectNoveltyPreflight(
 ): Promise<FaceNoveltyPreflightReport | { enabled: false; reason: string }> {
   if (process.env.NODE_ENV === "production") {
     return { enabled: false, reason: "production" };
-  }
-  if (!isPersonaFaceNoveltyDebugEnabled()) {
-    return { enabled: false, reason: "flag_disabled" };
   }
 
   const noveltyRepo = new SupabaseNoveltyRepository();

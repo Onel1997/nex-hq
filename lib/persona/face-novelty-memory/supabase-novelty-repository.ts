@@ -10,6 +10,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PersonaDomainError } from "../domain/errors";
 import type { FaceNoveltyRecord, FaceNoveltyState } from "./types";
 import type { NoveltyRecordFilter, NoveltyRepository } from "./novelty-repository";
+import { resolveHistoricalNoveltyArchetypeFilter } from "./historical-backfill-archetype-filter";
+import { HISTORICAL_BACKFILL_FORBIDDEN_STATES } from "./historical-backfill-types";
 
 function str(v: unknown, fallback = ""): string {
   return typeof v === "string" ? v : v == null ? fallback : String(v);
@@ -110,8 +112,30 @@ export class SupabaseNoveltyRepository implements NoveltyRepository {
 
   async findMany(filter: NoveltyRecordFilter): Promise<FaceNoveltyRecord[]> {
     const client = createAdminClient();
+    let archetypeFilter = filter.archetypeId;
+
+    // Phase 2.0C.2 — brand_role must not be used as novelty archetype_id.
+    if (filter.archetypeId) {
+      const states =
+        filter.states && filter.states.length > 0
+          ? filter.states
+          : [...HISTORICAL_BACKFILL_FORBIDDEN_STATES];
+      const { count, error: cErr } = await client
+        .from(TABLE)
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", filter.workspaceId)
+        .eq("archetype_id", filter.archetypeId)
+        .in("state", states);
+      throwDb(cErr, "Failed to probe novelty archetype filter");
+      const resolution = resolveHistoricalNoveltyArchetypeFilter({
+        requestedArchetypeId: filter.archetypeId,
+        matchingRowCountForRequested: count ?? 0,
+      });
+      archetypeFilter = resolution.effectiveArchetypeId ?? undefined;
+    }
+
     let query = client.from(TABLE).select("*").eq("workspace_id", filter.workspaceId);
-    if (filter.archetypeId) query = query.eq("archetype_id", filter.archetypeId);
+    if (archetypeFilter) query = query.eq("archetype_id", archetypeFilter);
     if (filter.states && filter.states.length > 0) query = query.in("state", filter.states);
     const { data, error } = await query;
     throwDb(error, "Failed to query face novelty records");

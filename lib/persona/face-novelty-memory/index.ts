@@ -179,3 +179,80 @@ export type {
   RetryFaceEvaluationResult,
   RetryFaceEvaluationDeps,
 } from "./retry-evaluation";
+
+// Phase 2.0C — historical face embedding backfill
+export {
+  HISTORICAL_BACKFILL_FORBIDDEN_STATES,
+  HISTORICAL_BACKFILL_DEFAULT_BATCH_SIZE,
+  BACKFILL_JOB_STATUSES,
+  BACKFILL_RESULT_STATUSES,
+  BACKFILL_FAILED_RESULT_STATUSES,
+  BACKFILL_RETRYABLE_FAILURE_STATUSES,
+} from "./historical-backfill-types";
+export type {
+  HistoricalBackfillForbiddenState,
+  BackfillJobStatus,
+  BackfillResultStatus,
+  FaceEmbeddingBackfillJob,
+  FaceEmbeddingBackfillResult,
+  HistoricalBackfillEligibilityRecord,
+  HistoricalBackfillPreflightSummary,
+  SafeBackfillJobSummary,
+  HistoricalBackfillBatchOutcome,
+} from "./historical-backfill-types";
+
+export {
+  isForbiddenBackfillState,
+  hasValidStoredEmbedding,
+  isBackfillEligible,
+  dedupeEligibleByAsset,
+  buildHistoricalBackfillPreflightSummary,
+  mapDetectionStatusToResultStatus,
+} from "./historical-backfill-eligibility";
+
+export { calculateExtendedHistoricalCoverage } from "./historical-backfill-coverage";
+export type { ExtendedHistoricalFaceProtectionSummary } from "./historical-backfill-coverage";
+
+export {
+  PERSONA_FACE_HISTORICAL_COVERAGE_MIN_PERCENT_ENV,
+  resolveMinimumProcessableCoveragePercent,
+  evaluateDiscoveryCoverageGate,
+} from "./discovery-coverage-gate";
+export type {
+  DiscoveryCoverageGateInput,
+  DiscoveryCoverageGateResult,
+} from "./discovery-coverage-gate";
+
+export {
+  MemoryHistoricalBackfillRepository,
+  toSafeBackfillJobSummary,
+  isTerminalJobStatus,
+} from "./historical-backfill-repository";
+export type {
+  HistoricalBackfillRepository,
+  CreateBackfillJobInput,
+  UpsertBackfillResultInput,
+} from "./historical-backfill-repository";
+
+export { SupabaseHistoricalBackfillRepository } from "./supabase-historical-backfill-repository";
+
+export {
+  PERSONA_BRAND_ROLE_IDS,
+  resolveHistoricalNoveltyArchetypeFilter,
+  logHistoricalDiscoveryAudit,
+} from "./historical-backfill-archetype-filter";
+export type {
+  NoveltyArchetypeFilterResolution,
+  HistoricalDiscoveryAuditFunnel,
+} from "./historical-backfill-archetype-filter";
+
+export {
+  loadHistoricalBackfillPreflight,
+  loadHistoricalProtectionSnapshot,
+  runHistoricalFaceEmbeddingBackfillBatch,
+  runHistoricalFaceEmbeddingBackfillUntilDone,
+} from "./historical-backfill-service";
+export type {
+  HistoricalBackfillDeps,
+  StartHistoricalBackfillOptions,
+} from "./historical-backfill-service";

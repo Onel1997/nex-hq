@@ -8,8 +8,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PersonaDomainError } from "../domain/errors";
 import type { EmbeddingRepository, EmbeddingUpdate } from "./embedding-repository";
 import type { StoredEmbeddingRef } from "./local-face-embedding-evaluator";
+import { resolveHistoricalNoveltyArchetypeFilter } from "./historical-backfill-archetype-filter";
 
 const TABLE = "persona_face_novelty_records";
+const FORBIDDEN_STATES = [
+  "shown",
+  "shortlisted",
+  "saved",
+  "rejected",
+  "exhausted",
+  "approved",
+] as const;
 
 function throwDb(error: { message: string } | null, msg: string) {
   if (error) throw new PersonaDomainError(msg, "VALIDATION", { message: error.message });
@@ -41,16 +50,35 @@ export class SupabaseEmbeddingRepository implements EmbeddingRepository {
     archetypeId?: string,
   ): Promise<StoredEmbeddingRef[]> {
     const client = createAdminClient();
+
+    // Phase 2.0C.2 — do not apply brand_role as archetype_id (returns empty).
+    let matchingForRequested = 0;
+    if (archetypeId?.trim()) {
+      const { count, error: cErr } = await client
+        .from(TABLE)
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("archetype_id", archetypeId.trim())
+        .in("state", [...FORBIDDEN_STATES])
+        .not("face_embedding", "is", null);
+      throwDb(cErr, "Failed to count embeddings for requested archetype");
+      matchingForRequested = count ?? 0;
+    }
+    const resolution = resolveHistoricalNoveltyArchetypeFilter({
+      requestedArchetypeId: archetypeId,
+      matchingRowCountForRequested: matchingForRequested,
+    });
+
     let query = client
       .from(TABLE)
       .select("asset_id, candidate_id, face_embedding")
       .eq("workspace_id", workspaceId)
       .not("face_embedding", "is", null)
       // Only compare against shown/exhausted/saved/approved/shortlisted/rejected
-      .in("state", ["shown", "shortlisted", "saved", "rejected", "exhausted", "approved"]);
+      .in("state", [...FORBIDDEN_STATES]);
 
-    if (archetypeId) {
-      query = query.eq("archetype_id", archetypeId);
+    if (resolution.effectiveArchetypeId) {
+      query = query.eq("archetype_id", resolution.effectiveArchetypeId);
     }
 
     const { data, error } = await query;

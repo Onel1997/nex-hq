@@ -41,6 +41,10 @@ const MIGRATION_LIVE_DEBUG = path.join(
   process.cwd(),
   "supabase/migrations/20260729120000_persona_face_novelty_live_debug.sql",
 );
+const MIGRATION_BACKFILL = path.join(
+  process.cwd(),
+  "supabase/migrations/20260731100000_persona_face_novelty_embedding_backfill.sql",
+);
 
 export type PreflightHistoryCounts = {
   priorNoveltyHistoryCount: number;
@@ -65,14 +69,19 @@ export async function runFaceNoveltyPreflight(options?: {
   const checks: FaceNoveltyPreflightCheck[] = [];
   const simulate = options?.simulate ?? {};
 
-  // 1. Feature flag
+  // 1. Development availability (Phase 2.0C.1 — Historical Face Protection
+  // is always available in development; PERSONA_FACE_NOVELTY_DEBUG is optional
+  // for extra candidate-level debug payloads only).
   const featureFlagEnabled = isPersonaFaceNoveltyDebugEnabled();
+  const developmentAvailable = process.env.NODE_ENV !== "production";
   checks.push({
     id: "feature_flag",
-    ok: featureFlagEnabled,
-    detail: featureFlagEnabled
-      ? "PERSONA_FACE_NOVELTY_DEBUG=true (development)"
-      : "PERSONA_FACE_NOVELTY_DEBUG is not enabled in development",
+    ok: developmentAvailable,
+    detail: developmentAvailable
+      ? featureFlagEnabled
+        ? "Development Historical Face Protection available (PERSONA_FACE_NOVELTY_DEBUG=true)"
+        : "Development Historical Face Protection available (debug env optional)"
+      : "Historical Face Protection is development-only",
   });
 
   // 2. Failure mode
@@ -151,12 +160,13 @@ export async function runFaceNoveltyPreflight(options?: {
     !simulate.migrationMissing &&
     fs.existsSync(MIGRATION_MEMORY) &&
     fs.existsSync(MIGRATION_EMBEDDINGS) &&
-    fs.existsSync(MIGRATION_LIVE_DEBUG);
+    fs.existsSync(MIGRATION_LIVE_DEBUG) &&
+    fs.existsSync(MIGRATION_BACKFILL);
   checks.push({
     id: "migrations",
     ok: migrationsOk,
     detail: migrationsOk
-      ? "Novelty migrations available on disk"
+      ? "Novelty migrations available on disk (incl. Phase 2.0C backfill)"
       : "Novelty migration files missing",
   });
 

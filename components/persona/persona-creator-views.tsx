@@ -1427,6 +1427,17 @@ export function CreationProjectsView({
               ) : null}
             </div>
           ) : null}
+          {process.env.NODE_ENV !== "production" ? (
+            <FaceNoveltyLiveCheckPanel
+              projectId={selected.id}
+              archetypeId={selected.brand_role || undefined}
+              candidates={
+                studio.projectCandidateState?.projectId === selected.id
+                  ? studio.projectCandidateState.candidates
+                  : []
+              }
+            />
+          ) : null}
           {error ? <p className="ps-error-inline">{error}</p> : null}
             </>
           ) : null}
@@ -1706,13 +1717,6 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             </div>
           </dl>
         </details>
-      ) : null}
-
-      {studio.selectedProjectId ? (
-        <FaceNoveltyLiveCheckPanel
-          projectId={studio.selectedProjectId}
-          candidates={visibleCandidates}
-        />
       ) : null}
 
       {diversityWarning && !integrityMismatch ? (
