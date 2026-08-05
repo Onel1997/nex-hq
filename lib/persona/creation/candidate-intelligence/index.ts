@@ -14,6 +14,27 @@ export {
 } from "./prompt-builder";
 
 export {
+  assertObfCastAnatomyDiversity,
+  assertObfPromptHasNoLegacyBiology,
+  buildDiscoveryIdentityL3Debug,
+  buildDiscoveryIdentityL3Metadata,
+  buildNoveltyBlockIdentityRetryContract,
+  formatObfAgeBodyDirectionPrompt,
+  formatObfArchetypeConstraintsPrompt,
+  formatObfCastingSetPrompt,
+  formatObfGarmentDirectionPrompt,
+  formatObfPresenceFamilyPrompt,
+  isObfL3DebugEnabled,
+  nextDiscoveryIdentityAttempt,
+  resolveObfDiscoveryIdentity,
+  type DiscoveryIdentityL3Debug,
+  type DiscoveryIdentityL3Metadata,
+  type NoveltyBlockIdentityRetryContract,
+  type ObfL3ResolveInput,
+  type ObfL3ResolveResult,
+} from "./obf-l3-integration";
+
+export {
   PREMIUM_CASTING_QUALITY_REFERENCE,
   a1CastingCompositionBlock,
   a1CastingPhotographyBlock,

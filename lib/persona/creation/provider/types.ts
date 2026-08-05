@@ -77,6 +77,16 @@ export interface CreateCandidateBatchInput {
   castingPhase?: "a1_discovery" | "a2_validation";
   /** Optional concurrency override (otherwise PERSONA_IMAGE_CONCURRENCY). */
   concurrency?: number;
+  /**
+   * Phase 2.1B — durable generation run id for L3 sampling.
+   * Defaults to an ephemeral job id when omitted (tests / legacy callers).
+   */
+  generationRunId?: string;
+  /**
+   * Phase 2.1B — L3 identity attempt number (novelty-block retry increments).
+   * Default 1. Does not change novelty thresholds.
+   */
+  identityAttemptNumber?: number;
 }
 
 export interface PersonaCandidateGenerator {

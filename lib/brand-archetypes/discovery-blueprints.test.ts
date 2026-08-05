@@ -286,29 +286,46 @@ describe("Phase 1.8E archetype-scoped discovery blueprints", () => {
   });
 
   it("Urban OBF never assigns female identity to any slot", () => {
-    const project = projectForArchetype(ARCH_URBAN, "proj-urban");
     for (const n of [1, 2, 3, 4]) {
-      const built = buildCandidatePrompt({
-        project,
-        assetType: "portrait_front",
+      const bp = resolveDiscoveryBlueprint({
+        archetypeId: ARCH_URBAN,
         candidateNumber: n,
       });
-      assert.equal(built.discoveryBlueprint?.gender, "male");
-      assert.equal(built.brandArchetype.id, ARCH_URBAN);
+      assert.equal(bp.gender, "male");
+      assert.equal(bp.archetypeId, ARCH_URBAN);
     }
+    // Phase 2.1B: Urban L2 lanes not yet migrated — live OBF prompt must fail closed.
+    assert.throws(
+      () =>
+        buildCandidatePrompt({
+          project: projectForArchetype(ARCH_URBAN, "proj-urban"),
+          assetType: "portrait_front",
+          candidateNumber: 1,
+          generationRunId: "run-urban",
+        }),
+      /No L2 SlotBlueprints configured/i,
+    );
   });
 
   it("Female OBF never assigns male identity to any slot", () => {
-    const project = projectForArchetype(ARCH_FEMALE, "proj-female");
     for (const n of [1, 2, 3, 4]) {
-      const built = buildCandidatePrompt({
-        project,
-        assetType: "portrait_front",
+      const bp = resolveDiscoveryBlueprint({
+        archetypeId: ARCH_FEMALE,
         candidateNumber: n,
       });
-      assert.equal(built.discoveryBlueprint?.gender, "female");
-      assert.equal(built.brandArchetype.id, ARCH_FEMALE);
+      assert.equal(bp.gender, "female");
+      assert.equal(bp.archetypeId, ARCH_FEMALE);
     }
+    assert.throws(
+      () =>
+        buildCandidatePrompt({
+          project: projectForArchetype(ARCH_FEMALE, "proj-female"),
+          assetType: "portrait_front",
+          candidateNumber: 1,
+          generationRunId: "run-female",
+        }),
+      /No L2 SlotBlueprints configured/i,
+    );
   });
 });
 
@@ -504,14 +521,19 @@ describe("Phase 1.9 premium streetwear casting quality engine", () => {
     }
   });
 
-  it("13–14. candidate-specific backgrounds and lighting are unique", () => {
+  it("13–14. candidate-specific backgrounds and lighting are unique (L3 casting sets)", () => {
     const backgrounds = MEDITERRANEAN_DISCOVERY_BLUEPRINTS.map((b) => b.backgroundDirection);
     const lightings = MEDITERRANEAN_DISCOVERY_BLUEPRINTS.map((b) => b.lightingDirection);
     assert.equal(new Set(backgrounds).size, 4);
     assert.equal(new Set(lightings).size, 4);
+    const castBackgrounds = mediterraneanPrompts().map(
+      ({ built }) => built.discoveryIdentityInstance!.castingBackground,
+    );
+    // L3 samples casting backgrounds from per-slot pools — unique across A–D for a fixed run.
+    assert.equal(new Set(castBackgrounds).size, 4);
     for (const { prompt, built } of mediterraneanPrompts()) {
-      assert.ok(prompt.includes(built.discoveryBlueprint!.backgroundDirection));
-      assert.ok(prompt.includes(built.discoveryBlueprint!.lightingDirection));
+      assert.ok(prompt.includes(built.discoveryIdentityInstance!.castingBackground));
+      assert.match(prompt, /PREMIUM CASTING PHOTOGRAPHY|A1 PREMIUM CASTING SET/i);
     }
   });
 
@@ -561,18 +583,20 @@ describe("Phase 1.9 premium streetwear casting quality engine", () => {
     assert.equal(assessment.dimensions.overall, assessment.briefFit);
   });
 
-  it("snapshot: each Mediterranean prompt contains identity, fashion, garment, photo, composition, presence, negatives, PI, male lock", () => {
+  it("snapshot: each Mediterranean prompt contains L3 identity, fashion, garment, photo, composition, presence, negatives, PI, male lock", () => {
     const rows = mediterraneanPrompts();
     const blueprints = MEDITERRANEAN_DISCOVERY_BLUEPRINTS;
     rows.forEach(({ prompt, negative, built }, i) => {
       const bp = blueprints[i]!;
+      const l3 = built.discoveryIdentityInstance!;
       assert.equal(built.discoveryBlueprint?.id, bp.id);
-      assert.ok(prompt.includes(bp.name));
-      assert.ok(prompt.includes(bp.ancestryDirection));
-      assert.ok(prompt.includes(bp.faceGeometry));
-      assert.ok(prompt.includes(bp.fashionCasting.fashionPresence));
-      assert.ok(prompt.includes(bp.garmentDirection) || prompt.includes(bp.garmentDirection.slice(0, 40)));
-      assert.ok(prompt.includes(bp.backgroundDirection));
+      assert.ok(built.slotBlueprint);
+      assert.ok(prompt.includes(bp.name) || prompt.includes(built.slotBlueprint!.name));
+      assert.ok(prompt.includes(l3.regionalCluster) || prompt.includes(built.slotBlueprint!.regionalCluster));
+      assert.ok(prompt.includes(l3.faceGeometry));
+      assert.ok(prompt.includes(l3.garmentColor) || prompt.includes(built.slotBlueprint!.fashionDirection.slice(0, 20)));
+      assert.ok(prompt.includes(l3.castingBackground));
+      assert.match(prompt, /Generate a new individual inside this casting lane\./i);
       assert.match(prompt, /premium European streetwear casting test|fashion agency photography|50mm–85mm/i);
       assert.match(prompt, /mid-torso|upper torso|shoulders FULLY visible/i);
       assert.match(prompt, /calm|approachable|quietly confident/i);
@@ -580,11 +604,12 @@ describe("Phase 1.9 premium streetwear casting quality engine", () => {
       assert.match(prompt, /PRODUCT INTELLIGENCE|Product Intelligence/);
       assert.match(prompt, /ONLY adult male/);
       assert.ok(built.promptFingerprint.length >= 8);
-      for (const other of blueprints) {
-        if (other.id === bp.id) continue;
+      for (const other of rows) {
+        if (other.n === rows[i]!.n) continue;
         assert.ok(
-          !prompt.includes(other.faceGeometry),
-          `${bp.slot} must not contain ${other.slot} faceGeometry`,
+          !prompt.includes(other.built.discoveryIdentityInstance!.faceGeometry) ||
+            other.built.discoveryIdentityInstance!.faceGeometry === l3.faceGeometry,
+          `${bp.slot} must not contain other slot faceGeometry`,
         );
       }
       assert.ok(!/ONLY adult female/i.test(prompt));
@@ -643,23 +668,24 @@ describe("Phase 1.9A character diversity — permanent anatomy", () => {
     );
   });
 
-  it("Mediterranean prompts carry permanent anatomy and anti-clone language", () => {
+  it("Mediterranean prompts carry L3 anatomy and anti-clone language", () => {
     const project = projectForArchetype(ARCH_MED, "proj-phase19a");
     for (const n of [1, 2, 3, 4]) {
       const built = buildCandidatePrompt({
         project,
         assetType: "portrait_front",
         candidateNumber: n,
+        generationRunId: "run-phase19a",
       });
-      const bp = built.discoveryBlueprint!;
-      assert.ok(built.prompt.includes(bp.forehead));
-      assert.ok(built.prompt.includes(bp.eyebrowDensity));
-      assert.ok(built.prompt.includes(bp.earShape));
-      assert.ok(built.prompt.includes(bp.hairline));
-      assert.ok(built.prompt.includes(bp.facialProportions));
-      assert.match(built.prompt, /instantly recognizable|memorable premium identity/i);
+      const l3 = built.discoveryIdentityInstance!;
+      assert.ok(built.prompt.includes(l3.forehead));
+      assert.ok(built.prompt.includes(l3.eyebrows));
+      assert.ok(built.prompt.includes(l3.ears));
+      assert.ok(built.prompt.includes(l3.hairline));
+      assert.ok(built.prompt.includes(l3.facialRatioVariant));
+      assert.match(built.prompt, /Generate a new individual inside this casting lane\./i);
       assert.match(built.prompt, /brother|clone|repetitive Mediterranean template|generic handsome/i);
-      assert.match(built.prompt, /Distinct facial anatomy|Permanent unique human identity/i);
+      assert.match(built.prompt, /DISCOVERY IDENTITY INSTANCE \(L3\)/);
     }
   });
 
@@ -699,30 +725,30 @@ describe("Phase 1.9A.1 discovery diversity sampling", () => {
     assert.match(clusters[3]!, /Lebanese|Levantine/i);
   });
 
-  it("Diversity Brief appears before biology and mandates maximum distance", () => {
+  it("L3 anatomy appears before Brand Memory; legacy Diversity Brief is absent", () => {
     const project = projectForArchetype(ARCH_MED, "proj-phase19a1");
     for (const n of [1, 2, 3, 4]) {
       const built = buildCandidatePrompt({
         project,
         assetType: "portrait_front",
         candidateNumber: n,
+        generationRunId: "run-phase19a1",
       });
       assert.match(
         built.prompt,
-        /Generate four biologically distinct premium agency models with maximum facial diversity/i,
+        /Generate a new individual inside this casting lane\./i,
       );
-      assert.match(built.blocks.diversityBrief, /DISCOVERY DIVERSITY BRIEF/i);
-      assert.match(built.blocks.diversityBrief, /SLOT [ABCD] DIVERSITY INSTRUCTION/i);
-      const briefIdx = built.prompt.indexOf("DISCOVERY DIVERSITY BRIEF");
-      const bioIdx = built.prompt.indexOf("CANDIDATE-SPECIFIC BIOLOGICAL IDENTITY");
-      assert.ok(briefIdx >= 0 && bioIdx > briefIdx);
+      assert.equal(built.blocks.diversityBrief, "");
+      assert.doesNotMatch(built.prompt, /DISCOVERY DIVERSITY BRIEF/);
+      assert.doesNotMatch(built.prompt, /CANDIDATE-SPECIFIC BIOLOGICAL IDENTITY/);
+      const l3Idx = built.prompt.indexOf("DISCOVERY IDENTITY INSTANCE (L3)");
+      const brandIdx = built.prompt.indexOf("PREMIUM STREETWEAR BRAND DNA");
+      assert.ok(l3Idx >= 0 && brandIdx > l3Idx);
       assert.ok(
-        built.prompt.includes(built.discoveryBlueprint!.diversitySampling.regionalCluster),
+        built.prompt.includes(built.slotBlueprint!.regionalCluster),
       );
       assert.ok(
-        built.prompt.includes(
-          built.discoveryBlueprint!.diversitySampling.slotDiversityInstruction,
-        ),
+        built.prompt.includes(built.discoveryIdentityInstance!.regionalCluster),
       );
     }
   });

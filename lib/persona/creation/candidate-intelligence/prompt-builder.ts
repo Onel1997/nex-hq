@@ -1,11 +1,11 @@
 /**
  * Modular prompt composition for Persona Stage-A casting.
  *
- * Official Brand Face discovery priority (Phase 1.8E):
- * 1. strict archetype and gender lock
- * 2. candidate-specific biological identity blueprint
- * 3. age and body structure
- * 4. expression and presence
+ * Official Brand Face A1 discovery priority (Phase 2.1B):
+ * 1. archetype and gender constraints
+ * 2. L3 Discovery Identity Instance anatomy (only exact person source)
+ * 3. age and body direction
+ * 4. presence / expression family
  * 5. Brand Memory
  * 6. Product Intelligence wardrobe constraints
  * 7. reference direction
@@ -14,6 +14,7 @@
  * 10. negative constraints
  *
  * Legacy generic Persona Creator may still use variation recipes.
+ * OBF must never inject legacy absolute biology.
  */
 
 import {
@@ -35,16 +36,16 @@ import {
   assertBlueprintGenderMatchesArchetype,
   assertDiscoveryCastBlueprintsUnique,
   discoveryRunVariationToken,
+  formatBlueprintGarmentPrompt,
   formatBlueprintIdentityPrompt,
   formatDiscoveryDiversityBrief,
+  formatFashionCastingProfilePrompt,
   listDiscoveryBlueprintsForArchetype,
   logDiscoveryBlueprintTrace,
   promptFingerprint,
   requiredGenderForArchetype,
   resolveDiscoveryBlueprint,
   variationProfileFromBlueprint,
-  formatBlueprintGarmentPrompt,
-  formatFashionCastingProfilePrompt,
   type ArchetypeCandidateBlueprint,
   type BrandArchetype,
   type BrandArchetypeCatalog,
@@ -52,6 +53,11 @@ import {
   type IdentityDna,
 } from "@/lib/brand-archetypes";
 import { parseArchetypeIdFromProjectDescription } from "@/lib/brand-face-selection/creation-project-mapper";
+import {
+  IdentityBlueprintError,
+  type DiscoveryIdentityInstance,
+  type SlotBlueprint,
+} from "@/lib/persona/identity-blueprints";
 import {
   formatProductWardrobeConstraintsForPersona,
   createProductIntelligenceSnapshot,
@@ -69,6 +75,18 @@ import {
 import type { CandidateAssetType, PersonaCreationProject } from "../../domain/creation-types";
 import { variationProfileFromArchetype } from "./archetype-bridge";
 import {
+  assertObfPromptHasNoLegacyBiology,
+  formatObfAgeBodyDirectionPrompt,
+  formatObfArchetypeConstraintsPrompt,
+  formatObfCastingSetPrompt,
+  formatObfGarmentDirectionPrompt,
+  formatObfPresenceFamilyPrompt,
+  isObfL3DebugEnabled,
+  resolveObfDiscoveryIdentity,
+  type DiscoveryIdentityL3Debug,
+  type DiscoveryIdentityL3Metadata,
+} from "./obf-l3-integration";
+import {
   resolveCandidateVariation,
   type CandidateVariationProfile,
 } from "./variations";
@@ -84,11 +102,11 @@ import {
 } from "./premium-casting-direction";
 
 export interface PromptBlocks {
-  /** 1 — Identity DNA (Brand Archetype) */
+  /** 1 — Identity DNA / archetype constraints */
   identity: string;
-  /** 2 — Authentic human appearance from Identity DNA / blueprint */
+  /** 2 — Authentic human appearance (legacy / non-OBF) */
   appearance: string;
-  /** 3 — Commercial presence from Identity DNA */
+  /** 3 — Commercial presence */
   presence: string;
   /** 4 — Brand DNA */
   brandDna: string;
@@ -104,23 +122,23 @@ export interface PromptBlocks {
   variation: string;
   /** Supporting polish only */
   editorialRules: string;
-  /** Premium editorial casting direction (Phase 1.8A) */
+  /** Premium editorial casting direction */
   premiumCasting: string;
   /** Strict gender role enforcement */
   genderEnforcement: string;
-  /** Candidate-specific biological blueprint (OBF) */
+  /** L3 Discovery Identity Instance anatomy (OBF) — only exact person source */
   biologicalIdentity: string;
-  /** Diversity Brief — maximize biological distance (Phase 1.9A.1) */
+  /** @deprecated Phase 2.1B — empty for OBF live prompts */
   diversityBrief: string;
-  /** Age / body from blueprint */
+  /** Age / body lane constraints */
   ageBody: string;
-  /** Fashion casting profile (Phase 1.9) */
+  /** Presence / fashion casting (non-anatomy for OBF) */
   fashionCasting: string;
-  /** Per-candidate Product Intelligence garment (Phase 1.9) */
+  /** Per-candidate Product Intelligence garment */
   garmentDirection: string;
   /** A1 presence / anti-aggression rules */
   presenceRules: string;
-  /** Run-specific non-identity variation token block (OBF) */
+  /** @deprecated Phase 2.1B — empty for OBF (no identity-lock run token) */
   runVariation: string;
   /** @deprecated Prefer presence — kept for older snapshot readers. */
   lifestyle: string;
@@ -137,24 +155,38 @@ export interface BuiltCandidatePrompt {
   brandMemory: BrandMemory;
   productIntelligence: ProductIntelligenceSnapshot;
   referenceIntelligence: ReferenceIntelligenceSnapshot;
-  /** Official Brand Archetype used for Identity DNA. */
   brandArchetype: BrandArchetype;
   identityDna: IdentityDna;
   brandArchetypeSnapshot: BrandArchetypeSnapshot;
-  /** Present for Official Brand Face discovery. */
+  /** Legacy blueprint bridge / metadata for OBF. */
   discoveryBlueprint: ArchetypeCandidateBlueprint | null;
+  /** Phase 2.1B — L2 casting lane for OBF. */
+  slotBlueprint: SlotBlueprint | null;
+  /** Phase 2.1B — sampled L3 person for this run/attempt. */
+  discoveryIdentityInstance: DiscoveryIdentityInstance | null;
+  /** Phase 2.1B — safe L3 metadata for persistence. */
+  discoveryIdentityMetadata: DiscoveryIdentityL3Metadata | null;
+  /** Phase 2.1B — development-only L3 debug (never full prompt). */
+  discoveryIdentityDebug: DiscoveryIdentityL3Debug | null;
   promptFingerprint: string;
   runVariationToken: string | null;
   officialBrandFace: boolean;
+  /** Identity attempt used for L3 sampling (OBF). */
+  identityAttemptNumber: number;
 }
 
 function framingForAsset(
   assetType: CandidateAssetType,
   memory: BrandMemory,
-  discoveryBlueprint?: ArchetypeCandidateBlueprint | null,
+  options?: {
+    discoveryBlueprint?: ArchetypeCandidateBlueprint | null;
+    officialBrandFace?: boolean;
+  },
 ): string {
   const fitLabel = memory.fit.labels[0] ?? "premium";
   const brandFit = `${fitLabel.toLowerCase()} ${memory.brandName} streetwear fit`;
+  const discoveryBlueprint = options?.discoveryBlueprint;
+  const officialBrandFace = options?.officialBrandFace === true;
 
   switch (assetType) {
     case "portrait_front":
@@ -163,7 +195,9 @@ function framingForAsset(
         discoveryBlueprint
           ? `Posture for this slot: ${discoveryBlueprint.fashionCasting.postureDirection}.`
           : "Relaxed shoulders, slight body rotation — never passport-square.",
-        "Photorealistic premium skin texture with natural pores. Same identity across all angles.",
+        officialBrandFace
+          ? "Photorealistic premium skin texture with natural pores."
+          : "Photorealistic premium skin texture with natural pores. Same identity across all angles.",
       ].join("\n");
     case "portrait_three_quarter":
       return [
@@ -171,7 +205,9 @@ function framingForAsset(
         "True 30–45 degree body/face turn — not a near-copy of the front frame.",
         "Upper torso and shoulders still fully visible — same casting-editorial crop family.",
         "Same person as THIS candidate's front portrait. Natural gaze. Slight posture variation.",
-        "Keep identity locked. Change only angle and subtle stance.",
+        officialBrandFace
+          ? "Change only angle and subtle stance for THIS candidate."
+          : "Keep identity locked. Change only angle and subtle stance.",
       ].join("\n");
     case "portrait_profile":
       return [
@@ -201,12 +237,13 @@ function framingForAsset(
         "Identical face and hair to THIS candidate.",
       ].join("\n");
     default:
-      return `CAMERA — ${memory.brandName} streetwear casting portrait, identity-locked to THIS candidate only.`;
+      return `CAMERA — ${memory.brandName} streetwear casting portrait for THIS candidate only.`;
   }
 }
 
 /**
  * Legacy variation-based identity lock — only used when archetype inject is disabled.
+ * Must never be used for Official Brand Face discovery.
  */
 function buildIdentityLockBlock(
   project: PersonaCreationProject,
@@ -240,18 +277,25 @@ function buildEnvironmentLightingBlock(
   variation: CandidateVariationProfile,
   memory: BrandMemory,
   archetype?: BrandArchetype,
-  discoveryBlueprint?: ArchetypeCandidateBlueprint | null,
+  options?: {
+    discoveryBlueprint?: ArchetypeCandidateBlueprint | null;
+    obfCastingSet?: string;
+  },
 ): string {
-  return [
-    premiumPhotographyBlock(),
-    "",
-    discoveryBlueprint
-      ? a1CastingPhotographyBlock(discoveryBlueprint)
+  const castingSet =
+    options?.obfCastingSet ??
+    (options?.discoveryBlueprint
+      ? a1CastingPhotographyBlock(options.discoveryBlueprint)
       : [
           "7–8. CONTROLLED NEUTRAL CASTING ENVIRONMENT",
           `Background (candidate-specific): ${variation.background}.`,
           `Light: ${archetype?.lightingDirection ?? variation.lighting}.`,
-        ].join("\n"),
+        ].join("\n"));
+
+  return [
+    premiumPhotographyBlock(),
+    "",
+    castingSet,
     "Keep Stage A controlled and neutral — not a campaign location.",
     "No streets, cafés, parking garages, shops, clothing racks, cars, or product sets.",
     `Photography direction: ${archetype?.photographyDirection ?? memory.photographyStyle}`,
@@ -306,7 +350,7 @@ function buildNegativePrompt(
 
 /**
  * Build a modular OpenAI prompt for one candidate × one Stage-A camera asset.
- * Official Brand Face: archetype-scoped blueprints own biology (Phase 1.8E).
+ * Official Brand Face: L3 DiscoveryIdentityInstance is the only exact anatomy source (Phase 2.1B).
  * Legacy Creator: may still use global variation recipes when not OBF.
  */
 export function buildCandidatePrompt(params: {
@@ -319,10 +363,20 @@ export function buildCandidatePrompt(params: {
   referenceCatalog?: ReferenceWorkspaceCatalog;
   archetypeCatalog?: BrandArchetypeCatalog;
   discoveryBlueprint?: ArchetypeCandidateBlueprint;
+  /** Phase 2.1B — durable generation run id (defaults to project.id for tests). */
+  generationRunId?: string;
+  /** Phase 2.1B — L3 sampling attempt (novelty-block retry increments). Default 1. */
+  attemptNumber?: number;
+  /** Phase 2.1B — optional pre-sampled L3 instance. */
+  discoveryIdentityInstance?: DiscoveryIdentityInstance;
+  /** Phase 2.1B — optional pre-resolved L2 lane. */
+  slotBlueprint?: SlotBlueprint;
   /** When false, fall back to legacy variation recipes (tests only). Default true. */
   useBrandArchetypes?: boolean;
   /** Internal quality-regeneration suffix (Phase 1.8A). */
   premiumRetrySuffix?: string;
+  /** Optional fixed timestamp for reproducible L3 sampling in tests. */
+  identitySampledAt?: string;
 }): BuiltCandidatePrompt {
   const brandMemory =
     params.brandMemory ?? loadBrandMemory(params.project.workspace_id);
@@ -346,10 +400,23 @@ export function buildCandidatePrompt(params: {
     params.project.description,
   );
   const officialBrandFace = Boolean(officialArchetypeId);
+  const identityAttemptNumber = params.attemptNumber ?? 1;
+  const generationRunId =
+    params.generationRunId?.trim() || params.project.id;
 
   let brandArchetype: BrandArchetype;
   let discoveryBlueprint: ArchetypeCandidateBlueprint | null = null;
   let runVariationToken: string | null = null;
+  let slotBlueprint: SlotBlueprint | null = null;
+  let discoveryIdentityInstance: DiscoveryIdentityInstance | null = null;
+  let discoveryIdentityMetadata: DiscoveryIdentityL3Metadata | null = null;
+  let discoveryIdentityDebug: DiscoveryIdentityL3Debug | null = null;
+  let obfAnatomyBlock = "";
+  let obfAgeBody = "";
+  let obfPresence = "";
+  let obfGarment = "";
+  let obfCastingSet = "";
+  let obfIdentityConstraints = "";
 
   if (officialBrandFace && officialArchetypeId) {
     const found = archetypeCatalog.archetypes.find((a) => a.id === officialArchetypeId);
@@ -369,8 +436,45 @@ export function buildCandidatePrompt(params: {
       });
     assertBlueprintGenderMatchesArchetype(discoveryBlueprint, brandArchetype);
     runVariationToken = discoveryRunVariationToken(params.project.id);
+
+    const resolved = resolveObfDiscoveryIdentity({
+      archetypeId: brandArchetype.id,
+      candidateNumber: params.candidateNumber,
+      creationProjectId: params.project.id,
+      generationRunId,
+      attemptNumber: identityAttemptNumber,
+      discoveryIdentityInstance: params.discoveryIdentityInstance,
+      slotBlueprint: params.slotBlueprint,
+      sampledAt: params.identitySampledAt,
+    });
+    slotBlueprint = resolved.slotBlueprint;
+    discoveryIdentityInstance = resolved.discoveryIdentityInstance;
+    discoveryIdentityMetadata = resolved.metadata;
+    discoveryIdentityDebug = isObfL3DebugEnabled() ? resolved.debug : null;
+    obfAnatomyBlock = resolved.anatomyPromptBlock;
+    obfAgeBody = formatObfAgeBodyDirectionPrompt(
+      resolved.slotBlueprint,
+      resolved.discoveryIdentityInstance,
+    );
+    obfPresence = formatObfPresenceFamilyPrompt(
+      getIdentityDnaForArchetype(archetypeCatalog, brandArchetype),
+      resolved.slotBlueprint,
+      resolved.discoveryIdentityInstance,
+    );
+    obfGarment = formatObfGarmentDirectionPrompt(
+      resolved.slotBlueprint,
+      resolved.discoveryIdentityInstance,
+    );
+    obfCastingSet = formatObfCastingSetPrompt(
+      resolved.slotBlueprint,
+      resolved.discoveryIdentityInstance,
+    );
+    obfIdentityConstraints = formatObfArchetypeConstraintsPrompt(
+      brandArchetype,
+      getIdentityDnaForArchetype(archetypeCatalog, brandArchetype),
+      resolved.slotBlueprint,
+    );
   } else if (useArchetypes) {
-    // Legacy multi-archetype slot mapping (non-OBF Creator only).
     brandArchetype = resolveArchetypeForCandidate(
       archetypeCatalog,
       params.candidateNumber,
@@ -405,83 +509,127 @@ export function buildCandidatePrompt(params: {
       ? variationProfileFromBlueprint(discoveryBlueprint, brandArchetype)
       : variation;
 
-  const identity = useArchetypes
-    ? formatIdentityDnaPrompt(brandArchetype, identityDna)
-    : buildIdentityLockBlock(
-        params.project,
-        effectiveVariation,
-        params.candidateNumber,
-      );
+  if (officialBrandFace && !discoveryIdentityInstance) {
+    throw new IdentityBlueprintError(
+      "Official Brand Face discovery requires an L3 DiscoveryIdentityInstance before provider prompt composition",
+    );
+  }
+
+  // Guard: OBF must never use legacy absolute identity-lock biology as the anatomy source.
+  if (officialBrandFace && params.useBrandArchetypes === false) {
+    throw new IdentityBlueprintError(
+      "Official Brand Face cannot use legacy variation biology (useBrandArchetypes=false)",
+    );
+  }
+
+  const identity = officialBrandFace
+    ? obfIdentityConstraints
+    : useArchetypes
+      ? formatIdentityDnaPrompt(brandArchetype, identityDna)
+      : buildIdentityLockBlock(
+          params.project,
+          effectiveVariation,
+          params.candidateNumber,
+        );
+
+  if (officialBrandFace && /Lock this Identity DNA|do not invent a different person/i.test(identity)) {
+    throw new IdentityBlueprintError(
+      "Official Brand Face identity constraints unexpectedly contain legacy identity-lock wording",
+    );
+  }
 
   const genderEnforcement = useArchetypes
     ? genderEnforcementBlock(brandArchetype)
     : `Gender presentation: ${params.project.gender_presentation || "Male"}.`;
 
-  const biologicalIdentity = discoveryBlueprint
-    ? formatBlueprintIdentityPrompt(discoveryBlueprint)
-    : "";
+  // Phase 2.1B: OBF uses L3 anatomy only — legacy blueprint biology / diversity brief bypassed.
+  const biologicalIdentity = officialBrandFace
+    ? obfAnatomyBlock
+    : discoveryBlueprint
+      ? formatBlueprintIdentityPrompt(discoveryBlueprint)
+      : "";
 
-  const diversityBrief = discoveryBlueprint
-    ? formatDiscoveryDiversityBrief({
-        archetypeId: brandArchetype.id,
-        slot: discoveryBlueprint.slot,
-      })
-    : "";
+  const diversityBrief =
+    officialBrandFace
+      ? ""
+      : discoveryBlueprint
+        ? formatDiscoveryDiversityBrief({
+            archetypeId: brandArchetype.id,
+            slot: discoveryBlueprint.slot,
+          })
+        : "";
 
-  const ageBody = discoveryBlueprint
-    ? [
-        "3. AGE AND BODY STRUCTURE",
-        `Age feel: ${discoveryBlueprint.ageRange}.`,
-        `Body: ${discoveryBlueprint.bodyStructure}.`,
-        `Height / build direction: ${discoveryBlueprint.fashionCasting.modelHeightDirection}; ${discoveryBlueprint.fashionCasting.modelBuild}.`,
-        "Photoreal adult fashion-model proportions only — never childlike, never bodybuilder, never ordinary desk-job frame.",
-      ].join("\n")
-    : "";
+  const ageBody = officialBrandFace
+    ? obfAgeBody
+    : discoveryBlueprint
+      ? [
+          "3. AGE AND BODY STRUCTURE",
+          `Age feel: ${discoveryBlueprint.ageRange}.`,
+          `Body: ${discoveryBlueprint.bodyStructure}.`,
+          `Height / build direction: ${discoveryBlueprint.fashionCasting.modelHeightDirection}; ${discoveryBlueprint.fashionCasting.modelBuild}.`,
+          "Photoreal adult fashion-model proportions only — never childlike, never bodybuilder, never ordinary desk-job frame.",
+        ].join("\n")
+      : "";
 
-  const fashionCasting = discoveryBlueprint
-    ? formatFashionCastingProfilePrompt(discoveryBlueprint)
-    : "";
+  const fashionCasting = officialBrandFace
+    ? ""
+    : discoveryBlueprint
+      ? formatFashionCastingProfilePrompt(discoveryBlueprint)
+      : "";
 
-  const garmentDirection = discoveryBlueprint
-    ? formatBlueprintGarmentPrompt(discoveryBlueprint)
-    : "";
+  const garmentDirection = officialBrandFace
+    ? obfGarment
+    : discoveryBlueprint
+      ? formatBlueprintGarmentPrompt(discoveryBlueprint)
+      : "";
 
   const presenceRules = a1PresenceRulesBlock();
 
-  const appearance = discoveryBlueprint
+  // OBF: exact skin/anatomy lives in L3 only — do not restate blueprint skin.
+  const appearance = officialBrandFace
     ? [
-        "AUTHENTIC HUMAN APPEARANCE (from candidate blueprint)",
-        `Skin: ${discoveryBlueprint.skinTone}.`,
+        "AUTHENTIC HUMAN APPEARANCE",
         "Allow visible but subtle skin texture, natural pores, slight under-eye detail, mild asymmetry.",
         "Realistic facial hair texture when specified — never fake beard, never beauty-filter skin.",
         "Photoreal adult human — not porcelain beauty skin, not waxy AI clone.",
+        "Exact facial anatomy is defined only in the Discovery Identity Instance (L3) block.",
       ].join("\n")
-    : useArchetypes
-      ? formatArchetypeAppearancePrompt(identityDna)
-      : [
-          "2. AUTHENTIC HUMAN APPEARANCE",
-          `Skin: ${effectiveVariation.skinTone}.`,
-          "Allow visible but subtle skin texture, natural pores, slight under-eye detail, minor asymmetry.",
-          "Photoreal adult human — not porcelain beauty skin.",
-        ].join("\n");
+    : discoveryBlueprint
+      ? [
+          "AUTHENTIC HUMAN APPEARANCE (from candidate blueprint)",
+          `Skin: ${discoveryBlueprint.skinTone}.`,
+          "Allow visible but subtle skin texture, natural pores, slight under-eye detail, mild asymmetry.",
+          "Realistic facial hair texture when specified — never fake beard, never beauty-filter skin.",
+          "Photoreal adult human — not porcelain beauty skin, not waxy AI clone.",
+        ].join("\n")
+      : useArchetypes
+        ? formatArchetypeAppearancePrompt(identityDna)
+        : [
+            "2. AUTHENTIC HUMAN APPEARANCE",
+            `Skin: ${effectiveVariation.skinTone}.`,
+            "Allow visible but subtle skin texture, natural pores, slight under-eye detail, minor asymmetry.",
+            "Photoreal adult human — not porcelain beauty skin.",
+          ].join("\n");
 
-  const presence = discoveryBlueprint
-    ? [
-        "4. EXPRESSION AND PRESENCE",
-        `Expression: ${discoveryBlueprint.expression}.`,
-        `Fashion presence: ${discoveryBlueprint.fashionCasting.fashionPresence}.`,
-        `Micro-expression: ${discoveryBlueprint.fashionCasting.microExpression}.`,
-        `Camera presence: ${discoveryBlueprint.fashionCasting.cameraPresence}.`,
-        formatArchetypePresencePrompt(identityDna),
-      ].join("\n")
-    : useArchetypes
-      ? formatArchetypePresencePrompt(identityDna)
-      : [
-          "3. CALM / FRIENDLY COMMERCIAL PRESENCE",
-          `Expression: ${effectiveVariation.expression}.`,
-          `Posture: ${effectiveVariation.posture}.`,
-          `Social presence: ${effectiveVariation.socialPresence}.`,
-        ].join("\n");
+  const presence = officialBrandFace
+    ? obfPresence
+    : discoveryBlueprint
+      ? [
+          "4. EXPRESSION AND PRESENCE",
+          `Expression: ${discoveryBlueprint.expression}.`,
+          `Fashion presence: ${discoveryBlueprint.fashionCasting.fashionPresence}.`,
+          `Micro-expression: ${discoveryBlueprint.fashionCasting.microExpression}.`,
+          `Camera presence: ${discoveryBlueprint.fashionCasting.cameraPresence}.`,
+          formatArchetypePresencePrompt(identityDna),
+        ].join("\n")
+      : useArchetypes
+        ? formatArchetypePresencePrompt(identityDna)
+        : [
+            "3. CALM / FRIENDLY COMMERCIAL PRESENCE",
+            `Expression: ${effectiveVariation.expression}.`,
+            `Posture: ${effectiveVariation.posture}.`,
+            `Social presence: ${effectiveVariation.socialPresence}.`,
+          ].join("\n");
 
   const brandDna = formatBrandMemoryForPersona(brandMemory, {
     lifestyleDirection: params.project.fashion_style,
@@ -497,31 +645,43 @@ export function buildCandidatePrompt(params: {
       formatProductWardrobeConstraintsForPersona(productCatalog),
   });
   const referenceDirection = formatPersonaReferenceDirection(referenceCatalog);
-  const camera = framingForAsset(
-    params.assetType,
-    brandMemory,
+  const camera = framingForAsset(params.assetType, brandMemory, {
     discoveryBlueprint,
-  );
+    officialBrandFace,
+  });
   const lighting = buildEnvironmentLightingBlock(
     effectiveVariation,
     brandMemory,
     useArchetypes ? brandArchetype : undefined,
-    discoveryBlueprint,
+    officialBrandFace
+      ? { obfCastingSet }
+      : { discoveryBlueprint },
   );
-  const variationBlock = discoveryBlueprint
+
+  // OBF: do not inject legacy identityDescriptor / permanent anatomy promptLines.
+  const variationBlock = officialBrandFace
     ? [
-        `CANDIDATE BLUEPRINT — ${discoveryBlueprint.name} (Slot ${discoveryBlueprint.slot})`,
-        `Aesthetic: ${effectiveVariation.aesthetic}.`,
-        ...effectiveVariation.promptLines,
+        `CASTING LANE — ${slotBlueprint!.name} (Slot ${slotBlueprint!.slot})`,
+        `Fashion direction: ${slotBlueprint!.fashionDirection}.`,
+        `Brand role: ${slotBlueprint!.brandRole}.`,
         formatArchetypeDirectionPrompt(brandArchetype),
+        "Exact facial anatomy is defined only in the Discovery Identity Instance (L3) block.",
       ].join("\n")
-    : useArchetypes
-      ? formatArchetypeDirectionPrompt(brandArchetype)
-      : [
-          `CANDIDATE DIRECTION — Candidate ${params.candidateNumber}: ${effectiveVariation.label}`,
+    : discoveryBlueprint
+      ? [
+          `CANDIDATE BLUEPRINT — ${discoveryBlueprint.name} (Slot ${discoveryBlueprint.slot})`,
           `Aesthetic: ${effectiveVariation.aesthetic}.`,
           ...effectiveVariation.promptLines,
-        ].join("\n");
+          formatArchetypeDirectionPrompt(brandArchetype),
+        ].join("\n")
+      : useArchetypes
+        ? formatArchetypeDirectionPrompt(brandArchetype)
+        : [
+            `CANDIDATE DIRECTION — Candidate ${params.candidateNumber}: ${effectiveVariation.label}`,
+            `Aesthetic: ${effectiveVariation.aesthetic}.`,
+            ...effectiveVariation.promptLines,
+          ].join("\n");
+
   const editorialRules = formatBrandMemoryEditorialForPersona(brandMemory);
   const premiumCasting = useArchetypes
     ? [
@@ -536,13 +696,8 @@ export function buildCandidatePrompt(params: {
     useArchetypes ? brandArchetype : undefined,
   );
 
-  const runVariation = runVariationToken
-    ? [
-        "DISCOVERY RUN VARIATION",
-        `Discovery variation token: ${runVariationToken}`,
-        "Keep identity requirements fixed. Allow only small non-identity styling/light nuance for this run.",
-      ].join("\n")
-    : "";
+  // Phase 2.1B: remove identity-lock run token from OBF discovery.
+  const runVariation = "";
 
   const lifestyle = [
     "LUXURY CAMPAIGN CASTING CONTEXT",
@@ -579,37 +734,31 @@ export function buildCandidatePrompt(params: {
 
   const prompt = officialBrandFace
     ? [
-        // 1. strict archetype + gender lock
+        // 1. archetype + gender constraints
         blocks.identity,
         blocks.genderEnforcement,
         blocks.premiumCasting,
-        // 1b. Diversity Brief before biology (Phase 1.9A.1)
-        blocks.diversityBrief,
-        // 2. candidate-specific biological identity blueprint
+        // 2. L3 Discovery Identity Instance — only exact anatomy source
         blocks.biologicalIdentity,
         blocks.appearance,
-        // 3. age and body + fashion casting profile
+        // 3. age and body direction
         blocks.ageBody,
-        blocks.fashionCasting,
-        // 4. expression and presence
+        // 4. presence / expression family
         blocks.presence,
         blocks.presenceRules,
         // 5. Brand Memory
         blocks.brandDna,
-        // 6. Product Intelligence wardrobe + per-candidate garment
+        // 6. Product Intelligence wardrobe + garment
         blocks.wardrobe,
         blocks.garmentDirection,
-        // 7. reference direction
+        // 7. reference direction (optional)
         blocks.referenceDirection,
-        // 8. camera / A1 composition
+        // 8. camera
         blocks.camera,
         // 9. lighting / background
         blocks.lighting,
         blocks.variation,
         blocks.editorialRules,
-        // run token (non-identity)
-        blocks.runVariation,
-        // 10. negatives appended via composeProviderPrompt
         params.premiumRetrySuffix ?? "",
       ]
         .filter((block) => block.trim().length > 0)
@@ -618,20 +767,40 @@ export function buildCandidatePrompt(params: {
         blocks.identity,
         blocks.genderEnforcement,
         blocks.premiumCasting,
+        blocks.diversityBrief,
+        blocks.biologicalIdentity,
         blocks.appearance,
+        blocks.ageBody,
+        blocks.fashionCasting,
         blocks.presence,
         blocks.presenceRules,
         blocks.brandDna,
         blocks.wardrobe,
+        blocks.garmentDirection,
         blocks.referenceDirection,
         blocks.camera,
         blocks.lighting,
         blocks.variation,
         blocks.editorialRules,
+        blocks.runVariation,
         params.premiumRetrySuffix ?? "",
       ]
         .filter((block) => block.trim().length > 0)
         .join("\n\n");
+
+  if (officialBrandFace) {
+    assertObfPromptHasNoLegacyBiology(prompt, "OBF discovery prompt");
+    if (!/Generate a new individual inside this casting lane\./i.test(prompt)) {
+      throw new IdentityBlueprintError(
+        "OBF discovery prompt missing required L3 new-individual wording",
+      );
+    }
+    if (!discoveryIdentityInstance) {
+      throw new IdentityBlueprintError(
+        "Missing L3 DiscoveryIdentityInstance — refusing provider prompt",
+      );
+    }
+  }
 
   const fingerprint = promptFingerprint(prompt);
   if (discoveryBlueprint && runVariationToken) {
@@ -657,9 +826,14 @@ export function buildCandidatePrompt(params: {
     identityDna,
     brandArchetypeSnapshot,
     discoveryBlueprint,
+    slotBlueprint,
+    discoveryIdentityInstance,
+    discoveryIdentityMetadata,
+    discoveryIdentityDebug,
     promptFingerprint: fingerprint,
     runVariationToken,
     officialBrandFace,
+    identityAttemptNumber,
   };
 }
 

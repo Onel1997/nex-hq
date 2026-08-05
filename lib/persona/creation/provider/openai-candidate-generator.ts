@@ -22,6 +22,7 @@ import {
   resolveOfficialDiscoveryVariations,
   type CandidateVariationProfile,
 } from "../candidate-intelligence";
+import { assertObfCastAnatomyDiversity } from "../candidate-intelligence/obf-l3-integration";
 import {
   buildPremiumRetryPromptSuffix,
   DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS,
@@ -71,6 +72,8 @@ async function generateWithDiscoveryQualityFilter(input: {
   item: WorkItem;
   quality: ReturnType<typeof resolveQuality>;
   castingPhase: CastingFunnelPhase;
+  generationRunId: string;
+  identityAttemptNumber: number;
 }): Promise<{
   built: ReturnType<typeof buildCandidatePrompt>;
   generated: Awaited<ReturnType<typeof generateOpenAiImage>>;
@@ -96,7 +99,16 @@ async function generateWithDiscoveryQualityFilter(input: {
       candidateNumber: input.item.candidateNumber,
       variation: input.item.variation,
       premiumRetrySuffix: retrySuffix,
+      generationRunId: input.generationRunId,
+      attemptNumber: input.identityAttemptNumber,
     });
+
+    if (built.officialBrandFace && !built.discoveryIdentityInstance) {
+      throw new PersonaDomainError(
+        "Official Brand Face missing L3 DiscoveryIdentityInstance — refusing provider call",
+        "CONFIG",
+      );
+    }
 
     const { value: gen, attempts: providerAttempts } = await withTransientRetry(
       () =>
@@ -241,6 +253,8 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
 
     const quality = resolveQuality(input);
     const jobId = randomUUID();
+    const generationRunId = input.generationRunId?.trim() || jobId;
+    const identityAttemptNumber = input.identityAttemptNumber ?? 1;
     const castingPhase: CastingFunnelPhase = resolveCastingPhaseForGeneration({
       stage: input.stage,
       castingPhase: input.castingPhase,
@@ -268,6 +282,7 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
 
     if (resolved.officialBrandFace) {
       const fingerprints = new Set<string>();
+      const l3Instances = [];
       for (let i = 0; i < numbers.length; i += 1) {
         const built = buildCandidatePrompt({
           project: input.project,
@@ -275,9 +290,20 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
           candidateNumber: numbers[i]!,
           variation: variations[i],
           discoveryBlueprint: resolved.blueprints[i],
+          generationRunId,
+          attemptNumber: identityAttemptNumber,
         });
+        if (!built.discoveryIdentityInstance) {
+          throw new PersonaDomainError(
+            "Official Brand Face missing L3 DiscoveryIdentityInstance — refusing provider call",
+            "CONFIG",
+            { candidateNumber: numbers[i] },
+          );
+        }
+        l3Instances.push(built.discoveryIdentityInstance);
         fingerprints.add(built.promptFingerprint);
       }
+      assertObfCastAnatomyDiversity(l3Instances);
       if (fingerprints.size !== numbers.length) {
         throw new PersonaDomainError(
           "Official Brand Face discovery prompts are not unique across A–D.",
@@ -322,6 +348,8 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
         prompt: string;
         negative: string;
         identityLock: string;
+        l3Metadata?: ReturnType<typeof buildCandidatePrompt>["discoveryIdentityMetadata"];
+        l3Debug?: ReturnType<typeof buildCandidatePrompt>["discoveryIdentityDebug"];
       }
     >();
 
@@ -353,6 +381,8 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             item,
             quality,
             castingPhase,
+            generationRunId,
+            identityAttemptNumber,
           });
           const built = genResult.built;
           retryCount = Math.max(0, genResult.attempts - 1);
@@ -363,6 +393,10 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             bucket.prompt = built.prompt;
             bucket.negative = built.negativePrompt;
             bucket.identityLock = built.identityLock;
+            if (built.discoveryIdentityMetadata) {
+              bucket.l3Metadata = built.discoveryIdentityMetadata;
+              bucket.l3Debug = built.discoveryIdentityDebug;
+            }
           }
 
           if (!generated.imageBytes) {
@@ -442,6 +476,8 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
           provider: this.id,
           quality,
           costLabel: "allocated_estimate",
+          generationRunId,
+          identityAttemptNumber,
           variation: {
             id: variation.id,
             label: variation.label,
@@ -458,6 +494,12 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
               : null,
           identityLock: bucket.identityLock,
           identitySeed: variation.identityDescriptor,
+          ...(bucket.l3Metadata
+            ? { discoveryIdentity: bucket.l3Metadata }
+            : {}),
+          ...(bucket.l3Debug
+            ? { discoveryIdentityDebug: bucket.l3Debug }
+            : {}),
           diversity: {
             minPairwiseScore: diversity.minPairwiseScore,
             averagePairwiseScore: diversity.averagePairwiseScore,

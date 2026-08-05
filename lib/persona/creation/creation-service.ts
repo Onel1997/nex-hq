@@ -914,6 +914,8 @@ export async function confirmAndStartCandidateGeneration(
       castingPhase,
       candidateNumbers,
       assetTypes,
+      generationRunId: durableJob.id,
+      identityAttemptNumber: 1,
     });
 
     const existing = await creationRepo().listCandidates(scope, projectId);
@@ -1579,6 +1581,8 @@ export async function retrySingleCandidateAsset(
     qualityMode,
     assetTypes: [assetType],
     candidateNumbers: [candidate.candidate_number],
+    generationRunId: durableJob.id,
+    identityAttemptNumber: 1,
   });
 
   const result = batch.results[0];
