@@ -326,7 +326,7 @@ export class SupabaseHistoricalBackfillRepository
       .select(
         "id, workspace_id, archetype_id, creation_project_id, candidate_id, asset_id, state, " +
           "image_checksum, perceptual_hash, storage_object_key, " +
-          "face_embedding_dimension, face_detection_status, " +
+          "face_embedding_dimension, face_detection_status, live_evaluation_evidence, " +
           "face_embedding",
       )
       .eq("workspace_id", input.workspaceId)
@@ -361,6 +361,11 @@ export class SupabaseHistoricalBackfillRepository
         imageChecksum: nullableStr(r.image_checksum),
         perceptualHash: nullableStr(r.perceptual_hash),
         storageObjectKey: nullableStr(r.storage_object_key),
+        liveEvaluationFinalDecision:
+          typeof (r.live_evaluation_evidence as { finalDecision?: unknown } | null)
+            ?.finalDecision === "string"
+            ? ((r.live_evaluation_evidence as { finalDecision: string }).finalDecision)
+            : null,
       } satisfies HistoricalBackfillEligibilityRecord;
     });
 

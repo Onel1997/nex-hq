@@ -43,6 +43,13 @@ export function isBackfillEligible(
   if (!record.candidateId?.trim()) return false;
   if (!record.assetId?.trim()) return false;
   if (hasValidStoredEmbedding(record)) return false;
+  // Never backfill embeddings for faces that never passed novelty (board-visible).
+  if (
+    record.liveEvaluationFinalDecision != null &&
+    record.liveEvaluationFinalDecision !== "allowed"
+  ) {
+    return false;
+  }
   return true;
 }
 

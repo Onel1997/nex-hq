@@ -9,6 +9,7 @@ import { PersonaDomainError } from "../domain/errors";
 import type { EmbeddingRepository, EmbeddingUpdate } from "./embedding-repository";
 import type { StoredEmbeddingRef } from "./local-face-embedding-evaluator";
 import { resolveHistoricalNoveltyArchetypeFilter } from "./historical-backfill-archetype-filter";
+import { isEmbeddingEligibleForComparison } from "./embedding-comparison-eligibility";
 
 const TABLE = "persona_face_novelty_records";
 const FORBIDDEN_STATES = [
@@ -71,7 +72,7 @@ export class SupabaseEmbeddingRepository implements EmbeddingRepository {
 
     let query = client
       .from(TABLE)
-      .select("asset_id, candidate_id, face_embedding")
+      .select("asset_id, candidate_id, face_embedding, live_evaluation_evidence")
       .eq("workspace_id", workspaceId)
       .not("face_embedding", "is", null)
       // Only compare against shown/exhausted/saved/approved/shortlisted/rejected
@@ -86,6 +87,13 @@ export class SupabaseEmbeddingRepository implements EmbeddingRepository {
     if (!data) return [];
 
     return data
+      .filter((row) =>
+        isEmbeddingEligibleForComparison({
+          liveEvaluationEvidence: row.live_evaluation_evidence as
+            | { finalDecision?: string }
+            | null,
+        }),
+      )
       .filter((row) => Array.isArray(row.face_embedding) && row.face_embedding.length > 0)
       .map((row) => ({
         assetId: String(row.asset_id),

@@ -118,6 +118,8 @@ export type HistoricalBackfillEligibilityRecord = {
   imageChecksum: string | null;
   perceptualHash: string | null;
   storageObjectKey: string | null;
+  /** From live_evaluation_evidence.finalDecision when present. */
+  liveEvaluationFinalDecision?: string | null;
 };
 
 export type HistoricalBackfillPreflightSummary = {
