@@ -21,8 +21,8 @@ import { getQualityModeProfile } from "@/lib/persona/creation/quality-modes";
 type Ctx = { params: Promise<{ id: string }> };
 
 export const runtime = "nodejs";
-/** Allow OpenAI + novelty evaluation to finish for single-slot replacement. */
-export const maxDuration = 180;
+/** Allow provider timeout (180s) + terminal persistence before the route is killed. */
+export const maxDuration = 210;
 
 const PATCH_ACTIONS = new Set([
   "estimate",
@@ -60,6 +60,34 @@ export async function GET(_request: Request, ctx: Ctx) {
     if (url.searchParams.get("jobs") === "1") {
       const jobs = await listGenerationJobsForProject(gate.scope, id);
       return jsonOk({ project, jobs });
+    }
+    if (url.searchParams.get("novelty_replacement_status") === "1") {
+      const jobId = url.searchParams.get("jobId") ?? undefined;
+      const status = await getNoveltyReplacementJobStatus(
+        gate.scope,
+        id,
+        jobId || undefined,
+      );
+      return jsonOk({
+        jobId: status.status?.jobId ?? null,
+        projectId: status.projectId,
+        slot: status.status?.slot ?? null,
+        attemptNumber: status.status?.attemptNumber ?? null,
+        status: status.status?.status ?? null,
+        currentStage: status.status?.currentStage ?? null,
+        lastHeartbeatAt: status.status?.lastHeartbeatAt ?? null,
+        providerStartedAt: status.status?.providerStartedAt ?? null,
+        providerCompletedAt: status.status?.providerCompletedAt ?? null,
+        candidateId: status.status?.candidateId ?? null,
+        noveltyDecision: status.status?.noveltyDecision ?? null,
+        finalCandidateStatus: status.status?.finalCandidateStatus ?? null,
+        safeErrorCode: status.status?.safeErrorCode ?? null,
+        safeErrorMessage: status.status?.safeErrorMessage ?? null,
+        stageLabel: status.status?.stageLabel ?? null,
+        providerMayHaveCompleted:
+          status.status?.providerMayHaveCompleted ?? false,
+        reconciledJobIds: status.reconciledJobIds,
+      });
     }
     if (url.searchParams.get("incident") === "1") {
       const incident = await getIncidentProjectSummary(gate.scope, id);

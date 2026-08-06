@@ -6,6 +6,8 @@ export interface ImageGenerationRequest {
   styleNotes?: string;
   /** Persona Studio quality override — does not change Image Studio defaults. */
   qualityOverride?: "low" | "medium" | "high" | "auto";
+  /** Abort signal for the underlying OpenAI/fetch request. */
+  signal?: AbortSignal;
 }
 
 /** Result from an image provider — Phase 1 stores prompts only. */

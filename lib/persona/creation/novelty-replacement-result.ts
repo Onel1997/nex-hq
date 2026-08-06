@@ -8,7 +8,13 @@ import type { PersonaGenerationJob } from "../domain/creation-types";
 export const NOVELTY_REPLACEMENT_POLL_INTERVAL_MS = 2000;
 export const NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS = 120_000;
 export const NOVELTY_REPLACEMENT_TIMEOUT_MESSAGE =
-  "Generation is taking longer than expected. Refresh or check the job status." as const;
+  "Generation is taking longer than expected. Server status: generating." as const;
+
+export function formatNoveltyReplacementTimeoutMessage(
+  serverState: string,
+): string {
+  return `Generation is taking longer than expected. Server status: ${serverState}.`;
+}
 
 /** Confirmed but provider never started → stale after this window. */
 export const STALE_CONFIRMED_WITHOUT_PROVIDER_MS = 2 * 60 * 1000;
@@ -43,15 +49,31 @@ export type NoveltyReplacementSlotState =
 export type NoveltyReplacementCheckpoint =
   | "request_received"
   | "confirmation_validated"
+  | "job_marked_generating"
   | "replacement_job_loaded"
+  | "provider_request_started"
   | "provider_generation_started"
+  | "provider_timeout"
+  | "provider_response_received"
   | "provider_generation_completed"
+  | "provider_payload_validated"
+  | "candidate_row_created"
   | "candidate_created"
+  | "asset_upload_started"
+  | "asset_upload_completed"
+  | "asset_row_created"
   | "asset_created"
   | "novelty_evaluation_started"
+  | "face_detection_completed"
+  | "embedding_created"
+  | "comparisons_completed"
+  | "novelty_decision_persisted"
   | "novelty_evaluation_completed"
   | "candidate_status_persisted"
-  | "response_returned";
+  | "job_terminal_status_persisted"
+  | "API_response_returned"
+  | "response_returned"
+  | "board_payload_observed_terminal_result";
 
 export type NoveltyReplacementSuccessResponse = {
   ok: true;
@@ -103,6 +125,9 @@ export type ActiveNoveltyReplacementDto = {
   /** Explicit server slot lifecycle state — never inferred as generating from terminal jobs. */
   slotState: NoveltyReplacementSlotState;
   state: NoveltyReplacementSlotState;
+  currentStage: string | null;
+  stageLabel: string;
+  lastHeartbeatAt: string | null;
   providerStartedAt: string | null;
   providerCompletedAt: string | null;
   newCandidateId: string | null;
@@ -114,6 +139,7 @@ export type ActiveNoveltyReplacementDto = {
   elapsedDisplay: string;
   waitingToStart: boolean;
   recoveredFromStaleState?: boolean;
+  providerMayHaveCompleted?: boolean;
 };
 
 export function isNoveltyReplacementJob(job: {
@@ -286,6 +312,39 @@ export function isGenuinelyActiveReplacementPhase(
  * Determine if an active-looking job is stale based on timestamps.
  * Does not start provider calls.
  */
+export const PROVIDER_GENERATION_TIMEOUT_MS = 180_000;
+
+/**
+ * Whether a generating replacement has exceeded the provider deadline.
+ * Used by status reconciliation and active-job filtering — no provider calls.
+ */
+export function isProviderGenerationOverdue(
+  job: Pick<PersonaGenerationJob, "status" | "completed_at" | "confirmation_payload" | "started_at">,
+  nowMs = Date.now(),
+  timeoutMs = PROVIDER_GENERATION_TIMEOUT_MS,
+): boolean {
+  if (hasTerminalReplacementResult(job)) return false;
+  const payload = job.confirmation_payload ?? {};
+  if (payload.providerCompletedAt) return false;
+  const providerStartedAt =
+    payloadString(payload as Record<string, unknown>, "providerStartedAt") ??
+    job.started_at;
+  if (!providerStartedAt) return false;
+  const stage = payloadString(payload as Record<string, unknown>, "currentStage");
+  const stillRequesting =
+    stage == null ||
+    stage === "provider_request_started" ||
+    stage === "provider_generation_started" ||
+    stage === "job_marked_generating" ||
+    stage === "replacement_job_loaded" ||
+    stage === "confirmation_validated" ||
+    stage === "request_received";
+  if (!stillRequesting) return false;
+  const startedMs = parseIsoMs(providerStartedAt);
+  if (startedMs == null) return false;
+  return nowMs - startedMs > timeoutMs;
+}
+
 export function evaluateReplacementJobStaleness(
   job: PersonaGenerationJob,
   nowMs = Date.now(),
@@ -293,6 +352,10 @@ export function evaluateReplacementJobStaleness(
   const phase = resolveReplacementLifecyclePhase(job);
   if (!isGenuinelyActiveReplacementPhase(phase)) {
     return { stale: false, reason: null };
+  }
+
+  if (isProviderGenerationOverdue(job, nowMs)) {
+    return { stale: true, reason: "provider_generation_timeout" };
   }
 
   const payload = job.confirmation_payload ?? {};
@@ -389,6 +452,9 @@ export function toActiveNoveltyReplacementDto(
   });
   const slotState: NoveltyReplacementSlotState =
     phase === "confirmed" ? "generating" : phase;
+  const currentStage =
+    payloadString(payload, "currentStage") ??
+    payloadString(payload, "lastCheckpoint");
 
   return {
     jobId: job.id,
@@ -398,6 +464,9 @@ export function toActiveNoveltyReplacementDto(
     maxAttempts,
     slotState,
     state: slotState,
+    currentStage,
+    stageLabel: stageLabelForCheckpoint(currentStage),
+    lastHeartbeatAt: payloadString(payload, "lastHeartbeatAt"),
     providerStartedAt,
     providerCompletedAt: payloadString(payload, "providerCompletedAt"),
     newCandidateId: payloadString(payload, "newCandidateId"),
@@ -410,6 +479,9 @@ export function toActiveNoveltyReplacementDto(
     elapsedDisplay: elapsed.display,
     waitingToStart: elapsed.waitingToStart,
     recoveredFromStaleState: payload.recoveredFromStaleState === true,
+    providerMayHaveCompleted:
+      payload.providerMayHaveCompleted === true ||
+      Boolean(payloadString(payload, "providerCompletedAt")),
   };
 }
 
@@ -513,4 +585,46 @@ export function logNoveltyReplacementCheckpoint(
 ): void {
   if (process.env.NODE_ENV === "production") return;
   console.info("[novelty-replacement]", checkpoint, fields);
+}
+
+/** Human-readable stage labels for the board (safe, no secrets). */
+export function stageLabelForCheckpoint(
+  checkpoint: NoveltyReplacementCheckpoint | string | null | undefined,
+): string {
+  switch (checkpoint) {
+    case "request_received":
+    case "confirmation_validated":
+    case "job_marked_generating":
+    case "replacement_job_loaded":
+    case "provider_request_started":
+    case "provider_generation_started":
+      return "Requesting image";
+    case "provider_timeout":
+      return "Image generation timed out";
+    case "provider_response_received":
+    case "provider_generation_completed":
+    case "provider_payload_validated":
+    case "candidate_row_created":
+    case "candidate_created":
+    case "asset_upload_started":
+      return "Saving image";
+    case "asset_upload_completed":
+    case "asset_row_created":
+    case "asset_created":
+    case "novelty_evaluation_started":
+    case "face_detection_completed":
+    case "embedding_created":
+    case "comparisons_completed":
+      return "Checking face novelty";
+    case "novelty_decision_persisted":
+    case "novelty_evaluation_completed":
+    case "candidate_status_persisted":
+    case "job_terminal_status_persisted":
+    case "API_response_returned":
+    case "response_returned":
+    case "board_payload_observed_terminal_result":
+      return "Finalizing result";
+    default:
+      return "Generating image and checking face novelty...";
+  }
 }

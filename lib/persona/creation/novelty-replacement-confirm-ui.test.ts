@@ -37,6 +37,7 @@ import {
   NOVELTY_REPLACEMENT_POLL_INTERVAL_MS,
   NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS,
   NOVELTY_REPLACEMENT_TIMEOUT_MESSAGE,
+  formatNoveltyReplacementTimeoutMessage,
   outcomeMessage,
   readActiveNoveltyReplacements,
 } from "./novelty-replacement-result";
@@ -195,6 +196,10 @@ describe("Phase 2.1E.1 novelty replacement confirm/loading/result", () => {
     assert.equal(NOVELTY_REPLACEMENT_POLL_INTERVAL_MS, 2000);
     assert.equal(NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS, 120_000);
     assert.match(NOVELTY_REPLACEMENT_TIMEOUT_MESSAGE, /longer than expected/);
+    assert.match(
+      formatNoveltyReplacementTimeoutMessage("generating"),
+      /Server status: generating/,
+    );
   });
 
   it("10–14. active replacement jobs resume; board GET uses no-store headers in route", () => {
@@ -204,7 +209,7 @@ describe("Phase 2.1E.1 novelty replacement confirm/loading/result", () => {
     );
     assert.match(routeSrc, /confirm_novelty_replacement/);
     assert.match(routeSrc, /activeNoveltyReplacements/);
-    assert.match(routeSrc, /maxDuration = 180/);
+    assert.match(routeSrc, /maxDuration = 210/);
 
     const utilsSrc = readFileSync(
       join(process.cwd(), "app/api/persona/_utils.ts"),
@@ -284,8 +289,8 @@ describe("Phase 2.1E.1 novelty replacement confirm/loading/result", () => {
     assert.equal(result.providerStarted, true);
     assert.equal(result.providerCompleted, true);
     assert.ok(Array.isArray(result.checkpoints));
-    assert.ok(result.checkpoints?.includes("provider_generation_started"));
-    assert.ok(result.checkpoints?.includes("response_returned"));
+    assert.ok(result.checkpoints?.includes("provider_request_started") || result.checkpoints?.includes("provider_generation_started"));
+    assert.ok(result.checkpoints?.includes("response_returned") || result.checkpoints?.includes("API_response_returned"));
   });
 
   it("19. existing allowed candidates remain untouched", async () => {
@@ -317,7 +322,9 @@ describe("Phase 2.1E.1 novelty replacement confirm/loading/result", () => {
       "utf8",
     );
     assert.match(views, /setReplacementFlow/);
-    assert.match(views, /NOVELTY_REPLACEMENT_TIMEOUT_MESSAGE/);
+    assert.match(views, /formatNoveltyReplacementTimeoutMessage/);
+    assert.match(views, /createNoveltyReplacementPollController/);
+    assert.match(views, /novelty_replacement_status/);
     assert.match(views, /cache: "no-store"/);
     assert.match(views, /confirmInFlightRef/);
 

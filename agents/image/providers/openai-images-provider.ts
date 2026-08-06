@@ -70,7 +70,10 @@ export async function generateOpenAiImage(
   });
 
   try {
-    const response = await openai.images.generate(payload);
+    const response = await openai.images.generate(
+      payload,
+      request.signal ? { signal: request.signal } : undefined,
+    );
     const providerRequestId =
       typeof (response as { _request_id?: unknown })._request_id === "string"
         ? (response as { _request_id: string })._request_id

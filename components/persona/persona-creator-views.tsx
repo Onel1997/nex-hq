@@ -5,12 +5,14 @@ import type { PersonaStudioController } from "@/components/persona/use-persona-s
 import {
   NOVELTY_REPLACEMENT_POLL_INTERVAL_MS,
   NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS,
-  NOVELTY_REPLACEMENT_TIMEOUT_MESSAGE,
+  formatNoveltyReplacementTimeoutMessage,
   REPLACEMENT_JOB_STALE_MESSAGE,
   computeReplacementElapsed,
   outcomeMessage,
+  stageLabelForCheckpoint,
   type ActiveNoveltyReplacementDto,
 } from "@/lib/persona/creation/novelty-replacement-result";
+import { createNoveltyReplacementPollController } from "@/lib/persona/creation/novelty-replacement-execution";
 import type {
   BrandRole,
   IntendedUsage,
@@ -1469,6 +1471,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     nextAttemptNumber: number;
     maxAttempts: number;
     reason: string;
+    jobId?: string | null;
   } | null>(null);
   const [replacementFlow, setReplacementFlow] = useState<{
     candidateId: string;
@@ -1476,10 +1479,13 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     phase: "idle" | "confirming" | "generating" | "polling";
     attemptNumber: number;
     maxAttempts: number;
-    /** Epoch ms of providerStartedAt only — never project/job created_at alone. */
+    /** Epoch ms of local monotonic start — never project/job created_at alone. */
     providerStartedAtMs: number | null;
     jobId?: string | null;
     newCandidateId?: string | null;
+    stageLabel?: string;
+    providerMayHaveCompleted?: boolean;
+    safeError?: string | null;
   } | null>(null);
   const [elapsedDisplay, setElapsedDisplay] = useState("Waiting to start");
   const [staleRecoveryMessage, setStaleRecoveryMessage] = useState<string | null>(
@@ -1490,6 +1496,9 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     string | number | boolean | null
   > | null>(null);
   const confirmInFlightRef = useRef(false);
+  const pollControllerRef = useRef<ReturnType<
+    typeof createNoveltyReplacementPollController
+  > | null>(null);
 
   const serverActiveReplacements = useMemo(
     () => studio.projectCandidateState?.activeNoveltyReplacements ?? [],
@@ -1521,6 +1530,13 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
   }, [replacementFlow]);
+
+  useEffect(() => {
+    return () => {
+      pollControllerRef.current?.stop();
+      pollControllerRef.current = null;
+    };
+  }, []);
 
   // Server is source of truth — never restore generating from stale local/job status alone.
   useEffect(() => {
@@ -1959,6 +1975,12 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
               attemptNumber: replacementFlow.attemptNumber,
               maxAttempts: replacementFlow.maxAttempts,
               elapsedDisplay,
+              stageLabel:
+                replacementFlow.stageLabel ??
+                stageLabelForCheckpoint("provider_request_started"),
+              providerMayHaveCompleted:
+                replacementFlow.providerMayHaveCompleted,
+              safeError: replacementFlow.safeError ?? null,
             }}
           />
         </div>
@@ -1986,6 +2008,12 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                       attemptNumber: flowForSlot.attemptNumber,
                       maxAttempts: flowForSlot.maxAttempts,
                       elapsedDisplay,
+                      stageLabel:
+                        flowForSlot.stageLabel ??
+                        stageLabelForCheckpoint("provider_request_started"),
+                      providerMayHaveCompleted:
+                        flowForSlot.providerMayHaveCompleted,
+                      safeError: flowForSlot.safeError ?? null,
                     }
                   : null
               }
@@ -2014,6 +2042,9 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                           maxAttempts: prepared.maxAttempts ?? 4,
                           reason:
                             prepared.reason ?? "face_similarity_duplicate",
+                          jobId:
+                            (prepared as { job?: { id?: string } }).job?.id ??
+                            null,
                         });
                       } catch (e) {
                         setError(
@@ -2116,11 +2147,34 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                   return;
                 }
                 if (confirmInFlightRef.current) return;
+                if (pollControllerRef.current?.isRunning()) return;
                 confirmInFlightRef.current = true;
                 const prepareSnapshot = noveltyPrepare;
+                if (!prepareSnapshot) {
+                  confirmInFlightRef.current = false;
+                  setError("Prepare Generate New Face again.");
+                  return;
+                }
                 const token = studio.paidConfirmationToken;
                 const projectId = studio.selectedProjectId;
                 const flowStartedAtMs = Date.now();
+                type ConfirmResult = {
+                  status?: string;
+                  newCandidateId?: string;
+                  replacementJobId?: string;
+                  attemptNumber?: number;
+                  maxAttempts?: number;
+                  noveltyDecision?: string | null;
+                  providerStarted?: boolean;
+                  providerCompleted?: boolean;
+                  durationMs?: number;
+                  slot?: string;
+                  safeErrorMessage?: string;
+                };
+                let jobId = prepareSnapshot.jobId ?? null;
+                let confirmResult: ConfirmResult | null = null;
+                let confirmFailedMessage: string | null = null;
+
                 setError(null);
                 setResultMessage(null);
                 setReplacementFlow({
@@ -2130,140 +2184,232 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                   attemptNumber: prepareSnapshot.nextAttemptNumber,
                   maxAttempts: prepareSnapshot.maxAttempts,
                   providerStartedAtMs: flowStartedAtMs,
+                  jobId,
+                  stageLabel: stageLabelForCheckpoint("provider_request_started"),
                 });
                 setNoveltyPrepare(null);
                 setNoveltyConfirmCost(false);
 
+                const readStatus = async () => {
+                  const q = jobId
+                    ? `?novelty_replacement_status=1&jobId=${encodeURIComponent(jobId)}`
+                    : `?novelty_replacement_status=1`;
+                  const res = await fetch(
+                    `/api/persona/creation-projects/${projectId}${q}`,
+                    { cache: "no-store" },
+                  );
+                  const data = (await res.json()) as {
+                    status?: string | null;
+                    currentStage?: string | null;
+                    stageLabel?: string | null;
+                    candidateId?: string | null;
+                    noveltyDecision?: string | null;
+                    finalCandidateStatus?: string | null;
+                    safeErrorCode?: string | null;
+                    safeErrorMessage?: string | null;
+                    providerCompletedAt?: string | null;
+                    providerMayHaveCompleted?: boolean;
+                    jobId?: string | null;
+                  };
+                  if (data.jobId) jobId = data.jobId;
+                  const terminalStatuses = new Set([
+                    "completed",
+                    "failed",
+                    "cancelled",
+                    "partially_completed",
+                  ]);
+                  const terminal =
+                    Boolean(confirmResult?.status) ||
+                    Boolean(confirmFailedMessage) ||
+                    (typeof data.status === "string" &&
+                      terminalStatuses.has(data.status)) ||
+                    Boolean(data.finalCandidateStatus) ||
+                    Boolean(data.safeErrorCode);
+                  if (
+                    data.safeErrorCode === "provider_generation_timeout" ||
+                    data.safeErrorMessage?.includes("did not finish within")
+                  ) {
+                    setError("Image generation timed out.");
+                    setReplacementFlow((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            phase: "idle",
+                            stageLabel: "Image generation timed out",
+                            safeError: "provider_generation_timeout",
+                            providerMayHaveCompleted:
+                              data.providerMayHaveCompleted === true,
+                          }
+                        : prev,
+                    );
+                    return {
+                      terminal: true,
+                      serverState: "provider_generation_timeout",
+                    };
+                  }
+                  setReplacementFlow((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          phase: "polling",
+                          jobId: jobId ?? prev.jobId,
+                          newCandidateId:
+                            data.candidateId ?? prev.newCandidateId,
+                          stageLabel:
+                            data.stageLabel ??
+                            stageLabelForCheckpoint(data.currentStage) ??
+                            prev.stageLabel,
+                          providerMayHaveCompleted:
+                            data.providerMayHaveCompleted === true ||
+                            Boolean(data.providerCompletedAt),
+                        }
+                      : prev,
+                  );
+                  return {
+                    terminal,
+                    serverState:
+                      data.status ??
+                      data.currentStage ??
+                      data.finalCandidateStatus ??
+                      "generating",
+                  };
+                };
+
+                const controller = createNoveltyReplacementPollController({
+                  intervalMs: NOVELTY_REPLACEMENT_POLL_INTERVAL_MS,
+                  timeoutMs: NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS,
+                  now: () => Date.now(),
+                  poll: readStatus,
+                  reconcile: async () => {
+                    const res = await fetch(
+                      `/api/persona/creation-projects/${projectId}`,
+                      {
+                        method: "PATCH",
+                        cache: "no-store",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          action: "reconcile_novelty_replacement",
+                          jobId,
+                        }),
+                      },
+                    );
+                    const data = (await res.json()) as {
+                      job?: { status?: string | null };
+                      status?: { status?: string | null };
+                    };
+                    await studio.loadProject(projectId, {
+                      openCandidates: true,
+                    });
+                    return {
+                      serverState:
+                        data.status?.status ??
+                        data.job?.status ??
+                        "generating",
+                    };
+                  },
+                  onTimeoutMessage: (serverState) => {
+                    setError(
+                      formatNoveltyReplacementTimeoutMessage(serverState),
+                    );
+                  },
+                });
+                pollControllerRef.current = controller;
+
                 void (async () => {
                   try {
-                    const result = await studio.confirmNoveltyReplacement(
-                      projectId,
-                      {
+                    const confirmPromise = studio
+                      .confirmNoveltyReplacement(projectId, {
                         candidateId: prepareSnapshot.candidateId,
                         costConfirmed: true,
                         confirmationToken: token,
                         userConfirmedAt: new Date().toISOString(),
-                      },
-                    );
-
-                    setDebugReplacement({
-                      replacementJobId: result.replacementJobId ?? null,
-                      slot: result.slot ?? prepareSnapshot.slot,
-                      attempt: result.attemptNumber ?? prepareSnapshot.nextAttemptNumber,
-                      state: result.status ?? null,
-                      providerStarted: result.providerStarted ?? null,
-                      providerCompleted: result.providerCompleted ?? null,
-                      candidateId: result.newCandidateId ?? null,
-                      noveltyDecision: result.noveltyDecision ?? null,
-                      durationMs: result.durationMs ?? Date.now() - flowStartedAtMs,
-                      safeError: null,
-                    });
-
-                    // Poll until board reflects terminal slot state (max 120s).
-                    const deadline = Date.now() + NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS;
-                    let terminal = false;
-                    const slotNumber =
-                      prepareSnapshot.slot === "A"
-                        ? 1
-                        : prepareSnapshot.slot === "B"
-                          ? 2
-                          : prepareSnapshot.slot === "C"
-                            ? 3
-                            : 4;
-                    while (Date.now() < deadline) {
-                      const boardRes = await fetch(
-                        `/api/persona/creation-projects/${projectId}`,
-                        { cache: "no-store" },
-                      );
-                      const boardData = (await boardRes.json()) as {
-                        candidates?: { id: string; candidate_number: number; status: string }[];
-                        noveltyFailureSlots?: {
-                          candidateId: string;
-                          slot: number;
-                          slotExhausted?: boolean;
-                          attemptNumber?: number;
-                        }[];
-                        error?: string;
-                      };
-                      if (!boardRes.ok) {
-                        throw new Error(boardData.error ?? "Board reload failed");
-                      }
-                      await studio.loadProject(projectId, { openCandidates: true });
-
-                      const slots = boardData.noveltyFailureSlots ?? [];
-                      const visible = boardData.candidates ?? [];
-                      const newId = result.newCandidateId;
-
-                      if (result.status === "allowed") {
-                        if (
-                          visible.some((c) => c.id === newId) ||
-                          visible.some((c) => c.candidate_number === slotNumber)
-                        ) {
-                          terminal = true;
-                          break;
+                      })
+                      .then((result) => {
+                        confirmResult = result;
+                        if (result.replacementJobId) {
+                          jobId = result.replacementJobId;
                         }
-                      } else if (
-                        result.status === "blocked" ||
-                        result.status === "exhausted"
-                      ) {
-                        const failure = slots.find(
-                          (s) =>
-                            s.candidateId === newId || s.slot === slotNumber,
-                        );
-                        if (failure) {
-                          terminal = true;
-                          break;
-                        }
-                      } else {
-                        terminal = true;
-                        break;
-                      }
-                      setReplacementFlow((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              phase: "polling",
-                              jobId: result.replacementJobId,
-                            }
-                          : prev,
-                      );
-                      await new Promise((r) =>
-                        setTimeout(r, NOVELTY_REPLACEMENT_POLL_INTERVAL_MS),
-                      );
+                        setDebugReplacement({
+                          replacementJobId: result.replacementJobId ?? null,
+                          slot: result.slot ?? prepareSnapshot.slot,
+                          attempt:
+                            result.attemptNumber ??
+                            prepareSnapshot.nextAttemptNumber,
+                          state: result.status ?? null,
+                          providerStarted: result.providerStarted ?? null,
+                          providerCompleted: result.providerCompleted ?? null,
+                          candidateId: result.newCandidateId ?? null,
+                          noveltyDecision: result.noveltyDecision ?? null,
+                          durationMs:
+                            result.durationMs ?? Date.now() - flowStartedAtMs,
+                          safeError: null,
+                        });
+                        controller.stop();
+                        return result;
+                      })
+                      .catch((e: unknown) => {
+                        confirmFailedMessage =
+                          e instanceof Error
+                            ? e.message
+                            : "Generate New Face failed";
+                        setDebugReplacement((prev) => ({
+                          ...(prev ?? {}),
+                          state: "failed",
+                          safeError: confirmFailedMessage,
+                          durationMs: Date.now() - flowStartedAtMs,
+                        }));
+                        controller.stop();
+                        throw e;
+                      });
+
+                    const pollOutcome = await controller.start();
+                    // Prefer confirm outcome when it already finished.
+                    let resolvedConfirm: ConfirmResult | null = confirmResult;
+                    try {
+                      resolvedConfirm = (await confirmPromise) as ConfirmResult;
+                      confirmResult = resolvedConfirm;
+                    } catch {
+                      // confirmFailedMessage already set
                     }
 
-                            if (!terminal) {
-                              // Client poll timeout → one server reconciliation, then stop spinning.
-                              try {
-                                await fetch(
-                                  `/api/persona/creation-projects/${projectId}`,
-                                  {
-                                    method: "PATCH",
-                                    cache: "no-store",
-                                    headers: {
-                                      "Content-Type": "application/json",
-                                    },
-                                    body: JSON.stringify({
-                                      action: "reconcile_novelty_replacement",
-                                      jobId: result.replacementJobId,
-                                    }),
-                                  },
-                                );
-                                await studio.loadProject(projectId, {
-                                  openCandidates: true,
-                                });
-                              } catch {
-                                // fall through to timeout message
-                              }
-                              setError(NOVELTY_REPLACEMENT_TIMEOUT_MESSAGE);
-                            } else if (result.status === "allowed") {
-                      setResultMessage(outcomeMessage("allowed"));
-                    } else if (result.status === "blocked") {
-                      setResultMessage(
-                        `${outcomeMessage("blocked")} Attempt ${result.attemptNumber} of ${result.maxAttempts ?? 4}.`,
+                    if (confirmFailedMessage) {
+                      const timedOut =
+                        /did not finish within the allowed time|provider_generation_timeout/i.test(
+                          confirmFailedMessage,
+                        );
+                      setError(
+                        timedOut
+                          ? "Image generation timed out."
+                          : confirmFailedMessage,
                       );
-                    } else if (result.status === "exhausted") {
+                      if (resolvedConfirm?.providerCompleted) {
+                        setError(
+                          `${confirmFailedMessage} Provider may already have completed — do not retry without a fresh confirmation.`,
+                        );
+                      }
+                    } else if (resolvedConfirm?.status === "allowed") {
+                      setResultMessage(outcomeMessage("allowed"));
+                      await studio.loadProject(projectId, {
+                        openCandidates: true,
+                      });
+                    } else if (resolvedConfirm?.status === "blocked") {
+                      setResultMessage(
+                        `${outcomeMessage("blocked")} Attempt ${resolvedConfirm.attemptNumber} of ${resolvedConfirm.maxAttempts ?? 4}.`,
+                      );
+                      await studio.loadProject(projectId, {
+                        openCandidates: true,
+                      });
+                    } else if (resolvedConfirm?.status === "exhausted") {
                       setResultMessage(outcomeMessage("exhausted"));
+                      await studio.loadProject(projectId, {
+                        openCandidates: true,
+                      });
+                    } else if (pollOutcome === "timeout") {
+                      // error already set by onTimeoutMessage
+                    } else {
+                      await studio.loadProject(projectId, {
+                        openCandidates: true,
+                      });
                     }
                   } catch (e) {
                     const message =
@@ -2271,22 +2417,18 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                         ? e.message
                         : "Generate New Face failed";
                     setError(message);
-                    setDebugReplacement((prev) => ({
-                      ...(prev ?? {}),
-                      state: "failed",
-                      safeError: message,
-                      durationMs: Date.now() - flowStartedAtMs,
-                    }));
-                    if (studio.selectedProjectId) {
-                      try {
-                        await studio.loadProject(studio.selectedProjectId, {
-                          openCandidates: true,
-                        });
-                      } catch {
-                        // keep error from confirm
-                      }
+                    try {
+                      await studio.loadProject(projectId, {
+                        openCandidates: true,
+                      });
+                    } catch {
+                      // keep error from confirm
                     }
                   } finally {
+                    controller.stop();
+                    if (pollControllerRef.current === controller) {
+                      pollControllerRef.current = null;
+                    }
                     confirmInFlightRef.current = false;
                     setReplacementFlow(null);
                   }

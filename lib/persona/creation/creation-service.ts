@@ -141,7 +141,6 @@ import {
   MAX_DISCOVERY_IDENTITY_ATTEMPTS,
 } from "./novelty-replacement";
 import {
-  buildStaleFailurePayload,
   evaluateReplacementJobStaleness,
   isNoveltyReplacementJob,
   logNoveltyReplacementCheckpoint,
@@ -153,6 +152,30 @@ import {
   type NoveltyReplacementHttpResponse,
   type NoveltyReplacementSuccessResponse,
 } from "./novelty-replacement-result";
+import {
+  ASSET_UPLOAD_TIMEOUT_CODE,
+  ASSET_UPLOAD_TIMEOUT_MESSAGE,
+  buildFailureResponse,
+  buildSuccessResponse,
+  executeProviderWithDeadline,
+  finalizeNoveltyReplacementJob,
+  isProviderGenerationOverdue,
+  NOVELTY_EVALUATION_TIMEOUT_CODE,
+  NOVELTY_EVALUATION_TIMEOUT_MESSAGE,
+  NoveltyReplacementStageTimeoutError,
+  persistNoveltyReplacementCheckpoint,
+  PROVIDER_GENERATION_TIMEOUT_CODE,
+  PROVIDER_GENERATION_TIMEOUT_MESSAGE,
+  PROVIDER_GENERATION_TIMEOUT_MS,
+  ProviderGenerationTimeoutError,
+  releaseNoveltyReplacementLock,
+  resolveNoveltyReplacementStageTimeouts,
+  RESULT_PERSISTENCE_TIMEOUT_CODE,
+  RESULT_PERSISTENCE_TIMEOUT_MESSAGE,
+  toNoveltyReplacementJobStatusDto,
+  tryAcquireNoveltyReplacementLock,
+  withNoveltyReplacementStageTimeout,
+} from "./novelty-replacement-execution";
 import { buildNoveltyBlockIdentityRetryContract } from "./candidate-intelligence/obf-l3-integration";
 import { resolveSlotBlueprint } from "../identity-blueprints";
 import { slotForCandidateNumber } from "@/lib/brand-archetypes/discovery-blueprints";
@@ -1831,165 +1854,348 @@ export async function confirmNoveltyReplacementGeneration(
     userConfirmedAt?: string;
     attestation?: string;
     httpRequest?: Request;
+    /** Test-only stage timeout overrides (never used in production callers). */
+    stageTimeouts?: Partial<
+      import("./novelty-replacement-execution").NoveltyReplacementStageTimeouts
+    >;
   },
 ): Promise<NoveltyReplacementHttpResponse> {
   const startedAtMs = Date.now();
+  const timeouts = resolveNoveltyReplacementStageTimeouts(options.stageTimeouts);
   const checkpoints: NoveltyReplacementCheckpoint[] = ["request_received"];
   logNoveltyReplacementCheckpoint("request_received", {
     projectId,
     previousCandidateId: options.candidateId,
   });
 
-  if (!options.costConfirmed) {
-    throw new PersonaDomainError(
-      "Explizite Kostenbestätigung erforderlich.",
-      "WORKFLOW",
-      { requiresCostConfirmation: true },
-    );
-  }
-  if (!options.confirmationToken?.trim()) {
-    throw new PersonaDomainError(
-      "Bestätigungstoken erforderlich — bitte Kostenschätzung vorbereiten.",
-      "WORKFLOW",
-      { requiresConfirmationToken: true },
-    );
-  }
-  if (!options.userConfirmedAt?.trim()) {
-    throw new PersonaDomainError(
-      "Explizite Nutzerbestätigung erforderlich (Checkbox im UI).",
-      "WORKFLOW",
-      { requiresUserConfirmation: true },
-    );
-  }
+  let slotLabel = "?";
+  let lockAcquired = false;
+  let job: Awaited<ReturnType<ReturnType<typeof jobRepo>["createJob"]>> | null =
+    null;
+  let workingPayload: Record<string, unknown> = {};
+  let providerStartedAt: string | null = null;
+  let providerCompletedAt: string | null = null;
+  let providerRequestId: string | null = null;
+  let providerOutputId: string | null = null;
+  let newCandidateId: string | null = null;
+  let candidateCreatedAt: string | null = null;
+  let assetCreatedAt: string | null = null;
+  let noveltyStartedAt: string | null = null;
+  let noveltyCompletedAt: string | null = null;
+  let attemptNumber = 0;
+  let previousId = options.candidateId;
+  let finalized = false;
+  let recoveredFromExistingAsset = false;
 
-  const project = await requireProject(scope, projectId);
-  const previous = await requireCandidate(scope, options.candidateId);
-  if (previous.creation_project_id !== projectId) {
-    throw new PersonaDomainError(
-      "Candidate does not belong to this creation project.",
-      "WORKFLOW",
-    );
-  }
-  if (previous.status !== "novelty_blocked") {
-    throw new PersonaDomainError(
-      "Generate New Face is only available for novelty_blocked slots.",
-      "WORKFLOW",
-    );
-  }
-
-  const previousAttempt = readIdentityAttemptNumber(previous.generation_settings);
-  if (!canRequestNoveltyReplacement(previousAttempt)) {
-    await creationRepo().updateCandidate(scope, previous.id, {
-      generation_settings: {
-        ...(previous.generation_settings ?? {}),
-        slotExhausted: true,
-      },
-    });
-    throw new PersonaDomainError(SLOT_EXHAUSTED_MESSAGE, "WORKFLOW", {
-      slotExhausted: true,
-      attemptNumber: previousAttempt,
-    });
-  }
-
-  const nextAttempt = previousAttempt + 1;
-  const slotLabel =
-    ["A", "B", "C", "D"][previous.candidate_number - 1] ??
-    String(previous.candidate_number);
-  const generationRunId = readGenerationRunIdFromSettings(
-    previous.generation_settings,
-    previous.provider_job_id ?? project.id,
-  );
-
-  const archetypeId =
-    parseArchetypeIdFromProjectDescription(project.description) ??
-    "arch-mediterranean-premium-hero";
-  const slot = slotForCandidateNumber(previous.candidate_number);
-  const slotBlueprint = resolveSlotBlueprint({ archetypeId, slot });
-  const contract = buildNoveltyBlockIdentityRetryContract({
-    previousAttemptNumber: previousAttempt,
-    slotBlueprint,
-    generationRunId,
-    creationProjectId: projectId,
-  });
-  if (contract.slotExhausted) {
-    throw new PersonaDomainError(SLOT_EXHAUSTED_MESSAGE, "WORKFLOW", {
-      slotExhausted: true,
-    });
-  }
-
-  const qualityMode = project.quality_mode ?? DEFAULT_QUALITY_MODE;
-  const mult = getQualityModeProfile(qualityMode).costMultiplier;
-  const estimatedMin = Number((OPENAI_IMAGE_COST_EUR_MIN * mult).toFixed(4));
-  const estimatedMax = Number((OPENAI_IMAGE_COST_EUR_MAX * mult).toFixed(4));
-  const retryEstimate: CandidateGenerationCostEstimate = {
-    available: true,
-    provider: "openai",
-    providerMode: project.provider_mode,
-    candidateCount: 1,
-    imagesPerCandidate: 1,
-    totalImages: 1,
-    estimatedMin,
-    estimatedMax,
-    estimatedTotal: estimatedMax,
-    currency: "EUR",
-    stage: project.generation_stage,
-    note: "novelty_replacement",
-    costStatus: "estimated",
-    castingPhase: "a1_discovery",
-  };
-  const currentHash = estimateFingerprintFromCost(
-    projectId,
-    qualityMode,
-    retryEstimate,
-  );
-
-  const confirmation = await jobRepo().getConfirmationByToken(
-    scope,
-    options.confirmationToken,
-  );
-  if (!confirmation) {
-    throw new PersonaDomainError(
-      "Bestätigung ungültig — bitte Kostenschätzung erneut bestätigen.",
-      "WORKFLOW",
-    );
-  }
-
-  // Idempotent resume: same token already consumed → return existing job outcome.
-  if (confirmation.consumed_at) {
-    const existingJobId = confirmation.generation_job_id;
-    const existingJob = existingJobId
-      ? await jobRepo().getJob(scope, existingJobId)
-      : null;
-    if (existingJob && existingJob.confirmation_payload?.noveltyReplacement) {
-      const payload = existingJob.confirmation_payload;
-      const newCandidateId =
-        typeof payload.newCandidateId === "string"
-          ? payload.newCandidateId
-          : null;
-      if (newCandidateId) {
-        const existingCandidate = await creationRepo().getCandidate(
+  const failAndReturn = async (input: {
+    safeErrorCode: string;
+    safeErrorMessage: string;
+    finalCandidateStatus?: string | null;
+    noveltyDecision?: string | null;
+    providerMayHaveCompleted?: boolean;
+  }): Promise<NoveltyReplacementHttpResponse> => {
+    if (job && !finalized) {
+      try {
+        // Persist terminal status first — must not depend on nested stage wrappers
+        // or an aborted request context remaining alive.
+        job = await finalizeNoveltyReplacementJob({
           scope,
+          jobRepo: jobRepo(),
+          job,
+          terminalStatus: "failed",
+          outcomeStatus: "failed",
+          attemptNumber: attemptNumber || job.retry_count || 1,
+          currentStage:
+            input.safeErrorCode === PROVIDER_GENERATION_TIMEOUT_CODE
+              ? "provider_timeout"
+              : "job_terminal_status_persisted",
+          checkpoints,
+          providerStartedAt,
+          providerCompletedAt,
+          providerRequestId,
+          providerOutputId,
           newCandidateId,
-        );
-        if (existingCandidate) {
-          const slotExhausted =
-            existingCandidate.status === "novelty_blocked" &&
-            (Boolean(existingCandidate.generation_settings?.slotExhausted) ||
-              readIdentityAttemptNumber(existingCandidate.generation_settings) >=
-                MAX_DISCOVERY_IDENTITY_ATTEMPTS);
-          const outcome = mapFinalStatusToOutcome({
-            finalCandidateStatus: existingCandidate.status,
-            slotExhausted,
+          noveltyDecision: input.noveltyDecision ?? null,
+          finalCandidateStatus:
+            input.finalCandidateStatus ?? "novelty_failed",
+          actualCost: job.actual_cost,
+          safeErrorCode: input.safeErrorCode,
+          safeErrorMessage: input.safeErrorMessage,
+          candidateCreatedAt,
+          assetCreatedAt,
+          noveltyStartedAt,
+          noveltyCompletedAt,
+          recoveredFromExistingAsset,
+          providerMayHaveCompleted:
+            input.providerMayHaveCompleted ?? Boolean(providerCompletedAt),
+        });
+        finalized = true;
+        checkpoints.push("API_response_returned");
+      } catch (persistErr) {
+        const code =
+          persistErr instanceof NoveltyReplacementStageTimeoutError
+            ? persistErr.safeErrorCode
+            : input.safeErrorCode;
+        const message =
+          persistErr instanceof NoveltyReplacementStageTimeoutError
+            ? persistErr.safeErrorMessage
+            : persistErr instanceof Error
+              ? persistErr.message
+              : input.safeErrorMessage;
+        try {
+          await jobRepo().updateJob(scope, job.id, {
+            status: "failed",
+            completed_at: new Date().toISOString(),
+            error_code: code,
+            error_message: message,
+            confirmation_payload: {
+              ...(job.confirmation_payload ?? {}),
+              ...workingPayload,
+              currentStage:
+                code === PROVIDER_GENERATION_TIMEOUT_CODE
+                  ? "provider_timeout"
+                  : "job_terminal_status_persisted",
+              lastHeartbeatAt: new Date().toISOString(),
+              failedAt: new Date().toISOString(),
+              safeErrorCode: code,
+              safeErrorMessage: message,
+              providerStartedAt,
+              providerCompletedAt,
+              newCandidateId,
+              providerMayHaveCompleted: Boolean(providerCompletedAt),
+            },
           });
-          if (outcome !== "failed") {
+          finalized = true;
+        } catch {
+          // last resort — still return failed response
+        }
+      }
+    }
+    checkpoints.push("response_returned");
+    return buildFailureResponse({
+      projectId,
+      slot: slotLabel,
+      previousCandidateId: previousId,
+      newCandidateId,
+      replacementJobId: job?.id ?? null,
+      attemptNumber: attemptNumber || undefined,
+      providerStarted: Boolean(providerStartedAt),
+      providerCompleted: Boolean(providerCompletedAt),
+      providerMayHaveCompleted: Boolean(providerCompletedAt),
+      safeErrorCode: input.safeErrorCode,
+      safeErrorMessage: input.safeErrorMessage,
+      durationMs: Date.now() - startedAtMs,
+      checkpoints,
+    });
+  };
+
+  try {
+    if (!options.costConfirmed) {
+      throw new PersonaDomainError(
+        "Explizite Kostenbestätigung erforderlich.",
+        "WORKFLOW",
+        { requiresCostConfirmation: true },
+      );
+    }
+    if (!options.confirmationToken?.trim()) {
+      throw new PersonaDomainError(
+        "Bestätigungstoken erforderlich — bitte Kostenschätzung vorbereiten.",
+        "WORKFLOW",
+        { requiresConfirmationToken: true },
+      );
+    }
+    if (!options.userConfirmedAt?.trim()) {
+      throw new PersonaDomainError(
+        "Explizite Nutzerbestätigung erforderlich (Checkbox im UI).",
+        "WORKFLOW",
+        { requiresUserConfirmation: true },
+      );
+    }
+
+    const project = await requireProject(scope, projectId);
+    const previous = await requireCandidate(scope, options.candidateId);
+    previousId = previous.id;
+    if (previous.creation_project_id !== projectId) {
+      throw new PersonaDomainError(
+        "Candidate does not belong to this creation project.",
+        "WORKFLOW",
+      );
+    }
+    if (previous.status !== "novelty_blocked") {
+      throw new PersonaDomainError(
+        "Generate New Face is only available for novelty_blocked slots.",
+        "WORKFLOW",
+      );
+    }
+
+    const previousAttempt = readIdentityAttemptNumber(previous.generation_settings);
+    if (!canRequestNoveltyReplacement(previousAttempt)) {
+      await creationRepo().updateCandidate(scope, previous.id, {
+        generation_settings: {
+          ...(previous.generation_settings ?? {}),
+          slotExhausted: true,
+        },
+      });
+      throw new PersonaDomainError(SLOT_EXHAUSTED_MESSAGE, "WORKFLOW", {
+        slotExhausted: true,
+        attemptNumber: previousAttempt,
+      });
+    }
+
+    const nextAttempt = previousAttempt + 1;
+    attemptNumber = nextAttempt;
+    slotLabel =
+      ["A", "B", "C", "D"][previous.candidate_number - 1] ??
+      String(previous.candidate_number);
+    const generationRunId = readGenerationRunIdFromSettings(
+      previous.generation_settings,
+      previous.provider_job_id ?? project.id,
+    );
+
+    const archetypeId =
+      parseArchetypeIdFromProjectDescription(project.description) ??
+      "arch-mediterranean-premium-hero";
+    const slot = slotForCandidateNumber(previous.candidate_number);
+    const slotBlueprint = resolveSlotBlueprint({ archetypeId, slot });
+    const contract = buildNoveltyBlockIdentityRetryContract({
+      previousAttemptNumber: previousAttempt,
+      slotBlueprint,
+      generationRunId,
+      creationProjectId: projectId,
+    });
+    if (contract.slotExhausted) {
+      throw new PersonaDomainError(SLOT_EXHAUSTED_MESSAGE, "WORKFLOW", {
+        slotExhausted: true,
+      });
+    }
+
+    const qualityMode = project.quality_mode ?? DEFAULT_QUALITY_MODE;
+    const mult = getQualityModeProfile(qualityMode).costMultiplier;
+    const estimatedMin = Number((OPENAI_IMAGE_COST_EUR_MIN * mult).toFixed(4));
+    const estimatedMax = Number((OPENAI_IMAGE_COST_EUR_MAX * mult).toFixed(4));
+    const retryEstimate: CandidateGenerationCostEstimate = {
+      available: true,
+      provider: "openai",
+      providerMode: project.provider_mode,
+      candidateCount: 1,
+      imagesPerCandidate: 1,
+      totalImages: 1,
+      estimatedMin,
+      estimatedMax,
+      estimatedTotal: estimatedMax,
+      currency: "EUR",
+      stage: project.generation_stage,
+      note: "novelty_replacement",
+      costStatus: "estimated",
+      castingPhase: "a1_discovery",
+    };
+    const currentHash = estimateFingerprintFromCost(
+      projectId,
+      qualityMode,
+      retryEstimate,
+    );
+
+    const confirmation = await jobRepo().getConfirmationByToken(
+      scope,
+      options.confirmationToken,
+    );
+    if (!confirmation) {
+      throw new PersonaDomainError(
+        "Bestätigung ungültig — bitte Kostenschätzung erneut bestätigen.",
+        "WORKFLOW",
+      );
+    }
+
+    // Idempotent resume: same token already consumed → return existing job outcome.
+    if (confirmation.consumed_at) {
+      const existingJobId = confirmation.generation_job_id;
+      const existingJob = existingJobId
+        ? await jobRepo().getJob(scope, existingJobId)
+        : null;
+      if (existingJob && existingJob.confirmation_payload?.noveltyReplacement) {
+        const payload = existingJob.confirmation_payload;
+        const existingCandidateId =
+          typeof payload.newCandidateId === "string"
+            ? payload.newCandidateId
+            : null;
+        providerStartedAt =
+          typeof payload.providerStartedAt === "string"
+            ? payload.providerStartedAt
+            : existingJob.started_at;
+        providerCompletedAt =
+          typeof payload.providerCompletedAt === "string"
+            ? payload.providerCompletedAt
+            : null;
+
+        // Zero-provider recovery: provider finished but job never reached terminal.
+        if (
+          existingCandidateId &&
+          providerCompletedAt &&
+          (existingJob.status === "generating" || existingJob.status === "queued")
+        ) {
+          const existingCandidate = await creationRepo().getCandidate(
+            scope,
+            existingCandidateId,
+          );
+          if (existingCandidate) {
+            job = existingJob;
+            newCandidateId = existingCandidate.id;
+            recoveredFromExistingAsset = true;
+            workingPayload = { ...payload };
+            const slotExhausted =
+              existingCandidate.status === "novelty_blocked" &&
+              (Boolean(existingCandidate.generation_settings?.slotExhausted) ||
+                readIdentityAttemptNumber(existingCandidate.generation_settings) >=
+                  MAX_DISCOVERY_IDENTITY_ATTEMPTS);
+            const outcome = mapFinalStatusToOutcome({
+              finalCandidateStatus: existingCandidate.status,
+              slotExhausted,
+            });
+            if (outcome === "failed") {
+              return await failAndReturn({
+                safeErrorCode: "novelty_failed",
+                safeErrorMessage:
+                  "Face novelty evaluation failed for replacement.",
+                finalCandidateStatus: existingCandidate.status,
+                noveltyDecision:
+                  typeof payload.noveltyDecision === "string"
+                    ? payload.noveltyDecision
+                    : null,
+                providerMayHaveCompleted: true,
+              });
+            }
+            await finalizeNoveltyReplacementJob({
+              scope,
+              jobRepo: jobRepo(),
+              job: existingJob,
+              terminalStatus: "completed",
+              outcomeStatus: outcome,
+              attemptNumber: nextAttempt,
+              currentStage: "job_terminal_status_persisted",
+              checkpoints,
+              providerStartedAt,
+              providerCompletedAt,
+              newCandidateId: existingCandidate.id,
+              noveltyDecision:
+                typeof payload.noveltyDecision === "string"
+                  ? payload.noveltyDecision
+                  : existingCandidate.status === "ready"
+                    ? "allowed"
+                    : null,
+              finalCandidateStatus: existingCandidate.status,
+              slotExhausted,
+              recoveredFromExistingAsset: true,
+              providerMayHaveCompleted: true,
+            });
+            finalized = true;
+            checkpoints.push("API_response_returned");
             checkpoints.push("response_returned");
-            return {
-              ok: true,
+            return buildSuccessResponse({
               status: outcome,
               projectId,
               slot: slotLabel,
               previousCandidateId: previous.id,
-              newCandidateId,
+              newCandidateId: existingCandidate.id,
               replacementJobId: existingJob.id,
               attemptNumber: nextAttempt,
               maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
@@ -1998,144 +2204,316 @@ export async function confirmNoveltyReplacementGeneration(
                   ? payload.noveltyDecision
                   : null,
               finalCandidateStatus: existingCandidate.status,
-              providerStarted: Boolean(payload.providerStartedAt),
-              providerCompleted: Boolean(payload.providerCompletedAt),
+              providerStarted: Boolean(providerStartedAt),
+              providerCompleted: true,
               durationMs: Date.now() - startedAtMs,
-              message: outcomeMessage(outcome),
               checkpoints,
-            } satisfies NoveltyReplacementSuccessResponse;
+            });
           }
         }
+
+        if (existingCandidateId) {
+          const existingCandidate = await creationRepo().getCandidate(
+            scope,
+            existingCandidateId,
+          );
+          if (existingCandidate) {
+            const slotExhausted =
+              existingCandidate.status === "novelty_blocked" &&
+              (Boolean(existingCandidate.generation_settings?.slotExhausted) ||
+                readIdentityAttemptNumber(existingCandidate.generation_settings) >=
+                  MAX_DISCOVERY_IDENTITY_ATTEMPTS);
+            const outcome = mapFinalStatusToOutcome({
+              finalCandidateStatus: existingCandidate.status,
+              slotExhausted,
+            });
+            if (outcome !== "failed") {
+              checkpoints.push("response_returned");
+              return {
+                ok: true,
+                status: outcome,
+                projectId,
+                slot: slotLabel,
+                previousCandidateId: previous.id,
+                newCandidateId: existingCandidateId,
+                replacementJobId: existingJob.id,
+                attemptNumber: nextAttempt,
+                maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+                noveltyDecision:
+                  typeof payload.noveltyDecision === "string"
+                    ? payload.noveltyDecision
+                    : null,
+                finalCandidateStatus: existingCandidate.status,
+                providerStarted: Boolean(payload.providerStartedAt),
+                providerCompleted: Boolean(payload.providerCompletedAt),
+                durationMs: Date.now() - startedAtMs,
+                message: outcomeMessage(outcome),
+                checkpoints,
+              } satisfies NoveltyReplacementSuccessResponse;
+            }
+          }
+        }
+        if (
+          existingJob.status === "generating" ||
+          existingJob.status === "queued"
+        ) {
+          throw new PersonaDomainError(
+            "Generate New Face is already running for this confirmation.",
+            "WORKFLOW",
+            {
+              replacementInProgress: true,
+              replacementJobId: existingJob.id,
+              slot: slotLabel,
+              providerStarted: Boolean(providerStartedAt),
+              providerCompleted: Boolean(providerCompletedAt),
+              safeErrorCode: "replacement_in_progress",
+            },
+          );
+        }
       }
-      if (
-        existingJob.status === "generating" ||
-        existingJob.status === "queued"
-      ) {
+      throw new PersonaDomainError(
+        "Bestätigung wurde bereits verwendet — neue Kostenschätzung erforderlich.",
+        "WORKFLOW",
+        { reusedConfirmation: true },
+      );
+    }
+
+    assertConfirmationMatchesGenerationRequest({
+      scope,
+      project,
+      confirmation,
+      estimate: retryEstimate,
+      estimateHash: currentHash,
+      qualityMode,
+    });
+    assertValidUiAttestation({
+      attestation: options.attestation ?? UI_CHECKBOX_ATTESTATION,
+      userConfirmedAt: options.userConfirmedAt,
+      confirmation,
+      request: options.httpRequest,
+    });
+    assertValidUserConfirmationTimestamp(options.userConfirmedAt, confirmation);
+    assertLivePaidProviderInvocationAllowed({
+      estimatedMaxEur: retryEstimate.estimatedMax,
+    });
+    checkpoints.push("confirmation_validated");
+    logNoveltyReplacementCheckpoint("confirmation_validated", {
+      projectId,
+      slot: slotLabel,
+      previousCandidateId: previous.id,
+      attemptNumber: nextAttempt,
+    });
+
+    // Reject a second active replacement for the same slot.
+    const existingJobs = await jobRepo().listJobsForProject(scope, projectId);
+    const activeSameSlot = existingJobs.find((j) => {
+      if (!j.confirmation_payload?.noveltyReplacement) return false;
+      if (j.status !== "generating" && j.status !== "queued") return false;
+      const payloadSlot = j.confirmation_payload.slot;
+      const payloadCandidateId = j.confirmation_payload.candidateId;
+      return (
+        payloadSlot === slotLabel ||
+        payloadCandidateId === previous.id ||
+        j.candidate_id === previous.id
+      );
+    });
+    if (activeSameSlot) {
+      const activePayload = activeSameSlot.confirmation_payload ?? {};
+      // Never auto-rerun when provider already started on another confirmation.
+      if (activePayload.providerStartedAt) {
         throw new PersonaDomainError(
-          "Generate New Face is already running for this confirmation.",
+          `A Generate New Face job is already active for Slot ${slotLabel}.`,
           "WORKFLOW",
           {
             replacementInProgress: true,
-            replacementJobId: existingJob.id,
+            replacementJobId: activeSameSlot.id,
             slot: slotLabel,
+            providerStarted: true,
+            providerCompleted: Boolean(activePayload.providerCompletedAt),
+            safeErrorCode: "replacement_in_progress",
           },
         );
       }
+      throw new PersonaDomainError(
+        `A Generate New Face job is already active for Slot ${slotLabel}.`,
+        "WORKFLOW",
+        {
+          replacementInProgress: true,
+          replacementJobId: activeSameSlot.id,
+          slot: slotLabel,
+        },
+      );
     }
-    throw new PersonaDomainError(
-      "Bestätigung wurde bereits verwendet — neue Kostenschätzung erforderlich.",
-      "WORKFLOW",
-      { reusedConfirmation: true },
+
+    if (!tryAcquireNoveltyReplacementLock(projectId, slotLabel)) {
+      throw new PersonaDomainError(
+        `A Generate New Face job is already active for Slot ${slotLabel}.`,
+        "WORKFLOW",
+        {
+          replacementInProgress: true,
+          slot: slotLabel,
+          safeErrorCode: "replacement_in_progress",
+        },
+      );
+    }
+    lockAcquired = true;
+
+    const consumed = await jobRepo().consumeConfirmation(
+      scope,
+      options.confirmationToken,
     );
-  }
 
-  assertConfirmationMatchesGenerationRequest({
-    scope,
-    project,
-    confirmation,
-    estimate: retryEstimate,
-    estimateHash: currentHash,
-    qualityMode,
-  });
-  assertValidUiAttestation({
-    attestation: options.attestation ?? UI_CHECKBOX_ATTESTATION,
-    userConfirmedAt: options.userConfirmedAt,
-    confirmation,
-    request: options.httpRequest,
-  });
-  assertValidUserConfirmationTimestamp(options.userConfirmedAt, confirmation);
-  assertLivePaidProviderInvocationAllowed({
-    estimatedMaxEur: retryEstimate.estimatedMax,
-  });
-  checkpoints.push("confirmation_validated");
-  logNoveltyReplacementCheckpoint("confirmation_validated", {
-    projectId,
-    slot: slotLabel,
-    previousCandidateId: previous.id,
-    attemptNumber: nextAttempt,
-  });
+    const generator = getPersonaCandidateGenerator(project.provider_mode);
+    if (!generator.isConfigured()) {
+      throw new PersonaDomainError("Provider nicht eingerichtet.", "CONFIG");
+    }
+    assertLiveCastingProviderNotFake(generator.id, {
+      liveUiAttestation: Boolean(options.attestation),
+    });
 
-  // Reject a second active replacement for the same slot.
-  const existingJobs = await jobRepo().listJobsForProject(scope, projectId);
-  const activeSameSlot = existingJobs.find((j) => {
-    if (!j.confirmation_payload?.noveltyReplacement) return false;
-    if (j.status !== "generating" && j.status !== "queued") return false;
-    const payloadSlot = j.confirmation_payload.slot;
-    const payloadCandidateId = j.confirmation_payload.candidateId;
-    return (
-      payloadSlot === slotLabel ||
-      payloadCandidateId === previous.id ||
-      j.candidate_id === previous.id
-    );
-  });
-  if (activeSameSlot) {
-    throw new PersonaDomainError(
-      `A Generate New Face job is already active for Slot ${slotLabel}.`,
-      "WORKFLOW",
-      {
-        replacementInProgress: true,
-        replacementJobId: activeSameSlot.id,
-        slot: slotLabel,
-      },
-    );
-  }
+    const durableJob = consumed.generation_job_id
+      ? (await jobRepo().getJob(scope, consumed.generation_job_id)) ?? null
+      : null;
 
-  const consumed = await jobRepo().consumeConfirmation(
-    scope,
-    options.confirmationToken,
-  );
+    // Cost safety: if durable job already has provider evidence, never call provider again.
+    if (
+      durableJob?.confirmation_payload?.providerStartedAt &&
+      !durableJob.confirmation_payload?.providerCompletedAt &&
+      (durableJob.status === "generating" || durableJob.status === "queued")
+    ) {
+      job = durableJob;
+      providerStartedAt = String(durableJob.confirmation_payload.providerStartedAt);
+      workingPayload = { ...(durableJob.confirmation_payload ?? {}) };
+      return await failAndReturn({
+        safeErrorCode: "provider_generation_incomplete",
+        safeErrorMessage:
+          "A previous provider request was started for this confirmation and must not be retried automatically. Prepare a new confirmation after server recovery.",
+        providerMayHaveCompleted: false,
+      });
+    }
 
-  const generator = getPersonaCandidateGenerator(project.provider_mode);
-  if (!generator.isConfigured()) {
-    throw new PersonaDomainError("Provider nicht eingerichtet.", "CONFIG");
-  }
-  assertLiveCastingProviderNotFake(generator.id, {
-    liveUiAttestation: Boolean(options.attestation),
-  });
+    if (
+      durableJob?.confirmation_payload?.providerCompletedAt &&
+      typeof durableJob.confirmation_payload.newCandidateId === "string"
+    ) {
+      // Handled by zero-provider path via re-entry — finalize from stored candidate.
+      const existingCandidate = await creationRepo().getCandidate(
+        scope,
+        String(durableJob.confirmation_payload.newCandidateId),
+      );
+      if (existingCandidate) {
+        job = durableJob;
+        providerStartedAt =
+          typeof durableJob.confirmation_payload.providerStartedAt === "string"
+            ? durableJob.confirmation_payload.providerStartedAt
+            : durableJob.started_at;
+        providerCompletedAt = String(
+          durableJob.confirmation_payload.providerCompletedAt,
+        );
+        newCandidateId = existingCandidate.id;
+        recoveredFromExistingAsset = true;
+        const slotExhausted =
+          existingCandidate.status === "novelty_blocked" &&
+          (Boolean(existingCandidate.generation_settings?.slotExhausted) ||
+            readIdentityAttemptNumber(existingCandidate.generation_settings) >=
+              MAX_DISCOVERY_IDENTITY_ATTEMPTS);
+        const outcome = mapFinalStatusToOutcome({
+          finalCandidateStatus: existingCandidate.status,
+          slotExhausted,
+        });
+        if (outcome === "failed") {
+          return await failAndReturn({
+            safeErrorCode: "novelty_failed",
+            safeErrorMessage:
+              "Face novelty evaluation failed for replacement.",
+            finalCandidateStatus: existingCandidate.status,
+            providerMayHaveCompleted: true,
+          });
+        }
+        await finalizeNoveltyReplacementJob({
+          scope,
+          jobRepo: jobRepo(),
+          job: durableJob,
+          terminalStatus: "completed",
+          outcomeStatus: outcome,
+          attemptNumber: nextAttempt,
+          currentStage: "job_terminal_status_persisted",
+          checkpoints,
+          providerStartedAt,
+          providerCompletedAt,
+          newCandidateId: existingCandidate.id,
+          noveltyDecision:
+            typeof durableJob.confirmation_payload.noveltyDecision === "string"
+              ? durableJob.confirmation_payload.noveltyDecision
+              : null,
+          finalCandidateStatus: existingCandidate.status,
+          slotExhausted,
+          recoveredFromExistingAsset: true,
+          providerMayHaveCompleted: true,
+        });
+        finalized = true;
+        checkpoints.push("API_response_returned");
+        checkpoints.push("response_returned");
+        return buildSuccessResponse({
+          status: outcome,
+          projectId,
+          slot: slotLabel,
+          previousCandidateId: previous.id,
+          newCandidateId: existingCandidate.id,
+          replacementJobId: durableJob.id,
+          attemptNumber: nextAttempt,
+          maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+          noveltyDecision:
+            typeof durableJob.confirmation_payload.noveltyDecision === "string"
+              ? durableJob.confirmation_payload.noveltyDecision
+              : null,
+          finalCandidateStatus: existingCandidate.status,
+          providerStarted: true,
+          providerCompleted: true,
+          durationMs: Date.now() - startedAtMs,
+          checkpoints,
+        });
+      }
+    }
 
-  const durableJob = consumed.generation_job_id
-    ? (await jobRepo().getJob(scope, consumed.generation_job_id)) ?? null
-    : null;
-  const providerStartedAt = new Date().toISOString();
-  const job =
-    durableJob ??
-    (await jobRepo().createJob(scope, {
-      creation_project_id: projectId,
-      candidate_id: previous.id,
-      stage: project.generation_stage,
-      provider: retryEstimate.provider,
-      status: "generating",
-      requested_asset_types: ["portrait_front"],
-      quality_mode: qualityMode,
-      estimated_cost_min: estimatedMin,
-      estimated_cost_max: estimatedMax,
-      cost_is_estimated: true,
-      retry_count: nextAttempt,
-      confirmation_token: options.confirmationToken,
-      estimate_hash: currentHash,
-      confirmation_payload: {
-        userConfirmedAt: options.userConfirmedAt,
-        attestation: UI_CHECKBOX_ATTESTATION,
-        intent: "novelty_replacement",
-        noveltyReplacement: true,
-        slot: slotLabel,
-        candidateId: previous.id,
-        previousAttemptNumber: previousAttempt,
-        nextAttemptNumber: nextAttempt,
-        maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
-        reason: NOVELTY_REPLACEMENT_REASON,
-        providerStartedAt,
-      },
-      confirmed_at: new Date().toISOString(),
-      started_at: providerStartedAt,
-      created_by: scope.actorId,
-    }));
+    providerStartedAt = new Date().toISOString();
+    job =
+      durableJob ??
+      (await jobRepo().createJob(scope, {
+        creation_project_id: projectId,
+        candidate_id: previous.id,
+        stage: project.generation_stage,
+        provider: retryEstimate.provider,
+        status: "generating",
+        requested_asset_types: ["portrait_front"],
+        quality_mode: qualityMode,
+        estimated_cost_min: estimatedMin,
+        estimated_cost_max: estimatedMax,
+        cost_is_estimated: true,
+        retry_count: nextAttempt,
+        confirmation_token: options.confirmationToken,
+        estimate_hash: currentHash,
+        confirmation_payload: {
+          userConfirmedAt: options.userConfirmedAt,
+          attestation: UI_CHECKBOX_ATTESTATION,
+          intent: "novelty_replacement",
+          noveltyReplacement: true,
+          slot: slotLabel,
+          candidateId: previous.id,
+          previousAttemptNumber: previousAttempt,
+          nextAttemptNumber: nextAttempt,
+          maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+          reason: NOVELTY_REPLACEMENT_REASON,
+          providerStartedAt,
+          currentStage: "job_marked_generating",
+          lastHeartbeatAt: providerStartedAt,
+        },
+        confirmed_at: new Date().toISOString(),
+        started_at: providerStartedAt,
+        created_by: scope.actorId,
+      }));
 
-  await jobRepo().updateJob(scope, job.id, {
-    status: "generating",
-    confirmed_at: job.confirmed_at ?? new Date().toISOString(),
-    started_at: job.started_at ?? providerStartedAt,
-    confirmation_payload: {
+    workingPayload = {
       ...job.confirmation_payload,
       userConfirmedAt: options.userConfirmedAt,
       attestation: UI_CHECKBOX_ATTESTATION,
@@ -2148,574 +2526,854 @@ export async function confirmNoveltyReplacementGeneration(
       maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
       reason: NOVELTY_REPLACEMENT_REASON,
       providerStartedAt,
-    },
-  });
-  checkpoints.push("replacement_job_loaded");
-  logNoveltyReplacementCheckpoint("replacement_job_loaded", {
-    projectId,
-    slot: slotLabel,
-    replacementJobId: job.id,
-    previousCandidateId: previous.id,
-    attemptNumber: nextAttempt,
-  });
+    };
 
-  const previousSample = extractAnatomySampleFromSettings(
-    previous.generation_settings,
-  );
-  const debug = previous.generation_settings?.faceNoveltyLiveDebug as
-    | {
-        closestPriorCandidateId?: string;
-        closestPriorAssetId?: string;
-        similarity?: number;
-      }
-    | undefined;
-  const matchedCandidateId = debug?.closestPriorCandidateId ?? null;
-  let matchedProjectId: string | null = null;
-  let matchedCandidateNumber: number | null = null;
-  let avoidSameRunSample: Record<string, string> | null = null;
-  if (matchedCandidateId) {
-    try {
-      const matched = await creationRepo().getCandidate(scope, matchedCandidateId);
-      if (matched) {
-        matchedProjectId = matched.creation_project_id;
-        matchedCandidateNumber = matched.candidate_number;
-        if (matched.creation_project_id === projectId) {
-          avoidSameRunSample =
-            (extractAnatomySampleFromSettings(matched.generation_settings) as
-              | Record<string, string>
-              | null) ?? null;
-        }
-      }
-    } catch {
-      // matched prior may be historical — ignore sample load failures
-    }
-  }
-  const { matchedSameRun, matchedSlot } = resolveMatchedSameRunSlot({
-    matchedCandidateId,
-    matchedProjectId,
-    currentProjectId: projectId,
-    matchedCandidateNumber,
-  });
-
-  checkpoints.push("provider_generation_started");
-  logNoveltyReplacementCheckpoint("provider_generation_started", {
-    projectId,
-    slot: slotLabel,
-    replacementJobId: job.id,
-    attemptNumber: nextAttempt,
-    providerStarted: true,
-  });
-
-  let batch;
-  try {
-    batch = await generator.createCandidateBatch({
-      project: { ...project, candidate_count: 1 },
-      stage: project.generation_stage,
-      costConfirmed: true,
-      retryConfirmed: true,
-      qualityMode,
-      castingPhase: "a1_discovery",
-      assetTypes: ["portrait_front"],
-      candidateNumbers: [previous.candidate_number],
-      generationRunId: contract.keepGenerationRunId,
-      identityAttemptNumber: contract.nextAttemptNumber,
-      previousAttemptSample: previousSample as Record<string, string> | null,
-      avoidSameRunSample,
-      replacementOfCandidateId: previous.id,
-      replacementReason: NOVELTY_REPLACEMENT_REASON,
-      concurrency: 1,
-    });
-  } catch (err) {
-    const safeErrorMessage =
-      err instanceof Error ? err.message : "Provider generation failed";
     await jobRepo().updateJob(scope, job.id, {
-      status: "failed",
-      error_code: "provider_exception",
-      error_message: safeErrorMessage,
-      completed_at: new Date().toISOString(),
-      confirmation_payload: {
-        ...(job.confirmation_payload ?? {}),
-        providerStartedAt,
-        providerCompletedAt: null,
-        safeErrorCode: "provider_exception",
+      status: "generating",
+      confirmed_at: job.confirmed_at ?? new Date().toISOString(),
+      started_at: job.started_at ?? providerStartedAt,
+      confirmation_payload: workingPayload,
+    });
+    workingPayload = await persistNoveltyReplacementCheckpoint({
+      scope,
+      jobRepo: jobRepo(),
+      jobId: job.id,
+      existingPayload: workingPayload,
+      checkpoint: "job_marked_generating",
+      checkpoints,
+    });
+    workingPayload = await persistNoveltyReplacementCheckpoint({
+      scope,
+      jobRepo: jobRepo(),
+      jobId: job.id,
+      existingPayload: workingPayload,
+      checkpoint: "replacement_job_loaded",
+      checkpoints,
+    });
+
+    const previousSample = extractAnatomySampleFromSettings(
+      previous.generation_settings,
+    );
+    const debug = previous.generation_settings?.faceNoveltyLiveDebug as
+      | {
+          closestPriorCandidateId?: string;
+          closestPriorAssetId?: string;
+          similarity?: number;
+        }
+      | undefined;
+    const matchedCandidateId = debug?.closestPriorCandidateId ?? null;
+    let matchedProjectId: string | null = null;
+    let matchedCandidateNumber: number | null = null;
+    let avoidSameRunSample: Record<string, string> | null = null;
+    if (matchedCandidateId) {
+      try {
+        const matched = await creationRepo().getCandidate(scope, matchedCandidateId);
+        if (matched) {
+          matchedProjectId = matched.creation_project_id;
+          matchedCandidateNumber = matched.candidate_number;
+          if (matched.creation_project_id === projectId) {
+            avoidSameRunSample =
+              (extractAnatomySampleFromSettings(matched.generation_settings) as
+                | Record<string, string>
+                | null) ?? null;
+          }
+        }
+      } catch {
+        // matched prior may be historical — ignore sample load failures
+      }
+    }
+    const { matchedSameRun, matchedSlot } = resolveMatchedSameRunSlot({
+      matchedCandidateId,
+      matchedProjectId,
+      currentProjectId: projectId,
+      matchedCandidateNumber,
+    });
+
+    workingPayload = await persistNoveltyReplacementCheckpoint({
+      scope,
+      jobRepo: jobRepo(),
+      jobId: job.id,
+      existingPayload: workingPayload,
+      checkpoint: "provider_request_started",
+      checkpoints,
+      extra: { providerStartedAt },
+    });
+
+    let batch;
+    try {
+      batch = await executeProviderWithDeadline({
+        timeoutMs: timeouts.providerMs,
+        execute: (signal) =>
+          generator.createCandidateBatch({
+            project: { ...project, candidate_count: 1 },
+            stage: project.generation_stage,
+            costConfirmed: true,
+            retryConfirmed: true,
+            qualityMode,
+            castingPhase: "a1_discovery",
+            assetTypes: ["portrait_front"],
+            candidateNumbers: [previous.candidate_number],
+            generationRunId: contract.keepGenerationRunId,
+            identityAttemptNumber: contract.nextAttemptNumber,
+            previousAttemptSample: previousSample as Record<string, string> | null,
+            avoidSameRunSample,
+            replacementOfCandidateId: previous.id,
+            replacementReason: NOVELTY_REPLACEMENT_REASON,
+            concurrency: 1,
+            abortSignal: signal,
+          }),
+        extractProviderRequestId: (value) => value.jobId ?? null,
+        onLateResult: async (info) => {
+          if (!job) return;
+          try {
+            // Defer so timeout finalization always wins the status write.
+            await new Promise((r) => setTimeout(r, 0));
+            const latest = await jobRepo().getJob(scope, job.id);
+            if (!latest) return;
+            // Only attach diagnostics onto an already-terminal job.
+            // Never rewrite a generating row from a stale read-modify-write race.
+            if (
+              latest.status === "generating" ||
+              latest.status === "queued" ||
+              latest.status === "pending_confirmation"
+            ) {
+              return;
+            }
+            const existing = latest.confirmation_payload ?? {};
+            await jobRepo().updateJob(scope, job.id, {
+              status: latest.status,
+              completed_at: latest.completed_at,
+              error_code: latest.error_code,
+              error_message: latest.error_message,
+              confirmation_payload: {
+                ...existing,
+                lateProviderResultReceivedAt: info.receivedAt,
+                ignoredBecauseJobTerminal: true,
+                providerRequestId:
+                  info.providerRequestId ??
+                  existing.providerRequestId ??
+                  null,
+                providerMayHaveCompleted:
+                  info.ok === true ||
+                  existing.providerMayHaveCompleted === true,
+              },
+            });
+          } catch {
+            // Diagnostic persistence must not throw into the abandoned promise.
+          }
+        },
+      });
+    } catch (err) {
+      const aborted =
+        (err instanceof Error && err.name === "AbortError") ||
+        (typeof DOMException !== "undefined" &&
+          err instanceof DOMException &&
+          err.name === "AbortError");
+      const isTimeout =
+        err instanceof ProviderGenerationTimeoutError ||
+        err instanceof NoveltyReplacementStageTimeoutError ||
+        aborted;
+      const safeErrorCode = isTimeout
+        ? PROVIDER_GENERATION_TIMEOUT_CODE
+        : "provider_exception";
+      const safeErrorMessage = isTimeout
+        ? PROVIDER_GENERATION_TIMEOUT_MESSAGE
+        : err instanceof Error
+          ? err.message
+          : "Provider generation failed";
+      if (isTimeout && job) {
+        checkpoints.push("provider_timeout");
+        workingPayload = {
+          ...workingPayload,
+          currentStage: "provider_timeout",
+          lastCheckpoint: "provider_timeout",
+        };
+      }
+      return await failAndReturn({
+        safeErrorCode,
         safeErrorMessage,
+        providerMayHaveCompleted: false,
+      });
+    }
+
+    providerCompletedAt = new Date().toISOString();
+    providerRequestId = batch.jobId ?? null;
+    providerOutputId = batch.results[0]?.assets[0]?.providerOutputId ?? null;
+    workingPayload = await persistNoveltyReplacementCheckpoint({
+      scope,
+      jobRepo: jobRepo(),
+      jobId: job.id,
+      existingPayload: workingPayload,
+      checkpoint: "provider_response_received",
+      checkpoints,
+      extra: {
+        providerCompletedAt,
+        providerRequestId,
+        providerOutputId,
       },
     });
-    throw err instanceof PersonaDomainError
-      ? err
-      : new PersonaDomainError(safeErrorMessage, "WORKFLOW", {
-          safeErrorCode: "provider_exception",
-          providerStarted: true,
-          providerCompleted: false,
-          replacementJobId: job.id,
-        });
-  }
+    workingPayload = await persistNoveltyReplacementCheckpoint({
+      scope,
+      jobRepo: jobRepo(),
+      jobId: job.id,
+      existingPayload: workingPayload,
+      checkpoint: "provider_payload_validated",
+      checkpoints,
+    });
 
-  const providerCompletedAt = new Date().toISOString();
-  checkpoints.push("provider_generation_completed");
-  logNoveltyReplacementCheckpoint("provider_generation_completed", {
-    projectId,
-    slot: slotLabel,
-    replacementJobId: job.id,
-    providerCompleted: true,
-  });
-
-  const result = batch.results[0];
-  if (!result?.assets.length) {
-    await jobRepo().updateJob(scope, job.id, {
-      status: "failed",
-      error_code: "provider_empty_result",
-      error_message: batch.errorMessage ?? "Novelty replacement failed",
-      completed_at: new Date().toISOString(),
-      confirmation_payload: {
-        ...(job.confirmation_payload ?? {}),
-        providerStartedAt,
-        providerCompletedAt,
+    const result = batch.results[0];
+    if (!result?.assets.length) {
+      return await failAndReturn({
         safeErrorCode: "provider_empty_result",
         safeErrorMessage: batch.errorMessage ?? "Novelty replacement failed",
-      },
+        providerMayHaveCompleted: true,
+      });
+    }
+
+    const officialCast = resolveOfficialDiscoveryVariations({
+      project,
+      candidateNumbers: [previous.candidate_number],
     });
-    throw new PersonaDomainError("Generierung fehlgeschlagen", "WORKFLOW", {
-      safeErrorCode: "provider_empty_result",
-      providerStarted: true,
-      providerCompleted: true,
-      replacementJobId: job.id,
+    const variation =
+      officialCast.variations[0] ??
+      resolveCandidateVariation(previous.candidate_number);
+    const qualityAssessment = assessCandidateQuality({
+      project,
+      variation,
+      assetTypes: result.assets.map((a) => a.assetType),
+      qualityMode,
     });
-  }
+    const qualityFields = qualityFieldsForCandidate(qualityAssessment);
 
-  const officialCast = resolveOfficialDiscoveryVariations({
-    project,
-    candidateNumbers: [previous.candidate_number],
-  });
-  const variation =
-    officialCast.variations[0] ??
-    resolveCandidateVariation(previous.candidate_number);
-  const qualityAssessment = assessCandidateQuality({
-    project,
-    variation,
-    assetTypes: result.assets.map((a) => a.assetType),
-    qualityMode,
-  });
-  const qualityFields = qualityFieldsForCandidate(qualityAssessment);
-
-  const attemptRecord = buildNoveltyReplacementAttemptRecord({
-    attemptNumber: nextAttempt,
-    replacementOfCandidateId: previous.id,
-    replacementReason: NOVELTY_REPLACEMENT_REASON,
-    matchedCandidateId,
-    matchedProjectId,
-    matchedSlot,
-    matchedSameRun,
-    anatomyFingerprint: String(
-      (result.settings?.discoveryIdentity as { anatomyFingerprint?: string })
-        ?.anatomyFingerprint ?? "",
-    ),
-    identityFingerprint: String(
-      (result.settings?.discoveryIdentity as { identityFingerprint?: string })
-        ?.identityFingerprint ?? "",
-    ),
-    promptFingerprint: String(
-      (result.settings?.discoveryIdentity as { promptFingerprint?: string })
-        ?.promptFingerprint ?? "",
-    ),
-    samplingSeed: String(
-      (result.settings?.discoveryIdentity as { samplingSeed?: string })
-        ?.samplingSeed ?? "",
-    ),
-    providerRequestId: null,
-    providerOutputId: result.assets[0]?.providerOutputId ?? null,
-    noveltyDecision: null,
-    similarityScore: null,
-    slotBlueprintId: slotBlueprint.id,
-    generationRunId: contract.keepGenerationRunId,
-  });
-
-  const enrichedSettings: Record<string, unknown> = {
-    ...result.settings,
-    qualityAssessment,
-    generationRunId: contract.keepGenerationRunId,
-    identityAttemptNumber: nextAttempt,
-    replacementOfCandidateId: previous.id,
-    replacementReason: NOVELTY_REPLACEMENT_REASON,
-    matchedCandidateId,
-    matchedProjectId,
-    matchedSlot,
-    matchedSameRun,
-    noveltyReplacementAttempt: attemptRecord,
-    noveltyReplacementHistory: [
-      ...((Array.isArray(previous.generation_settings?.noveltyReplacementHistory)
-        ? previous.generation_settings?.noveltyReplacementHistory
-        : []) as unknown[]),
-      attemptRecord,
-    ],
-  };
-
-  // Keep board scoped to the original discovery run job id.
-  const boardGenerationRunId =
-    previous.provider_job_id ?? contract.keepGenerationRunId;
-
-  const isLiveProvider = creationRepo().kind !== "memory";
-  const initialStatus = isLiveProvider ? "generating" : "ready";
-
-  const displayName =
-    typeof (result.settings as { variation?: { label?: string } }).variation
-      ?.label === "string"
-      ? (result.settings as { variation: { label: string } }).variation.label
-      : previous.candidate_name;
-
-  const replacement = await creationRepo().createCandidate(scope, {
-    creation_project_id: projectId,
-    candidate_number: previous.candidate_number,
-    candidate_name: displayName,
-    status: initialStatus,
-    provider: batch.provider,
-    provider_job_id: boardGenerationRunId,
-    generation_seed: result.seed,
-    generation_prompt: result.prompt,
-    negative_prompt: result.negativePrompt,
-    generation_settings: enrichedSettings,
-    identity_summary: result.identitySummary,
-    distinguishing_features: result.distinguishingFeatures,
-    ...qualityFields,
-    user_rating: null,
-    user_notes: "",
-    rejection_reason: "",
-    actual_generation_cost: result.actualCostEur,
-    parent_candidate_id: previous.id,
-  });
-  checkpoints.push("candidate_created");
-  logNoveltyReplacementCheckpoint("candidate_created", {
-    projectId,
-    slot: slotLabel,
-    previousCandidateId: previous.id,
-    newCandidateId: replacement.id,
-    replacementJobId: job.id,
-  });
-
-  let primaryId: string | null = null;
-  for (const asset of result.assets) {
-    const assetId = randomUUID();
-    const uploaded =
-      creationRepo().kind === "memory"
-        ? buildPersonaCandidateAssetMetadata({
-            workspaceId: scope.workspaceId,
-            projectId,
-            candidateId: replacement.id,
-            assetId,
-            filename: `${asset.assetType}-replacement.png`,
-            bytes: asset.imageBytes,
-            mimeType: asset.mimeType,
-          })
-        : await uploadPersonaCandidateBytes({
-            workspaceId: scope.workspaceId,
-            projectId,
-            candidateId: replacement.id,
-            assetId,
-            filename: `${asset.assetType}-replacement.png`,
-            bytes: asset.imageBytes,
-            mimeType: asset.mimeType,
-          });
-    const created = await creationRepo().createCandidateAsset(scope, {
-      candidate_id: replacement.id,
-      asset_type: asset.assetType,
-      storage_path: uploaded.storagePath,
-      mime_type: asset.mimeType,
-      width: uploaded.width,
-      height: uploaded.height,
-      file_size_bytes: asset.imageBytes.length,
-      checksum: uploaded.checksum,
-      provider_output_id: asset.providerOutputId ?? null,
-      generation_metadata: {
-        ...(asset.metadata ?? {}),
-        noveltyReplacement: true,
-        attemptNumber: nextAttempt,
-        costLabel: "estimated",
-      },
-      status: "ready",
-      is_primary: asset.assetType === "portrait_front",
+    const attemptRecord = buildNoveltyReplacementAttemptRecord({
+      attemptNumber: nextAttempt,
+      replacementOfCandidateId: previous.id,
+      replacementReason: NOVELTY_REPLACEMENT_REASON,
+      matchedCandidateId,
+      matchedProjectId,
+      matchedSlot,
+      matchedSameRun,
+      anatomyFingerprint: String(
+        (result.settings?.discoveryIdentity as { anatomyFingerprint?: string })
+          ?.anatomyFingerprint ?? "",
+      ),
+      identityFingerprint: String(
+        (result.settings?.discoveryIdentity as { identityFingerprint?: string })
+          ?.identityFingerprint ?? "",
+      ),
+      promptFingerprint: String(
+        (result.settings?.discoveryIdentity as { promptFingerprint?: string })
+          ?.promptFingerprint ?? "",
+      ),
+      samplingSeed: String(
+        (result.settings?.discoveryIdentity as { samplingSeed?: string })
+          ?.samplingSeed ?? "",
+      ),
+      providerRequestId,
+      providerOutputId,
+      noveltyDecision: null,
+      similarityScore: null,
+      slotBlueprintId: slotBlueprint.id,
+      generationRunId: contract.keepGenerationRunId,
     });
-    if (created.is_primary) primaryId = created.id;
-  }
-  if (primaryId) {
-    await creationRepo().updateCandidate(scope, replacement.id, {
-      primary_preview_asset_id: primaryId,
-    });
-  }
-  checkpoints.push("asset_created");
-  logNoveltyReplacementCheckpoint("asset_created", {
-    projectId,
-    slot: slotLabel,
-    newCandidateId: replacement.id,
-    replacementJobId: job.id,
-  });
 
-  // Preserve previous blocked candidate; hide from board failure slots.
-  await creationRepo().updateCandidate(scope, previous.id, {
-    generation_settings: {
-      ...(previous.generation_settings ?? {}),
-      boardSupersededByReplacement: true,
-      replacedByCandidateId: replacement.id,
-    },
-  });
+    const enrichedSettings: Record<string, unknown> = {
+      ...result.settings,
+      qualityAssessment,
+      generationRunId: contract.keepGenerationRunId,
+      identityAttemptNumber: nextAttempt,
+      replacementOfCandidateId: previous.id,
+      replacementReason: NOVELTY_REPLACEMENT_REASON,
+      matchedCandidateId,
+      matchedProjectId,
+      matchedSlot,
+      matchedSameRun,
+      noveltyReplacementAttempt: attemptRecord,
+      noveltyReplacementHistory: [
+        ...((Array.isArray(previous.generation_settings?.noveltyReplacementHistory)
+          ? previous.generation_settings?.noveltyReplacementHistory
+          : []) as unknown[]),
+        attemptRecord,
+      ],
+    };
 
-  let finalStatus: CandidateStatus =
-    initialStatus === "ready" ? "ready" : "novelty_failed";
-  let similarityScore: number | null = null;
-  let noveltyDecision: string | null = initialStatus === "ready" ? "allowed" : null;
+    const boardGenerationRunId =
+      previous.provider_job_id ?? contract.keepGenerationRunId;
 
-  if (isLiveProvider && primaryId) {
+    const isLiveProvider = creationRepo().kind !== "memory";
+    const initialStatus = isLiveProvider ? "generating" : "ready";
+
+    const displayName =
+      typeof (result.settings as { variation?: { label?: string } }).variation
+        ?.label === "string"
+        ? (result.settings as { variation: { label: string } }).variation.label
+        : previous.candidate_name;
+
+    let replacement;
     try {
-      checkpoints.push("novelty_evaluation_started");
-      logNoveltyReplacementCheckpoint("novelty_evaluation_started", {
-        projectId,
-        slot: slotLabel,
-        newCandidateId: replacement.id,
+      replacement = await creationRepo().createCandidate(scope, {
+        creation_project_id: projectId,
+        candidate_number: previous.candidate_number,
+        candidate_name: displayName,
+        status: initialStatus,
+        provider: batch.provider,
+        provider_job_id: boardGenerationRunId,
+        generation_seed: result.seed,
+        generation_prompt: result.prompt,
+        negative_prompt: result.negativePrompt,
+        generation_settings: enrichedSettings,
+        identity_summary: result.identitySummary,
+        distinguishing_features: result.distinguishingFeatures,
+        ...qualityFields,
+        user_rating: null,
+        user_notes: "",
+        rejection_reason: "",
+        actual_generation_cost: result.actualCostEur,
+        parent_candidate_id: previous.id,
       });
-      const noveltyRepo = new SupabaseNoveltyRepository();
-      const embeddingRepo = new SupabaseEmbeddingRepository();
-      const diagnosticStore = new SupabaseLiveDiagnosticStore();
-      const noveltyHistory = await loadDiscoveryHistory(
-        noveltyRepo,
-        scope.workspaceId,
-        archetypeId,
-      );
-      const dataUrl = `data:${result.assets[0]!.mimeType};base64,${Buffer.from(result.assets[0]!.imageBytes).toString("base64")}`;
-      const imgMap = new Map<string, string>([[primaryId, dataUrl]]);
-      const liveEvaluator = await buildLiveFaceEvaluator({
-        workspaceId: scope.workspaceId,
-        archetypeId,
-        imageSourceMap: imgMap,
-      });
-      assertLiveFaceEvaluatorNotNull(
-        liveEvaluator,
-        `novelty_replacement candidate=${replacement.id}`,
-      );
-      const priorEmbeddingsLoaded = (
-        await embeddingRepo.loadEmbeddingsForWorkspace(
-          scope.workspaceId,
-          archetypeId,
-        )
-      ).length;
-
-      const identityFingerprint = buildIdentityFingerprint({
-        archetypeId,
-        blueprintId: slotBlueprint.id,
-        runVariationToken: officialCast.runVariationToken ?? undefined,
-        faceGeometry: variation.faceGeometry,
-        jawShape: variation.jawShape,
-        noseShape: variation.noseShape,
-        eyeShape: variation.eyeShape,
-        lipShape: variation.lipShape,
-        hairTexture: variation.hairTexture,
-        haircut: variation.haircut,
-        facialHair: variation.facialHair,
-        bodyStructure: variation.bodyBuild,
-        skinTone: variation.skinTone,
-        ancestryDirection: variation.identityDescriptor,
-      });
-
-      const noveltyCheck = await checkAndRegisterCandidate(
-        noveltyRepo,
-        noveltyHistory,
-        {
-          workspaceId: scope.workspaceId,
-          archetypeId,
-          creationProjectId: projectId,
-          candidateId: replacement.id,
-          assetId: primaryId,
-          identityFingerprint,
-          visualFingerprint: buildVisualFingerprint({}),
-          signedUrl: dataUrl,
-          sourceProvider: batch.provider,
-          sourceModel: batch.provider,
-        },
-        {
-          evaluator: liveEvaluator,
-          embeddingRepo,
-          diagnosticStore,
-          priorEmbeddingsLoaded,
-          slot: previous.candidate_number,
-          evaluatorActive: true,
-        },
-      );
-
-      finalStatus = noveltyCheck.candidateStatus as CandidateStatus;
-      noveltyDecision = noveltyCheck.finalDecision ?? null;
-      similarityScore =
-        typeof noveltyCheck.similarity === "number"
-          ? noveltyCheck.similarity
-          : null;
-
-      assertCandidateMayBecomeReady({
-        proposedStatus: finalStatus,
-        evaluationStatus: noveltyCheck.evaluationStatus,
-        finalDecision: noveltyCheck.finalDecision,
-        detectionStatus: noveltyCheck.detectionStatus,
-      });
-
-      const slotExhausted =
-        finalStatus === "novelty_blocked" &&
-        nextAttempt >= MAX_DISCOVERY_IDENTITY_ATTEMPTS;
-
-      const updatedAttempt = {
-        ...attemptRecord,
-        noveltyDecision,
-        similarityScore,
-        slotExhausted,
-        matchedCandidateId:
-          noveltyCheck.liveDebug?.closestPriorCandidateId ?? matchedCandidateId,
-      };
-
-      const settingsWithDebug = maybeAttachNoveltyDebugToSettings(
-        {
-          ...enrichedSettings,
-          noveltyReplacementAttempt: updatedAttempt,
-          slotExhausted,
-        },
-        noveltyCheck.liveDebug ?? null,
-      );
-
-      await creationRepo().updateCandidate(scope, replacement.id, {
-        status: finalStatus,
-        generation_settings: settingsWithDebug,
-        rejection_reason:
-          finalStatus === "ready"
-            ? ""
-            : slotExhausted
-              ? SLOT_EXHAUSTED_MESSAGE
-              : (noveltyCheck.replacementMessage ?? "novelty_protection"),
-        user_notes:
-          finalStatus === "ready"
-            ? ""
-            : `[novelty] ${noveltyCheck.hardRejectReason ?? noveltyCheck.finalDecision}`,
-      });
-      checkpoints.push("novelty_evaluation_completed");
-      checkpoints.push("candidate_status_persisted");
-      logNoveltyReplacementCheckpoint("novelty_evaluation_completed", {
-        projectId,
-        slot: slotLabel,
-        newCandidateId: replacement.id,
-        noveltyDecision: noveltyDecision ?? null,
-        finalCandidateStatus: finalStatus,
-      });
-
-      if (noveltyCheck.finalDecision === "allowed") {
-        await markCandidateShown(
-          noveltyRepo,
-          noveltyCheck.recordId,
-          scope.workspaceId,
-        );
-      }
     } catch (err) {
-      await creationRepo().updateCandidate(scope, replacement.id, {
-        status: "novelty_failed",
-        rejection_reason:
-          err instanceof Error ? err.message : "novelty_evaluation_failed",
+      return await failAndReturn({
+        safeErrorCode: "candidate_persist_exception",
+        safeErrorMessage:
+          err instanceof Error ? err.message : "Failed to create candidate",
+        providerMayHaveCompleted: true,
       });
-      finalStatus = "novelty_failed";
+    }
+    newCandidateId = replacement.id;
+    candidateCreatedAt = new Date().toISOString();
+    workingPayload = await persistNoveltyReplacementCheckpoint({
+      scope,
+      jobRepo: jobRepo(),
+      jobId: job.id,
+      existingPayload: workingPayload,
+      checkpoint: "candidate_row_created",
+      checkpoints,
+      extra: {
+        newCandidateId: replacement.id,
+        candidateCreatedAt,
+        providerCompletedAt,
+        providerRequestId,
+        providerOutputId,
+      },
+    });
+
+    let primaryId: string | null = null;
+    try {
+      workingPayload = await persistNoveltyReplacementCheckpoint({
+        scope,
+        jobRepo: jobRepo(),
+        jobId: job.id,
+        existingPayload: workingPayload,
+        checkpoint: "asset_upload_started",
+        checkpoints,
+      });
+      for (const asset of result.assets) {
+        const assetId = randomUUID();
+        const uploaded = await withNoveltyReplacementStageTimeout({
+          stage: "asset_upload_started",
+          timeoutMs: timeouts.uploadMs,
+          safeErrorCode: ASSET_UPLOAD_TIMEOUT_CODE,
+          safeErrorMessage: ASSET_UPLOAD_TIMEOUT_MESSAGE,
+          run: async () =>
+            creationRepo().kind === "memory"
+              ? buildPersonaCandidateAssetMetadata({
+                  workspaceId: scope.workspaceId,
+                  projectId,
+                  candidateId: replacement.id,
+                  assetId,
+                  filename: `${asset.assetType}-replacement.png`,
+                  bytes: asset.imageBytes,
+                  mimeType: asset.mimeType,
+                })
+              : uploadPersonaCandidateBytes({
+                  workspaceId: scope.workspaceId,
+                  projectId,
+                  candidateId: replacement.id,
+                  assetId,
+                  filename: `${asset.assetType}-replacement.png`,
+                  bytes: asset.imageBytes,
+                  mimeType: asset.mimeType,
+                }),
+        });
+        const created = await creationRepo().createCandidateAsset(scope, {
+          candidate_id: replacement.id,
+          asset_type: asset.assetType,
+          storage_path: uploaded.storagePath,
+          mime_type: asset.mimeType,
+          width: uploaded.width,
+          height: uploaded.height,
+          file_size_bytes: asset.imageBytes.length,
+          checksum: uploaded.checksum,
+          provider_output_id: asset.providerOutputId ?? null,
+          generation_metadata: {
+            ...(asset.metadata ?? {}),
+            noveltyReplacement: true,
+            attemptNumber: nextAttempt,
+            costLabel: "estimated",
+          },
+          status: "ready",
+          is_primary: asset.assetType === "portrait_front",
+        });
+        if (created.is_primary) primaryId = created.id;
+      }
+      if (primaryId) {
+        await creationRepo().updateCandidate(scope, replacement.id, {
+          primary_preview_asset_id: primaryId,
+        });
+      }
+      assetCreatedAt = new Date().toISOString();
+      workingPayload = await persistNoveltyReplacementCheckpoint({
+        scope,
+        jobRepo: jobRepo(),
+        jobId: job.id,
+        existingPayload: workingPayload,
+        checkpoint: "asset_upload_completed",
+        checkpoints,
+        extra: { assetCreatedAt },
+      });
+      workingPayload = await persistNoveltyReplacementCheckpoint({
+        scope,
+        jobRepo: jobRepo(),
+        jobId: job.id,
+        existingPayload: workingPayload,
+        checkpoint: "asset_row_created",
+        checkpoints,
+      });
+    } catch (err) {
+      const isTimeout = err instanceof NoveltyReplacementStageTimeoutError;
+      return await failAndReturn({
+        safeErrorCode: isTimeout ? err.safeErrorCode : "asset_upload_exception",
+        safeErrorMessage: isTimeout
+          ? err.safeErrorMessage
+          : err instanceof Error
+            ? err.message
+            : "Asset upload failed",
+        finalCandidateStatus: "novelty_failed",
+        providerMayHaveCompleted: true,
+      });
+    }
+
+    await creationRepo().updateCandidate(scope, previous.id, {
+      generation_settings: {
+        ...(previous.generation_settings ?? {}),
+        boardSupersededByReplacement: true,
+        replacedByCandidateId: replacement.id,
+      },
+    });
+
+    let finalStatus = (
+      initialStatus === "ready" ? "ready" : "novelty_failed"
+    ) as CandidateStatus;
+    let similarityScore: number | null = null;
+    let noveltyDecision: string | null =
+      initialStatus === "ready" ? "allowed" : null;
+
+    if (isLiveProvider && primaryId) {
+      try {
+        noveltyStartedAt = new Date().toISOString();
+        workingPayload = await persistNoveltyReplacementCheckpoint({
+          scope,
+          jobRepo: jobRepo(),
+          jobId: job.id,
+          existingPayload: workingPayload,
+          checkpoint: "novelty_evaluation_started",
+          checkpoints,
+          extra: {
+            noveltyEvaluationStarted: true,
+            noveltyStartedAt,
+          },
+        });
+
+        await withNoveltyReplacementStageTimeout({
+          stage: "novelty_evaluation_started",
+          timeoutMs: timeouts.noveltyMs,
+          safeErrorCode: NOVELTY_EVALUATION_TIMEOUT_CODE,
+          safeErrorMessage: NOVELTY_EVALUATION_TIMEOUT_MESSAGE,
+          run: async () => {
+            const noveltyRepo = new SupabaseNoveltyRepository();
+            const embeddingRepo = new SupabaseEmbeddingRepository();
+            const diagnosticStore = new SupabaseLiveDiagnosticStore();
+            const noveltyHistory = await loadDiscoveryHistory(
+              noveltyRepo,
+              scope.workspaceId,
+              archetypeId,
+            );
+            const dataUrl = `data:${result.assets[0]!.mimeType};base64,${Buffer.from(result.assets[0]!.imageBytes).toString("base64")}`;
+            const imgMap = new Map<string, string>([[primaryId!, dataUrl]]);
+            const liveEvaluator = await buildLiveFaceEvaluator({
+              workspaceId: scope.workspaceId,
+              archetypeId,
+              imageSourceMap: imgMap,
+            });
+            assertLiveFaceEvaluatorNotNull(
+              liveEvaluator,
+              `novelty_replacement candidate=${replacement.id}`,
+            );
+            const priorEmbeddingsLoaded = (
+              await embeddingRepo.loadEmbeddingsForWorkspace(
+                scope.workspaceId,
+                archetypeId,
+              )
+            ).length;
+
+            const identityFingerprint = buildIdentityFingerprint({
+              archetypeId,
+              blueprintId: slotBlueprint.id,
+              runVariationToken: officialCast.runVariationToken ?? undefined,
+              faceGeometry: variation.faceGeometry,
+              jawShape: variation.jawShape,
+              noseShape: variation.noseShape,
+              eyeShape: variation.eyeShape,
+              lipShape: variation.lipShape,
+              hairTexture: variation.hairTexture,
+              haircut: variation.haircut,
+              facialHair: variation.facialHair,
+              bodyStructure: variation.bodyBuild,
+              skinTone: variation.skinTone,
+              ancestryDirection: variation.identityDescriptor,
+            });
+
+            workingPayload = await persistNoveltyReplacementCheckpoint({
+              scope,
+              jobRepo: jobRepo(),
+              jobId: job!.id,
+              existingPayload: workingPayload,
+              checkpoint: "face_detection_completed",
+              checkpoints,
+            });
+
+            const noveltyCheck = await checkAndRegisterCandidate(
+              noveltyRepo,
+              noveltyHistory,
+              {
+                workspaceId: scope.workspaceId,
+                archetypeId,
+                creationProjectId: projectId,
+                candidateId: replacement.id,
+                assetId: primaryId!,
+                identityFingerprint,
+                visualFingerprint: buildVisualFingerprint({}),
+                signedUrl: dataUrl,
+                sourceProvider: batch.provider,
+                sourceModel: batch.provider,
+              },
+              {
+                evaluator: liveEvaluator,
+                embeddingRepo,
+                diagnosticStore,
+                priorEmbeddingsLoaded,
+                slot: previous.candidate_number,
+                evaluatorActive: true,
+              },
+            );
+
+            workingPayload = await persistNoveltyReplacementCheckpoint({
+              scope,
+              jobRepo: jobRepo(),
+              jobId: job!.id,
+              existingPayload: workingPayload,
+              checkpoint: "embedding_created",
+              checkpoints,
+            });
+            workingPayload = await persistNoveltyReplacementCheckpoint({
+              scope,
+              jobRepo: jobRepo(),
+              jobId: job!.id,
+              existingPayload: workingPayload,
+              checkpoint: "comparisons_completed",
+              checkpoints,
+            });
+
+            finalStatus = noveltyCheck.candidateStatus as CandidateStatus;
+            noveltyDecision = noveltyCheck.finalDecision ?? null;
+            similarityScore =
+              typeof noveltyCheck.similarity === "number"
+                ? noveltyCheck.similarity
+                : null;
+
+            assertCandidateMayBecomeReady({
+              proposedStatus: finalStatus,
+              evaluationStatus: noveltyCheck.evaluationStatus,
+              finalDecision: noveltyCheck.finalDecision,
+              detectionStatus: noveltyCheck.detectionStatus,
+            });
+
+            const slotExhaustedInner =
+              finalStatus === "novelty_blocked" &&
+              nextAttempt >= MAX_DISCOVERY_IDENTITY_ATTEMPTS;
+
+            const updatedAttempt = {
+              ...attemptRecord,
+              noveltyDecision,
+              similarityScore,
+              slotExhausted: slotExhaustedInner,
+              matchedCandidateId:
+                noveltyCheck.liveDebug?.closestPriorCandidateId ??
+                matchedCandidateId,
+            };
+
+            const settingsWithDebug = maybeAttachNoveltyDebugToSettings(
+              {
+                ...enrichedSettings,
+                noveltyReplacementAttempt: updatedAttempt,
+                slotExhausted: slotExhaustedInner,
+              },
+              noveltyCheck.liveDebug ?? null,
+            );
+
+            await creationRepo().updateCandidate(scope, replacement.id, {
+              status: finalStatus,
+              generation_settings: settingsWithDebug,
+              rejection_reason:
+                finalStatus === "ready"
+                  ? ""
+                  : slotExhaustedInner
+                    ? SLOT_EXHAUSTED_MESSAGE
+                    : (noveltyCheck.replacementMessage ?? "novelty_protection"),
+              user_notes:
+                finalStatus === "ready"
+                  ? ""
+                  : `[novelty] ${noveltyCheck.hardRejectReason ?? noveltyCheck.finalDecision}`,
+            });
+
+            noveltyCompletedAt = new Date().toISOString();
+            workingPayload = await persistNoveltyReplacementCheckpoint({
+              scope,
+              jobRepo: jobRepo(),
+              jobId: job!.id,
+              existingPayload: workingPayload,
+              checkpoint: "novelty_decision_persisted",
+              checkpoints,
+              extra: {
+                noveltyDecision,
+                finalCandidateStatus: finalStatus,
+                noveltyCompletedAt,
+              },
+            });
+            checkpoints.push("novelty_evaluation_completed");
+            checkpoints.push("candidate_status_persisted");
+
+            if (noveltyCheck.finalDecision === "allowed") {
+              await markCandidateShown(
+                noveltyRepo,
+                noveltyCheck.recordId,
+                scope.workspaceId,
+              );
+            }
+          },
+        });
+      } catch (err) {
+        const isTimeout = err instanceof NoveltyReplacementStageTimeoutError;
+        if (!isTimeout) {
+          await creationRepo().updateCandidate(scope, replacement.id, {
+            status: "novelty_failed",
+            rejection_reason:
+              err instanceof Error ? err.message : "novelty_evaluation_failed",
+          });
+        }
+        return await failAndReturn({
+          safeErrorCode: isTimeout
+            ? err.safeErrorCode
+            : "novelty_evaluation_exception",
+          safeErrorMessage: isTimeout
+            ? err.safeErrorMessage
+            : err instanceof Error
+              ? err.message
+              : "novelty_evaluation_failed",
+          finalCandidateStatus: "novelty_failed",
+          providerMayHaveCompleted: true,
+        });
+      }
+    } else if (!isLiveProvider) {
       checkpoints.push("novelty_evaluation_completed");
       checkpoints.push("candidate_status_persisted");
     }
-  } else if (!isLiveProvider) {
-    checkpoints.push("novelty_evaluation_completed");
-    checkpoints.push("candidate_status_persisted");
-  }
 
-  await creationRepo().updateProject(scope, projectId, {
-    actual_cost: Number((project.actual_cost + batch.actualCostEur).toFixed(4)),
-  });
-
-  const slotExhausted =
-    finalStatus === "novelty_blocked" &&
-    nextAttempt >= MAX_DISCOVERY_IDENTITY_ATTEMPTS;
-  const outcome = mapFinalStatusToOutcome({
-    finalCandidateStatus: finalStatus,
-    slotExhausted,
-  });
-  if (outcome === "failed") {
-    await jobRepo().updateJob(scope, job.id, {
-      status: "failed",
-      actual_cost: batch.actualCostEur,
-      completed_at: new Date().toISOString(),
-      error_code: "novelty_failed",
-      error_message: "Face novelty evaluation failed for replacement.",
-      confirmation_payload: {
-        ...(job.confirmation_payload ?? {}),
-        providerStartedAt,
-        providerCompletedAt,
-        newCandidateId: replacement.id,
-        noveltyDecision,
+    try {
+      await creationRepo().updateProject(scope, projectId, {
+        actual_cost: Number(
+          (project.actual_cost + batch.actualCostEur).toFixed(4),
+        ),
+      });
+    } catch (err) {
+      return await failAndReturn({
+        safeErrorCode: "project_cost_persist_exception",
+        safeErrorMessage:
+          err instanceof Error ? err.message : "Failed to update project cost",
         finalCandidateStatus: finalStatus,
+        noveltyDecision,
+        providerMayHaveCompleted: true,
+      });
+    }
+
+    const slotExhausted =
+      finalStatus === "novelty_blocked" &&
+      nextAttempt >= MAX_DISCOVERY_IDENTITY_ATTEMPTS;
+    const outcome = mapFinalStatusToOutcome({
+      finalCandidateStatus: finalStatus,
+      slotExhausted,
+    });
+
+    try {
+      await withNoveltyReplacementStageTimeout({
+        stage: "job_terminal_status_persisted",
+        timeoutMs: timeouts.persistMs,
+        safeErrorCode: RESULT_PERSISTENCE_TIMEOUT_CODE,
+        safeErrorMessage: RESULT_PERSISTENCE_TIMEOUT_MESSAGE,
+        run: async () => {
+          if (outcome === "failed") {
+            job = await finalizeNoveltyReplacementJob({
+              scope,
+              jobRepo: jobRepo(),
+              job: job!,
+              terminalStatus: "failed",
+              outcomeStatus: "failed",
+              attemptNumber: nextAttempt,
+              currentStage: "job_terminal_status_persisted",
+              checkpoints,
+              providerStartedAt,
+              providerCompletedAt,
+              providerRequestId,
+              providerOutputId,
+              newCandidateId: replacement.id,
+              noveltyDecision,
+              finalCandidateStatus: finalStatus,
+              slotExhausted,
+              actualCost: batch.actualCostEur,
+              safeErrorCode: "novelty_failed",
+              safeErrorMessage:
+                "Face novelty evaluation failed for replacement.",
+              candidateCreatedAt,
+              assetCreatedAt,
+              noveltyStartedAt,
+              noveltyCompletedAt,
+              providerMayHaveCompleted: true,
+            });
+          } else {
+            job = await finalizeNoveltyReplacementJob({
+              scope,
+              jobRepo: jobRepo(),
+              job: job!,
+              terminalStatus: "completed",
+              outcomeStatus: outcome,
+              attemptNumber: nextAttempt,
+              currentStage: "job_terminal_status_persisted",
+              checkpoints,
+              providerStartedAt,
+              providerCompletedAt,
+              providerRequestId,
+              providerOutputId,
+              newCandidateId: replacement.id,
+              noveltyDecision,
+              finalCandidateStatus: finalStatus,
+              slotExhausted,
+              actualCost: batch.actualCostEur,
+              candidateCreatedAt,
+              assetCreatedAt,
+              noveltyStartedAt,
+              noveltyCompletedAt,
+              providerMayHaveCompleted: true,
+            });
+          }
+          finalized = true;
+        },
+      });
+    } catch (err) {
+      const isTimeout = err instanceof NoveltyReplacementStageTimeoutError;
+      return await failAndReturn({
+        safeErrorCode: isTimeout
+          ? err.safeErrorCode
+          : "result_persistence_exception",
+        safeErrorMessage: isTimeout
+          ? err.safeErrorMessage
+          : err instanceof Error
+            ? err.message
+            : RESULT_PERSISTENCE_TIMEOUT_MESSAGE,
+        finalCandidateStatus: finalStatus,
+        noveltyDecision,
+        providerMayHaveCompleted: true,
+      });
+    }
+
+    checkpoints.push("API_response_returned");
+    checkpoints.push("response_returned");
+    logNoveltyReplacementCheckpoint("response_returned", {
+      projectId,
+      slot: slotLabel,
+      newCandidateId: replacement.id,
+      replacementJobId: job.id,
+      attemptNumber: nextAttempt,
+      noveltyDecision: noveltyDecision ?? null,
+      finalCandidateStatus: finalStatus,
+      durationMs: Date.now() - startedAtMs,
+    });
+
+    if (outcome === "failed") {
+      return buildFailureResponse({
+        projectId,
+        slot: slotLabel,
+        previousCandidateId: previous.id,
+        newCandidateId: replacement.id,
+        replacementJobId: job.id,
+        attemptNumber: nextAttempt,
+        providerStarted: true,
+        providerCompleted: true,
+        providerMayHaveCompleted: true,
         safeErrorCode: "novelty_failed",
         safeErrorMessage: "Face novelty evaluation failed for replacement.",
-      },
-    });
-    checkpoints.push("response_returned");
-    return {
-      ok: false,
-      status: "failed",
+        durationMs: Date.now() - startedAtMs,
+        checkpoints,
+      });
+    }
+
+    return buildSuccessResponse({
+      status: outcome,
       projectId,
       slot: slotLabel,
       previousCandidateId: previous.id,
       newCandidateId: replacement.id,
       replacementJobId: job.id,
       attemptNumber: nextAttempt,
-      providerStarted: true,
-      providerCompleted: true,
-      safeErrorCode: "novelty_failed",
-      safeErrorMessage: "Face novelty evaluation failed for replacement.",
-      durationMs: Date.now() - startedAtMs,
-      checkpoints,
-    };
-  }
-
-  await jobRepo().updateJob(scope, job.id, {
-    status: "completed",
-    actual_cost: batch.actualCostEur,
-    completed_at: new Date().toISOString(),
-    confirmation_payload: {
-      ...(job.confirmation_payload ?? {}),
-      providerStartedAt,
-      providerCompletedAt,
-      newCandidateId: replacement.id,
+      maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
       noveltyDecision,
       finalCandidateStatus: finalStatus,
-      attemptNumber: nextAttempt,
-      slot: slotLabel,
-      slotExhausted,
-    },
-  });
-
-  checkpoints.push("response_returned");
-  logNoveltyReplacementCheckpoint("response_returned", {
-    projectId,
-    slot: slotLabel,
-    newCandidateId: replacement.id,
-    replacementJobId: job.id,
-    attemptNumber: nextAttempt,
-    noveltyDecision: noveltyDecision ?? null,
-    finalCandidateStatus: finalStatus,
-    durationMs: Date.now() - startedAtMs,
-  });
-
-  return {
-    ok: true,
-    status: outcome,
-    projectId,
-    slot: slotLabel,
-    previousCandidateId: previous.id,
-    newCandidateId: replacement.id,
-    replacementJobId: job.id,
-    attemptNumber: nextAttempt,
-    maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
-    noveltyDecision,
-    finalCandidateStatus: finalStatus,
-    providerStarted: true,
-    providerCompleted: true,
-    durationMs: Date.now() - startedAtMs,
-    message: outcomeMessage(outcome),
-    checkpoints,
-  };
+      providerStarted: true,
+      providerCompleted: true,
+      durationMs: Date.now() - startedAtMs,
+      checkpoints,
+    });
+  } catch (err) {
+    if (err instanceof PersonaDomainError) {
+      const details = (err.details ?? {}) as Record<string, unknown>;
+      if (job && !finalized && (job.status === "generating" || job.status === "queued")) {
+        return await failAndReturn({
+          safeErrorCode:
+            typeof details.safeErrorCode === "string"
+              ? details.safeErrorCode
+              : err.code,
+          safeErrorMessage: err.message,
+          providerMayHaveCompleted: Boolean(providerCompletedAt),
+        });
+      }
+      throw err;
+    }
+    const safeErrorMessage =
+      err instanceof Error ? err.message : "Generate New Face failed";
+    if (job) {
+      return await failAndReturn({
+        safeErrorCode: "replacement_pipeline_exception",
+        safeErrorMessage,
+        providerMayHaveCompleted: Boolean(providerCompletedAt),
+      });
+    }
+    throw new PersonaDomainError(safeErrorMessage, "WORKFLOW", {
+      safeErrorCode: "replacement_pipeline_exception",
+    });
+  } finally {
+    if (lockAcquired) {
+      releaseNoveltyReplacementLock(projectId, slotLabel);
+    }
+  }
 }
 
 export async function listGenerationJobsForProject(
@@ -2728,8 +3386,9 @@ export async function listGenerationJobsForProject(
 }
 
 /**
- * Phase 2.1E.2 — Mark abandoned novelty replacement jobs as stale_failed.
+ * Phase 2.1E.2 / 2.1E.4 — Mark abandoned / overdue novelty replacement jobs terminal.
  * Never starts a provider call. Never reuses confirmation tokens.
+ * Uses currentStage + lastHeartbeatAt, and independently enforces the 180s provider deadline.
  */
 export async function reconcileStaleNoveltyReplacementJobs(
   scope: WorkspaceScope,
@@ -2742,32 +3401,92 @@ export async function reconcileStaleNoveltyReplacementJobs(
 }> {
   const jobs = await jobRepo().listJobsForProject(scope, projectId);
   const reconciledJobIds: string[] = [];
-  const nowIso = new Date(nowMs).toISOString();
+  const timeouts = resolveNoveltyReplacementStageTimeouts();
 
   for (const job of jobs) {
     if (!isNoveltyReplacementJob(job)) continue;
-    const { stale } = evaluateReplacementJobStaleness(job, nowMs);
-    if (!stale) continue;
     if (job.status === "failed" || job.status === "completed") continue;
 
-    await jobRepo().updateJob(scope, job.id, {
-      status: "failed",
-      error_code: "replacement_job_stale",
-      error_message:
-        "The previous face-generation job stopped unexpectedly and is no longer running.",
-      completed_at: nowIso,
-      confirmation_payload: buildStaleFailurePayload(
-        job.confirmation_payload ?? {},
-        nowIso,
-      ),
+    const overdue = isProviderGenerationOverdue(
+      job,
+      nowMs,
+      timeouts.providerMs,
+    );
+    const { stale } = evaluateReplacementJobStaleness(job, nowMs);
+    if (!overdue && !stale) continue;
+
+    const payload = job.confirmation_payload ?? {};
+    const safeErrorCode = overdue
+      ? PROVIDER_GENERATION_TIMEOUT_CODE
+      : "replacement_job_stale";
+    const safeErrorMessage = overdue
+      ? PROVIDER_GENERATION_TIMEOUT_MESSAGE
+      : "The previous face-generation job stopped unexpectedly and is no longer running.";
+
+    await finalizeNoveltyReplacementJob({
+      scope,
+      jobRepo: jobRepo(),
+      job,
+      terminalStatus: "failed",
+      outcomeStatus: overdue ? "failed" : "stale_failed",
+      attemptNumber:
+        typeof payload.nextAttemptNumber === "number"
+          ? payload.nextAttemptNumber
+          : typeof payload.attemptNumber === "number"
+            ? payload.attemptNumber
+            : job.retry_count || 1,
+      currentStage: overdue
+        ? "provider_timeout"
+        : "job_terminal_status_persisted",
+      checkpoints: Array.isArray(payload.checkpoints)
+        ? ([
+            ...payload.checkpoints,
+            overdue ? "provider_timeout" : "job_terminal_status_persisted",
+          ] as NoveltyReplacementCheckpoint[])
+        : [overdue ? "provider_timeout" : "job_terminal_status_persisted"],
+      providerStartedAt:
+        typeof payload.providerStartedAt === "string"
+          ? payload.providerStartedAt
+          : job.started_at,
+      providerCompletedAt:
+        typeof payload.providerCompletedAt === "string"
+          ? payload.providerCompletedAt
+          : null,
+      providerRequestId:
+        typeof payload.providerRequestId === "string"
+          ? payload.providerRequestId
+          : null,
+      providerOutputId:
+        typeof payload.providerOutputId === "string"
+          ? payload.providerOutputId
+          : null,
+      newCandidateId:
+        typeof payload.newCandidateId === "string"
+          ? payload.newCandidateId
+          : null,
+      noveltyDecision:
+        typeof payload.noveltyDecision === "string"
+          ? payload.noveltyDecision
+          : null,
+      finalCandidateStatus:
+        typeof payload.finalCandidateStatus === "string"
+          ? payload.finalCandidateStatus
+          : "novelty_failed",
+      safeErrorCode,
+      safeErrorMessage,
+      recoveredFromStaleState: !overdue,
+      providerMayHaveCompleted: Boolean(payload.providerCompletedAt),
     });
     reconciledJobIds.push(job.id);
-    logNoveltyReplacementCheckpoint("response_returned", {
-      projectId,
-      replacementJobId: job.id,
-      safeErrorCode: "replacement_job_stale",
-      recoveredFromStaleState: true,
-    });
+    logNoveltyReplacementCheckpoint(
+      overdue ? "provider_timeout" : "response_returned",
+      {
+        projectId,
+        replacementJobId: job.id,
+        safeErrorCode,
+        recoveredFromStaleState: !overdue,
+      },
+    );
   }
 
   const refreshed = await jobRepo().listJobsForProject(scope, projectId);
@@ -2780,6 +3499,7 @@ export async function reconcileStaleNoveltyReplacementJobs(
 
 /**
  * Explicit status endpoint helper for client polling timeout reconciliation.
+ * Safe fields only — no signed URLs, prompts, embeddings, tokens, or secrets.
  */
 export async function getNoveltyReplacementJobStatus(
   scope: WorkspaceScope,
@@ -2794,34 +3514,42 @@ export async function getNoveltyReplacementJobStatus(
       ? jobs.find((j) => j.id === reconciled.activeNoveltyReplacements[0]!.jobId) ??
         null
       : null;
+  const statusDto = job
+    ? toNoveltyReplacementJobStatusDto(job, projectId)
+    : null;
   return {
     projectId,
     reconciledJobIds: reconciled.reconciledJobIds,
     activeNoveltyReplacements: reconciled.activeNoveltyReplacements,
     slotReplacementStates: reconciled.slotReplacementStates,
-    job: job
+    status: statusDto,
+    job: statusDto
       ? {
-          id: job.id,
-          status: job.status,
-          errorCode: job.error_code,
-          errorMessage: job.error_message,
-          startedAt: job.started_at,
-          completedAt: job.completed_at,
-          confirmedAt: job.confirmed_at,
-          providerStartedAt:
-            typeof job.confirmation_payload?.providerStartedAt === "string"
-              ? job.confirmation_payload.providerStartedAt
-              : null,
-          providerCompletedAt:
-            typeof job.confirmation_payload?.providerCompletedAt === "string"
-              ? job.confirmation_payload.providerCompletedAt
-              : null,
-          recoveredFromStaleState:
-            job.confirmation_payload?.recoveredFromStaleState === true,
-          slot:
-            typeof job.confirmation_payload?.slot === "string"
-              ? job.confirmation_payload.slot
-              : null,
+          id: statusDto.jobId,
+          status: statusDto.status,
+          errorCode: statusDto.safeErrorCode,
+          errorMessage: statusDto.safeErrorMessage,
+          startedAt: statusDto.providerStartedAt,
+          completedAt:
+            job?.completed_at ??
+            (typeof job?.confirmation_payload?.completedAt === "string"
+              ? job.confirmation_payload.completedAt
+              : typeof job?.confirmation_payload?.failedAt === "string"
+                ? job.confirmation_payload.failedAt
+                : null),
+          confirmedAt: job?.confirmed_at ?? null,
+          providerStartedAt: statusDto.providerStartedAt,
+          providerCompletedAt: statusDto.providerCompletedAt,
+          recoveredFromStaleState: statusDto.recoveredFromStaleState,
+          slot: statusDto.slot,
+          currentStage: statusDto.currentStage,
+          lastHeartbeatAt: statusDto.lastHeartbeatAt,
+          candidateId: statusDto.candidateId,
+          noveltyDecision: statusDto.noveltyDecision,
+          finalCandidateStatus: statusDto.finalCandidateStatus,
+          attemptNumber: statusDto.attemptNumber,
+          stageLabel: statusDto.stageLabel,
+          providerMayHaveCompleted: statusDto.providerMayHaveCompleted,
         }
       : null,
   };

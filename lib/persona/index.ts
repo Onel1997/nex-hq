@@ -138,7 +138,41 @@ export {
 export {
   getFakeBatchInvocationCount,
   resetFakeBatchInvocationCount,
+  setFakeBatchDelayMsForTests,
+  setFakeBatchErrorForTests,
+  getLastFakeBatchAbortSignalForTests,
+  resetFakeBatchTestHooks,
 } from "./creation/provider/fake-candidate-generator";
+
+export {
+  setNoveltyReplacementStageTimeoutsForTests,
+  clearNoveltyReplacementLocksForTests,
+  withNoveltyReplacementStageTimeout,
+  executeProviderWithDeadline,
+  finalizeNoveltyReplacementJob,
+  createNoveltyReplacementPollController,
+  PROVIDER_GENERATION_TIMEOUT_CODE,
+  ASSET_UPLOAD_TIMEOUT_CODE,
+  NOVELTY_EVALUATION_TIMEOUT_CODE,
+  RESULT_PERSISTENCE_TIMEOUT_CODE,
+  PROVIDER_GENERATION_TIMEOUT_MESSAGE,
+  PROVIDER_GENERATION_TIMEOUT_MS,
+  NoveltyReplacementStageTimeoutError,
+  ProviderGenerationTimeoutError,
+  toNoveltyReplacementJobStatusDto,
+  isProviderGenerationOverdue,
+} from "./creation/novelty-replacement-execution";
+
+export {
+  NOVELTY_REPLACEMENT_POLL_INTERVAL_MS,
+  NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS,
+  NOVELTY_REPLACEMENT_TIMEOUT_MESSAGE,
+  stageLabelForCheckpoint,
+  evaluateReplacementJobStaleness,
+  hasTerminalReplacementResult,
+  readActiveNoveltyReplacements,
+  resolveSlotReplacementStates,
+} from "./creation/novelty-replacement-result";
 
 export {
   imagesPerCandidateForStage,

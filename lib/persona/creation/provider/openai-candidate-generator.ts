@@ -76,6 +76,7 @@ async function generateWithDiscoveryQualityFilter(input: {
   identityAttemptNumber: number;
   previousAttemptSample?: Record<string, string> | null;
   avoidSameRunSample?: Record<string, string> | null;
+  abortSignal?: AbortSignal;
 }): Promise<{
   built: ReturnType<typeof buildCandidatePrompt>;
   generated: Awaited<ReturnType<typeof generateOpenAiImage>>;
@@ -92,6 +93,9 @@ async function generateWithDiscoveryQualityFilter(input: {
   const applyFilter = isDiscoveryPortraitWork(input.castingPhase, input.item.assetType);
 
   for (let qualityAttempt = 1; qualityAttempt <= DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS; qualityAttempt += 1) {
+    if (input.abortSignal?.aborted) {
+      throw new DOMException("The operation was aborted.", "AbortError");
+    }
     qualityAttempts = qualityAttempt;
     const retrySuffix =
       qualityAttempt > 1 ? buildPremiumRetryPromptSuffix(qualityAttempt) : undefined;
@@ -121,11 +125,23 @@ async function generateWithDiscoveryQualityFilter(input: {
           dimensions: "1024x1024",
           assetType: "persona_candidate",
           qualityOverride: input.quality,
+          signal: input.abortSignal,
         }),
       {
         maxAttempts: 3,
         baseDelayMs: 800,
-        isTransient: isLikelyTransientProviderError,
+        isTransient: (error) => {
+          if (input.abortSignal?.aborted) return false;
+          if (
+            (error instanceof Error && error.name === "AbortError") ||
+            (typeof DOMException !== "undefined" &&
+              error instanceof DOMException &&
+              error.name === "AbortError")
+          ) {
+            return false;
+          }
+          return isLikelyTransientProviderError(error);
+        },
       },
     );
     attempts = providerAttempts;
@@ -237,6 +253,9 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
   }
 
   async createCandidateBatch(input: CreateCandidateBatchInput): Promise<CandidateBatchJob> {
+    if (input.abortSignal?.aborted) {
+      throw new DOMException("The operation was aborted.", "AbortError");
+    }
     if (!this.isConfigured()) {
       throw new PersonaDomainError(
         "Provider nicht eingerichtet (OPENAI_API_KEY).",
@@ -392,6 +411,7 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             identityAttemptNumber,
             previousAttemptSample: input.previousAttemptSample ?? null,
             avoidSameRunSample: input.avoidSameRunSample ?? null,
+            abortSignal: input.abortSignal,
           });
           const built = genResult.built;
           retryCount = Math.max(0, genResult.attempts - 1);

@@ -25,6 +25,9 @@ const TINY_PNG = Buffer.from(
 
 /** Test hook — increments when createCandidateBatch runs (never OpenAI). */
 let fakeBatchInvocationCount = 0;
+let fakeBatchDelayMs = 0;
+let fakeBatchError: Error | null = null;
+let lastFakeBatchAbortSignal: AbortSignal | null = null;
 
 export function getFakeBatchInvocationCount(): number {
   return fakeBatchInvocationCount;
@@ -32,6 +35,26 @@ export function getFakeBatchInvocationCount(): number {
 
 export function resetFakeBatchInvocationCount(): void {
   fakeBatchInvocationCount = 0;
+}
+
+/** Test-only: delay createCandidateBatch (never OpenAI). */
+export function setFakeBatchDelayMsForTests(ms: number): void {
+  fakeBatchDelayMs = Math.max(0, ms);
+}
+
+/** Test-only: force createCandidateBatch to throw (never OpenAI). */
+export function setFakeBatchErrorForTests(error: Error | null): void {
+  fakeBatchError = error;
+}
+
+export function getLastFakeBatchAbortSignalForTests(): AbortSignal | null {
+  return lastFakeBatchAbortSignal;
+}
+
+export function resetFakeBatchTestHooks(): void {
+  fakeBatchDelayMs = 0;
+  fakeBatchError = null;
+  lastFakeBatchAbortSignal = null;
 }
 
 export class FakeCandidateGenerator implements PersonaCandidateGenerator {
@@ -48,6 +71,37 @@ export class FakeCandidateGenerator implements PersonaCandidateGenerator {
 
   async createCandidateBatch(input: CreateCandidateBatchInput): Promise<CandidateBatchJob> {
     fakeBatchInvocationCount += 1;
+    const delayMs = fakeBatchDelayMs;
+    const forcedError = fakeBatchError;
+    const signal = input.abortSignal;
+    // Capture last signal for tests proving AbortSignal reaches the generator.
+    lastFakeBatchAbortSignal = signal ?? null;
+    if (signal?.aborted) {
+      throw new DOMException("The operation was aborted.", "AbortError");
+    }
+    if (delayMs > 0) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          cleanup();
+          resolve();
+        }, delayMs);
+        const onAbort = () => {
+          cleanup();
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        };
+        const cleanup = () => {
+          clearTimeout(timer);
+          signal?.removeEventListener("abort", onAbort);
+        };
+        signal?.addEventListener("abort", onAbort, { once: true });
+      });
+    }
+    if (signal?.aborted) {
+      throw new DOMException("The operation was aborted.", "AbortError");
+    }
+    if (forcedError) {
+      throw forcedError;
+    }
     if (!input.costConfirmed) {
       throw new PersonaDomainError(
         "Kostenbestätigung erforderlich vor bezahlter Generierung.",

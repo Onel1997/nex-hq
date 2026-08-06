@@ -242,14 +242,11 @@ describe("Phase 2.1E.2 stale replacement job recovery", () => {
 
     const updated = await jobRepo.getJob(scopeA, job.id);
     assert.equal(updated!.status, "failed");
-    assert.equal(updated!.error_code, REPLACEMENT_JOB_STALE_CODE);
+    // Provider started but overdue past 180s → provider_generation_timeout (not generic stale).
+    assert.equal(updated!.error_code, "provider_generation_timeout");
     assert.equal(
-      updated!.confirmation_payload?.recoveredFromStaleState,
-      true,
-    );
-    assert.equal(
-      updated!.confirmation_payload?.safeErrorMessage,
-      REPLACEMENT_JOB_STALE_MESSAGE,
+      updated!.confirmation_payload?.safeErrorCode,
+      "provider_generation_timeout",
     );
 
     // Page/board load reconciliation also makes no provider call.

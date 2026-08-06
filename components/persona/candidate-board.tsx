@@ -345,6 +345,9 @@ export function NoveltyFailureSlotCard({
     attemptNumber: number;
     maxAttempts: number;
     elapsedDisplay: string;
+    stageLabel?: string;
+    safeError?: string | null;
+    providerMayHaveCompleted?: boolean;
   } | null;
 }) {
   const isBlocked = slot.status === "novelty_blocked";
@@ -380,7 +383,7 @@ export function NoveltyFailureSlotCard({
           </p>
           <div
             role="progressbar"
-            aria-valuetext="Generating"
+            aria-valuetext={replacementUi.stageLabel ?? "Generating"}
             style={{
               marginTop: "0.75rem",
               height: 6,
@@ -401,14 +404,17 @@ export function NoveltyFailureSlotCard({
             />
           </div>
           <p className="ps-muted" style={{ fontSize: "12px", marginTop: "0.75rem" }}>
-            Generating image and checking face novelty...
+            {replacementUi.stageLabel ??
+              "Generating image and checking face novelty..."}
           </p>
           <p className="ps-muted" style={{ fontSize: "12px" }}>
             Elapsed {replacementUi.elapsedDisplay}
           </p>
-          <button type="button" className="ps-btn" style={{ marginTop: "0.75rem" }} disabled>
-            Generate New Face
-          </button>
+          {replacementUi.safeError ? (
+            <p style={{ marginTop: "0.75rem", color: "var(--ps-danger, #b42318)" }}>
+              {replacementUi.safeError}
+            </p>
+          ) : null}
         </div>
       </div>
     );

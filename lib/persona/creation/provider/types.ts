@@ -101,6 +101,11 @@ export interface CreateCandidateBatchInput {
    */
   replacementOfCandidateId?: string | null;
   replacementReason?: string | null;
+  /**
+   * Phase 2.1E.4 — abort signal for the live provider network request.
+   * Must reach the lowest OpenAI/fetch layer.
+   */
+  abortSignal?: AbortSignal;
 }
 
 export interface PersonaCandidateGenerator {
