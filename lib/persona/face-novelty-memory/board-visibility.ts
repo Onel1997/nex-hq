@@ -22,6 +22,11 @@ export type NoveltyFailureSlotDto = {
   status: NoveltyFailureSlotStatus;
   reason: string;
   requiresReplacementConfirmation: boolean;
+  /** Phase 2.1E — current L3 attempt for this blocked slot. */
+  attemptNumber?: number;
+  maxAttempts?: number;
+  slotExhausted?: boolean;
+  nextAttemptNumber?: number | null;
 };
 
 export type BoardCandidatePartition = {
@@ -64,6 +69,23 @@ export function toNoveltyFailureSlot(
   ) {
     return null;
   }
+  const settings = candidate.generation_settings ?? {};
+  if (settings.boardSupersededByReplacement === true) {
+    return null;
+  }
+  if (settings.slotExhausted === true) {
+    return {
+      slot: candidate.candidate_number,
+      candidateId: candidate.id,
+      status: candidate.status,
+      reason: "Slot exhausted — start a new discovery",
+      requiresReplacementConfirmation: false,
+      attemptNumber: readAttempt(settings),
+      maxAttempts: 4,
+      slotExhausted: true,
+      nextAttemptNumber: null,
+    };
+  }
   const debug = readLiveDebug(candidate);
   const reason =
     debug?.hardRejectReason ??
@@ -71,14 +93,33 @@ export function toNoveltyFailureSlot(
     candidate.user_notes?.replace(/^\[novelty\]\s*/, "") ??
     candidate.rejection_reason ??
     candidate.status;
+  const attemptNumber = readAttempt(settings);
+  const canReplace =
+    candidate.status === "novelty_blocked" &&
+    (debug?.requiresReplacementConfirmation ?? true) &&
+    attemptNumber < 4;
   return {
     slot: candidate.candidate_number,
     candidateId: candidate.id,
     status: candidate.status,
     reason,
-    requiresReplacementConfirmation:
-      debug?.requiresReplacementConfirmation ?? true,
+    requiresReplacementConfirmation: canReplace,
+    attemptNumber,
+    maxAttempts: 4,
+    slotExhausted: false,
+    nextAttemptNumber: canReplace ? attemptNumber + 1 : null,
   };
+}
+
+function readAttempt(settings: Record<string, unknown>): number {
+  const di = settings.discoveryIdentity;
+  if (di && typeof di === "object") {
+    const n = (di as { attemptNumber?: unknown }).attemptNumber;
+    if (typeof n === "number" && Number.isInteger(n) && n >= 1) return n;
+  }
+  const top = settings.identityAttemptNumber;
+  if (typeof top === "number" && Number.isInteger(top) && top >= 1) return top;
+  return 1;
 }
 
 export function partitionBoardCandidates(

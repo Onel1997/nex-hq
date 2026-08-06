@@ -70,9 +70,12 @@ export class FakeCandidateGenerator implements PersonaCandidateGenerator {
       input.candidateNumbers ??
       Array.from({ length: input.project.candidate_count }, (_, i) => i + 1);
 
+    const identityAttemptNumber = input.identityAttemptNumber ?? 1;
+    const generationRunId = input.generationRunId?.trim() || `fake-run-${Date.now()}`;
+
     const results = numbers.map((candidateNumber) => ({
       candidateNumber,
-      seed: `fake-${candidateNumber}`,
+      seed: `fake-${candidateNumber}-a${identityAttemptNumber}`,
       prompt: "fake-provider-test",
       negativePrompt: "",
       settings: {
@@ -80,12 +83,44 @@ export class FakeCandidateGenerator implements PersonaCandidateGenerator {
         costLabel: "allocated_estimate",
         castingPhase,
         fake: true,
+        generationRunId,
+        identityAttemptNumber,
+        discoveryIdentity: {
+          attemptNumber: identityAttemptNumber,
+          generationRunId,
+          samplingSeed: `fake-seed-${candidateNumber}-${identityAttemptNumber}`,
+          anatomyFingerprint: `fake-anatomy-${candidateNumber}-${identityAttemptNumber}`,
+          identityFingerprint: `fake-identity-${candidateNumber}-${identityAttemptNumber}`,
+          promptFingerprint: `fake-prompt-${candidateNumber}-${identityAttemptNumber}`,
+          slotBlueprintId: `fake-lane-${candidateNumber}`,
+          discoveryIdentityInstanceId: `fake-inst-${candidateNumber}-${identityAttemptNumber}`,
+          source: "controlled_sampling",
+          slot: ["A", "B", "C", "D"][candidateNumber - 1] ?? "A",
+        },
+        discoveryIdentitySample: {
+          faceGeometry: `fake-geometry-${identityAttemptNumber}`,
+          eyeSpacing: `fake-eyeSpacing-${identityAttemptNumber}`,
+          noseBridge: `fake-noseBridge-${identityAttemptNumber}`,
+          noseWidth: `fake-noseWidth-${identityAttemptNumber}`,
+          jaw: `fake-jaw-${identityAttemptNumber}`,
+          hairline: `fake-hairline-${identityAttemptNumber}`,
+          haircut: `fake-haircut-${identityAttemptNumber}`,
+          beardPattern: `fake-beard-${identityAttemptNumber}`,
+          optionalMicroMarks: identityAttemptNumber === 1 ? "none" : `mark-${identityAttemptNumber}`,
+        },
+        ...(input.replacementOfCandidateId
+          ? {
+              replacementOfCandidateId: input.replacementOfCandidateId,
+              replacementReason:
+                input.replacementReason ?? "face_similarity_duplicate",
+            }
+          : {}),
       },
       assets: assetTypes.map((assetType) => ({
         assetType,
         imageBytes: TINY_PNG,
         mimeType: "image/png",
-        providerOutputId: null,
+        providerOutputId: `fake-out-${candidateNumber}-${identityAttemptNumber}`,
         metadata: {
           provider: "fake",
           fake: true,

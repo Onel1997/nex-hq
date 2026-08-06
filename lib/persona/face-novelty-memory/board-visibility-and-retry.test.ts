@@ -159,8 +159,11 @@ describe("1–2. novelty_failed / novelty_blocked images not returned", () => {
       assert.ok(!("signedUrl" in slot));
       assert.ok(!("previewUrl" in slot));
       assert.equal(typeof slot.reason, "string");
-      assert.equal(slot.requiresReplacementConfirmation, true);
     }
+    const blockedSlot = failureSlots.find((s) => s.status === "novelty_blocked");
+    const failedSlot = failureSlots.find((s) => s.status === "novelty_failed");
+    assert.equal(blockedSlot?.requiresReplacementConfirmation, true);
+    assert.equal(failedSlot?.requiresReplacementConfirmation, false);
   });
 });
 

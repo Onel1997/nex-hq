@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PersonaStudioController } from "@/components/persona/use-persona-studio";
+import {
+  NOVELTY_REPLACEMENT_POLL_INTERVAL_MS,
+  NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS,
+  NOVELTY_REPLACEMENT_TIMEOUT_MESSAGE,
+  REPLACEMENT_JOB_STALE_MESSAGE,
+  computeReplacementElapsed,
+  outcomeMessage,
+  type ActiveNoveltyReplacementDto,
+} from "@/lib/persona/creation/novelty-replacement-result";
 import type {
   BrandRole,
   IntendedUsage,
@@ -1449,8 +1458,120 @@ export function CreationProjectsView({
 
 export function CandidatesView({ studio }: { studio: PersonaStudioController }) {
   const [error, setError] = useState<string | null>(null);
+  const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [noveltyConfirmCost, setNoveltyConfirmCost] = useState(false);
+  const [noveltyPrepare, setNoveltyPrepare] = useState<{
+    candidateId: string;
+    slot: string;
+    previousAttemptNumber: number;
+    nextAttemptNumber: number;
+    maxAttempts: number;
+    reason: string;
+  } | null>(null);
+  const [replacementFlow, setReplacementFlow] = useState<{
+    candidateId: string;
+    slot: string;
+    phase: "idle" | "confirming" | "generating" | "polling";
+    attemptNumber: number;
+    maxAttempts: number;
+    /** Epoch ms of providerStartedAt only — never project/job created_at alone. */
+    providerStartedAtMs: number | null;
+    jobId?: string | null;
+    newCandidateId?: string | null;
+  } | null>(null);
+  const [elapsedDisplay, setElapsedDisplay] = useState("Waiting to start");
+  const [staleRecoveryMessage, setStaleRecoveryMessage] = useState<string | null>(
+    null,
+  );
+  const [debugReplacement, setDebugReplacement] = useState<Record<
+    string,
+    string | number | boolean | null
+  > | null>(null);
+  const confirmInFlightRef = useRef(false);
+
+  const serverActiveReplacements = useMemo(
+    () => studio.projectCandidateState?.activeNoveltyReplacements ?? [],
+    [studio.projectCandidateState?.activeNoveltyReplacements],
+  );
+
+  useEffect(() => {
+    if (!replacementFlow) {
+      setElapsedDisplay("Waiting to start");
+      return;
+    }
+    if (
+      replacementFlow.phase !== "generating" &&
+      replacementFlow.phase !== "polling" &&
+      replacementFlow.phase !== "confirming"
+    ) {
+      return;
+    }
+    const tick = () => {
+      const computed = computeReplacementElapsed({
+        providerStartedAt:
+          replacementFlow.providerStartedAtMs != null
+            ? new Date(replacementFlow.providerStartedAtMs).toISOString()
+            : null,
+      });
+      setElapsedDisplay(computed.display);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [replacementFlow]);
+
+  // Server is source of truth — never restore generating from stale local/job status alone.
+  useEffect(() => {
+    const active: ActiveNoveltyReplacementDto | null =
+      serverActiveReplacements[0] ?? null;
+
+    if (!active) {
+      setReplacementFlow((prev) => {
+        if (
+          prev &&
+          !confirmInFlightRef.current &&
+          (prev.phase === "polling" || prev.phase === "generating")
+        ) {
+          return null;
+        }
+        return prev;
+      });
+      const staleJob = (studio.generationJobs ?? []).find((j) => {
+        const payload = j.confirmation_payload ?? {};
+        return (
+          (payload.noveltyReplacement === true ||
+            payload.intent === "novelty_replacement") &&
+          (j.status === "failed" || payload.recoveredFromStaleState === true) &&
+          (payload.safeErrorCode === "replacement_job_stale" ||
+            j.error_code === "replacement_job_stale")
+        );
+      });
+      if (staleJob && !confirmInFlightRef.current) {
+        setStaleRecoveryMessage(REPLACEMENT_JOB_STALE_MESSAGE);
+      }
+      return;
+    }
+
+    if (confirmInFlightRef.current) return;
+
+    const startedMs = active.providerStartedAt
+      ? Date.parse(active.providerStartedAt)
+      : NaN;
+    setReplacementFlow({
+      candidateId: active.candidateId,
+      slot: active.slot,
+      phase: "polling",
+      attemptNumber: active.attemptNumber,
+      maxAttempts: active.maxAttempts,
+      providerStartedAtMs: Number.isFinite(startedMs) ? startedMs : null,
+      jobId: active.jobId,
+      newCandidateId: active.newCandidateId,
+    });
+    setElapsedDisplay(active.elapsedDisplay);
+    setStaleRecoveryMessage(null);
+  }, [serverActiveReplacements, studio.generationJobs]);
 
   const projectOwnedOk = canRenderProjectCandidates({
     activeCreationProjectId: studio.selectedProjectId,
@@ -1783,13 +1904,130 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         />
       ) : null}
 
+      {error ? (
+        <div className="ps-callout ps-callout-warn" role="alert" style={{ marginBottom: "1rem" }}>
+          <p>
+            <strong>Generate New Face error</strong>
+          </p>
+          <p>{error}</p>
+        </div>
+      ) : null}
+      {staleRecoveryMessage ? (
+        <div className="ps-callout ps-callout-warn" role="status" style={{ marginBottom: "1rem" }}>
+          <p>
+            <strong>Previous generation stopped unexpectedly.</strong>
+          </p>
+          <p>{staleRecoveryMessage}</p>
+          <p className="ps-muted" style={{ fontSize: "12px" }}>
+            Code: replacement_job_stale — prepare a fresh Generate New Face confirmation to retry.
+          </p>
+        </div>
+      ) : null}
+      {resultMessage ? (
+        <div className="ps-callout" role="status" style={{ marginBottom: "1rem" }}>
+          <p>{resultMessage}</p>
+        </div>
+      ) : null}
+
+      {replacementFlow &&
+      (studio.projectDetailLoading ||
+        !failureSlots.some(
+          (s) =>
+            s.candidateId === replacementFlow.candidateId ||
+            (["A", "B", "C", "D"][s.slot - 1] ?? "") === replacementFlow.slot,
+        )) ? (
+        <div className="ps-ci-grid" style={{ marginBottom: "1rem" }}>
+          <NoveltyFailureSlotCard
+            slot={{
+              slot:
+                replacementFlow.slot === "A"
+                  ? 1
+                  : replacementFlow.slot === "B"
+                    ? 2
+                    : replacementFlow.slot === "C"
+                      ? 3
+                      : 4,
+              candidateId: replacementFlow.candidateId,
+              status: "novelty_blocked",
+              reason: "Generating new face…",
+              requiresReplacementConfirmation: false,
+              attemptNumber: replacementFlow.attemptNumber,
+              maxAttempts: replacementFlow.maxAttempts,
+            }}
+            replacementUi={{
+              phase: replacementFlow.phase,
+              attemptNumber: replacementFlow.attemptNumber,
+              maxAttempts: replacementFlow.maxAttempts,
+              elapsedDisplay,
+            }}
+          />
+        </div>
+      ) : null}
+
       {!studio.projectDetailLoading && !integrityMismatch && failureSlots.length > 0 ? (
         <div className="ps-ci-grid" style={{ marginBottom: "1rem" }}>
-          {failureSlots.map((slot) => (
+          {failureSlots.map((slot) => {
+            const slotLabel =
+              ["A", "B", "C", "D"][slot.slot - 1] ?? String(slot.slot);
+            const flowForSlot =
+              replacementFlow &&
+              (replacementFlow.candidateId === slot.candidateId ||
+                replacementFlow.slot === slotLabel)
+                ? replacementFlow
+                : null;
+            return (
             <NoveltyFailureSlotCard
               key={slot.candidateId}
               slot={slot}
+              replacementUi={
+                flowForSlot
+                  ? {
+                      phase: flowForSlot.phase,
+                      attemptNumber: flowForSlot.attemptNumber,
+                      maxAttempts: flowForSlot.maxAttempts,
+                      elapsedDisplay,
+                    }
+                  : null
+              }
+              onGenerateNewFace={
+                slot.requiresReplacementConfirmation && studio.selectedProjectId
+                  ? async () => {
+                      setError(null);
+                      setResultMessage(null);
+                      setNoveltyConfirmCost(false);
+                      try {
+                        const prepared = await studio.prepareNoveltyReplacement(
+                          studio.selectedProjectId!,
+                          slot.candidateId,
+                        );
+                        setNoveltyPrepare({
+                          candidateId: slot.candidateId,
+                          slot: prepared.slot ?? slotLabel,
+                          previousAttemptNumber:
+                            prepared.previousAttemptNumber ??
+                            slot.attemptNumber ??
+                            1,
+                          nextAttemptNumber:
+                            prepared.nextAttemptNumber ??
+                            slot.nextAttemptNumber ??
+                            2,
+                          maxAttempts: prepared.maxAttempts ?? 4,
+                          reason:
+                            prepared.reason ?? "face_similarity_duplicate",
+                        });
+                      } catch (e) {
+                        setError(
+                          e instanceof Error
+                            ? e.message
+                            : "Generate New Face prepare failed",
+                        );
+                        setNoveltyPrepare(null);
+                      }
+                    }
+                  : undefined
+              }
               onRetryEvaluation={
+                slot.status === "novelty_failed" &&
                 process.env.NODE_ENV !== "production"
                   ? async () => {
                       setError(null);
@@ -1806,7 +2044,8 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                           },
                         );
                         const data = (await res.json()) as { error?: string };
-                        if (!res.ok) throw new Error(data.error ?? "Retry evaluation failed");
+                        if (!res.ok)
+                          throw new Error(data.error ?? "Retry evaluation failed");
                         if (studio.selectedProjectId) {
                           await studio.loadProject(studio.selectedProjectId, {
                             openCandidates: true,
@@ -1819,8 +2058,275 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                   : undefined
               }
             />
-          ))}
+            );
+          })}
         </div>
+      ) : null}
+
+      {noveltyPrepare && studio.costEstimate && !replacementFlow ? (
+        <div className="ps-callout" style={{ marginBottom: "1rem" }}>
+          <p>
+            <strong>Generate New Face — Slot {noveltyPrepare.slot}</strong>
+          </p>
+          <p className="ps-muted" style={{ fontSize: "13px" }}>
+            Current attempt {noveltyPrepare.previousAttemptNumber} → next attempt{" "}
+            {noveltyPrepare.nextAttemptNumber} of {noveltyPrepare.maxAttempts}
+          </p>
+          <p className="ps-muted" style={{ fontSize: "13px" }}>
+            Reason: {noveltyPrepare.reason}
+          </p>
+          <p className="ps-muted" style={{ fontSize: "13px" }}>
+            Estimated single-image cost: €
+            {studio.costEstimate.estimatedMin.toFixed(2)}–€
+            {studio.costEstimate.estimatedMax.toFixed(2)}
+          </p>
+          <label
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              alignItems: "center",
+              marginTop: "0.75rem",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={noveltyConfirmCost}
+              disabled={confirmInFlightRef.current}
+              onChange={(e) => setNoveltyConfirmCost(e.target.checked)}
+            />
+            I confirm paid generation for this single blocked slot only.
+          </label>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+            <button
+              type="button"
+              className="ps-btn"
+              disabled={
+                !noveltyConfirmCost ||
+                confirmInFlightRef.current ||
+                !studio.paidConfirmationToken ||
+                studio.paidConfirmationProjectId !== studio.selectedProjectId
+              }
+              onClick={() => {
+                if (!studio.selectedProjectId || !studio.paidConfirmationToken) {
+                  setError("Confirmation token missing — prepare again.");
+                  return;
+                }
+                if (!noveltyConfirmCost) {
+                  setError("Please confirm the cost checkbox.");
+                  return;
+                }
+                if (confirmInFlightRef.current) return;
+                confirmInFlightRef.current = true;
+                const prepareSnapshot = noveltyPrepare;
+                const token = studio.paidConfirmationToken;
+                const projectId = studio.selectedProjectId;
+                const flowStartedAtMs = Date.now();
+                setError(null);
+                setResultMessage(null);
+                setReplacementFlow({
+                  candidateId: prepareSnapshot.candidateId,
+                  slot: prepareSnapshot.slot,
+                  phase: "generating",
+                  attemptNumber: prepareSnapshot.nextAttemptNumber,
+                  maxAttempts: prepareSnapshot.maxAttempts,
+                  providerStartedAtMs: flowStartedAtMs,
+                });
+                setNoveltyPrepare(null);
+                setNoveltyConfirmCost(false);
+
+                void (async () => {
+                  try {
+                    const result = await studio.confirmNoveltyReplacement(
+                      projectId,
+                      {
+                        candidateId: prepareSnapshot.candidateId,
+                        costConfirmed: true,
+                        confirmationToken: token,
+                        userConfirmedAt: new Date().toISOString(),
+                      },
+                    );
+
+                    setDebugReplacement({
+                      replacementJobId: result.replacementJobId ?? null,
+                      slot: result.slot ?? prepareSnapshot.slot,
+                      attempt: result.attemptNumber ?? prepareSnapshot.nextAttemptNumber,
+                      state: result.status ?? null,
+                      providerStarted: result.providerStarted ?? null,
+                      providerCompleted: result.providerCompleted ?? null,
+                      candidateId: result.newCandidateId ?? null,
+                      noveltyDecision: result.noveltyDecision ?? null,
+                      durationMs: result.durationMs ?? Date.now() - flowStartedAtMs,
+                      safeError: null,
+                    });
+
+                    // Poll until board reflects terminal slot state (max 120s).
+                    const deadline = Date.now() + NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS;
+                    let terminal = false;
+                    const slotNumber =
+                      prepareSnapshot.slot === "A"
+                        ? 1
+                        : prepareSnapshot.slot === "B"
+                          ? 2
+                          : prepareSnapshot.slot === "C"
+                            ? 3
+                            : 4;
+                    while (Date.now() < deadline) {
+                      const boardRes = await fetch(
+                        `/api/persona/creation-projects/${projectId}`,
+                        { cache: "no-store" },
+                      );
+                      const boardData = (await boardRes.json()) as {
+                        candidates?: { id: string; candidate_number: number; status: string }[];
+                        noveltyFailureSlots?: {
+                          candidateId: string;
+                          slot: number;
+                          slotExhausted?: boolean;
+                          attemptNumber?: number;
+                        }[];
+                        error?: string;
+                      };
+                      if (!boardRes.ok) {
+                        throw new Error(boardData.error ?? "Board reload failed");
+                      }
+                      await studio.loadProject(projectId, { openCandidates: true });
+
+                      const slots = boardData.noveltyFailureSlots ?? [];
+                      const visible = boardData.candidates ?? [];
+                      const newId = result.newCandidateId;
+
+                      if (result.status === "allowed") {
+                        if (
+                          visible.some((c) => c.id === newId) ||
+                          visible.some((c) => c.candidate_number === slotNumber)
+                        ) {
+                          terminal = true;
+                          break;
+                        }
+                      } else if (
+                        result.status === "blocked" ||
+                        result.status === "exhausted"
+                      ) {
+                        const failure = slots.find(
+                          (s) =>
+                            s.candidateId === newId || s.slot === slotNumber,
+                        );
+                        if (failure) {
+                          terminal = true;
+                          break;
+                        }
+                      } else {
+                        terminal = true;
+                        break;
+                      }
+                      setReplacementFlow((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              phase: "polling",
+                              jobId: result.replacementJobId,
+                            }
+                          : prev,
+                      );
+                      await new Promise((r) =>
+                        setTimeout(r, NOVELTY_REPLACEMENT_POLL_INTERVAL_MS),
+                      );
+                    }
+
+                            if (!terminal) {
+                              // Client poll timeout → one server reconciliation, then stop spinning.
+                              try {
+                                await fetch(
+                                  `/api/persona/creation-projects/${projectId}`,
+                                  {
+                                    method: "PATCH",
+                                    cache: "no-store",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      action: "reconcile_novelty_replacement",
+                                      jobId: result.replacementJobId,
+                                    }),
+                                  },
+                                );
+                                await studio.loadProject(projectId, {
+                                  openCandidates: true,
+                                });
+                              } catch {
+                                // fall through to timeout message
+                              }
+                              setError(NOVELTY_REPLACEMENT_TIMEOUT_MESSAGE);
+                            } else if (result.status === "allowed") {
+                      setResultMessage(outcomeMessage("allowed"));
+                    } else if (result.status === "blocked") {
+                      setResultMessage(
+                        `${outcomeMessage("blocked")} Attempt ${result.attemptNumber} of ${result.maxAttempts ?? 4}.`,
+                      );
+                    } else if (result.status === "exhausted") {
+                      setResultMessage(outcomeMessage("exhausted"));
+                    }
+                  } catch (e) {
+                    const message =
+                      e instanceof Error
+                        ? e.message
+                        : "Generate New Face failed";
+                    setError(message);
+                    setDebugReplacement((prev) => ({
+                      ...(prev ?? {}),
+                      state: "failed",
+                      safeError: message,
+                      durationMs: Date.now() - flowStartedAtMs,
+                    }));
+                    if (studio.selectedProjectId) {
+                      try {
+                        await studio.loadProject(studio.selectedProjectId, {
+                          openCandidates: true,
+                        });
+                      } catch {
+                        // keep error from confirm
+                      }
+                    }
+                  } finally {
+                    confirmInFlightRef.current = false;
+                    setReplacementFlow(null);
+                  }
+                })();
+              }}
+            >
+              Confirm Generate New Face
+            </button>
+            <button
+              type="button"
+              className="ps-btn"
+              disabled={confirmInFlightRef.current}
+              onClick={() => {
+                setNoveltyPrepare(null);
+                setNoveltyConfirmCost(false);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {DEBUG_MODE && (debugReplacement || replacementFlow) ? (
+        <details className="ps-tech" style={{ marginBottom: "1rem" }}>
+          <summary>Novelty replacement debug</summary>
+          <pre style={{ fontSize: "12px" }}>
+            {JSON.stringify(
+              {
+                ...debugReplacement,
+                phase: replacementFlow?.phase ?? null,
+                elapsedDisplay,
+                pollIntervalMs: NOVELTY_REPLACEMENT_POLL_INTERVAL_MS,
+                pollTimeoutMs: NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS,
+              },
+              null,
+              2,
+            )}
+          </pre>
+        </details>
       ) : null}
 
       {!studio.projectDetailLoading && !integrityMismatch && rankedBoard.length > 0 ? (

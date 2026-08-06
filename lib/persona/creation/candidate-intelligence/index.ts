@@ -27,6 +27,7 @@ export {
   isObfL3DebugEnabled,
   nextDiscoveryIdentityAttempt,
   resolveObfDiscoveryIdentity,
+  MAX_DISCOVERY_IDENTITY_ATTEMPTS,
   type DiscoveryIdentityL3Debug,
   type DiscoveryIdentityL3Metadata,
   type NoveltyBlockIdentityRetryContract,

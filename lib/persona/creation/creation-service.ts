@@ -14,6 +14,7 @@ import type {
   BrandCastMilestoneProgress,
   CandidateAssetType,
   CandidateGenerationCostEstimate,
+  CandidateStatus,
   CreateCreationProjectInput,
   IdentityReviewChecklist,
   IdentityReviewCheckKey,
@@ -128,6 +129,34 @@ import {
   partitionBoardCandidates,
   type NoveltyFailureSlotDto,
 } from "../face-novelty-memory/board-visibility";
+import {
+  buildNoveltyReplacementAttemptRecord,
+  canRequestNoveltyReplacement,
+  extractAnatomySampleFromSettings,
+  NOVELTY_REPLACEMENT_REASON,
+  readGenerationRunIdFromSettings,
+  readIdentityAttemptNumber,
+  resolveMatchedSameRunSlot,
+  SLOT_EXHAUSTED_MESSAGE,
+  MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+} from "./novelty-replacement";
+import {
+  buildStaleFailurePayload,
+  evaluateReplacementJobStaleness,
+  isNoveltyReplacementJob,
+  logNoveltyReplacementCheckpoint,
+  mapFinalStatusToOutcome,
+  outcomeMessage,
+  readActiveNoveltyReplacements,
+  resolveSlotReplacementStates,
+  type NoveltyReplacementCheckpoint,
+  type NoveltyReplacementHttpResponse,
+  type NoveltyReplacementSuccessResponse,
+} from "./novelty-replacement-result";
+import { buildNoveltyBlockIdentityRetryContract } from "./candidate-intelligence/obf-l3-integration";
+import { resolveSlotBlueprint } from "../identity-blueprints";
+import { slotForCandidateNumber } from "@/lib/brand-archetypes/discovery-blueprints";
+import { parseArchetypeIdFromProjectDescription } from "@/lib/brand-face-selection/creation-project-mapper";
 
 function creationRepo() {
   return getCreationRepository();
@@ -915,7 +944,7 @@ export async function confirmAndStartCandidateGeneration(
       candidateNumbers,
       assetTypes,
       generationRunId: durableJob.id,
-      identityAttemptNumber: 1,
+      identityAttemptNumber: 1, // initial discovery cast — replacements use confirmNoveltyReplacementGeneration
     });
 
     const existing = await creationRepo().listCandidates(scope, projectId);
@@ -1655,12 +1684,1147 @@ export async function retrySingleCandidateAsset(
   };
 }
 
+/**
+ * Phase 2.1E — Prepare single-slot novelty replacement confirmation.
+ * Never calls OpenAI. User must confirm before confirmNoveltyReplacementGeneration.
+ */
+export async function prepareNoveltyReplacementConfirmation(
+  scope: WorkspaceScope,
+  projectId: string,
+  options: { candidateId: string },
+) {
+  const project = await requireProject(scope, projectId);
+  const candidate = await requireCandidate(scope, options.candidateId);
+  if (candidate.creation_project_id !== projectId) {
+    throw new PersonaDomainError(
+      "Candidate does not belong to this creation project.",
+      "WORKFLOW",
+    );
+  }
+  if (candidate.status !== "novelty_blocked") {
+    throw new PersonaDomainError(
+      "Generate New Face is only available for novelty_blocked slots.",
+      "WORKFLOW",
+      { status: candidate.status },
+    );
+  }
+
+  const previousAttempt = readIdentityAttemptNumber(candidate.generation_settings);
+  if (!canRequestNoveltyReplacement(previousAttempt)) {
+    throw new PersonaDomainError(SLOT_EXHAUSTED_MESSAGE, "WORKFLOW", {
+      attemptNumber: previousAttempt,
+      maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+      slotExhausted: true,
+    });
+  }
+
+  const nextAttempt = previousAttempt + 1;
+  const slotLabel =
+    ["A", "B", "C", "D"][candidate.candidate_number - 1] ??
+    String(candidate.candidate_number);
+
+  const qualityMode = project.quality_mode ?? DEFAULT_QUALITY_MODE;
+  const mult = getQualityModeProfile(qualityMode).costMultiplier;
+  const estimatedMin = Number((OPENAI_IMAGE_COST_EUR_MIN * mult).toFixed(4));
+  const estimatedMax = Number((OPENAI_IMAGE_COST_EUR_MAX * mult).toFixed(4));
+  const estimate: CandidateGenerationCostEstimate = {
+    available: true,
+    provider: "openai",
+    providerMode: project.provider_mode,
+    candidateCount: 1,
+    imagesPerCandidate: 1,
+    totalImages: 1,
+    estimatedMin,
+    estimatedMax,
+    estimatedTotal: estimatedMax,
+    currency: "EUR",
+    stage: project.generation_stage,
+    note: `Novelty replacement · Slot ${slotLabel} · attempt ${nextAttempt} of ${MAX_DISCOVERY_IDENTITY_ATTEMPTS}`,
+    costStatus: "estimated",
+    castingPhase: "a1_discovery",
+  };
+
+  const estimateHash = estimateFingerprintFromCost(
+    projectId,
+    qualityMode,
+    estimate,
+  );
+  const token = createConfirmationToken();
+  const confirmationIntent: PaidConfirmationIntent = "novelty_replacement";
+
+  const job = await jobRepo().createJob(scope, {
+    creation_project_id: projectId,
+    candidate_id: candidate.id,
+    stage: project.generation_stage,
+    provider: estimate.provider,
+    status: "pending_confirmation",
+    requested_asset_types: ["portrait_front"],
+    quality_mode: qualityMode,
+    estimated_cost_min: estimatedMin,
+    estimated_cost_max: estimatedMax,
+    cost_is_estimated: true,
+    confirmation_token: token,
+    estimate_hash: estimateHash,
+    confirmation_payload: {
+      projectId,
+      intent: confirmationIntent,
+      castingPhase: "a1_discovery",
+      noveltyReplacement: true,
+      candidateId: candidate.id,
+      slot: slotLabel,
+      previousAttemptNumber: previousAttempt,
+      nextAttemptNumber: nextAttempt,
+      reason: NOVELTY_REPLACEMENT_REASON,
+      provider: estimate.provider,
+      timestamp: new Date().toISOString(),
+    },
+    created_by: scope.actorId,
+  });
+
+  const confirmation = await jobRepo().createConfirmation(scope, {
+    creation_project_id: projectId,
+    generation_job_id: job.id,
+    confirmation_token: token,
+    estimate_hash: estimateHash,
+    stage: project.generation_stage,
+    quality_mode: qualityMode,
+    candidate_count: 1,
+    asset_count: 1,
+    estimated_cost_min: estimatedMin,
+    estimated_cost_max: estimatedMax,
+    payload: {
+      ...job.confirmation_payload,
+      intent: confirmationIntent,
+    },
+    created_by: scope.actorId,
+  });
+
+  return {
+    estimate,
+    job,
+    confirmation,
+    quality: getQualityModeProfile(qualityMode),
+    costLabel: "estimated" as const,
+    slot: slotLabel,
+    candidateId: candidate.id,
+    previousAttemptNumber: previousAttempt,
+    nextAttemptNumber: nextAttempt,
+    maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+    reason: NOVELTY_REPLACEMENT_REASON,
+    replacementMessage: `Generate New Face for Slot ${slotLabel} (attempt ${nextAttempt} of ${MAX_DISCOVERY_IDENTITY_ATTEMPTS})`,
+  };
+}
+
+/**
+ * Phase 2.1E / 2.1E.1 — Confirmed single-slot novelty replacement generation.
+ * Requires explicit confirmation. Generates only the blocked slot.
+ * Keeps same project + L3 generationRunId; increments attemptNumber by 1.
+ * Returns a non-ambiguous HTTP result contract (ok + status).
+ */
+export async function confirmNoveltyReplacementGeneration(
+  scope: WorkspaceScope,
+  projectId: string,
+  options: {
+    candidateId: string;
+    costConfirmed: boolean;
+    confirmationToken?: string;
+    userConfirmedAt?: string;
+    attestation?: string;
+    httpRequest?: Request;
+  },
+): Promise<NoveltyReplacementHttpResponse> {
+  const startedAtMs = Date.now();
+  const checkpoints: NoveltyReplacementCheckpoint[] = ["request_received"];
+  logNoveltyReplacementCheckpoint("request_received", {
+    projectId,
+    previousCandidateId: options.candidateId,
+  });
+
+  if (!options.costConfirmed) {
+    throw new PersonaDomainError(
+      "Explizite Kostenbestätigung erforderlich.",
+      "WORKFLOW",
+      { requiresCostConfirmation: true },
+    );
+  }
+  if (!options.confirmationToken?.trim()) {
+    throw new PersonaDomainError(
+      "Bestätigungstoken erforderlich — bitte Kostenschätzung vorbereiten.",
+      "WORKFLOW",
+      { requiresConfirmationToken: true },
+    );
+  }
+  if (!options.userConfirmedAt?.trim()) {
+    throw new PersonaDomainError(
+      "Explizite Nutzerbestätigung erforderlich (Checkbox im UI).",
+      "WORKFLOW",
+      { requiresUserConfirmation: true },
+    );
+  }
+
+  const project = await requireProject(scope, projectId);
+  const previous = await requireCandidate(scope, options.candidateId);
+  if (previous.creation_project_id !== projectId) {
+    throw new PersonaDomainError(
+      "Candidate does not belong to this creation project.",
+      "WORKFLOW",
+    );
+  }
+  if (previous.status !== "novelty_blocked") {
+    throw new PersonaDomainError(
+      "Generate New Face is only available for novelty_blocked slots.",
+      "WORKFLOW",
+    );
+  }
+
+  const previousAttempt = readIdentityAttemptNumber(previous.generation_settings);
+  if (!canRequestNoveltyReplacement(previousAttempt)) {
+    await creationRepo().updateCandidate(scope, previous.id, {
+      generation_settings: {
+        ...(previous.generation_settings ?? {}),
+        slotExhausted: true,
+      },
+    });
+    throw new PersonaDomainError(SLOT_EXHAUSTED_MESSAGE, "WORKFLOW", {
+      slotExhausted: true,
+      attemptNumber: previousAttempt,
+    });
+  }
+
+  const nextAttempt = previousAttempt + 1;
+  const slotLabel =
+    ["A", "B", "C", "D"][previous.candidate_number - 1] ??
+    String(previous.candidate_number);
+  const generationRunId = readGenerationRunIdFromSettings(
+    previous.generation_settings,
+    previous.provider_job_id ?? project.id,
+  );
+
+  const archetypeId =
+    parseArchetypeIdFromProjectDescription(project.description) ??
+    "arch-mediterranean-premium-hero";
+  const slot = slotForCandidateNumber(previous.candidate_number);
+  const slotBlueprint = resolveSlotBlueprint({ archetypeId, slot });
+  const contract = buildNoveltyBlockIdentityRetryContract({
+    previousAttemptNumber: previousAttempt,
+    slotBlueprint,
+    generationRunId,
+    creationProjectId: projectId,
+  });
+  if (contract.slotExhausted) {
+    throw new PersonaDomainError(SLOT_EXHAUSTED_MESSAGE, "WORKFLOW", {
+      slotExhausted: true,
+    });
+  }
+
+  const qualityMode = project.quality_mode ?? DEFAULT_QUALITY_MODE;
+  const mult = getQualityModeProfile(qualityMode).costMultiplier;
+  const estimatedMin = Number((OPENAI_IMAGE_COST_EUR_MIN * mult).toFixed(4));
+  const estimatedMax = Number((OPENAI_IMAGE_COST_EUR_MAX * mult).toFixed(4));
+  const retryEstimate: CandidateGenerationCostEstimate = {
+    available: true,
+    provider: "openai",
+    providerMode: project.provider_mode,
+    candidateCount: 1,
+    imagesPerCandidate: 1,
+    totalImages: 1,
+    estimatedMin,
+    estimatedMax,
+    estimatedTotal: estimatedMax,
+    currency: "EUR",
+    stage: project.generation_stage,
+    note: "novelty_replacement",
+    costStatus: "estimated",
+    castingPhase: "a1_discovery",
+  };
+  const currentHash = estimateFingerprintFromCost(
+    projectId,
+    qualityMode,
+    retryEstimate,
+  );
+
+  const confirmation = await jobRepo().getConfirmationByToken(
+    scope,
+    options.confirmationToken,
+  );
+  if (!confirmation) {
+    throw new PersonaDomainError(
+      "Bestätigung ungültig — bitte Kostenschätzung erneut bestätigen.",
+      "WORKFLOW",
+    );
+  }
+
+  // Idempotent resume: same token already consumed → return existing job outcome.
+  if (confirmation.consumed_at) {
+    const existingJobId = confirmation.generation_job_id;
+    const existingJob = existingJobId
+      ? await jobRepo().getJob(scope, existingJobId)
+      : null;
+    if (existingJob && existingJob.confirmation_payload?.noveltyReplacement) {
+      const payload = existingJob.confirmation_payload;
+      const newCandidateId =
+        typeof payload.newCandidateId === "string"
+          ? payload.newCandidateId
+          : null;
+      if (newCandidateId) {
+        const existingCandidate = await creationRepo().getCandidate(
+          scope,
+          newCandidateId,
+        );
+        if (existingCandidate) {
+          const slotExhausted =
+            existingCandidate.status === "novelty_blocked" &&
+            (Boolean(existingCandidate.generation_settings?.slotExhausted) ||
+              readIdentityAttemptNumber(existingCandidate.generation_settings) >=
+                MAX_DISCOVERY_IDENTITY_ATTEMPTS);
+          const outcome = mapFinalStatusToOutcome({
+            finalCandidateStatus: existingCandidate.status,
+            slotExhausted,
+          });
+          if (outcome !== "failed") {
+            checkpoints.push("response_returned");
+            return {
+              ok: true,
+              status: outcome,
+              projectId,
+              slot: slotLabel,
+              previousCandidateId: previous.id,
+              newCandidateId,
+              replacementJobId: existingJob.id,
+              attemptNumber: nextAttempt,
+              maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+              noveltyDecision:
+                typeof payload.noveltyDecision === "string"
+                  ? payload.noveltyDecision
+                  : null,
+              finalCandidateStatus: existingCandidate.status,
+              providerStarted: Boolean(payload.providerStartedAt),
+              providerCompleted: Boolean(payload.providerCompletedAt),
+              durationMs: Date.now() - startedAtMs,
+              message: outcomeMessage(outcome),
+              checkpoints,
+            } satisfies NoveltyReplacementSuccessResponse;
+          }
+        }
+      }
+      if (
+        existingJob.status === "generating" ||
+        existingJob.status === "queued"
+      ) {
+        throw new PersonaDomainError(
+          "Generate New Face is already running for this confirmation.",
+          "WORKFLOW",
+          {
+            replacementInProgress: true,
+            replacementJobId: existingJob.id,
+            slot: slotLabel,
+          },
+        );
+      }
+    }
+    throw new PersonaDomainError(
+      "Bestätigung wurde bereits verwendet — neue Kostenschätzung erforderlich.",
+      "WORKFLOW",
+      { reusedConfirmation: true },
+    );
+  }
+
+  assertConfirmationMatchesGenerationRequest({
+    scope,
+    project,
+    confirmation,
+    estimate: retryEstimate,
+    estimateHash: currentHash,
+    qualityMode,
+  });
+  assertValidUiAttestation({
+    attestation: options.attestation ?? UI_CHECKBOX_ATTESTATION,
+    userConfirmedAt: options.userConfirmedAt,
+    confirmation,
+    request: options.httpRequest,
+  });
+  assertValidUserConfirmationTimestamp(options.userConfirmedAt, confirmation);
+  assertLivePaidProviderInvocationAllowed({
+    estimatedMaxEur: retryEstimate.estimatedMax,
+  });
+  checkpoints.push("confirmation_validated");
+  logNoveltyReplacementCheckpoint("confirmation_validated", {
+    projectId,
+    slot: slotLabel,
+    previousCandidateId: previous.id,
+    attemptNumber: nextAttempt,
+  });
+
+  // Reject a second active replacement for the same slot.
+  const existingJobs = await jobRepo().listJobsForProject(scope, projectId);
+  const activeSameSlot = existingJobs.find((j) => {
+    if (!j.confirmation_payload?.noveltyReplacement) return false;
+    if (j.status !== "generating" && j.status !== "queued") return false;
+    const payloadSlot = j.confirmation_payload.slot;
+    const payloadCandidateId = j.confirmation_payload.candidateId;
+    return (
+      payloadSlot === slotLabel ||
+      payloadCandidateId === previous.id ||
+      j.candidate_id === previous.id
+    );
+  });
+  if (activeSameSlot) {
+    throw new PersonaDomainError(
+      `A Generate New Face job is already active for Slot ${slotLabel}.`,
+      "WORKFLOW",
+      {
+        replacementInProgress: true,
+        replacementJobId: activeSameSlot.id,
+        slot: slotLabel,
+      },
+    );
+  }
+
+  const consumed = await jobRepo().consumeConfirmation(
+    scope,
+    options.confirmationToken,
+  );
+
+  const generator = getPersonaCandidateGenerator(project.provider_mode);
+  if (!generator.isConfigured()) {
+    throw new PersonaDomainError("Provider nicht eingerichtet.", "CONFIG");
+  }
+  assertLiveCastingProviderNotFake(generator.id, {
+    liveUiAttestation: Boolean(options.attestation),
+  });
+
+  const durableJob = consumed.generation_job_id
+    ? (await jobRepo().getJob(scope, consumed.generation_job_id)) ?? null
+    : null;
+  const providerStartedAt = new Date().toISOString();
+  const job =
+    durableJob ??
+    (await jobRepo().createJob(scope, {
+      creation_project_id: projectId,
+      candidate_id: previous.id,
+      stage: project.generation_stage,
+      provider: retryEstimate.provider,
+      status: "generating",
+      requested_asset_types: ["portrait_front"],
+      quality_mode: qualityMode,
+      estimated_cost_min: estimatedMin,
+      estimated_cost_max: estimatedMax,
+      cost_is_estimated: true,
+      retry_count: nextAttempt,
+      confirmation_token: options.confirmationToken,
+      estimate_hash: currentHash,
+      confirmation_payload: {
+        userConfirmedAt: options.userConfirmedAt,
+        attestation: UI_CHECKBOX_ATTESTATION,
+        intent: "novelty_replacement",
+        noveltyReplacement: true,
+        slot: slotLabel,
+        candidateId: previous.id,
+        previousAttemptNumber: previousAttempt,
+        nextAttemptNumber: nextAttempt,
+        maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+        reason: NOVELTY_REPLACEMENT_REASON,
+        providerStartedAt,
+      },
+      confirmed_at: new Date().toISOString(),
+      started_at: providerStartedAt,
+      created_by: scope.actorId,
+    }));
+
+  await jobRepo().updateJob(scope, job.id, {
+    status: "generating",
+    confirmed_at: job.confirmed_at ?? new Date().toISOString(),
+    started_at: job.started_at ?? providerStartedAt,
+    confirmation_payload: {
+      ...job.confirmation_payload,
+      userConfirmedAt: options.userConfirmedAt,
+      attestation: UI_CHECKBOX_ATTESTATION,
+      intent: "novelty_replacement",
+      noveltyReplacement: true,
+      slot: slotLabel,
+      candidateId: previous.id,
+      previousAttemptNumber: previousAttempt,
+      nextAttemptNumber: nextAttempt,
+      maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+      reason: NOVELTY_REPLACEMENT_REASON,
+      providerStartedAt,
+    },
+  });
+  checkpoints.push("replacement_job_loaded");
+  logNoveltyReplacementCheckpoint("replacement_job_loaded", {
+    projectId,
+    slot: slotLabel,
+    replacementJobId: job.id,
+    previousCandidateId: previous.id,
+    attemptNumber: nextAttempt,
+  });
+
+  const previousSample = extractAnatomySampleFromSettings(
+    previous.generation_settings,
+  );
+  const debug = previous.generation_settings?.faceNoveltyLiveDebug as
+    | {
+        closestPriorCandidateId?: string;
+        closestPriorAssetId?: string;
+        similarity?: number;
+      }
+    | undefined;
+  const matchedCandidateId = debug?.closestPriorCandidateId ?? null;
+  let matchedProjectId: string | null = null;
+  let matchedCandidateNumber: number | null = null;
+  let avoidSameRunSample: Record<string, string> | null = null;
+  if (matchedCandidateId) {
+    try {
+      const matched = await creationRepo().getCandidate(scope, matchedCandidateId);
+      if (matched) {
+        matchedProjectId = matched.creation_project_id;
+        matchedCandidateNumber = matched.candidate_number;
+        if (matched.creation_project_id === projectId) {
+          avoidSameRunSample =
+            (extractAnatomySampleFromSettings(matched.generation_settings) as
+              | Record<string, string>
+              | null) ?? null;
+        }
+      }
+    } catch {
+      // matched prior may be historical — ignore sample load failures
+    }
+  }
+  const { matchedSameRun, matchedSlot } = resolveMatchedSameRunSlot({
+    matchedCandidateId,
+    matchedProjectId,
+    currentProjectId: projectId,
+    matchedCandidateNumber,
+  });
+
+  checkpoints.push("provider_generation_started");
+  logNoveltyReplacementCheckpoint("provider_generation_started", {
+    projectId,
+    slot: slotLabel,
+    replacementJobId: job.id,
+    attemptNumber: nextAttempt,
+    providerStarted: true,
+  });
+
+  let batch;
+  try {
+    batch = await generator.createCandidateBatch({
+      project: { ...project, candidate_count: 1 },
+      stage: project.generation_stage,
+      costConfirmed: true,
+      retryConfirmed: true,
+      qualityMode,
+      castingPhase: "a1_discovery",
+      assetTypes: ["portrait_front"],
+      candidateNumbers: [previous.candidate_number],
+      generationRunId: contract.keepGenerationRunId,
+      identityAttemptNumber: contract.nextAttemptNumber,
+      previousAttemptSample: previousSample as Record<string, string> | null,
+      avoidSameRunSample,
+      replacementOfCandidateId: previous.id,
+      replacementReason: NOVELTY_REPLACEMENT_REASON,
+      concurrency: 1,
+    });
+  } catch (err) {
+    const safeErrorMessage =
+      err instanceof Error ? err.message : "Provider generation failed";
+    await jobRepo().updateJob(scope, job.id, {
+      status: "failed",
+      error_code: "provider_exception",
+      error_message: safeErrorMessage,
+      completed_at: new Date().toISOString(),
+      confirmation_payload: {
+        ...(job.confirmation_payload ?? {}),
+        providerStartedAt,
+        providerCompletedAt: null,
+        safeErrorCode: "provider_exception",
+        safeErrorMessage,
+      },
+    });
+    throw err instanceof PersonaDomainError
+      ? err
+      : new PersonaDomainError(safeErrorMessage, "WORKFLOW", {
+          safeErrorCode: "provider_exception",
+          providerStarted: true,
+          providerCompleted: false,
+          replacementJobId: job.id,
+        });
+  }
+
+  const providerCompletedAt = new Date().toISOString();
+  checkpoints.push("provider_generation_completed");
+  logNoveltyReplacementCheckpoint("provider_generation_completed", {
+    projectId,
+    slot: slotLabel,
+    replacementJobId: job.id,
+    providerCompleted: true,
+  });
+
+  const result = batch.results[0];
+  if (!result?.assets.length) {
+    await jobRepo().updateJob(scope, job.id, {
+      status: "failed",
+      error_code: "provider_empty_result",
+      error_message: batch.errorMessage ?? "Novelty replacement failed",
+      completed_at: new Date().toISOString(),
+      confirmation_payload: {
+        ...(job.confirmation_payload ?? {}),
+        providerStartedAt,
+        providerCompletedAt,
+        safeErrorCode: "provider_empty_result",
+        safeErrorMessage: batch.errorMessage ?? "Novelty replacement failed",
+      },
+    });
+    throw new PersonaDomainError("Generierung fehlgeschlagen", "WORKFLOW", {
+      safeErrorCode: "provider_empty_result",
+      providerStarted: true,
+      providerCompleted: true,
+      replacementJobId: job.id,
+    });
+  }
+
+  const officialCast = resolveOfficialDiscoveryVariations({
+    project,
+    candidateNumbers: [previous.candidate_number],
+  });
+  const variation =
+    officialCast.variations[0] ??
+    resolveCandidateVariation(previous.candidate_number);
+  const qualityAssessment = assessCandidateQuality({
+    project,
+    variation,
+    assetTypes: result.assets.map((a) => a.assetType),
+    qualityMode,
+  });
+  const qualityFields = qualityFieldsForCandidate(qualityAssessment);
+
+  const attemptRecord = buildNoveltyReplacementAttemptRecord({
+    attemptNumber: nextAttempt,
+    replacementOfCandidateId: previous.id,
+    replacementReason: NOVELTY_REPLACEMENT_REASON,
+    matchedCandidateId,
+    matchedProjectId,
+    matchedSlot,
+    matchedSameRun,
+    anatomyFingerprint: String(
+      (result.settings?.discoveryIdentity as { anatomyFingerprint?: string })
+        ?.anatomyFingerprint ?? "",
+    ),
+    identityFingerprint: String(
+      (result.settings?.discoveryIdentity as { identityFingerprint?: string })
+        ?.identityFingerprint ?? "",
+    ),
+    promptFingerprint: String(
+      (result.settings?.discoveryIdentity as { promptFingerprint?: string })
+        ?.promptFingerprint ?? "",
+    ),
+    samplingSeed: String(
+      (result.settings?.discoveryIdentity as { samplingSeed?: string })
+        ?.samplingSeed ?? "",
+    ),
+    providerRequestId: null,
+    providerOutputId: result.assets[0]?.providerOutputId ?? null,
+    noveltyDecision: null,
+    similarityScore: null,
+    slotBlueprintId: slotBlueprint.id,
+    generationRunId: contract.keepGenerationRunId,
+  });
+
+  const enrichedSettings: Record<string, unknown> = {
+    ...result.settings,
+    qualityAssessment,
+    generationRunId: contract.keepGenerationRunId,
+    identityAttemptNumber: nextAttempt,
+    replacementOfCandidateId: previous.id,
+    replacementReason: NOVELTY_REPLACEMENT_REASON,
+    matchedCandidateId,
+    matchedProjectId,
+    matchedSlot,
+    matchedSameRun,
+    noveltyReplacementAttempt: attemptRecord,
+    noveltyReplacementHistory: [
+      ...((Array.isArray(previous.generation_settings?.noveltyReplacementHistory)
+        ? previous.generation_settings?.noveltyReplacementHistory
+        : []) as unknown[]),
+      attemptRecord,
+    ],
+  };
+
+  // Keep board scoped to the original discovery run job id.
+  const boardGenerationRunId =
+    previous.provider_job_id ?? contract.keepGenerationRunId;
+
+  const isLiveProvider = creationRepo().kind !== "memory";
+  const initialStatus = isLiveProvider ? "generating" : "ready";
+
+  const displayName =
+    typeof (result.settings as { variation?: { label?: string } }).variation
+      ?.label === "string"
+      ? (result.settings as { variation: { label: string } }).variation.label
+      : previous.candidate_name;
+
+  const replacement = await creationRepo().createCandidate(scope, {
+    creation_project_id: projectId,
+    candidate_number: previous.candidate_number,
+    candidate_name: displayName,
+    status: initialStatus,
+    provider: batch.provider,
+    provider_job_id: boardGenerationRunId,
+    generation_seed: result.seed,
+    generation_prompt: result.prompt,
+    negative_prompt: result.negativePrompt,
+    generation_settings: enrichedSettings,
+    identity_summary: result.identitySummary,
+    distinguishing_features: result.distinguishingFeatures,
+    ...qualityFields,
+    user_rating: null,
+    user_notes: "",
+    rejection_reason: "",
+    actual_generation_cost: result.actualCostEur,
+    parent_candidate_id: previous.id,
+  });
+  checkpoints.push("candidate_created");
+  logNoveltyReplacementCheckpoint("candidate_created", {
+    projectId,
+    slot: slotLabel,
+    previousCandidateId: previous.id,
+    newCandidateId: replacement.id,
+    replacementJobId: job.id,
+  });
+
+  let primaryId: string | null = null;
+  for (const asset of result.assets) {
+    const assetId = randomUUID();
+    const uploaded =
+      creationRepo().kind === "memory"
+        ? buildPersonaCandidateAssetMetadata({
+            workspaceId: scope.workspaceId,
+            projectId,
+            candidateId: replacement.id,
+            assetId,
+            filename: `${asset.assetType}-replacement.png`,
+            bytes: asset.imageBytes,
+            mimeType: asset.mimeType,
+          })
+        : await uploadPersonaCandidateBytes({
+            workspaceId: scope.workspaceId,
+            projectId,
+            candidateId: replacement.id,
+            assetId,
+            filename: `${asset.assetType}-replacement.png`,
+            bytes: asset.imageBytes,
+            mimeType: asset.mimeType,
+          });
+    const created = await creationRepo().createCandidateAsset(scope, {
+      candidate_id: replacement.id,
+      asset_type: asset.assetType,
+      storage_path: uploaded.storagePath,
+      mime_type: asset.mimeType,
+      width: uploaded.width,
+      height: uploaded.height,
+      file_size_bytes: asset.imageBytes.length,
+      checksum: uploaded.checksum,
+      provider_output_id: asset.providerOutputId ?? null,
+      generation_metadata: {
+        ...(asset.metadata ?? {}),
+        noveltyReplacement: true,
+        attemptNumber: nextAttempt,
+        costLabel: "estimated",
+      },
+      status: "ready",
+      is_primary: asset.assetType === "portrait_front",
+    });
+    if (created.is_primary) primaryId = created.id;
+  }
+  if (primaryId) {
+    await creationRepo().updateCandidate(scope, replacement.id, {
+      primary_preview_asset_id: primaryId,
+    });
+  }
+  checkpoints.push("asset_created");
+  logNoveltyReplacementCheckpoint("asset_created", {
+    projectId,
+    slot: slotLabel,
+    newCandidateId: replacement.id,
+    replacementJobId: job.id,
+  });
+
+  // Preserve previous blocked candidate; hide from board failure slots.
+  await creationRepo().updateCandidate(scope, previous.id, {
+    generation_settings: {
+      ...(previous.generation_settings ?? {}),
+      boardSupersededByReplacement: true,
+      replacedByCandidateId: replacement.id,
+    },
+  });
+
+  let finalStatus: CandidateStatus =
+    initialStatus === "ready" ? "ready" : "novelty_failed";
+  let similarityScore: number | null = null;
+  let noveltyDecision: string | null = initialStatus === "ready" ? "allowed" : null;
+
+  if (isLiveProvider && primaryId) {
+    try {
+      checkpoints.push("novelty_evaluation_started");
+      logNoveltyReplacementCheckpoint("novelty_evaluation_started", {
+        projectId,
+        slot: slotLabel,
+        newCandidateId: replacement.id,
+      });
+      const noveltyRepo = new SupabaseNoveltyRepository();
+      const embeddingRepo = new SupabaseEmbeddingRepository();
+      const diagnosticStore = new SupabaseLiveDiagnosticStore();
+      const noveltyHistory = await loadDiscoveryHistory(
+        noveltyRepo,
+        scope.workspaceId,
+        archetypeId,
+      );
+      const dataUrl = `data:${result.assets[0]!.mimeType};base64,${Buffer.from(result.assets[0]!.imageBytes).toString("base64")}`;
+      const imgMap = new Map<string, string>([[primaryId, dataUrl]]);
+      const liveEvaluator = await buildLiveFaceEvaluator({
+        workspaceId: scope.workspaceId,
+        archetypeId,
+        imageSourceMap: imgMap,
+      });
+      assertLiveFaceEvaluatorNotNull(
+        liveEvaluator,
+        `novelty_replacement candidate=${replacement.id}`,
+      );
+      const priorEmbeddingsLoaded = (
+        await embeddingRepo.loadEmbeddingsForWorkspace(
+          scope.workspaceId,
+          archetypeId,
+        )
+      ).length;
+
+      const identityFingerprint = buildIdentityFingerprint({
+        archetypeId,
+        blueprintId: slotBlueprint.id,
+        runVariationToken: officialCast.runVariationToken ?? undefined,
+        faceGeometry: variation.faceGeometry,
+        jawShape: variation.jawShape,
+        noseShape: variation.noseShape,
+        eyeShape: variation.eyeShape,
+        lipShape: variation.lipShape,
+        hairTexture: variation.hairTexture,
+        haircut: variation.haircut,
+        facialHair: variation.facialHair,
+        bodyStructure: variation.bodyBuild,
+        skinTone: variation.skinTone,
+        ancestryDirection: variation.identityDescriptor,
+      });
+
+      const noveltyCheck = await checkAndRegisterCandidate(
+        noveltyRepo,
+        noveltyHistory,
+        {
+          workspaceId: scope.workspaceId,
+          archetypeId,
+          creationProjectId: projectId,
+          candidateId: replacement.id,
+          assetId: primaryId,
+          identityFingerprint,
+          visualFingerprint: buildVisualFingerprint({}),
+          signedUrl: dataUrl,
+          sourceProvider: batch.provider,
+          sourceModel: batch.provider,
+        },
+        {
+          evaluator: liveEvaluator,
+          embeddingRepo,
+          diagnosticStore,
+          priorEmbeddingsLoaded,
+          slot: previous.candidate_number,
+          evaluatorActive: true,
+        },
+      );
+
+      finalStatus = noveltyCheck.candidateStatus as CandidateStatus;
+      noveltyDecision = noveltyCheck.finalDecision ?? null;
+      similarityScore =
+        typeof noveltyCheck.similarity === "number"
+          ? noveltyCheck.similarity
+          : null;
+
+      assertCandidateMayBecomeReady({
+        proposedStatus: finalStatus,
+        evaluationStatus: noveltyCheck.evaluationStatus,
+        finalDecision: noveltyCheck.finalDecision,
+        detectionStatus: noveltyCheck.detectionStatus,
+      });
+
+      const slotExhausted =
+        finalStatus === "novelty_blocked" &&
+        nextAttempt >= MAX_DISCOVERY_IDENTITY_ATTEMPTS;
+
+      const updatedAttempt = {
+        ...attemptRecord,
+        noveltyDecision,
+        similarityScore,
+        slotExhausted,
+        matchedCandidateId:
+          noveltyCheck.liveDebug?.closestPriorCandidateId ?? matchedCandidateId,
+      };
+
+      const settingsWithDebug = maybeAttachNoveltyDebugToSettings(
+        {
+          ...enrichedSettings,
+          noveltyReplacementAttempt: updatedAttempt,
+          slotExhausted,
+        },
+        noveltyCheck.liveDebug ?? null,
+      );
+
+      await creationRepo().updateCandidate(scope, replacement.id, {
+        status: finalStatus,
+        generation_settings: settingsWithDebug,
+        rejection_reason:
+          finalStatus === "ready"
+            ? ""
+            : slotExhausted
+              ? SLOT_EXHAUSTED_MESSAGE
+              : (noveltyCheck.replacementMessage ?? "novelty_protection"),
+        user_notes:
+          finalStatus === "ready"
+            ? ""
+            : `[novelty] ${noveltyCheck.hardRejectReason ?? noveltyCheck.finalDecision}`,
+      });
+      checkpoints.push("novelty_evaluation_completed");
+      checkpoints.push("candidate_status_persisted");
+      logNoveltyReplacementCheckpoint("novelty_evaluation_completed", {
+        projectId,
+        slot: slotLabel,
+        newCandidateId: replacement.id,
+        noveltyDecision: noveltyDecision ?? null,
+        finalCandidateStatus: finalStatus,
+      });
+
+      if (noveltyCheck.finalDecision === "allowed") {
+        await markCandidateShown(
+          noveltyRepo,
+          noveltyCheck.recordId,
+          scope.workspaceId,
+        );
+      }
+    } catch (err) {
+      await creationRepo().updateCandidate(scope, replacement.id, {
+        status: "novelty_failed",
+        rejection_reason:
+          err instanceof Error ? err.message : "novelty_evaluation_failed",
+      });
+      finalStatus = "novelty_failed";
+      checkpoints.push("novelty_evaluation_completed");
+      checkpoints.push("candidate_status_persisted");
+    }
+  } else if (!isLiveProvider) {
+    checkpoints.push("novelty_evaluation_completed");
+    checkpoints.push("candidate_status_persisted");
+  }
+
+  await creationRepo().updateProject(scope, projectId, {
+    actual_cost: Number((project.actual_cost + batch.actualCostEur).toFixed(4)),
+  });
+
+  const slotExhausted =
+    finalStatus === "novelty_blocked" &&
+    nextAttempt >= MAX_DISCOVERY_IDENTITY_ATTEMPTS;
+  const outcome = mapFinalStatusToOutcome({
+    finalCandidateStatus: finalStatus,
+    slotExhausted,
+  });
+  if (outcome === "failed") {
+    await jobRepo().updateJob(scope, job.id, {
+      status: "failed",
+      actual_cost: batch.actualCostEur,
+      completed_at: new Date().toISOString(),
+      error_code: "novelty_failed",
+      error_message: "Face novelty evaluation failed for replacement.",
+      confirmation_payload: {
+        ...(job.confirmation_payload ?? {}),
+        providerStartedAt,
+        providerCompletedAt,
+        newCandidateId: replacement.id,
+        noveltyDecision,
+        finalCandidateStatus: finalStatus,
+        safeErrorCode: "novelty_failed",
+        safeErrorMessage: "Face novelty evaluation failed for replacement.",
+      },
+    });
+    checkpoints.push("response_returned");
+    return {
+      ok: false,
+      status: "failed",
+      projectId,
+      slot: slotLabel,
+      previousCandidateId: previous.id,
+      newCandidateId: replacement.id,
+      replacementJobId: job.id,
+      attemptNumber: nextAttempt,
+      providerStarted: true,
+      providerCompleted: true,
+      safeErrorCode: "novelty_failed",
+      safeErrorMessage: "Face novelty evaluation failed for replacement.",
+      durationMs: Date.now() - startedAtMs,
+      checkpoints,
+    };
+  }
+
+  await jobRepo().updateJob(scope, job.id, {
+    status: "completed",
+    actual_cost: batch.actualCostEur,
+    completed_at: new Date().toISOString(),
+    confirmation_payload: {
+      ...(job.confirmation_payload ?? {}),
+      providerStartedAt,
+      providerCompletedAt,
+      newCandidateId: replacement.id,
+      noveltyDecision,
+      finalCandidateStatus: finalStatus,
+      attemptNumber: nextAttempt,
+      slot: slotLabel,
+      slotExhausted,
+    },
+  });
+
+  checkpoints.push("response_returned");
+  logNoveltyReplacementCheckpoint("response_returned", {
+    projectId,
+    slot: slotLabel,
+    newCandidateId: replacement.id,
+    replacementJobId: job.id,
+    attemptNumber: nextAttempt,
+    noveltyDecision: noveltyDecision ?? null,
+    finalCandidateStatus: finalStatus,
+    durationMs: Date.now() - startedAtMs,
+  });
+
+  return {
+    ok: true,
+    status: outcome,
+    projectId,
+    slot: slotLabel,
+    previousCandidateId: previous.id,
+    newCandidateId: replacement.id,
+    replacementJobId: job.id,
+    attemptNumber: nextAttempt,
+    maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+    noveltyDecision,
+    finalCandidateStatus: finalStatus,
+    providerStarted: true,
+    providerCompleted: true,
+    durationMs: Date.now() - startedAtMs,
+    message: outcomeMessage(outcome),
+    checkpoints,
+  };
+}
+
 export async function listGenerationJobsForProject(
   scope: WorkspaceScope,
   projectId: string,
 ) {
   await requireProject(scope, projectId);
+  await reconcileStaleNoveltyReplacementJobs(scope, projectId);
   return jobRepo().listJobsForProject(scope, projectId);
+}
+
+/**
+ * Phase 2.1E.2 — Mark abandoned novelty replacement jobs as stale_failed.
+ * Never starts a provider call. Never reuses confirmation tokens.
+ */
+export async function reconcileStaleNoveltyReplacementJobs(
+  scope: WorkspaceScope,
+  projectId: string,
+  nowMs = Date.now(),
+): Promise<{
+  reconciledJobIds: string[];
+  activeNoveltyReplacements: ReturnType<typeof readActiveNoveltyReplacements>;
+  slotReplacementStates: ReturnType<typeof resolveSlotReplacementStates>;
+}> {
+  const jobs = await jobRepo().listJobsForProject(scope, projectId);
+  const reconciledJobIds: string[] = [];
+  const nowIso = new Date(nowMs).toISOString();
+
+  for (const job of jobs) {
+    if (!isNoveltyReplacementJob(job)) continue;
+    const { stale } = evaluateReplacementJobStaleness(job, nowMs);
+    if (!stale) continue;
+    if (job.status === "failed" || job.status === "completed") continue;
+
+    await jobRepo().updateJob(scope, job.id, {
+      status: "failed",
+      error_code: "replacement_job_stale",
+      error_message:
+        "The previous face-generation job stopped unexpectedly and is no longer running.",
+      completed_at: nowIso,
+      confirmation_payload: buildStaleFailurePayload(
+        job.confirmation_payload ?? {},
+        nowIso,
+      ),
+    });
+    reconciledJobIds.push(job.id);
+    logNoveltyReplacementCheckpoint("response_returned", {
+      projectId,
+      replacementJobId: job.id,
+      safeErrorCode: "replacement_job_stale",
+      recoveredFromStaleState: true,
+    });
+  }
+
+  const refreshed = await jobRepo().listJobsForProject(scope, projectId);
+  return {
+    reconciledJobIds,
+    activeNoveltyReplacements: readActiveNoveltyReplacements(refreshed, nowMs),
+    slotReplacementStates: resolveSlotReplacementStates(refreshed, nowMs),
+  };
+}
+
+/**
+ * Explicit status endpoint helper for client polling timeout reconciliation.
+ */
+export async function getNoveltyReplacementJobStatus(
+  scope: WorkspaceScope,
+  projectId: string,
+  jobId?: string,
+) {
+  const reconciled = await reconcileStaleNoveltyReplacementJobs(scope, projectId);
+  const jobs = await jobRepo().listJobsForProject(scope, projectId);
+  const job = jobId
+    ? jobs.find((j) => j.id === jobId) ?? null
+    : reconciled.activeNoveltyReplacements[0]
+      ? jobs.find((j) => j.id === reconciled.activeNoveltyReplacements[0]!.jobId) ??
+        null
+      : null;
+  return {
+    projectId,
+    reconciledJobIds: reconciled.reconciledJobIds,
+    activeNoveltyReplacements: reconciled.activeNoveltyReplacements,
+    slotReplacementStates: reconciled.slotReplacementStates,
+    job: job
+      ? {
+          id: job.id,
+          status: job.status,
+          errorCode: job.error_code,
+          errorMessage: job.error_message,
+          startedAt: job.started_at,
+          completedAt: job.completed_at,
+          confirmedAt: job.confirmed_at,
+          providerStartedAt:
+            typeof job.confirmation_payload?.providerStartedAt === "string"
+              ? job.confirmation_payload.providerStartedAt
+              : null,
+          providerCompletedAt:
+            typeof job.confirmation_payload?.providerCompletedAt === "string"
+              ? job.confirmation_payload.providerCompletedAt
+              : null,
+          recoveredFromStaleState:
+            job.confirmation_payload?.recoveredFromStaleState === true,
+          slot:
+            typeof job.confirmation_payload?.slot === "string"
+              ? job.confirmation_payload.slot
+              : null,
+        }
+      : null,
+  };
 }
 
 export async function listCandidates(scope: WorkspaceScope, projectId: string) {
@@ -1695,6 +2859,8 @@ export async function listCandidateBoardPayload(
   noveltyFailureSlots: NoveltyFailureSlotDto[];
   candidatePreviews: Record<string, string | null>;
   generationRunId: string | null;
+  activeNoveltyReplacements: ReturnType<typeof readActiveNoveltyReplacements>;
+  slotReplacementStates: ReturnType<typeof resolveSlotReplacementStates>;
   freshness: {
     creationProjectId: string;
     generationRunId: string | null;
@@ -1703,6 +2869,7 @@ export async function listCandidateBoardPayload(
     providerJobIds: (string | null)[];
   };
 }> {
+  const reconciled = await reconcileStaleNoveltyReplacementJobs(scope, projectId);
   const jobs = await jobRepo().listJobsForProject(scope, projectId);
   const generationRunId = resolveCurrentGenerationRunId(jobs);
   const all = await listCandidates(scope, projectId);
@@ -1735,6 +2902,8 @@ export async function listCandidateBoardPayload(
     noveltyFailureSlots: failureSlots,
     candidatePreviews,
     generationRunId,
+    activeNoveltyReplacements: reconciled.activeNoveltyReplacements,
+    slotReplacementStates: reconciled.slotReplacementStates,
     freshness,
   };
 }

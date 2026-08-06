@@ -367,6 +367,14 @@ export function buildCandidatePrompt(params: {
   generationRunId?: string;
   /** Phase 2.1B — L3 sampling attempt (novelty-block retry increments). Default 1. */
   attemptNumber?: number;
+  /** Phase 2.1E — prior attempt anatomy for anti-repeat. */
+  previousAttemptSample?: Partial<
+    Record<import("@/lib/persona/identity-blueprints").ControlledPoolKey, string>
+  > | null;
+  /** Phase 2.1E — same-run matched slot anatomy to avoid. */
+  avoidSameRunSample?: Partial<
+    Record<import("@/lib/persona/identity-blueprints").ControlledPoolKey, string>
+  > | null;
   /** Phase 2.1B — optional pre-sampled L3 instance. */
   discoveryIdentityInstance?: DiscoveryIdentityInstance;
   /** Phase 2.1B — optional pre-resolved L2 lane. */
@@ -446,6 +454,8 @@ export function buildCandidatePrompt(params: {
       discoveryIdentityInstance: params.discoveryIdentityInstance,
       slotBlueprint: params.slotBlueprint,
       sampledAt: params.identitySampledAt,
+      previousAttemptSample: params.previousAttemptSample,
+      avoidSameRunSample: params.avoidSameRunSample,
     });
     slotBlueprint = resolved.slotBlueprint;
     discoveryIdentityInstance = resolved.discoveryIdentityInstance;

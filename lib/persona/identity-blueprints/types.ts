@@ -149,6 +149,18 @@ export type SampleDiscoveryIdentityInput = {
   readonly attemptNumber: number;
   /** Optional fixed ISO timestamp for reproducible tests. */
   readonly sampledAt?: string;
+  /**
+   * Phase 2.1E — prior attempt anatomy for anti-repeat (novelty replacement).
+   * When attemptNumber > 1, at least 5 retry-diversity axes must differ.
+   */
+  readonly previousAttemptSample?: Partial<
+    Record<ControlledPoolKey, string>
+  > | null;
+  /**
+   * Phase 2.1E — same-run matched slot anatomy to rotate away from
+   * (e.g. D blocked against B).
+   */
+  readonly avoidSameRunSample?: Partial<Record<ControlledPoolKey, string>> | null;
 };
 
 export type ValidationIssue = {

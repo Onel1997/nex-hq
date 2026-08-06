@@ -22,6 +22,11 @@ export type ProjectCandidateState = {
   loadedAt: string;
   candidatePreviews: Record<string, string | null>;
   noveltyFailureSlots: import("@/lib/persona/face-novelty-memory/board-visibility").NoveltyFailureSlotDto[];
+  activeNoveltyReplacements: import("@/lib/persona/creation/novelty-replacement-result").ActiveNoveltyReplacementDto[];
+  slotReplacementStates: Record<
+    string,
+    import("@/lib/persona/creation/novelty-replacement-result").NoveltyReplacementSlotState
+  >;
   generationJobs: PersonaGenerationJob[];
   incidentSummary: IncidentProjectSummary | null;
 };
@@ -164,6 +169,11 @@ export function buildProjectCandidateState(input: {
   assets?: PersonaCandidateAsset[];
   candidatePreviews?: Record<string, string | null>;
   noveltyFailureSlots?: import("@/lib/persona/face-novelty-memory/board-visibility").NoveltyFailureSlotDto[];
+  activeNoveltyReplacements?: import("@/lib/persona/creation/novelty-replacement-result").ActiveNoveltyReplacementDto[];
+  slotReplacementStates?: Record<
+    string,
+    import("@/lib/persona/creation/novelty-replacement-result").NoveltyReplacementSlotState
+  >;
   generationJobs?: PersonaGenerationJob[];
   incidentSummary?: IncidentProjectSummary | null;
 }): ProjectCandidateState {
@@ -186,6 +196,8 @@ export function buildProjectCandidateState(input: {
       loadedAt: new Date().toISOString(),
       candidatePreviews: {},
       noveltyFailureSlots: [],
+      activeNoveltyReplacements: [],
+      slotReplacementStates: {},
       generationJobs: input.generationJobs ?? [],
       incidentSummary: input.incidentSummary ?? null,
     };
@@ -197,6 +209,8 @@ export function buildProjectCandidateState(input: {
     loadedAt: new Date().toISOString(),
     candidatePreviews: input.candidatePreviews ?? {},
     noveltyFailureSlots: input.noveltyFailureSlots ?? [],
+    activeNoveltyReplacements: input.activeNoveltyReplacements ?? [],
+    slotReplacementStates: input.slotReplacementStates ?? {},
     generationJobs: input.generationJobs ?? [],
     incidentSummary: input.incidentSummary ?? null,
   };

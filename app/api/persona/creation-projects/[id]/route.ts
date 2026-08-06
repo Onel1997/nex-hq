@@ -3,13 +3,16 @@ import { PersonaDomainError } from "@/lib/persona";
 import { assertPaidGenerationHttpRequestAllowed } from "@/lib/persona/creation/paid-generation-guard";
 import {
   confirmAndStartCandidateGeneration,
+  confirmNoveltyReplacementGeneration,
   ensureManualCandidateSlots,
   estimateCreationCost,
   getCreationProject,
   getCreationProviderSetup,
   getIncidentProjectSummary,
+  getNoveltyReplacementJobStatus,
   listCandidateBoardPayload,
   listGenerationJobsForProject,
+  prepareNoveltyReplacementConfirmation,
   preparePaidGenerationConfirmation,
   updateCreationProject,
 } from "@/lib/persona/creation/creation-service";
@@ -18,12 +21,17 @@ import { getQualityModeProfile } from "@/lib/persona/creation/quality-modes";
 type Ctx = { params: Promise<{ id: string }> };
 
 export const runtime = "nodejs";
+/** Allow OpenAI + novelty evaluation to finish for single-slot replacement. */
+export const maxDuration = 180;
 
 const PATCH_ACTIONS = new Set([
   "estimate",
   "prepare_confirmation",
   "prepare_manual",
   "generate",
+  "prepare_novelty_replacement",
+  "confirm_novelty_replacement",
+  "reconcile_novelty_replacement",
 ]);
 
 export async function GET(_request: Request, ctx: Ctx) {
@@ -64,6 +72,8 @@ export async function GET(_request: Request, ctx: Ctx) {
       project,
       candidates: board.candidates,
       noveltyFailureSlots: board.noveltyFailureSlots,
+      activeNoveltyReplacements: board.activeNoveltyReplacements,
+      slotReplacementStates: board.slotReplacementStates,
       jobs,
       incident,
       candidatePreviews: board.candidatePreviews,
@@ -137,6 +147,87 @@ export async function PATCH(request: Request, ctx: Ctx) {
         httpRequest: request,
       });
       return jsonOk({ success: true, ...result });
+    }
+    if (body.action === "prepare_novelty_replacement") {
+      const candidateId =
+        typeof body.candidateId === "string" ? body.candidateId : "";
+      if (!candidateId) {
+        return jsonError(
+          new PersonaDomainError("candidateId is required", "VALIDATION"),
+        );
+      }
+      const prepared = await prepareNoveltyReplacementConfirmation(
+        gate.scope,
+        id,
+        { candidateId },
+      );
+      return jsonOk({ success: true, ...prepared });
+    }
+    if (body.action === "confirm_novelty_replacement") {
+      assertPaidGenerationHttpRequestAllowed(request);
+      const candidateId =
+        typeof body.candidateId === "string" ? body.candidateId : "";
+      if (!candidateId) {
+        return jsonError(
+          new PersonaDomainError("candidateId is required", "VALIDATION"),
+        );
+      }
+      try {
+        const result = await confirmNoveltyReplacementGeneration(gate.scope, id, {
+          candidateId,
+          costConfirmed: Boolean(body.costConfirmed),
+          confirmationToken:
+            typeof body.confirmationToken === "string"
+              ? body.confirmationToken
+              : undefined,
+          userConfirmedAt:
+            typeof body.userConfirmedAt === "string"
+              ? body.userConfirmedAt
+              : undefined,
+          attestation:
+            typeof body.attestation === "string" ? body.attestation : undefined,
+          httpRequest: request,
+        });
+        if (!result.ok) {
+          return jsonOk(result, 422);
+        }
+        return jsonOk(result);
+      } catch (error) {
+        if (error instanceof PersonaDomainError) {
+          const details = (error.details ?? {}) as Record<string, unknown>;
+          return jsonOk(
+            {
+              ok: false,
+              status: "failed" as const,
+              projectId: id,
+              previousCandidateId: candidateId,
+              replacementJobId:
+                typeof details.replacementJobId === "string"
+                  ? details.replacementJobId
+                  : null,
+              providerStarted: Boolean(details.providerStarted),
+              providerCompleted: Boolean(details.providerCompleted),
+              safeErrorCode:
+                typeof details.safeErrorCode === "string"
+                  ? details.safeErrorCode
+                  : error.code,
+              safeErrorMessage: error.message,
+            },
+            error.code === "WORKFLOW" ? 409 : 400,
+          );
+        }
+        throw error;
+      }
+    }
+    if (body.action === "reconcile_novelty_replacement") {
+      const jobId =
+        typeof body.jobId === "string" ? body.jobId : undefined;
+      const status = await getNoveltyReplacementJobStatus(
+        gate.scope,
+        id,
+        jobId,
+      );
+      return jsonOk({ success: true, ...status });
     }
     if (typeof body.action === "string") {
       return jsonError(

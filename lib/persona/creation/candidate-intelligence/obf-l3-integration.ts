@@ -18,6 +18,7 @@ import {
   validateDiscoveryIdentityInstance,
   validateIdentityWithinBlueprint,
   validateSlotBlueprint,
+  type ControlledPoolKey,
   type DiscoveryIdentityInstance,
   type DiscoverySlot,
   type SlotBlueprint,
@@ -60,6 +61,10 @@ export type ObfL3ResolveInput = {
   discoveryIdentityInstance?: DiscoveryIdentityInstance;
   slotBlueprint?: SlotBlueprint;
   sampledAt?: string;
+  /** Phase 2.1E — prior attempt anatomy for anti-repeat. */
+  previousAttemptSample?: Partial<Record<ControlledPoolKey, string>> | null;
+  /** Phase 2.1E — same-run matched slot anatomy to avoid. */
+  avoidSameRunSample?: Partial<Record<ControlledPoolKey, string>> | null;
 };
 
 export type ObfL3ResolveResult = {
@@ -169,6 +174,8 @@ export function resolveObfDiscoveryIdentity(
       generationRunId: input.generationRunId,
       attemptNumber,
       sampledAt: input.sampledAt,
+      previousAttemptSample: input.previousAttemptSample,
+      avoidSameRunSample: input.avoidSameRunSample,
     });
 
   if (!instance) {
@@ -323,6 +330,8 @@ export function nextDiscoveryIdentityAttempt(currentAttempt: number): number {
   return currentAttempt + 1;
 }
 
+export const MAX_DISCOVERY_IDENTITY_ATTEMPTS = 4 as const;
+
 export type NoveltyBlockIdentityRetryContract = {
   previousAttemptNumber: number;
   nextAttemptNumber: number;
@@ -330,6 +339,8 @@ export type NoveltyBlockIdentityRetryContract = {
   keepArchetypeId: string;
   keepGenerationRunId: string;
   keepCreationProjectId: string;
+  maxAttempts: typeof MAX_DISCOVERY_IDENTITY_ATTEMPTS;
+  slotExhausted: boolean;
   /** Explicit: thresholds / evaluator / embedding model are unchanged. */
   noveltyThresholdsUnchanged: true;
   autoSpendMoney: false;
@@ -341,13 +352,20 @@ export function buildNoveltyBlockIdentityRetryContract(input: {
   generationRunId: string;
   creationProjectId: string;
 }): NoveltyBlockIdentityRetryContract {
+  const slotExhausted =
+    input.previousAttemptNumber >= MAX_DISCOVERY_IDENTITY_ATTEMPTS;
+  const nextAttemptNumber = slotExhausted
+    ? input.previousAttemptNumber
+    : nextDiscoveryIdentityAttempt(input.previousAttemptNumber);
   return {
     previousAttemptNumber: input.previousAttemptNumber,
-    nextAttemptNumber: nextDiscoveryIdentityAttempt(input.previousAttemptNumber),
+    nextAttemptNumber,
     keepSlotBlueprintId: input.slotBlueprint.id,
     keepArchetypeId: input.slotBlueprint.archetypeId,
     keepGenerationRunId: input.generationRunId,
     keepCreationProjectId: input.creationProjectId,
+    maxAttempts: MAX_DISCOVERY_IDENTITY_ATTEMPTS,
+    slotExhausted,
     noveltyThresholdsUnchanged: true,
     autoSpendMoney: false,
   };

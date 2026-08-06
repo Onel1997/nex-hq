@@ -74,6 +74,8 @@ async function generateWithDiscoveryQualityFilter(input: {
   castingPhase: CastingFunnelPhase;
   generationRunId: string;
   identityAttemptNumber: number;
+  previousAttemptSample?: Record<string, string> | null;
+  avoidSameRunSample?: Record<string, string> | null;
 }): Promise<{
   built: ReturnType<typeof buildCandidatePrompt>;
   generated: Awaited<ReturnType<typeof generateOpenAiImage>>;
@@ -93,15 +95,17 @@ async function generateWithDiscoveryQualityFilter(input: {
     qualityAttempts = qualityAttempt;
     const retrySuffix =
       qualityAttempt > 1 ? buildPremiumRetryPromptSuffix(qualityAttempt) : undefined;
-    built = buildCandidatePrompt({
-      project: input.project,
-      assetType: input.item.assetType,
-      candidateNumber: input.item.candidateNumber,
-      variation: input.item.variation,
-      premiumRetrySuffix: retrySuffix,
-      generationRunId: input.generationRunId,
-      attemptNumber: input.identityAttemptNumber,
-    });
+        built = buildCandidatePrompt({
+          project: input.project,
+          assetType: input.item.assetType,
+          candidateNumber: input.item.candidateNumber,
+          variation: input.item.variation,
+          premiumRetrySuffix: retrySuffix,
+          generationRunId: input.generationRunId,
+          attemptNumber: input.identityAttemptNumber,
+          previousAttemptSample: input.previousAttemptSample,
+          avoidSameRunSample: input.avoidSameRunSample,
+        });
 
     if (built.officialBrandFace && !built.discoveryIdentityInstance) {
       throw new PersonaDomainError(
@@ -292,6 +296,8 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
           discoveryBlueprint: resolved.blueprints[i],
           generationRunId,
           attemptNumber: identityAttemptNumber,
+          previousAttemptSample: input.previousAttemptSample ?? null,
+          avoidSameRunSample: input.avoidSameRunSample ?? null,
         });
         if (!built.discoveryIdentityInstance) {
           throw new PersonaDomainError(
@@ -350,6 +356,7 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
         identityLock: string;
         l3Metadata?: ReturnType<typeof buildCandidatePrompt>["discoveryIdentityMetadata"];
         l3Debug?: ReturnType<typeof buildCandidatePrompt>["discoveryIdentityDebug"];
+        l3InstanceSample?: Record<string, string>;
       }
     >();
 
@@ -383,6 +390,8 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             castingPhase,
             generationRunId,
             identityAttemptNumber,
+            previousAttemptSample: input.previousAttemptSample ?? null,
+            avoidSameRunSample: input.avoidSameRunSample ?? null,
           });
           const built = genResult.built;
           retryCount = Math.max(0, genResult.attempts - 1);
@@ -396,6 +405,34 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             if (built.discoveryIdentityMetadata) {
               bucket.l3Metadata = built.discoveryIdentityMetadata;
               bucket.l3Debug = built.discoveryIdentityDebug;
+            }
+            if (built.discoveryIdentityInstance) {
+              const inst = built.discoveryIdentityInstance;
+              bucket.l3InstanceSample = {
+                faceGeometry: inst.faceGeometry,
+                eyeSpacing: inst.eyeSpacing,
+                eyeShape: inst.eyeShape,
+                noseBridge: inst.noseBridge,
+                noseWidth: inst.noseWidth,
+                noseTip: inst.noseTip,
+                jaw: inst.jaw,
+                chin: inst.chin,
+                hairline: inst.hairline,
+                haircut: inst.haircut,
+                beardPattern: inst.beardPattern,
+                optionalMicroMarks: inst.optionalMicroMarks,
+                facialRatioVariant: inst.facialRatioVariant,
+                forehead: inst.forehead,
+                eyebrows: inst.eyebrows,
+                asymmetry: inst.asymmetry,
+                skinToneExact: inst.skinToneExact,
+                cheekbones: inst.cheekbones,
+                lips: inst.lips,
+                ears: inst.ears,
+                microExpression: inst.microExpression,
+                garmentColor: inst.garmentColor,
+                castingBackground: inst.castingBackground,
+              };
             }
           }
 
@@ -499,6 +536,16 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             : {}),
           ...(bucket.l3Debug
             ? { discoveryIdentityDebug: bucket.l3Debug }
+            : {}),
+          ...(bucket.l3InstanceSample
+            ? { discoveryIdentitySample: bucket.l3InstanceSample }
+            : {}),
+          ...(input.replacementOfCandidateId
+            ? {
+                replacementOfCandidateId: input.replacementOfCandidateId,
+                replacementReason:
+                  input.replacementReason ?? "face_similarity_duplicate",
+              }
             : {}),
           diversity: {
             minPairwiseScore: diversity.minPairwiseScore,

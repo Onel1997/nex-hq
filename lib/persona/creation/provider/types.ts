@@ -87,6 +87,20 @@ export interface CreateCandidateBatchInput {
    * Default 1. Does not change novelty thresholds.
    */
   identityAttemptNumber?: number;
+  /**
+   * Phase 2.1E — prior attempt anatomy sample for anti-repeat.
+   * Passed through to L3 sampler; never includes embeddings.
+   */
+  previousAttemptSample?: Record<string, string> | null;
+  /**
+   * Phase 2.1E — same-run matched slot anatomy to rotate away from.
+   */
+  avoidSameRunSample?: Record<string, string> | null;
+  /**
+   * Phase 2.1E — candidate being replaced (audit / persistence).
+   */
+  replacementOfCandidateId?: string | null;
+  replacementReason?: string | null;
 }
 
 export interface PersonaCandidateGenerator {

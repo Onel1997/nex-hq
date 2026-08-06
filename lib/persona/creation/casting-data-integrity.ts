@@ -96,15 +96,36 @@ const COMPLETED_GENERATION_RUN_STATUSES = new Set([
   "partially_completed",
 ]);
 
+function isNoveltyReplacementJob(job: {
+  confirmation_payload?: Record<string, unknown> | null;
+}): boolean {
+  const payload = job.confirmation_payload;
+  if (!payload || typeof payload !== "object") return false;
+  return (
+    payload.noveltyReplacement === true ||
+    payload.intent === "novelty_replacement"
+  );
+}
+
 /**
  * Latest executed generation run for a project.
  * Ignores newer pending_confirmation / queued jobs created by prepare_confirmation.
+ * Phase 2.1E — also ignores single-slot novelty replacement jobs so the board
+ * stays scoped to the original discovery run.
  */
 export function resolveCurrentGenerationRunId(
-  jobs: Array<Pick<PersonaGenerationJob, "id" | "status" | "created_at">>,
+  jobs: Array<
+    Pick<PersonaGenerationJob, "id" | "status" | "created_at"> & {
+      confirmation_payload?: Record<string, unknown> | null;
+    }
+  >,
 ): string | null {
   const completed = jobs
-    .filter((j) => COMPLETED_GENERATION_RUN_STATUSES.has(j.status))
+    .filter(
+      (j) =>
+        COMPLETED_GENERATION_RUN_STATUSES.has(j.status) &&
+        !isNoveltyReplacementJob(j),
+    )
     .slice()
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
   return completed[0]?.id ?? null;

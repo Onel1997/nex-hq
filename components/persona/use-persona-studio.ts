@@ -335,6 +335,11 @@ export function usePersonaStudio() {
         incident?: import("@/lib/persona/creation/creation-service").IncidentProjectSummary | null;
         candidatePreviews?: Record<string, string | null>;
         noveltyFailureSlots?: import("@/lib/persona/face-novelty-memory/board-visibility").NoveltyFailureSlotDto[];
+        activeNoveltyReplacements?: import("@/lib/persona/creation/novelty-replacement-result").ActiveNoveltyReplacementDto[];
+        slotReplacementStates?: Record<
+          string,
+          import("@/lib/persona/creation/novelty-replacement-result").NoveltyReplacementSlotState
+        >;
         generationRunId?: string | null;
         freshness?: {
           creationProjectId: string;
@@ -392,6 +397,8 @@ export function usePersonaStudio() {
         candidates,
         candidatePreviews: data.candidatePreviews ?? {},
         noveltyFailureSlots: data.noveltyFailureSlots ?? [],
+        activeNoveltyReplacements: data.activeNoveltyReplacements ?? [],
+        slotReplacementStates: data.slotReplacementStates ?? {},
         generationJobs: data.jobs ?? [],
         incidentSummary: data.incident ?? null,
       });
@@ -664,6 +671,114 @@ export function usePersonaStudio() {
     }));
     return { ...data, confirmationToken: token };
   }, []);
+
+  const prepareNoveltyReplacement = useCallback(
+    async (projectId: string, candidateId: string) => {
+      const { res, data } = await fetchJson<{
+        error?: string;
+        estimate?: CandidateGenerationCostEstimate;
+        confirmation?: { confirmation_token: string };
+        job?: { confirmation_token?: string | null };
+        slot?: string;
+        candidateId?: string;
+        previousAttemptNumber?: number;
+        nextAttemptNumber?: number;
+        maxAttempts?: number;
+        reason?: string;
+        replacementMessage?: string;
+      }>(`/api/persona/creation-projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "prepare_novelty_replacement",
+          candidateId,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(data.error ?? "Generate New Face confirmation failed");
+      }
+      const token =
+        data.confirmation?.confirmation_token ??
+        data.job?.confirmation_token ??
+        null;
+      setState((prev) => ({
+        ...prev,
+        selectedProjectId: projectId,
+        costEstimate: data.estimate ?? null,
+        paidConfirmationToken: token,
+        paidConfirmationProjectId: token ? projectId : null,
+      }));
+      return { ...data, confirmationToken: token };
+    },
+    [],
+  );
+
+  const confirmNoveltyReplacement = useCallback(
+    async (
+      projectId: string,
+      opts: {
+        candidateId: string;
+        costConfirmed: boolean;
+        confirmationToken?: string;
+        userConfirmedAt?: string;
+        attestation?: string;
+      },
+    ) => {
+      const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
+        method: "PATCH",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "confirm_novelty_replacement",
+          attestation: "ui_checkbox",
+          ...opts,
+        }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        status?: string;
+        error?: string;
+        safeErrorMessage?: string;
+        safeErrorCode?: string;
+        message?: string;
+        newCandidateId?: string;
+        attemptNumber?: number;
+        slot?: string;
+        noveltyDecision?: string | null;
+        replacementJobId?: string;
+        finalCandidateStatus?: string;
+        providerStarted?: boolean;
+        providerCompleted?: boolean;
+        durationMs?: number;
+        projectId?: string;
+        previousCandidateId?: string;
+        maxAttempts?: number;
+      };
+
+      if (!res.ok || data.ok === false) {
+        throw new Error(
+          data.safeErrorMessage ??
+            data.error ??
+            data.message ??
+            "Generate New Face failed",
+        );
+      }
+
+      // Keep confirmation tokens until reload confirms the new board state.
+      await loadProject(projectId, { openCandidates: true });
+      await refreshCreation();
+
+      setState((prev) => ({
+        ...prev,
+        costEstimate: null,
+        paidConfirmationToken: null,
+        paidConfirmationProjectId: null,
+      }));
+
+      return data;
+    },
+    [loadProject, refreshCreation],
+  );
 
   const generateCandidates = useCallback(
     async (
@@ -1007,6 +1122,8 @@ export function usePersonaStudio() {
     createProject,
     estimateProjectCost,
     preparePaidConfirmation,
+    prepareNoveltyReplacement,
+    confirmNoveltyReplacement,
     generateCandidates,
     prepareManualCandidates,
     patchCandidate,

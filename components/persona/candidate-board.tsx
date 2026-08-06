@@ -331,40 +331,139 @@ export function CandidateBoardCard({
 
 export function NoveltyFailureSlotCard({
   slot,
+  onGenerateNewFace,
   onRetryEvaluation,
+  replacementUi,
 }: {
   slot: import("@/lib/persona/face-novelty-memory/board-visibility").NoveltyFailureSlotDto;
+  /** Phase 2.1E — paid novelty replacement (face_similarity_duplicate). */
+  onGenerateNewFace?: () => void | Promise<void>;
+  /** Dev-only: re-evaluate the same stored asset without OpenAI. */
   onRetryEvaluation?: () => void | Promise<void>;
+  replacementUi?: {
+    phase: "idle" | "confirming" | "generating" | "polling";
+    attemptNumber: number;
+    maxAttempts: number;
+    elapsedDisplay: string;
+  } | null;
 }) {
   const isBlocked = slot.status === "novelty_blocked";
+  const slotLabel = ["A", "B", "C", "D"][slot.slot - 1] ?? String(slot.slot);
+  const exhausted = Boolean(slot.slotExhausted);
+  const isGenerating =
+    replacementUi != null &&
+    (replacementUi.phase === "generating" ||
+      replacementUi.phase === "polling" ||
+      replacementUi.phase === "confirming");
+  const showGenerateNewFace =
+    isBlocked &&
+    Boolean(slot.requiresReplacementConfirmation) &&
+    Boolean(onGenerateNewFace) &&
+    !isGenerating &&
+    !exhausted;
+  const showRetryEval = !isBlocked && Boolean(onRetryEvaluation) && !isGenerating;
+
+  if (isGenerating && replacementUi) {
+    return (
+      <div
+        className="ps-ci-card"
+        data-novelty-slot="generating"
+        data-replacement-phase={replacementUi.phase}
+      >
+        <div className="ps-ci-card-hero">
+          <div className="ps-ci-card-hero-empty">Generating new face</div>
+        </div>
+        <div className="ps-ci-card-body">
+          <strong>Candidate {slotLabel}</strong>
+          <p style={{ marginTop: "0.5rem" }}>
+            Attempt {replacementUi.attemptNumber} of {replacementUi.maxAttempts}
+          </p>
+          <div
+            role="progressbar"
+            aria-valuetext="Generating"
+            style={{
+              marginTop: "0.75rem",
+              height: 6,
+              borderRadius: 999,
+              background: "rgba(0,0,0,0.08)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              className="ps-novelty-indeterminate"
+              style={{
+                width: "40%",
+                height: "100%",
+                borderRadius: 999,
+                background: "currentColor",
+                animation: "ps-novelty-indeterminate 1.2s ease-in-out infinite",
+              }}
+            />
+          </div>
+          <p className="ps-muted" style={{ fontSize: "12px", marginTop: "0.75rem" }}>
+            Generating image and checking face novelty...
+          </p>
+          <p className="ps-muted" style={{ fontSize: "12px" }}>
+            Elapsed {replacementUi.elapsedDisplay}
+          </p>
+          <button type="button" className="ps-btn" style={{ marginTop: "0.75rem" }} disabled>
+            Generate New Face
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="ps-ci-card" data-novelty-slot={slot.status}>
       <div className="ps-ci-card-hero">
         <div className="ps-ci-card-hero-empty">
-          {isBlocked ? "Blocked slot" : "Failed slot"}
+          {exhausted
+            ? "Slot exhausted"
+            : isBlocked
+              ? "Blocked slot"
+              : "Failed slot"}
         </div>
       </div>
       <div className="ps-ci-card-body">
-        <strong>Candidate {["A", "B", "C", "D"][slot.slot - 1] ?? slot.slot}</strong>
+        <strong>Candidate {slotLabel}</strong>
         <p className="ps-muted" style={{ marginTop: "0.5rem" }}>
-          {isBlocked
-            ? "Candidate blocked by face novelty protection."
-            : "Face novelty evaluation failed. No candidate was shown."}
+          {exhausted
+            ? "Slot exhausted after 4 attempts. Start a new discovery."
+            : isBlocked
+              ? slot.reason?.includes("similar") ||
+                slot.reason === "face_similarity_duplicate"
+                ? "New face was still too similar."
+                : "Candidate blocked by face novelty protection."
+              : "Face novelty evaluation failed. No candidate was shown."}
         </p>
         <p className="ps-muted" style={{ fontSize: "12px" }}>
           {slot.reason}
         </p>
-        {isBlocked && slot.requiresReplacementConfirmation ? (
+        {typeof slot.attemptNumber === "number" ? (
           <p className="ps-muted" style={{ fontSize: "12px" }}>
-            Replacement generation requires explicit confirmation.
+            Attempt {slot.attemptNumber} of {slot.maxAttempts ?? 4}
+            {slot.nextAttemptNumber != null
+              ? ` · next ${slot.nextAttemptNumber}`
+              : ""}
           </p>
         ) : null}
-        {onRetryEvaluation ? (
+        {showGenerateNewFace ? (
           <button
             type="button"
             className="ps-btn"
             style={{ marginTop: "0.75rem" }}
-            onClick={() => void onRetryEvaluation()}
+            onClick={() => void onGenerateNewFace?.()}
+          >
+            Generate New Face
+          </button>
+        ) : null}
+        {showRetryEval ? (
+          <button
+            type="button"
+            className="ps-btn"
+            style={{ marginTop: "0.75rem" }}
+            onClick={() => void onRetryEvaluation?.()}
           >
             Retry Face Evaluation
           </button>

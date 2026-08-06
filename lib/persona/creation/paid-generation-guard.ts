@@ -29,7 +29,7 @@ export const UI_CHECKBOX_ATTESTATION = "ui_checkbox" as const;
 /** Prepared estimate + confirmation valid for this window. */
 export const CONFIRMATION_TTL_MS = 30 * 60 * 1000;
 
-export type PaidConfirmationIntent = "initial" | "retry";
+export type PaidConfirmationIntent = "initial" | "retry" | "novelty_replacement";
 
 export function isAutomatedTestEnvironment(): boolean {
   if (process.env[PERSONA_SIMULATE_PRODUCTION_ENV] === "1") return false;
@@ -275,6 +275,7 @@ export function confirmationIntent(
   confirmation: PersonaGenerationConfirmation,
 ): PaidConfirmationIntent {
   const intent = confirmation.payload?.intent;
+  if (intent === "novelty_replacement") return "novelty_replacement";
   return intent === "retry" ? "retry" : "initial";
 }
 
@@ -365,7 +366,11 @@ export function assertConfirmationMatchesGenerationRequest(args: {
   }
 
   const intent = confirmationIntent(confirmation);
-  if (project.actual_cost > 0 && intent !== "retry") {
+  if (
+    project.actual_cost > 0 &&
+    intent !== "retry" &&
+    intent !== "novelty_replacement"
+  ) {
     throw new PersonaDomainError(
       "Erneute bezahlte Generierung erfordert eine neue Retry-Bestätigung (prepare_confirmation).",
       "WORKFLOW",

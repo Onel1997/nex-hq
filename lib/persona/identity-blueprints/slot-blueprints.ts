@@ -9,7 +9,8 @@ import type { ControlledPools, DiscoverySlot, SlotBlueprint } from "./types";
 export const MEDITERRANEAN_ARCHETYPE_ID =
   "arch-mediterranean-premium-hero" as const;
 
-export const SLOT_BLUEPRINT_VERSION = "2.1A.0" as const;
+/** Bumped in 2.1E for Soft Luxury pool expansion (Slot A only). */
+export const SLOT_BLUEPRINT_VERSION = "2.1E.0" as const;
 
 const SHARED_CAMERA_RULES = [
   "A1 casting-editorial: mid-torso or chest upward, shoulders fully visible",
@@ -25,81 +26,96 @@ function pools(p: ControlledPools): ControlledPools {
   return p;
 }
 
+/** Phase 2.1E — Soft Luxury lane expanded for biological distance within Iberian premium. */
 const SLOT_A_POOLS = pools({
   skinToneExact: [
     "light-medium warm olive with soft sun-kissed peach undertone",
     "light warm olive with subtle golden cheek flush",
     "medium-light Iberian olive with soft peach midtones",
-    "warm light olive with faint freckling-ready tone",
+    "warm light olive with even clear complexion — no freckling emphasis",
+    "fair-warm Iberian olive with soft porcelain-peach balance",
   ],
   facialRatioVariant: [
     "balanced soft vertical thirds with slightly longer lower face",
     "elegant midface with narrower bizygomatic width",
-    "soft oval proportions with calm vertical balance",
-    "refined midface length with gentle lower-third softness",
+    "elongated vertical balance with longer midface",
+    "subtle heart-oval ratios with narrower chin relative to temples",
+    "slim oblong proportions with calm vertical length",
   ],
   faceGeometry: [
     "elegant soft oval silhouette with gently rounded temples",
-    "narrow-to-medium soft oval cranial outline",
-    "smooth oval face with refined chin tip readiness",
-    "soft oval with calm temple curves — never rectangular",
+    "elongated oval cranial outline with refined length",
+    "subtle heart-oval face with softer temple-to-chin taper",
+    "slim oblong face with quiet premium length — never rectangular athletic",
+    "softly angular oval with light cheek-plane definition",
   ],
   forehead: [
     "medium-smooth forehead with soft temples",
-    "calm medium forehead height with gentle vertical plane",
-    "soft forehead with light temple openness",
+    "straighter forehead plane with calm vertical height",
+    "wider upper forehead with open frontal presence",
+    "narrower temples with focused frontal width",
+    "higher forehead vault with soft luxury openness",
   ],
   eyebrows: [
     "medium soft arched brows with natural sparse outer tails",
     "soft medium brows with gentle upward outer arch",
     "natural soft arch with lighter outer density",
+    "straighter soft-luxury brows with light density",
   ],
   eyeShape: [
+    "rounded almond eyes with soft premium lid character",
+    "hooded almond eyes with quiet luxury lid weight",
+    "softer downturned outer-corner eyes — approachable editorial",
+    "calm medium-open almond lids with refined crease",
     "warm expressive almond eyes with softly open lids",
-    "calm almond eyes with luminous soft lid character",
-    "open soft-luxury almond lids with gentle crease",
-    "expressive almond shape with relaxed upper lid",
   ],
   eyeSpacing: [
-    "slightly wider interpupillary spacing — open soft-luxury gaze",
+    "wider-set soft-luxury spacing with open midface",
+    "medium balanced interpupillary spacing",
+    "slightly deep-set spacing with quieter eye recess",
     "open balanced spacing with soft-luxury width",
     "moderately wide set with calm open midface",
-    "wider-than-average soft spacing — never dense urban close-set",
   ],
   noseBridge: [
-    "slim straight high-ish bridge — refined Iberian soft luxury",
     "narrow straight bridge with delicate root",
+    "medium-width straight Iberian bridge",
+    "subtle convex bridge with soft character — never aquiline hero",
+    "broader soft bridge with gentle root mass",
     "slim refined bridge with soft vertical line",
-    "narrow elegant bridge — never broad Maghrebi root",
   ],
   noseWidth: [
     "narrow alar width — delicate nostrils",
-    "slim alar base with fine nostril character",
+    "medium-width soft alar base",
     "narrow-to-medium refined width",
-    "delicate narrow alar span",
+    "soft broader alar span within Iberian premium",
+    "balanced medium alar character — not Maghrebi widest",
   ],
   noseTip: [
     "soft rounded tip with light definition",
+    "slightly upturned soft tip with calm lift",
+    "defined rounded tip with clear soft finish",
     "refined soft tip — never bulbous, never aquiline",
     "delicate rounded tip with calm definition",
-    "soft lightly defined tip with slim character",
   ],
   jaw: [
-    "refined elegant jaw with soft masculine angle",
-    "clean soft jawline without square mass",
+    "refined tapered jaw with soft masculine finish",
+    "softly angular jaw with light gonial definition",
     "narrow elegant jaw with gentle gonial soft angle",
-    "refined masculine jaw — never athletic flare",
+    "moderate mandibular width with calm premium line",
+    "clean soft jawline without square mass",
   ],
   chin: [
+    "narrower soft chin with light projection",
+    "broader rounded chin with gentle menton mass",
     "refined rounded chin tip with light projection",
     "soft rounded chin — no cleft, no square block",
     "elegant light-projection chin tip",
-    "gentle rounded menton with soft luxury finish",
   ],
   cheekbones: [
     "elegant medium cheekbones with soft under-cheek volume",
     "soft medium cheek support — never hollow fashion cut",
     "gentle mid-cheek volume with calm plane",
+    "slightly higher soft cheek support with quiet definition",
   ],
   lips: [
     "medium-soft lips with gentle cupid bow",
@@ -112,22 +128,25 @@ const SLOT_A_POOLS = pools({
     "close-set medium ears — low athletic projection",
   ],
   hairline: [
-    "soft rounded natural hairline with gentle temple curves",
-    "natural soft hairline without harsh widow's peak",
-    "gentle temple-curve hairline — soft luxury edge",
+    "straight natural soft-luxury hairline",
+    "soft M-shape hairline with gentle temple notches",
+    "higher corner hairline with open temples",
     "rounded natural hairline with calm density at temples",
+    "uneven natural hairline with lived-in temple variation",
   ],
   haircut: [
-    "modern soft taper with loose textured crown waves",
-    "soft luxury medium-short waves with lived-in crown",
-    "textured soft taper — not fade-heavy street",
-    "loose crown waves with refined soft sides",
+    "short soft taper with clean premium sides",
+    "medium textured crop with soft crown volume",
+    "soft waves with lived-in Iberian movement",
+    "side-parted textured soft-luxury cut",
+    "longer top with natural fall and refined sides",
   ],
   beardPattern: [
-    "subtle uneven 2–3 day stubble denser on chin and upper lip",
-    "refined light chin-weighted shadow — never full beard",
-    "soft uneven stubble with lighter cheeks",
-    "light designer stubble focused on jaw tip and philtrum",
+    "clean-shaven soft luxury jaw",
+    "faint moustache only — light upper-lip shadow",
+    "light separated stubble with uneven cheek gaps",
+    "short even stubble covering jaw lightly",
+    "moustache with sparse chin shadow — never full beard",
   ],
   microExpression: [
     "relaxed mouth, almost-smile without teeth, calm attentive gaze",
@@ -138,13 +157,14 @@ const SLOT_A_POOLS = pools({
     "mild natural left-cheek softness and uneven stubble density",
     "subtle brow-height difference with soft left bias",
     "natural cheek-plane asymmetry — authentic not plastic",
-    "uneven freckle-ready nose-bridge texture with mild left softness",
+    "uneven temple hairline density with mild left softness",
   ],
   optionalMicroMarks: [
     "none",
-    "faint freckling across nose bridge only",
-    "tiny mole near left outer cheek",
-    "subtle beauty mark below right lip corner",
+    "cheek mole on left mid-cheek",
+    "temple mole near right hairline",
+    "subtle cheek pigmentation variation — natural not freckle field",
+    "faint under-eye texture note — realistic, never beauty-filter",
   ],
   garmentColor: [
     "washed-black heavyweight oversized T-shirt",

@@ -74,3 +74,15 @@ export {
   discoveryIdentityPromptContainsNewIndividualWording,
   discoveryIdentityPromptContainsIdentityLockWording,
 } from "./prompt-format";
+
+export {
+  RETRY_DIVERSITY_AXES,
+  MIN_RETRY_AXIS_DIFFS,
+  HISTORICAL_SOFT_LUXURY_CLUSTER_MARKERS,
+  SAME_RUN_AVOID_AXES,
+  countRetryAxisDiffs,
+  matchesHistoricalSoftLuxuryCluster,
+  assertRetryAxisDiversity,
+  assertAvoidsHistoricalSoftLuxuryCluster,
+  assertSameRunCollisionDiversity,
+} from "./attempt-diversity";

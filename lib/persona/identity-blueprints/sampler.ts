@@ -3,8 +3,21 @@
  *
  * No Math.random. Seed derives from archetype + slot + run + attempt + blueprint version.
  * High-leverage axes rotate preferentially across attempts.
+ * Phase 2.1E adds attempt-aware and same-run collision diversity guards.
  */
 
+import {
+  assertAvoidsHistoricalSoftLuxuryCluster,
+  assertRetryAxisDiversity,
+  assertSameRunCollisionDiversity,
+  countRetryAxisDiffs,
+  countSameRunAxisDiffs,
+  matchesHistoricalSoftLuxuryCluster,
+  MIN_RETRY_AXIS_DIFFS,
+  RETRY_DIVERSITY_AXES,
+  SAME_RUN_AVOID_AXES,
+  type RetryDiversityAxis,
+} from "./attempt-diversity";
 import {
   anatomyFingerprintFromAttributes,
   highLeverageCombinationKey,
@@ -175,6 +188,126 @@ function applyHighLeverageAntiRepeat(
   };
 }
 
+function pickAvoiding(
+  pool: readonly string[],
+  rng: () => number,
+  offset: number,
+  forbidden: ReadonlySet<string>,
+): string {
+  if (pool.length === 0) {
+    throw new IdentityBlueprintError("Cannot sample from empty pool");
+  }
+  for (let i = 0; i < pool.length; i += 1) {
+    const candidate =
+      pool[(Math.floor(rng() * pool.length) + offset + i) % pool.length]!;
+    if (!forbidden.has(candidate)) return candidate;
+  }
+  return pickFromPool(pool, rng, offset);
+}
+
+/**
+ * Reroll retry-diversity / historical-cluster / same-run axes until constraints hold.
+ */
+function applyAttemptDiversityGuards(input: {
+  slotBlueprint: SlotBlueprint;
+  attemptNumber: number;
+  current: RawSample;
+  previousAttemptSample?: Partial<Record<ControlledPoolKey, string>> | null;
+  avoidSameRunSample?: Partial<Record<ControlledPoolKey, string>> | null;
+}): RawSample {
+  const {
+    slotBlueprint,
+    attemptNumber,
+    current,
+    previousAttemptSample,
+    avoidSameRunSample,
+  } = input;
+  const sampled = { ...current.sampled };
+  let guard = 0;
+
+  const needsPrev =
+    attemptNumber > 1 &&
+    previousAttemptSample != null &&
+    Object.keys(previousAttemptSample).length > 0;
+  const needsHistorical = slotBlueprint.slot === "A" && attemptNumber >= 3;
+  const needsSameRun =
+    avoidSameRunSample != null && Object.keys(avoidSameRunSample).length > 0;
+
+  while (guard < 24) {
+    const prevOk =
+      !needsPrev ||
+      countRetryAxisDiffs(
+        sampled as Partial<Record<RetryDiversityAxis, string>>,
+        previousAttemptSample as Partial<Record<RetryDiversityAxis, string>>,
+      ) >= MIN_RETRY_AXIS_DIFFS;
+    const histOk =
+      !needsHistorical || !matchesHistoricalSoftLuxuryCluster(sampled);
+    const sameOk =
+      !needsSameRun ||
+      countSameRunAxisDiffs(sampled, avoidSameRunSample!) >= MIN_RETRY_AXIS_DIFFS;
+
+    if (prevOk && histOk && sameOk) break;
+
+    guard += 1;
+    const rerollSeed = identityShortHash(
+      `${current.samplingSeed}|attempt-div|${guard}`,
+      24,
+    );
+    const rng = createDeterministicRng(rerollSeed);
+
+    const axesToReroll = new Set<ControlledPoolKey>([
+      ...RETRY_DIVERSITY_AXES,
+      ...SAME_RUN_AVOID_AXES,
+      "eyeShape",
+      "forehead",
+      "facialRatioVariant",
+    ]);
+
+    for (const key of axesToReroll) {
+      const pool = slotBlueprint.controlledPools[key];
+      const forbidden = new Set<string>();
+      if (needsPrev && previousAttemptSample?.[key]) {
+        forbidden.add(previousAttemptSample[key]!);
+      }
+      if (needsSameRun && avoidSameRunSample?.[key]) {
+        forbidden.add(avoidSameRunSample[key]!);
+      }
+      sampled[key] = pickAvoiding(
+        pool,
+        rng,
+        attemptStrideForKey(key, attemptNumber, pool.length) + guard,
+        forbidden,
+      );
+    }
+  }
+
+  const result: RawSample = {
+    samplingSeed: current.samplingSeed,
+    exactAge: current.exactAge,
+    sampled,
+  };
+
+  assertRetryAxisDiversity({
+    attemptNumber,
+    current: sampled as Partial<Record<RetryDiversityAxis, string>>,
+    previous: previousAttemptSample as
+      | Partial<Record<RetryDiversityAxis, string>>
+      | null
+      | undefined,
+  });
+  assertAvoidsHistoricalSoftLuxuryCluster({
+    attemptNumber,
+    slot: slotBlueprint.slot,
+    sample: sampled,
+  });
+  assertSameRunCollisionDiversity({
+    current: sampled,
+    matchedSameRun: avoidSameRunSample,
+  });
+
+  return result;
+}
+
 /**
  * Final attribute sample for attempt N, applying anti-repeat vs prior attempts.
  * Iterates 1..N so previous high-leverage keys include their own anti-repeat.
@@ -183,6 +316,8 @@ function sampleRawAttributes(input: {
   slotBlueprint: SlotBlueprint;
   generationRunId: string;
   attemptNumber: number;
+  previousAttemptSample?: Partial<Record<ControlledPoolKey, string>> | null;
+  avoidSameRunSample?: Partial<Record<ControlledPoolKey, string>> | null;
 }): RawSample {
   const { slotBlueprint, generationRunId, attemptNumber } = input;
   let previousHl: string | null = null;
@@ -204,7 +339,14 @@ function sampleRawAttributes(input: {
   if (!current) {
     throw new IdentityBlueprintError("Failed to sample attributes");
   }
-  return current;
+
+  return applyAttemptDiversityGuards({
+    slotBlueprint,
+    attemptNumber,
+    current,
+    previousAttemptSample: input.previousAttemptSample,
+    avoidSameRunSample: input.avoidSameRunSample,
+  });
 }
 
 /**
@@ -234,6 +376,8 @@ export function sampleDiscoveryIdentityInstance(
     slotBlueprint,
     generationRunId,
     attemptNumber,
+    previousAttemptSample: input.previousAttemptSample,
+    avoidSameRunSample: input.avoidSameRunSample,
   });
 
   const sampledAt = input.sampledAt ?? new Date().toISOString();
