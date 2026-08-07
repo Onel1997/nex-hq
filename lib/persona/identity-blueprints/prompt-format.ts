@@ -1,6 +1,6 @@
 /**
- * L3 prompt formatter foundation — anatomy block only.
- * Integrated into provider prompts in a later phase (2.1B).
+ * L3 prompt formatter — casting-director identity brief (anatomy only).
+ * Does not include Brand Memory, Product Intelligence, camera, lighting, or negatives.
  */
 
 import type { DiscoveryIdentityInstance } from "./types";
@@ -16,7 +16,7 @@ const FORBIDDEN_PROMPT_PHRASES = [
 
 /**
  * Format concrete L3 anatomy for a discovery identity instance.
- * Does not include Brand Memory, Product Intelligence, camera, lighting, or negatives.
+ * Framed as an independent casting brief so each slot reads as a different real human.
  */
 export function formatDiscoveryIdentityInstancePrompt(
   instance: DiscoveryIdentityInstance,
@@ -25,6 +25,9 @@ export function formatDiscoveryIdentityInstancePrompt(
     "DISCOVERY IDENTITY INSTANCE (L3)",
     "Generate a new individual inside this casting lane.",
     "This is a fresh person for this discovery run — not a locked Brand Face.",
+    "Cast this person as a real professional model — not an AI fashion clone.",
+    "Exact facial anatomy below is authoritative for THIS slot only.",
+    "Do not borrow proportions, lighting face-shape habits, or styling from other slots.",
     "",
     `Slot: ${instance.slot}`,
     `Gender: ${instance.gender}`,
@@ -32,6 +35,7 @@ export function formatDiscoveryIdentityInstancePrompt(
     `Exact age feel: ${instance.exactAge}`,
     "",
     "BIOLOGICAL IDENTITY (sampled for this run)",
+    "Unique human for THIS slot only — never four brothers.",
     `Skin: ${instance.skinToneExact}.`,
     `Facial proportions: ${instance.facialRatioVariant}.`,
     `Face geometry: ${instance.faceGeometry}.`,
@@ -47,8 +51,15 @@ export function formatDiscoveryIdentityInstancePrompt(
     `Haircut: ${instance.haircut}.`,
     `Facial hair pattern: ${instance.beardPattern}.`,
     `Micro-expression: ${instance.microExpression}.`,
-    `Natural asymmetry: ${instance.asymmetry}.`,
+    `Natural asymmetry (required): ${instance.asymmetry}.`,
     `Optional micro-marks: ${instance.optionalMicroMarks}.`,
+    "",
+    "REALISM NOTES FOR THIS PERSON",
+    "Render real unretouched human skin on this exact face — visible natural pores and subtle pigmentation variation.",
+    "Keep the stated asymmetry visible, including slight eye asymmetry. Keep ears, lips, under-eye texture, and hairline photographically real.",
+    "Render individual imperfect hair strands. If facial hair is present, keep density slightly uneven — never stamped CGI.",
+    "If optional micro-marks are present, keep them subtle and believable.",
+    "Do not beautify, symmetrize, airbrush, or polish this person into an Instagram AI / Midjourney fashion model.",
     "",
     "CASTING SUPPORT (non-anatomy, instance-scoped)",
     `Garment color direction: ${instance.garmentColor}.`,

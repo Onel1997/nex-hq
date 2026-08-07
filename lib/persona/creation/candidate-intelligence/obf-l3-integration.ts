@@ -293,14 +293,15 @@ export function formatObfGarmentDirectionPrompt(
   instance: DiscoveryIdentityInstance,
 ): string {
   return [
-    "A1 GARMENT DIRECTION (Product Intelligence authority)",
+    "A1 SIMPLE WARDROBE (Product Intelligence authority)",
     `Lane garment categories: ${slotBlueprint.garmentCategories.join(", ")}.`,
     `Assigned garment/color for this individual: ${instance.garmentColor}.`,
     "Only Oversized Heavyweight T-Shirt, Heavyweight Hoodie, or Zip Hoodie.",
+    "Restrained casting styling — clothing supports face evaluation, does not dominate.",
+    "Believable fabric texture and soft natural wrinkles required.",
     "No caps, jackets, jewelry, suits, cargo pants, footwear, or accessories.",
     "No visible third-party logos, no invented Milaene artwork, no random graphics, no text on clothing.",
     "Garment must visibly drape like heavyweight premium streetwear with oversized shoulder/sleeve proportions.",
-    "Clothing supports model evaluation — does not dominate the portrait.",
   ].join("\n");
 }
 
@@ -309,9 +310,10 @@ export function formatObfCastingSetPrompt(
   instance: DiscoveryIdentityInstance,
 ): string {
   return [
-    "A1 PREMIUM CASTING SET (instance-scoped)",
+    "A1 PREMIUM CASTING SET (instance-scoped — independent from other slots)",
     `Background: ${instance.castingBackground}.`,
-    `Camera rules: ${slotBlueprint.cameraRules.join(" · ")}.`,
+    `Camera rules for this slot only: ${slotBlueprint.cameraRules.join(" · ")}.`,
+    "Lighting and crop must follow THIS slot's camera direction — never copy another board slot's setup.",
     "Still controlled casting photography — premium agency test shoot energy.",
     "Do NOT generate full campaign locations, streets, cafés, parking garages, shops, or product sets.",
   ].join("\n");

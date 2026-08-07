@@ -14,13 +14,37 @@ export const SLOT_BLUEPRINT_VERSION = "2.1E.0" as const;
 
 const SHARED_CAMERA_RULES = [
   "A1 casting-editorial: mid-torso or chest upward, shoulders fully visible",
-  "Slight 10–20° body rotation — never passport-centered symmetry",
-  "50mm–85mm portrait lens direction, shallow but natural depth of field",
+  "Never passport-centered symmetry — each slot uses its own camera height and crop",
+  "Real camera / real lens rendering — photographic depth, natural shadows",
   "Controlled casting set — not a campaign location",
 ] as const;
 
+const SLOT_A_CAMERA_RULES = [
+  ...SHARED_CAMERA_RULES,
+  "Slot A: ~85mm intimate quiet-luxury distance, camera slightly above eye level",
+  "Slot A: soft window key from camera-left, gentle 8–12° head turn",
+] as const;
+
+const SLOT_B_CAMERA_RULES = [
+  ...SHARED_CAMERA_RULES,
+  "Slot B: ~50mm documentary-fashion distance, eye-level to slightly below",
+  "Slot B: harder directional key from camera-right, firmer 15–20° body rotation",
+] as const;
+
+const SLOT_C_CAMERA_RULES = [
+  ...SHARED_CAMERA_RULES,
+  "Slot C: ~70mm editorial portrait with airy headroom, camera slightly below eye level",
+  "Slot C: soft high-window wrap, soft three-quarter turn toward camera-right",
+] as const;
+
+const SLOT_D_CAMERA_RULES = [
+  ...SHARED_CAMERA_RULES,
+  "Slot D: ~58–65mm campaign portrait distance, true eye-level hold",
+  "Slot D: warm soft key with gentle Rembrandt cheek cue, subtle 5–10° turn",
+] as const;
+
 const SHARED_QUALITY_BAR =
-  "Agency-signed premium streetwear campaign model — photoreal, commercially memorable, suitable for homepage / Shopify / social / future video";
+  "Real agency-signed campaign model — photoreal skin texture, natural asymmetry, commercially memorable, suitable for homepage / Shopify / social / future video — never Instagram AI, never Midjourney fashion";
 
 function pools(p: ControlledPools): ControlledPools {
   return p;
@@ -593,6 +617,7 @@ function mediterraneanLane(input: {
   brandRole: string;
   crossSlotExclusions: readonly string[];
   controlledPools: ControlledPools;
+  cameraRules: readonly string[];
 }): SlotBlueprint {
   return {
     id: input.id,
@@ -611,7 +636,7 @@ function mediterraneanLane(input: {
     expressionFamily: input.expressionFamily,
     qualityBar: SHARED_QUALITY_BAR,
     garmentCategories: ["oversized_heavyweight_tee", "heavyweight_hoodie", "zip_hoodie"],
-    cameraRules: [...SHARED_CAMERA_RULES],
+    cameraRules: [...input.cameraRules],
     crossSlotExclusions: input.crossSlotExclusions,
     controlledPools: input.controlledPools,
     fashionDirection: input.fashionDirection,
@@ -642,6 +667,7 @@ export const MEDITERRANEAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
       "square hero chin mass",
     ],
     controlledPools: SLOT_A_POOLS,
+    cameraRules: SLOT_A_CAMERA_RULES,
   }),
   mediterraneanLane({
     slot: "B",
@@ -665,6 +691,7 @@ export const MEDITERRANEAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
       "soft luxury narrow refined nose",
     ],
     controlledPools: SLOT_B_POOLS,
+    cameraRules: SLOT_B_CAMERA_RULES,
   }),
   mediterraneanLane({
     slot: "C",
@@ -688,6 +715,7 @@ export const MEDITERRANEAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
       "dense hero jawline beard",
     ],
     controlledPools: SLOT_C_POOLS,
+    cameraRules: SLOT_C_CAMERA_RULES,
   }),
   mediterraneanLane({
     slot: "D",
@@ -711,6 +739,7 @@ export const MEDITERRANEAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
       "soft luxury narrow refined jaw",
     ],
     controlledPools: SLOT_D_POOLS,
+    cameraRules: SLOT_D_CAMERA_RULES,
   }),
 ] as const;
 

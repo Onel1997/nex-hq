@@ -37,16 +37,21 @@ export {
 
 export {
   PREMIUM_CASTING_QUALITY_REFERENCE,
+  PREMIUM_PROMPT_REQUIRED_TOKENS,
+  SUBPREMIUM_CASTING_CUES,
   a1CastingCompositionBlock,
   a1CastingPhotographyBlock,
   a1PresenceRulesBlock,
   buildPremiumRetryPromptSuffix,
   genderEnforcementBlock,
   isOfficialArchetypeSlug,
+  photographicRealismBlock,
   premiumArchetypeCastingBlock,
   premiumFashionPresenceBlock,
   premiumNegativePromptAdditions,
   premiumPhotographyBlock,
+  realHumanPhotographPriorityBlock,
+  slotCastingCameraBlock,
   type OfficialArchetypeSlug,
 } from "./premium-casting-direction";
 

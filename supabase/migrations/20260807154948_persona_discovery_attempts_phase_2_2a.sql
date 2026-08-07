@@ -58,6 +58,9 @@ CREATE INDEX IF NOT EXISTS idx_pda_candidate
   ON public.persona_discovery_attempts (candidate_id)
   WHERE candidate_id IS NOT NULL;
 
+-- RLS — same app-layer workspace scoping pattern as persona_generation_jobs /
+-- persona_creation_projects (Phase 1.2 / 1.5). NexHQ does not use
+-- brain_workspaces.owner_user_id or brain_workspace_members.
 ALTER TABLE public.persona_discovery_attempts ENABLE ROW LEVEL SECURITY;
 
 DO $$
@@ -65,31 +68,13 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
     WHERE tablename = 'persona_discovery_attempts'
-      AND policyname = 'persona_discovery_attempts_workspace_isolation'
+      AND policyname = 'persona_discovery_attempts_service_all'
   ) THEN
-    CREATE POLICY persona_discovery_attempts_workspace_isolation
+    CREATE POLICY persona_discovery_attempts_service_all
       ON public.persona_discovery_attempts
       FOR ALL
-      USING (
-        workspace_id IN (
-          SELECT id FROM public.brain_workspaces
-          WHERE owner_user_id = auth.uid()
-             OR id IN (
-               SELECT workspace_id FROM public.brain_workspace_members
-               WHERE user_id = auth.uid()
-             )
-        )
-      )
-      WITH CHECK (
-        workspace_id IN (
-          SELECT id FROM public.brain_workspaces
-          WHERE owner_user_id = auth.uid()
-             OR id IN (
-               SELECT workspace_id FROM public.brain_workspace_members
-               WHERE user_id = auth.uid()
-             )
-        )
-      );
+      USING (true)
+      WITH CHECK (true);
   END IF;
 END $$;
 

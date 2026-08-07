@@ -301,12 +301,14 @@ describe("Phase 2.1B live L3 identity prompt integration", () => {
     assert.equal(FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD, 0.45);
   });
 
-  it("22. prompt order places L3 anatomy before Brand Memory", () => {
+  it("22. prompt order places L3 anatomy and camera before Brand Memory (Phase 2.2C)", () => {
     const built = buildObf({ candidateNumber: 1, generationRunId: "run-order" });
+    const real = built.prompt.indexOf("REAL HUMAN PHOTOGRAPH");
     const l3 = built.prompt.indexOf("DISCOVERY IDENTITY INSTANCE (L3)");
-    const brand = built.prompt.indexOf("PREMIUM STREETWEAR BRAND DNA");
     const camera = built.prompt.indexOf("CAMERA — Official Brand Face A1");
-    assert.ok(l3 >= 0 && brand > l3);
-    assert.ok(camera > brand);
+    const brand = built.prompt.indexOf("PREMIUM STREETWEAR BRAND DNA");
+    assert.ok(real >= 0 && real < l3);
+    assert.ok(l3 >= 0 && camera > l3);
+    assert.ok(brand > camera);
   });
 });

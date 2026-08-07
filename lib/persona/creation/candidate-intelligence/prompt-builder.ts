@@ -1,17 +1,14 @@
 /**
  * Modular prompt composition for Persona Stage-A casting.
  *
- * Official Brand Face A1 discovery priority (Phase 2.1B):
- * 1. archetype and gender constraints
+ * Official Brand Face A1 discovery priority (Phase 2.2C):
+ * 1. real human photograph
  * 2. L3 Discovery Identity Instance anatomy (only exact person source)
- * 3. age and body direction
- * 4. presence / expression family
- * 5. Brand Memory
- * 6. Product Intelligence wardrobe constraints
- * 7. reference direction
- * 8. camera and framing
- * 9. lighting and background
- * 10. negative constraints
+ * 3. natural human realism
+ * 4. casting presence
+ * 5. simple wardrobe
+ * 6. camera and lighting
+ * 7. brand quality
  *
  * Legacy generic Persona Creator may still use variation recipes.
  * OBF must never inject legacy absolute biology.
@@ -95,10 +92,13 @@ import {
   a1CastingPhotographyBlock,
   a1PresenceRulesBlock,
   genderEnforcementBlock,
+  photographicRealismBlock,
   premiumArchetypeCastingBlock,
   premiumFashionPresenceBlock,
   premiumNegativePromptAdditions,
   premiumPhotographyBlock,
+  realHumanPhotographPriorityBlock,
+  slotCastingCameraBlock,
 } from "./premium-casting-direction";
 
 export interface PromptBlocks {
@@ -181,24 +181,32 @@ function framingForAsset(
   options?: {
     discoveryBlueprint?: ArchetypeCandidateBlueprint | null;
     officialBrandFace?: boolean;
+    slot?: import("@/lib/persona/identity-blueprints").DiscoverySlot | null;
   },
 ): string {
   const fitLabel = memory.fit.labels[0] ?? "premium";
   const brandFit = `${fitLabel.toLowerCase()} ${memory.brandName} streetwear fit`;
   const discoveryBlueprint = options?.discoveryBlueprint;
   const officialBrandFace = options?.officialBrandFace === true;
+  const slotCamera =
+    officialBrandFace && options?.slot
+      ? slotCastingCameraBlock(options.slot)
+      : "";
 
   switch (assetType) {
     case "portrait_front":
       return [
         a1CastingCompositionBlock(),
+        slotCamera,
         discoveryBlueprint
           ? `Posture for this slot: ${discoveryBlueprint.fashionCasting.postureDirection}.`
           : "Relaxed shoulders, slight body rotation — never passport-square.",
         officialBrandFace
-          ? "Photorealistic premium skin texture with natural pores."
+          ? "Photorealistic skin with natural pores, micro texture, and visible natural asymmetry — never beauty-filter polish."
           : "Photorealistic premium skin texture with natural pores. Same identity across all angles.",
-      ].join("\n");
+      ]
+        .filter((line) => line.trim().length > 0)
+        .join("\n");
     case "portrait_three_quarter":
       return [
         "CAMERA — Stage A Three Quarter Portrait",
@@ -318,12 +326,18 @@ function buildNegativePrompt(
   const archetypeAvoid = archetype?.avoid.join(", ") ?? "";
 
   return [
-    "cartoon, anime, illustration, 3d render, plastic skin, waxy skin, glossy beauty retouching,",
-    "over-smoothed, porcelain skin, airbrushed texture, exaggerated facial symmetry,",
+    "AI generated, CGI, 3D, 3d render, render, digital art, digital-art appearance,",
+    "Midjourney fashion, Midjourney aesthetic, Instagram AI model, Instagram AI look,",
+    "hyper-polished fashion avatar, excessive cinematic glow, extreme bokeh,",
+    "orange teal grading, teal orange grade, cartoon, anime, illustration, fashion illustration,",
+    "plastic skin, wax skin, waxy skin, glossy beauty retouching, beauty filter, beauty filters,",
+    "over-smoothed, porcelain skin, airbrushed, airbrushed skin, perfect face, perfect symmetry,",
+    "perfect jawlines, symmetrical face, glassy eyes, artificial eyes, overly perfect hair,",
     "deformed hands, extra fingers, bad anatomy, watermark, text, logo,",
     "collage, multiple people, child, minor, underage, age-ambiguous,",
     "sexualized pose, different person between angles, identity drift, hair color change, eye color change,",
     "identical candidates, cloned facial identity, generic AI face, same face as other candidates,",
+    "duplicate person, same identity, four brothers, same lighting across candidates,",
     "aggressive expression, angry eyes, intimidating stare, deeply furrowed brows, hostile expression,",
     "criminal stereotype, gangster styling, piercing stare, confrontational gaze, hard authority,",
     "CEO portrait, corporate headshot, luxury realtor, businessman, suit, blazer, turtleneck, dress shirt,",
@@ -335,8 +349,8 @@ function buildNegativePrompt(
     "bodybuilder physique, fitness influencer, over-groomed hair, perfectly combed slick business hair,",
     "identical beige background, beauty ring light, dramatic fashion lighting, harsh intimidation shadows,",
     "street cafe campaign scene, parking garage, clothing rack set, product mockup, group shot,",
-    "broad commercial smile, flashy jewelry, visible brand logos, loud prints, luxury watch,",
-    "invented product, third-party branding, jewelry focus, wrong gender,",
+    "finished advertising campaign look, broad commercial smile, flashy jewelry, visible brand logos,",
+    "loud prints, luxury watch, invented product, third-party branding, jewelry focus, wrong gender,",
     `${forbiddenProducts},`,
     `${forbiddenFits},`,
     `${forbiddenAesthetics},`,
@@ -598,19 +612,16 @@ export function buildCandidatePrompt(params: {
   // OBF: exact skin/anatomy lives in L3 only — do not restate blueprint skin.
   const appearance = officialBrandFace
     ? [
-        "AUTHENTIC HUMAN APPEARANCE",
-        "Allow visible but subtle skin texture, natural pores, slight under-eye detail, mild asymmetry.",
-        "Realistic facial hair texture when specified — never fake beard, never beauty-filter skin.",
-        "Photoreal adult human — not porcelain beauty skin, not waxy AI clone.",
+        "AUTHENTIC HUMAN APPEARANCE — NATURAL HUMAN REALISM",
+        photographicRealismBlock(),
         "Exact facial anatomy is defined only in the Discovery Identity Instance (L3) block.",
+        "This slot must look like a different real human from every other board slot — same brand family, never brothers.",
       ].join("\n")
     : discoveryBlueprint
       ? [
           "AUTHENTIC HUMAN APPEARANCE (from candidate blueprint)",
           `Skin: ${discoveryBlueprint.skinTone}.`,
-          "Allow visible but subtle skin texture, natural pores, slight under-eye detail, mild asymmetry.",
-          "Realistic facial hair texture when specified — never fake beard, never beauty-filter skin.",
-          "Photoreal adult human — not porcelain beauty skin, not waxy AI clone.",
+          photographicRealismBlock(),
         ].join("\n")
       : useArchetypes
         ? formatArchetypeAppearancePrompt(identityDna)
@@ -658,6 +669,7 @@ export function buildCandidatePrompt(params: {
   const camera = framingForAsset(params.assetType, brandMemory, {
     discoveryBlueprint,
     officialBrandFace,
+    slot: slotBlueprint?.slot ?? null,
   });
   const lighting = buildEnvironmentLightingBlock(
     effectiveVariation,
@@ -676,6 +688,7 @@ export function buildCandidatePrompt(params: {
         `Brand role: ${slotBlueprint!.brandRole}.`,
         formatArchetypeDirectionPrompt(brandArchetype),
         "Exact facial anatomy is defined only in the Discovery Identity Instance (L3) block.",
+        "Build THIS slot's prompt independently — never homogenize face, lighting, crop, or styling with other board slots.",
       ].join("\n")
     : discoveryBlueprint
       ? [
@@ -744,31 +757,31 @@ export function buildCandidatePrompt(params: {
 
   const prompt = officialBrandFace
     ? [
-        // 1. archetype + gender constraints
-        blocks.identity,
+        // Phase 2.2C priority:
+        // 1. real human photograph
+        // 2. L3 identity
+        // 3. natural human realism
+        // 4. casting presence
+        // 5. simple wardrobe
+        // 6. camera/light
+        // 7. brand quality
+        realHumanPhotographPriorityBlock(),
         blocks.genderEnforcement,
-        blocks.premiumCasting,
-        // 2. L3 Discovery Identity Instance — only exact anatomy source
+        blocks.identity,
         blocks.biologicalIdentity,
         blocks.appearance,
-        // 3. age and body direction
         blocks.ageBody,
-        // 4. presence / expression family
         blocks.presence,
         blocks.presenceRules,
-        // 5. Brand Memory
-        blocks.brandDna,
-        // 6. Product Intelligence wardrobe + garment
-        blocks.wardrobe,
         blocks.garmentDirection,
-        // 7. reference direction (optional)
-        blocks.referenceDirection,
-        // 8. camera
+        blocks.wardrobe,
         blocks.camera,
-        // 9. lighting / background
         blocks.lighting,
+        blocks.premiumCasting,
         blocks.variation,
+        blocks.brandDna,
         blocks.editorialRules,
+        blocks.referenceDirection,
         params.premiumRetrySuffix ?? "",
       ]
         .filter((block) => block.trim().length > 0)
