@@ -1134,6 +1134,7 @@ export function CreationProjectsView({
   const canStartGeneration = useMemo(() => {
     if (!selected) return false;
     if (!paidGenerationEnabled) return false;
+    if (studio.activeConfirmationStatus !== "ready") return false;
     return canStartPaidCandidateGeneration({
       busy,
       costConfirmed: confirmCost,
@@ -1150,6 +1151,7 @@ export function CreationProjectsView({
     studio.costEstimate,
     studio.paidConfirmationProjectId,
     studio.paidConfirmationToken,
+    studio.activeConfirmationStatus,
     paidGenerationEnabled,
   ]);
 
@@ -1292,6 +1294,53 @@ export function CreationProjectsView({
             {selected.status} · Provider {selected.provider_mode} · Ist-Kosten{" "}
             {selected.actual_cost.toFixed(2)} €
           </p>
+          {studio.discoveryLifecycle ? (
+            <div
+              className={`ps-callout${
+                studio.discoveryLifecycle.state === "failed" ||
+                studio.discoveryLifecycle.notStarted
+                  ? " ps-callout-warn"
+                  : ""
+              }`}
+            >
+              <p>
+                <strong>
+                  Discovery state: {studio.discoveryLifecycle.state}
+                </strong>
+              </p>
+              <p>{studio.discoveryLifecycle.message}</p>
+              {studio.discoveryLifecycle.executedDiscoveryRunId ? (
+                <p className="ps-muted">
+                  Executed run: {studio.discoveryLifecycle.executedDiscoveryRunId}
+                  {studio.discoveryLifecycle.failedErrorCode
+                    ? ` · ${studio.discoveryLifecycle.failedErrorCode}`
+                    : ""}
+                </p>
+              ) : null}
+              {studio.discoveryLifecycle.primaryAction === "prepare_estimate" ||
+              studio.discoveryLifecycle.primaryAction === "retry_failed" ? (
+                <button
+                  type="button"
+                  disabled={!canPrepareConfirmation}
+                  onClick={() => void runEstimate(selected.id)}
+                >
+                  {studio.discoveryLifecycle.primaryAction === "retry_failed"
+                    ? "Retry — prepare estimate"
+                    : "Prepare estimate"}
+                </button>
+              ) : null}
+              {studio.discoveryLifecycle.primaryAction === "continue_confirmation" &&
+              !studio.costEstimate ? (
+                <button
+                  type="button"
+                  disabled={!canPrepareConfirmation}
+                  onClick={() => void runEstimate(selected.id)}
+                >
+                  Continue Discovery
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {countUnattestedPaidJobs(studio.generationJobs) > 0 ? (
             <div className="ps-callout ps-callout-warn">
               <p>
@@ -1413,24 +1462,40 @@ export function CreationProjectsView({
                 {studio.costEstimate.note} — Werte sind Schätzungen, keine finalen Kosten.
               </p>
               {studio.paidConfirmationToken &&
-              studio.paidConfirmationProjectId === selected.id ? (
-                <p className="ps-muted">Bestätigungstoken bereit · explizite Bestätigung erforderlich</p>
-              ) : null}
-              <label className="ps-check">
-                <input
-                  type="checkbox"
-                  checked={confirmCost}
-                  onChange={(e) => setConfirmCost(e.target.checked)}
-                />
-                Ich bestätige die geschätzten Kosten und starte die Generierung bewusst.
-              </label>
-              <button
-                type="button"
-                disabled={!canStartGeneration}
-                onClick={() => void runGenerate(selected.id)}
-              >
-                Generierung starten
-              </button>
+              studio.paidConfirmationProjectId === selected.id &&
+              studio.activeConfirmationStatus === "ready" ? (
+                <>
+                  <p className="ps-muted">Confirmation ready · explizite Bestätigung erforderlich</p>
+                  <label className="ps-check">
+                    <input
+                      type="checkbox"
+                      checked={confirmCost}
+                      onChange={(e) => setConfirmCost(e.target.checked)}
+                    />
+                    Ich bestätige die geschätzten Kosten und starte die Generierung bewusst.
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!canStartGeneration}
+                    onClick={() => void runGenerate(selected.id)}
+                  >
+                    Generierung starten
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="ps-muted">
+                    Cost estimate available — new confirmation required.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={!canPrepareConfirmation}
+                    onClick={() => void runEstimate(selected.id)}
+                  >
+                    Prepare confirmation
+                  </button>
+                </>
+              )}
               {!paidGenerationEnabled ? (
                 <p className="ps-muted">
                   Kostenpflichtige Generierung ist derzeit gesperrt.
@@ -1746,6 +1811,9 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         GENERATION_RUN_ID: studio.activeGenerationRunId,
         GENERATION_SOURCE: generationSource,
         GENERATION_STARTED_AT: activeJob?.started_at ?? null,
+        DISCOVERY_STATE: studio.discoveryLifecycle?.state ?? null,
+        EXECUTED_DISCOVERY_RUN_ID:
+          studio.discoveryLifecycle?.executedDiscoveryRunId ?? null,
         CANDIDATES_CREATED_AT: visibleCandidates.map((c) => c.created_at),
         PROVIDER_JOB_IDS: visibleCandidates.map((c) => c.provider_job_id),
       };
@@ -1759,6 +1827,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
       failureSlots,
       studio.generationJobs,
       studio.activeGenerationRunId,
+      studio.discoveryLifecycle,
       generationSource,
     ],
   );
@@ -1806,6 +1875,8 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             {`GENERATION RUN ID: ${debugPayload.GENERATION_RUN_ID ?? "—"}\n`}
             {`GENERATION SOURCE: ${debugPayload.GENERATION_SOURCE}\n`}
             {`GENERATION STARTED AT: ${debugPayload.GENERATION_STARTED_AT ?? "—"}\n`}
+            {`DISCOVERY STATE: ${debugPayload.DISCOVERY_STATE ?? "—"}\n`}
+            {`EXECUTED DISCOVERY RUN ID: ${debugPayload.EXECUTED_DISCOVERY_RUN_ID ?? "—"}\n`}
             {`CANDIDATES CREATED AT: ${(debugPayload.CANDIDATES_CREATED_AT as string[]).join(", ") || "—"}`}
           </pre>
           <button type="button" className="ps-btn-secondary" onClick={() => void copyDebug()}>
@@ -1890,34 +1961,63 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
       ) : null}
 
       {!studio.projectDetailLoading && !integrityMismatch && visibleCandidates.length === 0 && failureSlots.length === 0 ? (
-        <EmptyState
-          title={
-            studio.selectedProjectId
-              ? "No candidates exist for this project."
-              : "No active casting session."
-          }
-          body={
-            !studio.selectedProjectId
-              ? "Click New casting session, then Start New Discovery and confirm paid generation — the board only shows faces from the current generation run."
-              : candidatesInSync
-                ? "This creation project has no candidates for the current completed generation run. Start a new discovery — never reuse another project's board."
-                : "Select a creation project and wait for it to finish loading before viewing candidates."
-          }
-          actionLabel={
-            !studio.selectedProjectId
-              ? "Start casting"
-              : candidatesInSync
-                ? "Open Creation Projects"
-                : undefined
-          }
-          onAction={
-            !studio.selectedProjectId
-              ? () => studio.startNewCastingSession()
-              : candidatesInSync
-                ? () => studio.setSection("creation_projects")
-                : undefined
-          }
-        />
+        (() => {
+          const lifecycle = studio.discoveryLifecycle;
+          const notStarted =
+            lifecycle?.notStarted === true ||
+            lifecycle?.state === "draft" ||
+            lifecycle?.state === "estimate_ready" ||
+            lifecycle?.state === "pending_confirmation";
+          const failed = lifecycle?.state === "failed";
+          const generating = lifecycle?.state === "generating";
+          return (
+            <EmptyState
+              title={
+                !studio.selectedProjectId
+                  ? "No active casting session."
+                  : failed
+                    ? "Discovery generation failed."
+                    : generating
+                      ? "Discovery generation is in progress."
+                      : notStarted
+                        ? "Discovery has not started yet."
+                        : "No candidates exist for this project."
+              }
+              body={
+                !studio.selectedProjectId
+                  ? "Click New casting session, then Start New Discovery and confirm paid generation — the board only shows faces from the current generation run."
+                  : failed
+                    ? lifecycle?.failedErrorMessage ||
+                      "Prepare a new estimate and confirm again on this project. Do not create a new project."
+                    : generating
+                      ? "Wait for the generation run to finish, then refresh. Provider calls only run after confirmation."
+                      : notStarted
+                        ? "Prepare an estimate and confirm paid generation before candidates appear. The empty board does not mean casting completed."
+                        : candidatesInSync
+                          ? "This creation project has no candidates for the current completed generation run. Continue from Creation Projects — never reuse another project's board."
+                          : "Select a creation project and wait for it to finish loading before viewing candidates."
+              }
+              actionLabel={
+                !studio.selectedProjectId
+                  ? "Start casting"
+                  : failed || notStarted
+                    ? "Continue Discovery"
+                    : candidatesInSync
+                      ? "Open Creation Projects"
+                      : undefined
+              }
+              onAction={
+                !studio.selectedProjectId
+                  ? () => studio.startNewCastingSession()
+                  : failed || notStarted
+                    ? () => studio.setSection("creation_projects")
+                    : candidatesInSync
+                      ? () => studio.setSection("creation_projects")
+                      : undefined
+              }
+            />
+          );
+        })()
       ) : null}
 
       {error ? (

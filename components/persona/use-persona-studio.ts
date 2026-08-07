@@ -14,6 +14,9 @@ import {
   logCastingFlowTrace,
   resolveGenerationSource,
 } from "@/lib/persona/creation/casting-data-integrity";
+import type { DiscoveryLifecycleSnapshot } from "@/lib/persona/creation/discovery-lifecycle";
+import type { ActiveConfirmationStatus } from "@/lib/persona/creation/active-discovery-confirmation";
+import { logDiscoveryCheckpoint } from "@/lib/persona/creation/discovery-lifecycle";
 
 /**
  * Safe JSON fetch: validates status and content-type before parsing.
@@ -137,6 +140,10 @@ interface StudioState {
   projectDetailLoading: boolean;
   /** Server-resolved current completed generation run for the loaded project. */
   activeGenerationRunId: string | null;
+  /** Explicit A1 discovery lifecycle — never treat empty board as completed. */
+  discoveryLifecycle: DiscoveryLifecycleSnapshot | null;
+  /** Server-resolved usable discovery confirmation only (never consumed). */
+  activeConfirmationStatus: ActiveConfirmationStatus | null;
   presets: CreationProjectPreset[];
   providerSetupMessage: string | null;
 }
@@ -187,6 +194,8 @@ export function usePersonaStudio() {
     projectCandidateState: null,
     projectDetailLoading: false,
     activeGenerationRunId: null,
+    discoveryLifecycle: null,
+    activeConfirmationStatus: null,
     presets: [],
     providerSetupMessage: null,
   });
@@ -314,12 +323,10 @@ export function usePersonaStudio() {
       projectCandidateState: null,
       costEstimate:
         prev.selectedProjectId === projectId ? prev.costEstimate : null,
-      paidConfirmationToken:
-        prev.selectedProjectId === projectId ? prev.paidConfirmationToken : null,
-      paidConfirmationProjectId:
-        prev.selectedProjectId === projectId
-          ? prev.paidConfirmationProjectId
-          : null,
+      // Never carry a previous project's token; never hydrate from last_confirmation_token.
+      paidConfirmationToken: null,
+      paidConfirmationProjectId: null,
+      activeConfirmationStatus: null,
     }));
 
     try {
@@ -341,6 +348,9 @@ export function usePersonaStudio() {
           import("@/lib/persona/creation/novelty-replacement-result").NoveltyReplacementSlotState
         >;
         generationRunId?: string | null;
+        discoveryLifecycle?: DiscoveryLifecycleSnapshot | null;
+        activeConfirmationToken?: string | null;
+        activeConfirmationStatus?: ActiveConfirmationStatus | null;
         freshness?: {
           creationProjectId: string;
           generationRunId: string | null;
@@ -450,25 +460,33 @@ export function usePersonaStudio() {
           projectCandidateState,
           projectDetailLoading: false,
           activeGenerationRunId: data.generationRunId ?? null,
+          discoveryLifecycle: data.discoveryLifecycle ?? null,
           selectedCandidateId: null,
           candidateAssets: [],
           creationProjects: prev.creationProjects.map((p) =>
             p.id === projectId && data.project ? data.project : p,
           ),
+          // Estimate-only reload may keep costEstimate; never invent a usable token.
           costEstimate: prev.selectedProjectId === projectId ? prev.costEstimate : null,
-          paidConfirmationToken:
-            prev.paidConfirmationProjectId === projectId
-              ? prev.paidConfirmationToken
-              : (data.project?.last_confirmation_token ?? null),
-          paidConfirmationProjectId:
-            prev.paidConfirmationProjectId === projectId
-              ? projectId
-              : data.project?.last_confirmation_token
-                ? projectId
-                : null,
+          paidConfirmationToken: data.activeConfirmationToken ?? null,
+          paidConfirmationProjectId: data.activeConfirmationToken
+            ? projectId
+            : null,
+          activeConfirmationStatus: data.activeConfirmationStatus ?? "missing",
           section: opts?.openCandidates ? "candidates" : prev.section,
         };
       });
+      logDiscoveryCheckpoint("project_reloaded", {
+        creationProjectId: projectId,
+        discoveryState: data.discoveryLifecycle?.state ?? null,
+        generationRunId: data.generationRunId ?? null,
+      });
+      if (opts?.openCandidates) {
+        logDiscoveryCheckpoint("board_opened", {
+          creationProjectId: projectId,
+          discoveryState: data.discoveryLifecycle?.state ?? null,
+        });
+      }
       if (data.project?.last_estimate_at) {
         void estimateProjectCost(projectId).catch(() => undefined);
       }
@@ -538,6 +556,8 @@ export function usePersonaStudio() {
       projectDetailLoading: true,
       projectCandidateState: null,
       activeGenerationRunId: null,
+      discoveryLifecycle: null,
+      activeConfirmationStatus: null,
     }));
     if (DEBUG_MODE) {
       console.info("[persona-casting] bindDiscoveryProject", {
@@ -562,6 +582,8 @@ export function usePersonaStudio() {
       projectDetailLoading: false,
       projectCandidateState: null,
       activeGenerationRunId: null,
+      discoveryLifecycle: null,
+      activeConfirmationStatus: null,
       section: "creator",
     }));
     if (DEBUG_MODE) {
@@ -648,27 +670,55 @@ export function usePersonaStudio() {
   );
 
   const preparePaidConfirmation = useCallback(async (projectId: string) => {
+    logDiscoveryCheckpoint("estimate_prepare_started", {
+      creationProjectId: projectId,
+    });
     const { res, data } = await fetchJson<{
       error?: string;
+      code?: string;
+      details?: { safeErrorCode?: string };
       estimate?: CandidateGenerationCostEstimate;
       confirmation?: { confirmation_token: string };
-      job?: { confirmation_token?: string | null };
+      job?: { confirmation_token?: string | null; id?: string };
+      activeConfirmationToken?: string | null;
+      activeConfirmationStatus?: ActiveConfirmationStatus | null;
       costLabel?: string;
     }>(`/api/persona/creation-projects/${projectId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "prepare_confirmation" }),
     });
-    if (!res.ok) throw new Error(data.error ?? "Bestätigung vorbereiten fehlgeschlagen");
+    if (!res.ok) {
+      const safeCode =
+        data.details?.safeErrorCode ??
+        (data.code ? "discovery_estimate_failed" : "discovery_estimate_failed");
+      throw new Error(
+        data.error
+          ? `${data.error} (${safeCode})`
+          : `Bestätigung vorbereiten fehlgeschlagen (${safeCode})`,
+      );
+    }
     const token =
-      data.confirmation?.confirmation_token ?? data.job?.confirmation_token ?? null;
+      data.activeConfirmationToken ??
+      data.confirmation?.confirmation_token ??
+      data.job?.confirmation_token ??
+      null;
     setState((prev) => ({
       ...prev,
       selectedProjectId: projectId,
       costEstimate: data.estimate ?? null,
       paidConfirmationToken: token,
       paidConfirmationProjectId: token ? projectId : null,
+      activeConfirmationStatus: data.activeConfirmationStatus ?? (token ? "ready" : "missing"),
     }));
+    logDiscoveryCheckpoint("estimate_prepare_completed", {
+      creationProjectId: projectId,
+      jobId: data.job?.id ?? null,
+      hasToken: Boolean(token),
+    });
+    logDiscoveryCheckpoint("confirmation_ui_opened", {
+      creationProjectId: projectId,
+    });
     return { ...data, confirmationToken: token };
   }, []);
 
@@ -791,6 +841,9 @@ export function usePersonaStudio() {
         attestation?: string;
       },
     ) => {
+      logDiscoveryCheckpoint("confirmation_submitted", {
+        creationProjectId: projectId,
+      });
       const res = await fetch(`/api/persona/creation-projects/${projectId}`, {
         method: "PATCH",
         cache: "no-store",
@@ -803,9 +856,35 @@ export function usePersonaStudio() {
       });
       const data = (await res.json()) as {
         error?: string;
+        code?: string;
+        details?: { safeErrorCode?: string };
         candidates?: PersonaCandidate[];
+        generationRunId?: string | null;
+        project?: PersonaCreationProject;
+        durableJob?: { id?: string; status?: string } | null;
       };
-      if (!res.ok) throw new Error(data.error ?? "Generierung fehlgeschlagen");
+      if (!res.ok) {
+        const safeCode =
+          data.details?.safeErrorCode ?? "discovery_generation_start_failed";
+        throw new Error(
+          data.error
+            ? `${data.error} (${safeCode})`
+            : `Generierung fehlgeschlagen (${safeCode})`,
+        );
+      }
+      logDiscoveryCheckpoint("confirmation_validated", {
+        creationProjectId: projectId,
+        generationRunId: data.generationRunId ?? data.durableJob?.id ?? null,
+      });
+      logDiscoveryCheckpoint("generation_job_created", {
+        creationProjectId: projectId,
+        generationRunId: data.generationRunId ?? data.durableJob?.id ?? null,
+      });
+      logDiscoveryCheckpoint("generation_started", {
+        creationProjectId: projectId,
+        generationRunId: data.generationRunId ?? data.durableJob?.id ?? null,
+        projectStatus: data.project?.status ?? null,
+      });
       if (DEBUG_MODE) {
         logCastingFlowTrace("client.generation_completion", {
           creationProjectId: projectId,
@@ -818,12 +897,19 @@ export function usePersonaStudio() {
         costEstimate: null,
         paidConfirmationToken: null,
         paidConfirmationProjectId: null,
+        activeConfirmationStatus: null,
         projectCandidateState: null,
         candidates: [],
         candidatePreviews: {},
       }));
       await loadProject(projectId);
       await refreshCreation();
+      return {
+        project: data.project ?? null,
+        generationRunId: data.generationRunId ?? data.durableJob?.id ?? null,
+        candidates: data.candidates ?? [],
+        durableJobStatus: data.durableJob?.status ?? null,
+      };
     },
     [loadProject, refreshCreation],
   );

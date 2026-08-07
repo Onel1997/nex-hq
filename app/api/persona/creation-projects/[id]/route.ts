@@ -106,6 +106,9 @@ export async function GET(_request: Request, ctx: Ctx) {
       incident,
       candidatePreviews: board.candidatePreviews,
       generationRunId: board.generationRunId,
+      discoveryLifecycle: board.discoveryLifecycle,
+      activeConfirmationToken: board.activeConfirmationToken,
+      activeConfirmationStatus: board.activeConfirmationStatus,
       freshness: board.freshness,
     });
   } catch (error) {
@@ -147,11 +150,23 @@ export async function PATCH(request: Request, ctx: Ctx) {
       const candidateIds = Array.isArray(body.candidateIds)
         ? body.candidateIds.filter((id): id is string => typeof id === "string")
         : undefined;
-      const prepared = await preparePaidGenerationConfirmation(gate.scope, id, {
-        castingPhase,
-        candidateIds,
-      });
-      return jsonOk({ success: true, ...prepared });
+      try {
+        const prepared = await preparePaidGenerationConfirmation(gate.scope, id, {
+          castingPhase,
+          candidateIds,
+        });
+        return jsonOk({ success: true, ...prepared });
+      } catch (error) {
+        if (error instanceof PersonaDomainError) {
+          return jsonError(
+            new PersonaDomainError(error.message, error.code, {
+              ...(error.details ?? {}),
+              safeErrorCode: "discovery_estimate_failed",
+            }),
+          );
+        }
+        throw error;
+      }
     }
     if (body.action === "prepare_manual") {
       const candidates = await ensureManualCandidateSlots(gate.scope, id);
@@ -159,22 +174,48 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
     if (body.action === "generate") {
       assertPaidGenerationHttpRequestAllowed(request);
-      const result = await confirmAndStartCandidateGeneration(gate.scope, id, {
-        costConfirmed: Boolean(body.costConfirmed),
-        retryConfirmed: Boolean(body.retryConfirmed),
-        confirmationToken:
-          typeof body.confirmationToken === "string"
-            ? body.confirmationToken
-            : undefined,
-        userConfirmedAt:
-          typeof body.userConfirmedAt === "string"
-            ? body.userConfirmedAt
-            : undefined,
-        attestation:
-          typeof body.attestation === "string" ? body.attestation : undefined,
-        httpRequest: request,
-      });
-      return jsonOk({ success: true, ...result });
+      try {
+        const result = await confirmAndStartCandidateGeneration(gate.scope, id, {
+          costConfirmed: Boolean(body.costConfirmed),
+          retryConfirmed: Boolean(body.retryConfirmed),
+          confirmationToken:
+            typeof body.confirmationToken === "string"
+              ? body.confirmationToken
+              : undefined,
+          userConfirmedAt:
+            typeof body.userConfirmedAt === "string"
+              ? body.userConfirmedAt
+              : undefined,
+          attestation:
+            typeof body.attestation === "string" ? body.attestation : undefined,
+          httpRequest: request,
+        });
+        return jsonOk({ success: true, ...result });
+      } catch (error) {
+        if (error instanceof PersonaDomainError) {
+          const details = (error.details ?? {}) as Record<string, unknown>;
+          const safeErrorCode =
+            details.reusedConfirmation ||
+            details.requiresConfirmationToken ||
+            details.requiresCostConfirmation ||
+            details.requiresUserConfirmation
+              ? "discovery_confirmation_failed"
+              : details.durableJobId == null && error.code === "WORKFLOW"
+                ? "generation_job_creation_failed"
+                : "discovery_generation_start_failed";
+          const message =
+            details.reusedConfirmation
+              ? "This confirmation has already been used. Prepare a new confirmation before starting generation."
+              : error.message;
+          return jsonError(
+            new PersonaDomainError(message, error.code, {
+              ...details,
+              safeErrorCode,
+            }),
+          );
+        }
+        throw error;
+      }
     }
     if (body.action === "prepare_novelty_replacement") {
       const candidateId =

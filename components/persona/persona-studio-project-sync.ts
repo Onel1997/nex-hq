@@ -7,6 +7,7 @@ import type {
 } from "@/lib/persona/domain/creation-types";
 import type { IncidentProjectSummary } from "@/lib/persona/creation/creation-service";
 import type { CandidateGenerationCostEstimate } from "@/lib/persona/domain/creation-types";
+import type { DiscoveryLifecycleSnapshot } from "@/lib/persona/creation/discovery-lifecycle";
 import {
   projectScopedPreviewKey,
   validateProjectCandidateBoardState,
@@ -250,5 +251,7 @@ export function emptyProjectDetailState() {
     projectCandidateState: null as ProjectCandidateState | null,
     projectDetailLoading: true,
     activeGenerationRunId: null as string | null,
+    discoveryLifecycle: null as DiscoveryLifecycleSnapshot | null,
+    activeConfirmationStatus: null as import("@/lib/persona/creation/active-discovery-confirmation").ActiveConfirmationStatus | null,
   };
 }

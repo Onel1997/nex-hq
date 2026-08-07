@@ -107,6 +107,11 @@ import {
   validateA1DiscoveryCompletion,
   type GenerationSource,
 } from "./casting-data-integrity";
+import { resolveDiscoveryProjectState } from "./discovery-lifecycle";
+import {
+  resolveActiveDiscoveryConfirmation,
+  type ActiveDiscoveryConfirmation,
+} from "./active-discovery-confirmation";
 import {
   buildIdentityFingerprint,
   buildVisualFingerprint,
@@ -494,6 +499,51 @@ export async function preparePaidGenerationConfirmation(
         ? "retry"
         : "initial";
 
+  // One active pending initial-discovery confirmation per project — cancel orphans.
+  if (castingPhase === "a1_discovery") {
+    const existingJobs = await jobRepo().listJobsForProject(scope, projectId);
+    const existingConfirmations = await jobRepo().listConfirmationsForProject(
+      scope,
+      projectId,
+    );
+    for (const existing of existingJobs) {
+      if (existing.status !== "pending_confirmation") continue;
+      const payload = existing.confirmation_payload ?? {};
+      if (
+        payload.noveltyReplacement === true ||
+        payload.intent === "novelty_replacement" ||
+        payload.castingPhase === "a2_validation"
+      ) {
+        continue;
+      }
+      await jobRepo().updateJob(scope, existing.id, {
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        error_code: "SUPERSEDED_CONFIRMATION",
+        error_message: "Superseded by a newer discovery estimate confirmation.",
+      });
+      const linked = existingConfirmations.find(
+        (c) =>
+          c.generation_job_id === existing.id ||
+          c.confirmation_token === existing.confirmation_token,
+      );
+      if (linked && !linked.consumed_at) {
+        await jobRepo().updateConfirmationByToken(
+          scope,
+          linked.confirmation_token,
+          {
+            payload: {
+              ...linked.payload,
+              cancelled: true,
+              superseded: true,
+              cancelledAt: new Date().toISOString(),
+            },
+          },
+        );
+      }
+    }
+  }
+
   const job = await jobRepo().createJob(scope, {
     creation_project_id: projectId,
     stage: project.generation_stage,
@@ -517,6 +567,8 @@ export async function preparePaidGenerationConfirmation(
       provider: estimate.provider,
       intent: confirmationIntent,
       castingPhase,
+      jobType:
+        castingPhase === "a1_discovery" ? "initial_discovery" : "a2_validation",
       selectedCandidateIds: selectedIds ?? [],
       timestamp: new Date().toISOString(),
     },
@@ -549,6 +601,13 @@ export async function preparePaidGenerationConfirmation(
     last_estimate_hash: estimateHash,
   });
 
+  const activeConfirmation: ActiveDiscoveryConfirmation = {
+    activeConfirmationToken: token,
+    activeConfirmationStatus: "ready",
+    confirmationId: confirmation.id,
+    generationJobId: job.id,
+  };
+
   return {
     estimate,
     job,
@@ -564,6 +623,7 @@ export async function preparePaidGenerationConfirmation(
     paidExecutionLockedMessage: isPaidProviderMode(project.provider_mode) && !isPaidGenerationEnabled()
       ? "Kostenpflichtige Generierung ist derzeit gesperrt."
       : null,
+    ...activeConfirmation,
   };
 }
 
@@ -800,6 +860,11 @@ export async function confirmAndStartCandidateGeneration(
     options.confirmationToken,
   );
   durableJobId = consumedConfirmation.generation_job_id;
+
+  // Consumed tokens must never remain as a usable project pointer.
+  await creationRepo().updateProject(scope, projectId, {
+    last_confirmation_token: null,
+  });
 
   // retryConfirmed is UI-only acknowledgment — authorization is the confirmation record.
   void options.retryConfirmed;
@@ -1402,6 +1467,8 @@ export async function confirmAndStartCandidateGeneration(
     await creationRepo().updateProject(scope, projectId, {
       status: job.results.length ? "review" : "failed",
       actual_cost: Number((project.actual_cost + job.actualCostEur).toFixed(4)),
+      // Keep pointer cleared after consume — never restore a consumed token.
+      last_confirmation_token: null,
     });
 
     await logPersonaAuditEvent({
@@ -1433,7 +1500,10 @@ export async function confirmAndStartCandidateGeneration(
       costLabel: "estimated" as const,
     };
   } catch (error) {
-    await creationRepo().updateProject(scope, projectId, { status: "failed" });
+    await creationRepo().updateProject(scope, projectId, {
+      status: "failed",
+      last_confirmation_token: null,
+    });
     await jobRepo().updateJob(scope, durableJob.id, {
       status: "failed",
       error_code: "GENERATION_FAILED",
@@ -3573,6 +3643,36 @@ export async function listCandidates(scope: WorkspaceScope, projectId: string) {
   });
 }
 
+export async function resolveActiveDiscoveryConfirmationForProject(
+  scope: WorkspaceScope,
+  projectId: string,
+): Promise<ActiveDiscoveryConfirmation> {
+  const project = await requireProject(scope, projectId);
+  const jobs = await jobRepo().listJobsForProject(scope, projectId);
+  const confirmations = await jobRepo().listConfirmationsForProject(
+    scope,
+    projectId,
+  );
+  const active = resolveActiveDiscoveryConfirmation({
+    projectId,
+    confirmations,
+    jobs,
+    lastConfirmationToken: project.last_confirmation_token,
+  });
+
+  // Heal stale project pointer: never leave a non-active token on the project row.
+  if (
+    project.last_confirmation_token &&
+    project.last_confirmation_token !== active.activeConfirmationToken
+  ) {
+    await creationRepo().updateProject(scope, projectId, {
+      last_confirmation_token: active.activeConfirmationToken,
+    });
+  }
+
+  return active;
+}
+
 /**
  * Candidate Board payload — fail-closed.
  * Only candidates belonging to the current completed generation run are eligible.
@@ -3587,6 +3687,9 @@ export async function listCandidateBoardPayload(
   noveltyFailureSlots: NoveltyFailureSlotDto[];
   candidatePreviews: Record<string, string | null>;
   generationRunId: string | null;
+  discoveryLifecycle: ReturnType<typeof resolveDiscoveryProjectState>;
+  activeConfirmationToken: string | null;
+  activeConfirmationStatus: ActiveDiscoveryConfirmation["activeConfirmationStatus"];
   activeNoveltyReplacements: ReturnType<typeof readActiveNoveltyReplacements>;
   slotReplacementStates: ReturnType<typeof resolveSlotReplacementStates>;
   freshness: {
@@ -3598,8 +3701,13 @@ export async function listCandidateBoardPayload(
   };
 }> {
   const reconciled = await reconcileStaleNoveltyReplacementJobs(scope, projectId);
+  const activeConfirmation =
+    await resolveActiveDiscoveryConfirmationForProject(scope, projectId);
+  // Re-load after possible pointer heal so lifecycle sees cleared token.
+  const project = await requireProject(scope, projectId);
   const jobs = await jobRepo().listJobsForProject(scope, projectId);
   const generationRunId = resolveCurrentGenerationRunId(jobs);
+  const discoveryLifecycle = resolveDiscoveryProjectState(project, jobs);
   const all = await listCandidates(scope, projectId);
   const runScoped = generationRunId
     ? filterCandidatesForGenerationRun(all, generationRunId)
@@ -3630,6 +3738,9 @@ export async function listCandidateBoardPayload(
     noveltyFailureSlots: failureSlots,
     candidatePreviews,
     generationRunId,
+    discoveryLifecycle,
+    activeConfirmationToken: activeConfirmation.activeConfirmationToken,
+    activeConfirmationStatus: activeConfirmation.activeConfirmationStatus,
     activeNoveltyReplacements: reconciled.activeNoveltyReplacements,
     slotReplacementStates: reconciled.slotReplacementStates,
     freshness,

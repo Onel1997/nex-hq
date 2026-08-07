@@ -23,6 +23,9 @@ import {
   type BrandFaceDiscoveryBrief,
 } from "@/lib/brand-face-selection";
 import { logCastingFlowTrace } from "@/lib/persona/creation/casting-data-integrity";
+import {
+  logDiscoveryCheckpoint,
+} from "@/lib/persona/creation/discovery-lifecycle";
 import { DEBUG_MODE } from "@/components/persona/persona-studio-project-sync";
 import { loadProductCatalog } from "@/lib/product-intelligence";
 import type { PersonaStudioController } from "@/components/persona/use-persona-studio";
@@ -257,6 +260,7 @@ export function OfficialBrandFaceCastingView({
 
   const canGenerate = useMemo(() => {
     if (!activeProjectId) return false;
+    if (studio.activeConfirmationStatus !== "ready") return false;
     return canStartPaidCandidateGeneration({
       busy,
       costConfirmed: confirmCost,
@@ -273,6 +277,7 @@ export function OfficialBrandFaceCastingView({
     studio.costEstimate,
     studio.paidConfirmationProjectId,
     studio.paidConfirmationToken,
+    studio.activeConfirmationStatus,
   ]);
 
   const startDiscovery = async (archetype: BrandArchetype) => {
@@ -283,6 +288,10 @@ export function OfficialBrandFaceCastingView({
     setError(null);
     setConfirmCost(false);
     try {
+      logDiscoveryCheckpoint("new_discovery_clicked", {
+        archetypeId: archetype.id,
+        workspaceId: archetype.workspaceId,
+      });
       const dna = getIdentityDnaForArchetype(catalog, archetype);
       let selection = createBrandFaceSelectionProject({
         workspaceId: archetype.workspaceId,
@@ -306,6 +315,10 @@ export function OfficialBrandFaceCastingView({
       if (!project) throw new Error("Creation project could not be created");
 
       const sessionProjectId = resolveDiscoverySessionProjectId(project.id);
+      logDiscoveryCheckpoint("project_created", {
+        creationProjectId: sessionProjectId,
+        archetypeId: archetype.id,
+      });
 
       if (DEBUG_MODE) {
         logCastingFlowTrace("discovery.project_created", {
@@ -341,6 +354,8 @@ export function OfficialBrandFaceCastingView({
       setBrief(discoveryBrief);
       setPhase("confirm_a1");
       studio.bindDiscoveryProject(sessionProjectId);
+      // Keep confirmation panel visible — do not jump to Candidate Board.
+      studio.setSection("creator");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Discovery konnte nicht gestartet werden");
     } finally {
@@ -373,7 +388,7 @@ export function OfficialBrandFaceCastingView({
         saveSelectionProject(next);
       }
 
-      await studio.generateCandidates(activeProjectId, {
+      const result = await studio.generateCandidates(activeProjectId, {
         costConfirmed: true,
         confirmationToken: token,
         userConfirmedAt: new Date().toISOString(),
@@ -389,7 +404,25 @@ export function OfficialBrandFaceCastingView({
         });
       }
 
-      await studio.openCandidatesForProject(activeProjectId);
+      const projectFailed =
+        result.project?.status === "failed" ||
+        result.durableJobStatus === "failed";
+
+      if (projectFailed) {
+        setError(
+          "Discovery generation failed. Open Creation Projects to prepare a new estimate and retry — keep this project.",
+        );
+        studio.setSection("creation_projects");
+        await studio.loadProject(activeProjectId);
+        return;
+      }
+
+      if (result.generationRunId || (result.candidates?.length ?? 0) > 0) {
+        await studio.openCandidatesForProject(activeProjectId);
+      } else {
+        studio.setSection("creation_projects");
+        await studio.loadProject(activeProjectId);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generierung fehlgeschlagen");
     } finally {
@@ -484,7 +517,9 @@ export function OfficialBrandFaceCastingView({
             ))}
           </ul>
 
-          {studio.costEstimate ? (
+          {studio.costEstimate &&
+          studio.paidConfirmationToken &&
+          studio.activeConfirmationStatus === "ready" ? (
             <label className="ps-obf-cost-confirm">
               <input
                 type="checkbox"
@@ -497,17 +532,24 @@ export function OfficialBrandFaceCastingView({
               </span>
             </label>
           ) : (
-            <button
-              type="button"
-              disabled={busy || !activeProjectId}
-              onClick={() =>
-                activeProjectId
-                  ? void studio.preparePaidConfirmation(activeProjectId)
-                  : undefined
-              }
-            >
-              Prepare cost confirmation
-            </button>
+            <>
+              {studio.costEstimate ? (
+                <p className="ps-muted">
+                  Cost estimate available — new confirmation required.
+                </p>
+              ) : null}
+              <button
+                type="button"
+                disabled={busy || !activeProjectId}
+                onClick={() =>
+                  activeProjectId
+                    ? void studio.preparePaidConfirmation(activeProjectId)
+                    : undefined
+                }
+              >
+                Prepare confirmation
+              </button>
+            </>
           )}
 
           <div className="ps-obf-cast-actions">

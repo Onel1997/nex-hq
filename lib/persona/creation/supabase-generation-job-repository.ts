@@ -205,6 +205,7 @@ export class SupabaseGenerationJobRepository implements PersonaGenerationJobRepo
       throw new PersonaDomainError(
         "Bestätigung wurde bereits verwendet — neue Kostenschätzung erforderlich.",
         "WORKFLOW",
+        { reusedConfirmation: true },
       );
     }
     const db = createAdminClient();

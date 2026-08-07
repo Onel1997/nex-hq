@@ -148,6 +148,7 @@ export class MemoryGenerationJobRepository implements PersonaGenerationJobReposi
       throw new PersonaDomainError(
         "Bestätigung wurde bereits verwendet — neue Kostenschätzung erforderlich.",
         "WORKFLOW",
+        { reusedConfirmation: true },
       );
     }
     const updated: PersonaGenerationConfirmation = {

@@ -204,6 +204,31 @@ export type {
   PaidGenerationSafetyContext,
   PreparePaidConfirmationGateReasons,
 } from "./creation/creation-workflow";
+export {
+  DISCOVERY_SAFE_ERROR_CODES,
+  isInitialDiscoveryJob,
+  listInitialDiscoveryJobs,
+  logDiscoveryCheckpoint,
+  resolveActiveInitialDiscoveryJob,
+  resolveBoardGenerationRunId,
+  resolveDiscoveryProjectState,
+  resolveExecutedDiscoveryRunId,
+  shouldOpenCandidateBoardForDiscovery,
+} from "./creation/discovery-lifecycle";
+export type {
+  DiscoveryLifecycleSnapshot,
+  DiscoveryProjectState,
+  DiscoverySafeErrorCode,
+  DiscoveryWorkflowCheckpoint,
+} from "./creation/discovery-lifecycle";
+export {
+  canSubmitDiscoveryConfirmation,
+  resolveActiveDiscoveryConfirmation,
+} from "./creation/active-discovery-confirmation";
+export type {
+  ActiveConfirmationStatus,
+  ActiveDiscoveryConfirmation,
+} from "./creation/active-discovery-confirmation";
 export { PERSONA_CREATION_PRESETS, getCreationPreset } from "./creation/presets";
 export {
   getPersonaCandidateGenerator,
