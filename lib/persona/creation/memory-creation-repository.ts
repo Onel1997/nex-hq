@@ -261,6 +261,16 @@ export class MemoryCreationRepository implements PersonaCreationRepository {
     return row ? structuredClone(row) : null;
   }
 
+  async findCandidateByConvertedPersonaId(scope: WorkspaceScope, personaId: string) {
+    const row =
+      this.candidates.find(
+        (c) =>
+          c.workspace_id === scope.workspaceId &&
+          c.converted_persona_id === personaId,
+      ) ?? null;
+    return row ? structuredClone(row) : null;
+  }
+
   async listCandidateAssets(scope: WorkspaceScope, candidateId: string) {
     await this.getCandidate(scope, candidateId);
     return structuredClone(

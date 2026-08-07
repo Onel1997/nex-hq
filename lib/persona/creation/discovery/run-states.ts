@@ -39,7 +39,13 @@ export function resolveDiscoveryRunState(input: {
   slotsTarget?: number;
 }): DiscoveryRunState {
   const target = input.slotsTarget ?? 4;
-  if (input.technicalFailure) return "failed";
+  // Phase 2.2E.2 — a technical failure must not erase already-allowed slots.
+  // With 1–3 allowed → ready_partial; with 0 allowed → failed.
+  if (input.technicalFailure) {
+    if (input.allowedCount >= target) return "ready";
+    if (input.allowedCount >= 1) return "ready_partial";
+    return "failed";
+  }
   if (input.allowedCount >= target) return "ready";
   if (input.budgetExhausted && input.allowedCount >= 1) return "ready_partial";
   if (input.budgetExhausted && input.allowedCount === 0) return "failed";

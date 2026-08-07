@@ -430,6 +430,17 @@ export class SupabaseCreationRepository implements PersonaCreationRepository {
     return data ? mapCandidate(data as Record<string, unknown>) : null;
   }
 
+  async findCandidateByConvertedPersonaId(scope: WorkspaceScope, personaId: string) {
+    const { data, error } = await this.db
+      .from("persona_candidates")
+      .select("*")
+      .eq("workspace_id", scope.workspaceId)
+      .eq("converted_persona_id", personaId)
+      .maybeSingle();
+    throwDb(error, `Converted candidate laden fehlgeschlagen: ${error?.message}`);
+    return data ? mapCandidate(data as Record<string, unknown>) : null;
+  }
+
   async listCandidateAssets(scope: WorkspaceScope, candidateId: string) {
     await this.getCandidate(scope, candidateId);
     const { data, error } = await this.db

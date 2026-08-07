@@ -21,6 +21,11 @@ export interface LiveEvaluatorConfig {
   archetypeId: string;
   /** Map<assetId, signedUrl> for the candidate image being evaluated. */
   imageSourceMap?: Map<string, string>;
+  /**
+   * Phase 2.2G — current discovery project id so same-run allowed faces
+   * remain in the biological comparison pool.
+   */
+  currentCreationProjectId?: string;
 }
 
 /**
@@ -52,6 +57,7 @@ export async function buildLiveFaceEvaluator(
     priorEmbeddings = await embeddingRepo.loadEmbeddingsForWorkspace(
       config.workspaceId,
       config.archetypeId,
+      { currentCreationProjectId: config.currentCreationProjectId },
     );
   } catch (err) {
     throw new Error(

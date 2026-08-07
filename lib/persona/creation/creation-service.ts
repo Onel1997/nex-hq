@@ -121,6 +121,7 @@ import {
   checkAndRegisterCandidate,
   markCandidateShown,
   loadDiscoveryHistory,
+  promoteToHistoricallyProtectedIdentity,
 } from "../face-novelty-memory";
 import {
   buildLiveFaceEvaluator,
@@ -192,6 +193,38 @@ function creationRepo() {
 
 function personaRepo() {
   return getPersonaRepository();
+}
+
+/**
+ * Phase 2.2G — promote novelty historical protection on Supabase only.
+ * Memory creation tests have no shared novelty rows / Supabase env.
+ */
+async function promoteHistoricalProtectionIfPersisted(input: {
+  workspaceId: string;
+  candidateId: string;
+  status: "selected_brand_face" | "approved_persona" | "identity_locked" | "brand_cast_approved";
+  reason: "candidate_selected" | "persona_converted" | "identity_locked" | "brand_cast_approved";
+  source: string;
+  actorId?: string | null;
+}): Promise<void> {
+  if (creationRepo().kind !== "supabase") return;
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) return;
+  try {
+    await promoteToHistoricallyProtectedIdentity(new SupabaseNoveltyRepository(), {
+      workspaceId: input.workspaceId,
+      candidateId: input.candidateId,
+      status: input.status,
+      reason: input.reason,
+      source: input.source,
+      actorId: input.actorId,
+    });
+  } catch (err) {
+    console.error("[Phase 2.2G] historical protection promote failed", {
+      source: input.source,
+      candidateId: input.candidateId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 async function assertCandidateIsBrandCastAttested(
@@ -1286,6 +1319,7 @@ export async function confirmAndStartCandidateGeneration(
         liveEvaluator = await buildLiveFaceEvaluator({
           workspaceId: scope.workspaceId,
           archetypeId: archetypeIdForNovelty,
+          currentCreationProjectId: projectId,
         });
         assertLiveFaceEvaluatorNotNull(
           liveEvaluator,
@@ -1296,6 +1330,7 @@ export async function confirmAndStartCandidateGeneration(
           await embCountRepo.loadEmbeddingsForWorkspace(
             scope.workspaceId,
             archetypeIdForNovelty,
+            { currentCreationProjectId: projectId },
           )
         ).length;
       } catch (initErr) {
@@ -1487,6 +1522,7 @@ export async function confirmAndStartCandidateGeneration(
               workspaceId: scope.workspaceId,
               archetypeId: archetypeIdForNovelty,
               imageSourceMap: imgMap,
+              currentCreationProjectId: projectId,
             });
           }
         } catch {
@@ -1580,6 +1616,7 @@ export async function confirmAndStartCandidateGeneration(
             await embeddingRepo.loadEmbeddingsForWorkspace(
               scope.workspaceId,
               archetypeIdForNovelty,
+              { currentCreationProjectId: projectId },
             )
           ).length;
         }
@@ -3282,6 +3319,7 @@ export async function confirmNoveltyReplacementGeneration(
               workspaceId: scope.workspaceId,
               archetypeId,
               imageSourceMap: imgMap,
+              currentCreationProjectId: projectId,
             });
             assertLiveFaceEvaluatorNotNull(
               liveEvaluator,
@@ -3291,6 +3329,7 @@ export async function confirmNoveltyReplacementGeneration(
               await embeddingRepo.loadEmbeddingsForWorkspace(
                 scope.workspaceId,
                 archetypeId,
+                { currentCreationProjectId: projectId },
               )
             ).length;
 
@@ -4094,6 +4133,15 @@ export async function updateCandidateReview(
       status: "selected",
       generation_stage: "identity_lock",
     });
+    // Phase 2.2G — selection promotes embedding into historical protection pool.
+    await promoteHistoricalProtectionIfPersisted({
+      workspaceId: scope.workspaceId,
+      candidateId,
+      status: "selected_brand_face",
+      reason: "candidate_selected",
+      source: "creation.update_candidate.selected",
+      actorId: scope.actorId,
+    });
     await logPersonaAuditEvent({
       workspaceId: scope.workspaceId,
       eventType: "candidate.selected",
@@ -4469,6 +4517,15 @@ export async function convertCandidateToPersona(
     converted_persona_id: persona.id,
   });
 
+  await promoteHistoricalProtectionIfPersisted({
+    workspaceId: scope.workspaceId,
+    candidateId,
+    status: "approved_persona",
+    reason: "persona_converted",
+    source: "creation.convert_candidate_to_persona",
+    actorId: scope.actorId,
+  });
+
   await logPersonaAuditEvent({
     workspaceId: scope.workspaceId,
     eventType: "candidate.converted_to_persona",
@@ -4564,6 +4621,25 @@ export async function lockPersonaIdentity(
     image_identity_ready: latest.checklist.suitable_for_image_generation,
     video_identity_ready: latest.checklist.suitable_for_video_generation,
   });
+
+  try {
+    const sourceCandidate = await creationRepo().findCandidateByConvertedPersonaId(
+      scope,
+      personaId,
+    );
+    if (sourceCandidate) {
+      await promoteHistoricalProtectionIfPersisted({
+        workspaceId: scope.workspaceId,
+        candidateId: sourceCandidate.id,
+        status: "identity_locked",
+        reason: "identity_locked",
+        source: "creation.lock_persona_identity",
+        actorId: scope.actorId,
+      });
+    }
+  } catch (err) {
+    console.error("[Phase 2.2G] historical protection promote on identity lock failed", err);
+  }
 
   await logPersonaAuditEvent({
     workspaceId: scope.workspaceId,

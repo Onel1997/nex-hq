@@ -11,6 +11,8 @@
  * return `not_available` until a real provider is connected.
  */
 
+import type { HistoricalFaceProtectionStatus } from "./historical-protection";
+
 export const FACE_NOVELTY_STATES = [
   "generated",
   "shown",
@@ -55,6 +57,14 @@ export interface FaceNoveltyRecord {
   approvedAt?: string;
   shortlistedAt?: string;
   rejectedAt?: string;
+  /**
+   * Phase 2.2G — durable historical biological protection.
+   * unprotected = casting data only; protected statuses enter cross-project pool.
+   */
+  historicalProtectionStatus?: HistoricalFaceProtectionStatus;
+  historicalProtectionPromotedAt?: string;
+  historicalProtectionReason?: string;
+  historicalProtectionSource?: string;
 }
 
 /** Lightweight reference passed to similarity evaluators. */

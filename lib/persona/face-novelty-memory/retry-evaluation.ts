@@ -221,6 +221,7 @@ export async function retryFaceNoveltyEvaluation(
           workspaceId: args.workspaceId,
           archetypeId: args.archetypeId,
           imageSourceMap: args.imageSourceMap,
+          currentCreationProjectId: candidate.creation_project_id,
         }));
 
     const evaluator = await buildEvaluator({
@@ -243,7 +244,11 @@ export async function retryFaceNoveltyEvaluation(
     );
 
     const priorEmbeddings = (
-      await embeddingRepo.loadEmbeddingsForWorkspace(scope.workspaceId, archetypeId)
+      await embeddingRepo.loadEmbeddingsForWorkspace(
+        scope.workspaceId,
+        archetypeId,
+        { currentCreationProjectId: candidate.creation_project_id },
+      )
     ).filter((e) => e.candidateId !== candidate.id);
 
     const evaluation = await evaluateDiscoveryNovelty({

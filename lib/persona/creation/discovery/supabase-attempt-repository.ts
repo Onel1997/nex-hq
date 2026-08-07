@@ -57,6 +57,15 @@ function mapAttempt(row: Record<string, unknown>): DiscoveryAttemptRecord {
     noveltyDecision: nullableStr(row.novelty_decision),
     highestSimilarity: num(row.highest_similarity),
     matchedCandidateId: nullableStr(row.matched_candidate_id),
+    embeddingStatus: (() => {
+      const s = nullableStr(row.embedding_status);
+      if (s === "created" || s === "reused" || s === "missing") return s;
+      return null;
+    })(),
+    euclideanDistance: num(row.euclidean_distance),
+    matchedProjectId: nullableStr(row.matched_project_id),
+    matchedSameRun:
+      row.matched_same_run == null ? null : Boolean(row.matched_same_run),
     status: str(row.status, "planned") as DiscoveryAttemptStatus,
     providerStartedAt: nullableStr(row.provider_started_at),
     providerCompletedAt: nullableStr(row.provider_completed_at),
@@ -95,6 +104,10 @@ function attemptRow(record: DiscoveryAttemptRecord): Record<string, unknown> {
     novelty_decision: record.noveltyDecision,
     highest_similarity: record.highestSimilarity,
     matched_candidate_id: record.matchedCandidateId,
+    embedding_status: record.embeddingStatus,
+    euclidean_distance: record.euclideanDistance,
+    matched_project_id: record.matchedProjectId,
+    matched_same_run: record.matchedSameRun,
     status: record.status,
     provider_started_at: record.providerStartedAt,
     provider_completed_at: record.providerCompletedAt,

@@ -9,12 +9,21 @@
  */
 
 import type { FaceNoveltyRecord, FaceNoveltyState } from "./types";
+import type { HistoricalFaceProtectionStatus } from "./historical-protection";
+import { normalizeHistoricalProtectionStatus } from "./historical-protection";
 
 export interface NoveltyRecordFilter {
   workspaceId: string;
   archetypeId?: string;
   states?: FaceNoveltyState[];
 }
+
+export type HistoricalProtectionUpdate = {
+  historicalProtectionStatus: HistoricalFaceProtectionStatus;
+  historicalProtectionPromotedAt?: string;
+  historicalProtectionReason?: string;
+  historicalProtectionSource?: string;
+};
 
 export interface NoveltyRepository {
   /**
@@ -35,6 +44,12 @@ export interface NoveltyRepository {
       >
     >,
   ): Promise<void>;
+  /** Phase 2.2G — promote / strengthen historical biological protection. */
+  updateHistoricalProtection(
+    id: string,
+    workspaceId: string,
+    update: HistoricalProtectionUpdate,
+  ): Promise<void>;
   /** Load all records matching the filter. */
   findMany(filter: NoveltyRecordFilter): Promise<FaceNoveltyRecord[]>;
   /** Load one record by candidateId + workspaceId. */
@@ -44,6 +59,15 @@ export interface NoveltyRepository {
   ): Promise<FaceNoveltyRecord | null>;
   /** Load one record by assetId + workspaceId. */
   findByAssetId(assetId: string, workspaceId: string): Promise<FaceNoveltyRecord | null>;
+}
+
+function withDefaultProtection(record: FaceNoveltyRecord): FaceNoveltyRecord {
+  return {
+    ...record,
+    historicalProtectionStatus: normalizeHistoricalProtectionStatus(
+      record.historicalProtectionStatus,
+    ),
+  };
 }
 
 /** In-memory implementation — suitable for tests and ephemeral server routes. */
@@ -56,30 +80,44 @@ export class MemoryNoveltyRepository implements NoveltyRepository {
    * one row per (workspace_id, candidate_id). Retries update in place.
    */
   async upsert(record: FaceNoveltyRecord): Promise<void> {
+    const incoming = withDefaultProtection(record);
     for (const [id, existing] of this.records) {
       if (
-        existing.workspaceId === record.workspaceId &&
-        existing.candidateId === record.candidateId &&
-        id !== record.id
+        existing.workspaceId === incoming.workspaceId &&
+        existing.candidateId === incoming.candidateId &&
+        id !== incoming.id
       ) {
         // Same candidate under a different id — fold into the existing row.
         this.records.delete(id);
         this.records.set(id, {
-          ...record,
+          ...incoming,
           id,
           createdAt: existing.createdAt,
-          firstShownAt: record.firstShownAt ?? existing.firstShownAt,
-          exhaustedAt: record.exhaustedAt ?? existing.exhaustedAt,
-          savedAt: record.savedAt ?? existing.savedAt,
-          approvedAt: record.approvedAt ?? existing.approvedAt,
-          shortlistedAt: record.shortlistedAt ?? existing.shortlistedAt,
-          rejectedAt: record.rejectedAt ?? existing.rejectedAt,
-          embeddingVersion: record.embeddingVersion ?? existing.embeddingVersion,
+          firstShownAt: incoming.firstShownAt ?? existing.firstShownAt,
+          exhaustedAt: incoming.exhaustedAt ?? existing.exhaustedAt,
+          savedAt: incoming.savedAt ?? existing.savedAt,
+          approvedAt: incoming.approvedAt ?? existing.approvedAt,
+          shortlistedAt: incoming.shortlistedAt ?? existing.shortlistedAt,
+          rejectedAt: incoming.rejectedAt ?? existing.rejectedAt,
+          embeddingVersion: incoming.embeddingVersion ?? existing.embeddingVersion,
+          historicalProtectionStatus:
+            incoming.historicalProtectionStatus ??
+            existing.historicalProtectionStatus ??
+            "unprotected",
+          historicalProtectionPromotedAt:
+            incoming.historicalProtectionPromotedAt ??
+            existing.historicalProtectionPromotedAt,
+          historicalProtectionReason:
+            incoming.historicalProtectionReason ??
+            existing.historicalProtectionReason,
+          historicalProtectionSource:
+            incoming.historicalProtectionSource ??
+            existing.historicalProtectionSource,
         });
         return;
       }
     }
-    this.records.set(record.id, { ...record });
+    this.records.set(incoming.id, { ...incoming });
   }
 
   async updateState(
@@ -98,13 +136,29 @@ export class MemoryNoveltyRepository implements NoveltyRepository {
     this.records.set(id, { ...existing, state, ...(timestamps ?? {}) });
   }
 
+  async updateHistoricalProtection(
+    id: string,
+    workspaceId: string,
+    update: HistoricalProtectionUpdate,
+  ): Promise<void> {
+    const existing = this.records.get(id);
+    if (!existing || existing.workspaceId !== workspaceId) return;
+    this.records.set(id, {
+      ...existing,
+      historicalProtectionStatus: update.historicalProtectionStatus,
+      historicalProtectionPromotedAt: update.historicalProtectionPromotedAt,
+      historicalProtectionReason: update.historicalProtectionReason,
+      historicalProtectionSource: update.historicalProtectionSource,
+    });
+  }
+
   async findMany(filter: NoveltyRecordFilter): Promise<FaceNoveltyRecord[]> {
     const results: FaceNoveltyRecord[] = [];
     for (const record of this.records.values()) {
       if (record.workspaceId !== filter.workspaceId) continue;
       if (filter.archetypeId && record.archetypeId !== filter.archetypeId) continue;
       if (filter.states && !filter.states.includes(record.state)) continue;
-      results.push({ ...record });
+      results.push(withDefaultProtection(record));
     }
     return results;
   }
@@ -115,7 +169,7 @@ export class MemoryNoveltyRepository implements NoveltyRepository {
   ): Promise<FaceNoveltyRecord | null> {
     for (const record of this.records.values()) {
       if (record.candidateId === candidateId && record.workspaceId === workspaceId) {
-        return { ...record };
+        return withDefaultProtection(record);
       }
     }
     return null;
@@ -124,7 +178,7 @@ export class MemoryNoveltyRepository implements NoveltyRepository {
   async findByAssetId(assetId: string, workspaceId: string): Promise<FaceNoveltyRecord | null> {
     for (const record of this.records.values()) {
       if (record.assetId === assetId && record.workspaceId === workspaceId) {
-        return { ...record };
+        return withDefaultProtection(record);
       }
     }
     return null;

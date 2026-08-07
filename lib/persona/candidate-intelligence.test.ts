@@ -571,7 +571,7 @@ describe("Phase 1.8A Premium Fashion Casting Quality", () => {
       assert.match(built.prompt, /campaign-ready/i);
       assert.match(built.prompt, /editorial/i);
       assert.match(built.prompt, /photorealistic/i);
-      assert.match(built.prompt, /FASHION MODEL QUALITY BAR/);
+      assert.match(built.prompt, /FASHION MODEL QUALITY BAR|PRIMARY BRAND FACE|PREMIUM CASTING —/);
       assert.match(built.blocks.camera, /passport|headshot|ID-card|mid-torso|upper torso/i);
       assert.match(built.blocks.lighting, /PREMIUM CASTING PHOTOGRAPHY|PREMIUM EDITORIAL PHOTOGRAPHY/i);
       assert.match(built.negativePrompt, /LinkedIn portrait|LinkedIn profile photo/i);

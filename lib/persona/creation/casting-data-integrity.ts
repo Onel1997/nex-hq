@@ -144,7 +144,14 @@ export function filterCandidatesForGenerationRun(
   candidates: PersonaCandidate[],
   generationRunId: string,
 ): PersonaCandidate[] {
-  return candidates.filter((c) => c.provider_job_id === generationRunId);
+  return candidates.filter((c) => {
+    if (c.provider_job_id !== generationRunId) return false;
+    // Phase 2.2E — superseded retry parents stay in history, not on the board.
+    if (c.generation_settings?.boardSupersededByReplacement === true) {
+      return false;
+    }
+    return true;
+  });
 }
 
 export function assertCandidatesBelongToProject(

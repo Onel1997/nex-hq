@@ -36,6 +36,7 @@ import {
   resolveNoveltyCandidateStatus,
   type NoveltyVisibilityDecision,
 } from "./visibility-assertion";
+import { promoteToHistoricallyProtectedIdentity } from "./historical-protection-promotion";
 
 export const NOVELTY_REPLACEMENT_CONFIRMATION_MESSAGE =
   "Candidate rejected by novelty protection. Confirm replacement generation.";
@@ -97,6 +98,12 @@ export async function registerGeneratedCandidate(
     shortlistedAt: existing?.shortlistedAt,
     rejectedAt: existing?.rejectedAt,
     embeddingVersion: existing?.embeddingVersion,
+    // Phase 2.2G — discovery remains unprotected until explicit promotion.
+    historicalProtectionStatus:
+      existing?.historicalProtectionStatus ?? "unprotected",
+    historicalProtectionPromotedAt: existing?.historicalProtectionPromotedAt,
+    historicalProtectionReason: existing?.historicalProtectionReason,
+    historicalProtectionSource: existing?.historicalProtectionSource,
   };
   await repo.upsert(record);
   return record;
@@ -147,7 +154,7 @@ export async function markCandidateRejected(
   });
 }
 
-/** Transition to "approved". */
+/** Transition to "approved" and promote durable historical protection. */
 export async function markCandidateApproved(
   repo: NoveltyRepository,
   recordId: string,
@@ -155,6 +162,16 @@ export async function markCandidateApproved(
 ): Promise<void> {
   await repo.updateState(recordId, workspaceId, "approved", {
     approvedAt: new Date().toISOString(),
+  });
+  const all = await repo.findMany({ workspaceId });
+  const found = all.find((r) => r.id === recordId);
+  if (!found) return;
+  await promoteToHistoricallyProtectedIdentity(repo, {
+    workspaceId,
+    candidateId: found.candidateId,
+    status: "brand_cast_approved",
+    reason: "brand_cast_approved",
+    source: "novelty.markCandidateApproved",
   });
 }
 
@@ -185,6 +202,8 @@ export interface CandidateNoveltyCheck {
   detectionConfidence?: number;
   embeddingStatus?: "created" | "reused" | "missing";
   embeddingDimension?: number;
+  /** Closest prior Euclidean distance from the biological evaluator. */
+  euclideanDistance?: number;
   priorEmbeddingsCompared?: number;
   closestPriorAssetId?: string;
   evaluationDurationMs?: number;
@@ -206,6 +225,12 @@ export interface CheckCandidateOptions {
   slot?: number;
   /** Whether LocalFaceEmbeddingEvaluator (or live equivalent) is active. */
   evaluatorActive?: boolean;
+  /**
+   * Phase 2.2E — always persist a freshly extracted embedding for this
+   * evaluation, even if the novelty row already has one (discovery retries
+   * must never keep the attempt-1 face vector).
+   */
+  forceFreshEmbedding?: boolean;
 }
 
 /**
@@ -274,11 +299,19 @@ export async function checkAndRegisterCandidate(
   const closestPriorCandidateId =
     evaluation.closestPriorCandidateId ??
     (rawResult?._closestMatchCandidateId as string | undefined);
+  const euclideanDistance = rawResult?._closestDistance as number | undefined;
   const priorCompared =
     options?.priorEmbeddingsLoaded ?? history.priorAssetReferences.length;
   const comparisonExecuted =
     evaluation.faceSimilarity?.status === "performed" && priorCompared > 0;
   const evaluationStatus = evaluation.faceSimilarity?.status;
+
+  // Capture prior asset before register overwrites it — used for fresh-embedding.
+  const existingBefore = await repo.findByCandidateId(
+    input.candidateId,
+    input.workspaceId,
+  );
+  const previousAssetId = existingBefore?.assetId ?? null;
 
   // Register the candidate regardless of result so the failed attempt is
   // recorded safely (never lost).
@@ -287,10 +320,15 @@ export async function checkAndRegisterCandidate(
   let embeddingStatus: "created" | "reused" | "missing" = "missing";
   let embeddingDimension: number | undefined;
 
-  // Persist embedding if extracted — once per record, never re-extracted.
+  // Persist embedding if extracted. Phase 2.2E: forceFreshEmbedding / asset
+  // change overwrites any prior vector so retries never keep attempt-1 face.
   if (embeddingVector && embeddingVector.length > 0 && options?.embeddingRepo) {
     const alreadyHas = await options.embeddingRepo.hasEmbedding(record.id, input.workspaceId);
-    if (!alreadyHas) {
+    const assetChanged =
+      Boolean(previousAssetId) && previousAssetId !== input.assetId;
+    const shouldWrite =
+      !alreadyHas || options.forceFreshEmbedding === true || assetChanged;
+    if (shouldWrite) {
       await options.embeddingRepo.saveEmbedding({
         noveltyRecordId: record.id,
         workspaceId: input.workspaceId,
@@ -304,6 +342,11 @@ export async function checkAndRegisterCandidate(
           ? "performed"
           : (detectionStatus ?? "unavailable")) as import("./similarity-threshold").FaceDetectionStatus,
         similarityThresholdVersion: thresholdVersion ?? FACE_SIMILARITY_THRESHOLD_VERSION,
+        assetId: input.assetId,
+        candidateId: input.candidateId,
+        creationProjectId: input.creationProjectId,
+        historicalProtectionStatus:
+          record.historicalProtectionStatus ?? "unprotected",
       });
       embeddingStatus = "created";
       embeddingDimension = embeddingVector.length;
@@ -415,6 +458,7 @@ export async function checkAndRegisterCandidate(
     detectionConfidence,
     embeddingStatus,
     embeddingDimension: liveDebugBase.embeddingDimension,
+    euclideanDistance,
     priorEmbeddingsCompared: priorCompared,
     closestPriorAssetId,
     evaluationDurationMs,

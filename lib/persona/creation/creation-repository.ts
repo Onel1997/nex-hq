@@ -53,6 +53,11 @@ export interface PersonaCreationRepository {
     scope: WorkspaceScope,
     projectId: string,
   ): Promise<PersonaCandidate | null>;
+  /** Phase 2.2G — resolve discovery candidate that converted into a persona. */
+  findCandidateByConvertedPersonaId(
+    scope: WorkspaceScope,
+    personaId: string,
+  ): Promise<PersonaCandidate | null>;
 
   listCandidateAssets(
     scope: WorkspaceScope,

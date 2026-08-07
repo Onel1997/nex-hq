@@ -354,6 +354,15 @@ describe("2.2A brand face discovery diversity engine", () => {
       resolveDiscoveryRunState({ allowedCount: 0, technicalFailure: true, budgetExhausted: true }),
       "failed",
     );
+    assert.equal(
+      resolveDiscoveryRunState({
+        allowedCount: 2,
+        technicalFailure: true,
+        budgetExhausted: false,
+      }),
+      "ready_partial",
+      "technical failure must not erase already-allowed slots",
+    );
 
     const provider = new FakeBrandFaceDiscoveryProvider();
     const repo = new MemoryDiscoveryAttemptRepository();
@@ -433,6 +442,10 @@ describe("2.2A brand face discovery diversity engine", () => {
           noveltyDecision: "allowed",
           highestSimilarity: 0.1,
           matchedCandidateId: null,
+          embeddingStatus: null,
+          euclideanDistance: null,
+          matchedProjectId: null,
+          matchedSameRun: null,
           status: "allowed",
           providerStartedAt: null,
           providerCompletedAt: null,
@@ -574,6 +587,10 @@ describe("2.2A brand face discovery diversity engine", () => {
       noveltyDecision: "allowed",
       highestSimilarity: 0.1,
       matchedCandidateId: null,
+      embeddingStatus: null,
+      euclideanDistance: null,
+      matchedProjectId: null,
+      matchedSameRun: null,
       status: "allowed" as const,
       providerStartedAt: null,
       providerCompletedAt: null,
@@ -621,6 +638,10 @@ describe("2.2A brand face discovery diversity engine", () => {
       noveltyDecision: "allowed",
       highestSimilarity: 0.2,
       matchedCandidateId: null,
+      embeddingStatus: null,
+      euclideanDistance: null,
+      matchedProjectId: null,
+      matchedSameRun: null,
       status: "allowed" as const,
       providerStartedAt: null,
       providerCompletedAt: null,

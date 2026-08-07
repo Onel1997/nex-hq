@@ -6,10 +6,15 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PersonaDomainError } from "../domain/errors";
-import type { EmbeddingRepository, EmbeddingUpdate } from "./embedding-repository";
+import type {
+  EmbeddingRepository,
+  EmbeddingUpdate,
+  LoadEmbeddingsOptions,
+} from "./embedding-repository";
 import type { StoredEmbeddingRef } from "./local-face-embedding-evaluator";
 import { resolveHistoricalNoveltyArchetypeFilter } from "./historical-backfill-archetype-filter";
 import { isEmbeddingEligibleForComparison } from "./embedding-comparison-eligibility";
+import { normalizeHistoricalProtectionStatus } from "./historical-protection";
 
 const TABLE = "persona_face_novelty_records";
 const FORBIDDEN_STATES = [
@@ -49,6 +54,7 @@ export class SupabaseEmbeddingRepository implements EmbeddingRepository {
   async loadEmbeddingsForWorkspace(
     workspaceId: string,
     archetypeId?: string,
+    options?: LoadEmbeddingsOptions,
   ): Promise<StoredEmbeddingRef[]> {
     const client = createAdminClient();
 
@@ -72,10 +78,12 @@ export class SupabaseEmbeddingRepository implements EmbeddingRepository {
 
     let query = client
       .from(TABLE)
-      .select("asset_id, candidate_id, face_embedding, live_evaluation_evidence")
+      .select(
+        "asset_id, candidate_id, face_embedding, live_evaluation_evidence, creation_project_id, historical_protection_status",
+      )
       .eq("workspace_id", workspaceId)
       .not("face_embedding", "is", null)
-      // Only compare against shown/exhausted/saved/approved/shortlisted/rejected
+      // Candidate rows that may hold embeddings; eligibility filters further.
       .in("state", [...FORBIDDEN_STATES]);
 
     if (resolution.effectiveArchetypeId) {
@@ -92,6 +100,14 @@ export class SupabaseEmbeddingRepository implements EmbeddingRepository {
           liveEvaluationEvidence: row.live_evaluation_evidence as
             | { finalDecision?: string }
             | null,
+          historicalProtectionStatus: normalizeHistoricalProtectionStatus(
+            row.historical_protection_status,
+          ),
+          creationProjectId:
+            typeof row.creation_project_id === "string"
+              ? row.creation_project_id
+              : null,
+          currentCreationProjectId: options?.currentCreationProjectId,
         }),
       )
       .filter((row) => Array.isArray(row.face_embedding) && row.face_embedding.length > 0)

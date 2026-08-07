@@ -9,9 +9,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PersonaDomainError } from "../domain/errors";
 import type { FaceNoveltyRecord, FaceNoveltyState } from "./types";
-import type { NoveltyRecordFilter, NoveltyRepository } from "./novelty-repository";
+import type {
+  HistoricalProtectionUpdate,
+  NoveltyRecordFilter,
+  NoveltyRepository,
+} from "./novelty-repository";
 import { resolveHistoricalNoveltyArchetypeFilter } from "./historical-backfill-archetype-filter";
 import { HISTORICAL_BACKFILL_FORBIDDEN_STATES } from "./historical-backfill-types";
+import { normalizeHistoricalProtectionStatus } from "./historical-protection";
 
 function str(v: unknown, fallback = ""): string {
   return typeof v === "string" ? v : v == null ? fallback : String(v);
@@ -48,6 +53,14 @@ function mapRecord(row: Record<string, unknown>): FaceNoveltyRecord {
     approvedAt: nullableStr(row.approved_at),
     shortlistedAt: nullableStr(row.shortlisted_at),
     rejectedAt: nullableStr(row.rejected_at),
+    historicalProtectionStatus: normalizeHistoricalProtectionStatus(
+      row.historical_protection_status,
+    ),
+    historicalProtectionPromotedAt: nullableStr(
+      row.historical_protection_promoted_at,
+    ),
+    historicalProtectionReason: nullableStr(row.historical_protection_reason),
+    historicalProtectionSource: nullableStr(row.historical_protection_source),
   };
 }
 
@@ -86,6 +99,15 @@ export class SupabaseNoveltyRepository implements NoveltyRepository {
         approved_at: record.approvedAt ?? null,
         shortlisted_at: record.shortlistedAt ?? null,
         rejected_at: record.rejectedAt ?? null,
+        historical_protection_status: normalizeHistoricalProtectionStatus(
+          record.historicalProtectionStatus,
+        ),
+        historical_protection_promoted_at:
+          record.historicalProtectionPromotedAt ?? null,
+        historical_protection_reason:
+          record.historicalProtectionReason ?? null,
+        historical_protection_source:
+          record.historicalProtectionSource ?? null,
       },
       { onConflict: "workspace_id,candidate_id" },
     );
@@ -117,6 +139,26 @@ export class SupabaseNoveltyRepository implements NoveltyRepository {
       .eq("id", id)
       .eq("workspace_id", workspaceId);
     throwDb(error, "Failed to update face novelty record state");
+  }
+
+  async updateHistoricalProtection(
+    id: string,
+    workspaceId: string,
+    update: HistoricalProtectionUpdate,
+  ): Promise<void> {
+    const client = createAdminClient();
+    const { error } = await client
+      .from(TABLE)
+      .update({
+        historical_protection_status: update.historicalProtectionStatus,
+        historical_protection_promoted_at:
+          update.historicalProtectionPromotedAt ?? null,
+        historical_protection_reason: update.historicalProtectionReason ?? null,
+        historical_protection_source: update.historicalProtectionSource ?? null,
+      })
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
+    throwDb(error, "Failed to update historical face protection");
   }
 
   async findMany(filter: NoveltyRecordFilter): Promise<FaceNoveltyRecord[]> {

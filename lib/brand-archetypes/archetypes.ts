@@ -15,44 +15,45 @@ const DNA_MEDITERRANEAN = finalizeIdentityDna({
   version: "1.0.0",
   appearance: {
     faceGeometryFamily:
-      "balanced oval-rectangle everyday masculine planes with slight natural asymmetry",
-    proportions: "natural adult male proportions, lean-normal frame",
-    eyeFeeling: "relaxed almond eyes, soft lids, calm friendly gaze",
+      "soft masculine balanced everyday planes with slight natural asymmetry — harmony over extreme features",
+    proportions: "natural adult male proportions, lean athletic frame — never bodybuilder",
+    eyeFeeling: "expressive but relaxed eyes, soft lids, calm friendly gaze",
     noseFamily: "medium straight natural bridge with soft tip",
     lips: "natural medium lips, soft definition, calm closed mouth",
-    jawFamily: "softly defined approachable jaw — never razor-sharp fashion geometry",
-    beardFamily: "soft 2–3 day natural stubble, uneven real density",
+    jawFamily: "subtle approachable jawline — never oversized, never razor-sharp fashion geometry",
+    beardFamily: "clean shave or soft slight stubble with uneven real density",
     skinToneFamily:
-      "warm light-medium olive, lightly sun-kissed, visible subtle pores",
+      "warm light-medium olive, youthful healthy sun-kissed skin, visible subtle pores, small imperfections welcome",
     hairFamily:
-      "straight-to-wavy dark brown natural textured crop with modern soft taper",
+      "dark brown natural contemporary streetwear hair — textured curls, curly crop, soft taper/low fade, or relaxed wavy medium — never perfect editorial styling",
   },
   presence: {
-    confidence: "quiet premium confidence",
-    approachability: "high — friendly European Brand Face energy",
-    calmness: "calm commercial presence",
-    communityFeeling: "premium community credible",
-    luxuryFeeling: "understated premium — never CEO or corporate luxury",
-    authenticity: "high authentic Mediterranean warmth",
-    socialEnergy: "casually memorable Instagram / TikTok Brand Face",
+    confidence: "quiet confidence — authentic charisma",
+    approachability: "high — customers instantly believe he could represent the brand",
+    calmness: "friendly calm commercial presence",
+    communityFeeling: "premium modern streetwear community credible",
+    luxuryFeeling: "understated premium — never CEO or perfume-campaign luxury",
+    authenticity: "high authentic Mediterranean warmth — effortless and timeless",
+    socialEnergy: "memorable brand ambassador energy — “he looks cool,” not most-handsome casting",
   },
   movement: {
     posture: "relaxed upright with soft natural stance",
     shoulderPosition: "natural medium shoulders, relaxed not squared",
     naturalAsymmetry: "allow mild natural facial and posture asymmetry",
-    bodyEnergy: "effortless calm — casting-ready, not stiff",
+    bodyEnergy: "effortless calm — casting-ready, wearable in oversized clothing",
   },
   photography: {
     framingPreference: "head-and-shoulders to half-body casting frames",
     cameraEnergy: "soft eye contact, calm commercial camera presence",
-    expressionFamily: "soft neutral to lightly friendly — no forced smile, no scowl",
-    editorialRestraint: "clean commercial polish without catwalk severity",
+    expressionFamily: "friendly calm — quiet confidence, no forced smile, no scowl, no intimidation",
+    editorialRestraint: "natural daylight commercial polish — no fashion-week severity, no cinematic grade",
   },
   lifestyle: {
-    fashionDirection: "premium oversized streetwear basics — washed black / charcoal / off-white",
-    socialBehavior: "friendly authentic European lifestyle presence",
-    communityRole: "premium hero for homepage and campaign drops",
-    campaignRole: "Homepage / Shopify / Luxury Drop Hero",
+    fashionDirection:
+      "premium oversized streetwear basics — washed black / charcoal / off-white — ESSENTIALS / ALD / Our Legacy / COS / ARKET / Zara Studio vibe",
+    socialBehavior: "effortlessly stylish, approachable, memorable European lifestyle presence",
+    communityRole: "primary premium streetwear Brand Face for homepage and campaign drops",
+    campaignRole: "Homepage / Shopify / Premium Streetwear Drop Hero",
   },
 });
 
@@ -170,21 +171,27 @@ const ARCH_MEDITERRANEAN: BrandArchetype = {
   workspaceId: WORKSPACE_ID,
   status: "active",
   genderPresentation: "Male",
-  ageRange: "24-28",
+  ageRange: "22-27",
   ethnicityDirection: "European / Mediterranean",
-  bodyDirection: "lean-normal everyday frame",
-  faceDirection: "approachable masculine — not CEO, not runway",
-  hairDirection: "dark brown textured crop, soft taper",
-  groomingDirection: "soft natural stubble, never over-groomed",
-  personality: "Friendly, premium, authentic, calm European warmth",
-  socialEnergy: "Casually memorable Brand Face for homepage and campaigns",
-  commercialRole: "Homepage / Shopify / Campaign / Luxury Drop Hero",
+  bodyDirection:
+    "lean athletic — not muscular, not bodybuilder — normal healthy proportions wearable in oversized clothing",
+  faceDirection:
+    "soft masculine Mediterranean harmony — subtle jaw, thicker natural brows, expressive relaxed eyes, approachable authenticity — brand ambassador not runway",
+  hairDirection:
+    "natural contemporary streetwear hair — textured curls, curly crop, taper/low fade, or relaxed wavy medium — never perfect editorial styling",
+  groomingDirection: "clean shave or slight natural stubble — never over-groomed",
+  personality:
+    "Quiet confidence, authentic charisma, approachable — customers instantly believe he could represent the brand",
+  socialEnergy:
+    "“He looks cool” — trustworthy, premium, modern, effortless, timeless — not the most handsome man possible",
+  commercialRole: "Homepage / Shopify / Campaign / Premium Streetwear Drop Hero",
   wardrobeDirection:
-    "Oversized tee, heavy hoodie, zip hoodie — washed black / charcoal / off-white",
-  photographyDirection: "Soft daylight commercial casting — editorial restraint",
+    "Oversized tee, heavy hoodie, zip hoodie — washed black / charcoal / off-white — ESSENTIALS / ALD / Our Legacy / COS / ARKET / Zara Studio vibe",
+  photographyDirection:
+    "Natural daylight commercial fashion campaign — soft shadows, real skin — no cinematic grade, no perfume lighting",
   cameraDirection: "Soft eye contact, head-and-shoulders to half-body",
-  lightingDirection: "Soft natural daylight, warm realistic skin",
-  communityRole: "Premium community-credible hero",
+  lightingDirection: "Natural daylight, soft shadows, warm realistic skin",
+  communityRole: "Primary premium streetwear Brand Face customers trust",
   campaignRole: "Homepage Hero / Campaign Hero / Product Hero",
   productAffinity: [
     {
@@ -217,6 +224,9 @@ const ARCH_MEDITERRANEAN: BrandArchetype = {
     "Runway fashion week",
     "Corporate headshot",
     "Intimidating stare",
+    "Hyper masculine / oversized jaw",
+    "Perfume campaign / movie hero",
+    "Looking older than 28",
   ],
   roles: [
     "homepage_hero",

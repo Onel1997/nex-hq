@@ -41,6 +41,12 @@ export type NoveltyEvalDecision = {
   reason?: string | null;
   highestSimilarity?: number | null;
   matchedCandidateId?: string | null;
+  /** Phase 2.2E — fresh embedding status for this paid attempt. */
+  embeddingStatus?: "created" | "reused" | "missing" | null;
+  /** Phase 2.2E — closest prior Euclidean distance. */
+  euclideanDistance?: number | null;
+  matchedProjectId?: string | null;
+  matchedSameRun?: boolean | null;
 };
 
 export type SlotPlan = {
@@ -59,6 +65,9 @@ export type CompletionEngineDeps = {
     slot: DiscoverySlot;
     attemptNumber: number;
     candidateId: string;
+    assetId: string;
+    /** Phase 2.2E — actual sampled L3 identity for this attempt (not static blueprint). */
+    identity: DiscoveryIdentityInstance;
     imageBytes: Buffer;
     allowedSameRunCandidateIds: string[];
   }) => Promise<NoveltyEvalDecision>;
@@ -318,6 +327,10 @@ export async function runDiscoveryCompletion(
       noveltyDecision: null,
       highestSimilarity: null,
       matchedCandidateId: null,
+      embeddingStatus: null,
+      euclideanDistance: null,
+      matchedProjectId: null,
+      matchedSameRun: null,
       status: "generating",
       providerStartedAt: now(),
       providerCompletedAt: null,
@@ -344,6 +357,22 @@ export async function runDiscoveryCompletion(
         providerSeed,
       });
 
+      // Phase 2.2E.2 — persist paid provider evidence BEFORE candidate/asset
+      // writes so a successful FLUX call is never lost if persistence fails.
+      const afterProvider: DiscoveryAttemptRecord = {
+        ...baseAttempt,
+        providerRequestId: providerResult.providerRequestId,
+        providerResultId: providerResult.providerResultId,
+        providerSeed: providerResult.providerSeed,
+        providerStartedAt: providerResult.providerStartedAt,
+        providerCompletedAt: providerResult.providerCompletedAt,
+        actualCostEur: providerResult.estimatedCostEur,
+        costStatus: providerResult.costStatus,
+        status: "evaluating",
+        updatedAt: now(),
+      };
+      await deps.attemptRepo.upsertAttempt(afterProvider);
+
       await deps.attemptRepo.upsertRunLedger({
         ...(await persistLedger("evaluating")),
       });
@@ -359,6 +388,8 @@ export async function runDiscoveryCompletion(
         slot: plan.slot,
         attemptNumber: plan.attemptNumber,
         candidateId: persisted.candidateId,
+        assetId: persisted.assetId,
+        identity: plan.identity,
         imageBytes: providerResult.imageBytes,
         allowedSameRunCandidateIds: [...allowedBySlot.values()].map((v) => v.candidateId),
       });
@@ -376,20 +407,17 @@ export async function runDiscoveryCompletion(
       }
 
       const updated: DiscoveryAttemptRecord = {
-        ...baseAttempt,
+        ...afterProvider,
         candidateId: persisted.candidateId,
         assetId: persisted.assetId,
-        providerRequestId: providerResult.providerRequestId,
-        providerResultId: providerResult.providerResultId,
-        providerSeed: providerResult.providerSeed,
-        providerStartedAt: providerResult.providerStartedAt,
-        providerCompletedAt: providerResult.providerCompletedAt,
         noveltyDecision: novelty.reason ?? novelty.decision,
         highestSimilarity: novelty.highestSimilarity ?? null,
         matchedCandidateId: novelty.matchedCandidateId ?? null,
+        embeddingStatus: novelty.embeddingStatus ?? null,
+        euclideanDistance: novelty.euclideanDistance ?? null,
+        matchedProjectId: novelty.matchedProjectId ?? null,
+        matchedSameRun: novelty.matchedSameRun ?? null,
         status,
-        actualCostEur: providerResult.estimatedCostEur,
-        costStatus: providerResult.costStatus,
         updatedAt: now(),
       };
       await deps.attemptRepo.upsertAttempt(updated);
@@ -409,13 +437,29 @@ export async function runDiscoveryCompletion(
           ? String((error as { code?: string }).code ?? "provider_failed")
           : "provider_failed";
       const isTimeout = code === "provider_timeout";
-      technicalFailure = true;
+      // Preserve any provider request id already written before this failure.
+      const latestForSlot = await deps.attemptRepo.listAttemptsForSlot({
+        generationRunId: input.generationRunId,
+        workspaceId: input.workspaceId,
+        slot: plan.slot,
+      });
+      const current =
+        latestForSlot.find((a) => a.attemptNumber === plan.attemptNumber) ??
+        baseAttempt;
+      const providerAlreadyCompleted = Boolean(current.providerRequestId);
+
+      // Phase 2.2E.2 — post-provider persistence/eval errors fail THIS attempt
+      // only. Do not abort the run or erase already-allowed slots (e.g. B).
+      if (!providerAlreadyCompleted) {
+        technicalFailure = true;
+      }
+
       await deps.attemptRepo.upsertAttempt({
-        ...baseAttempt,
+        ...current,
         status: isTimeout ? "timeout" : "failed",
         errorCode: code,
         errorMessage: error instanceof Error ? error.message : "provider failed",
-        providerCompletedAt: now(),
+        providerCompletedAt: current.providerCompletedAt ?? now(),
         updatedAt: now(),
       });
       return { status: "failed" as const };

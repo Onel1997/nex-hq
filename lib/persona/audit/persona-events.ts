@@ -25,7 +25,8 @@ export type PersonaAuditEventType =
   | "candidate.converted_to_persona"
   | "identity_review.completed"
   | "persona.identity_locked"
-  | "persona.brand_cast_approved";
+  | "persona.brand_cast_approved"
+  | "face_novelty.historical_protection_promoted";
 
 export async function logPersonaAuditEvent(params: {
   workspaceId: string;

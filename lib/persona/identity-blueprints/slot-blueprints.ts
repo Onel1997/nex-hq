@@ -44,7 +44,7 @@ const SLOT_D_CAMERA_RULES = [
 ] as const;
 
 const SHARED_QUALITY_BAR =
-  "Real agency-signed campaign model — photoreal skin texture, natural asymmetry, commercially memorable, suitable for homepage / Shopify / social / future video — never Instagram AI, never Midjourney fashion";
+  "Primary Brand Face — premium modern streetwear ambassador (~22–27), soft masculine harmony, lean athletic, quiet confidence, approachable — customers instantly believe he represents the brand — never runway, perfume campaign, oversized jaw, or most-handsome-man casting";
 
 function pools(p: ControlledPools): ControlledPools {
   return p;
@@ -159,11 +159,11 @@ const SLOT_A_POOLS = pools({
     "uneven natural hairline with lived-in temple variation",
   ],
   haircut: [
-    "short soft taper with clean premium sides",
-    "medium textured crop with soft crown volume",
-    "soft waves with lived-in Iberian movement",
-    "side-parted textured soft-luxury cut",
-    "longer top with natural fall and refined sides",
+    "short textured curls with soft natural crown",
+    "natural curly crop — lived-in streetwear",
+    "clean taper fade with textured top",
+    "low fade with relaxed wavy medium top",
+    "effortless messy curls — never perfect editorial hair",
   ],
   beardPattern: [
     "clean-shaven soft luxury jaw",
@@ -296,9 +296,9 @@ const SLOT_B_POOLS = pools({
   ],
   haircut: [
     "short textured curls with clean low fade",
-    "dense coil-wave short crop with low fade",
-    "urban short curls — never medium-length creative waves",
-    "tight textured curl crop with precise fade",
+    "natural curly crop with low fade",
+    "dense coil-wave short crop — effortless streetwear",
+    "clean taper fade with textured curls — never perfect editorial hair",
   ],
   beardPattern: [
     "well-kept short dense stubble covering cheeks and jaw evenly",
@@ -428,10 +428,10 @@ const SLOT_C_POOLS = pools({
     "airy creative hairline — never dense low hero crop",
   ],
   haircut: [
-    "medium-length loose curls or waves past the ears",
-    "chestnut creative waves with airy movement",
-    "medium loose waves — never short fade",
-    "editorial medium-length textured waves",
+    "relaxed wavy medium hair with natural movement",
+    "effortless messy curls past the ears",
+    "chestnut creative waves — lived-in, not editorial-perfect",
+    "medium loose waves — natural contemporary streetwear",
   ],
   beardPattern: [
     "clean-shaven or extremely sparse light stubble only on upper lip",
@@ -561,10 +561,10 @@ const SLOT_D_POOLS = pools({
     "low dense Levantine hairline framing textured crop",
   ],
   haircut: [
-    "thick near-black textured crop — dense modern hero cut",
-    "dense textured hero crop — never medium-length waves",
-    "near-black coarse textured crop with modern density",
-    "flagship textured crop — never Maghrebi curl fade",
+    "natural curly crop — thick textured streetwear",
+    "short textured curls with soft modern density",
+    "thick textured crop with clean taper — never perfect editorial hair",
+    "effortless dense curly crop — contemporary premium streetwear",
   ],
   beardPattern: [
     "short even beard or dense refined stubble denser along jawline",
@@ -649,15 +649,15 @@ export const MEDITERRANEAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
     slot: "A",
     id: "med-lane-a-soft-luxury",
     name: "Mediterranean Soft Luxury",
-    ageRange: "24-29",
+    ageRange: "22-27",
     regionalCluster: "Spanish Mediterranean / Iberian soft luxury",
     skinToneRange: "light-medium warm olive to soft sun-kissed peach Iberian band",
-    bodyDirection: "tall lean naturally athletic soft-luxury model frame",
+    bodyDirection: "tall lean naturally athletic streetwear casting frame — never bodybuilder",
     facialProportionFamily: "soft oval elegant midface family",
     hairTextureFamily: "dark chocolate-brown soft waves / fine-to-medium strands",
     facialHairFamily: "light uneven 2–3 day stubble family — never full beard",
-    expressionFamily: "quiet confidence — calm approachable soft luxury",
-    fashionDirection: "washed-black / charcoal oversized heavyweight tee — soft luxury lane",
+    expressionFamily: "effortless confidence — calm approachable relaxed streetwear presence",
+    fashionDirection: "washed-black / charcoal oversized heavyweight tee — soft streetwear lane",
     brandRole: "Homepage · Shopify · Premium Campaign",
     crossSlotExclusions: [
       "Maghrebi athletic rectangular skull",
@@ -673,14 +673,14 @@ export const MEDITERRANEAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
     slot: "B",
     id: "med-lane-b-north-african-street",
     name: "North African Street Premium",
-    ageRange: "24-30",
+    ageRange: "22-27",
     regionalCluster: "North African / Maghrebi street premium",
     skinToneRange: "medium olive-brown to warm amber Maghrebi band — deeper than Iberian",
-    bodyDirection: "tall slim-athletic fashion build with thicker athletic neck",
+    bodyDirection: "tall slim-athletic streetwear build with thicker athletic neck — never bodybuilder",
     facialProportionFamily: "longer athletic rectangular lower-third family",
     hairTextureFamily: "dark dense coil-wave curls — Maghrebi street-premium",
     facialHairFamily: "short dense even stubble family — sharper cheek edge",
-    expressionFamily: "modern urban confidence — cooler streetwear attitude",
+    expressionFamily: "effortless urban confidence — cooler relaxed streetwear attitude",
     fashionDirection: "black/charcoal zip hoodie over dark heavyweight tee — street premium",
     brandRole: "Social · Zip Hoodie · Community Campaign",
     crossSlotExclusions: [
@@ -697,14 +697,14 @@ export const MEDITERRANEAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
     slot: "C",
     id: "med-lane-c-southern-creative",
     name: "Southern European Creative",
-    ageRange: "23-29",
+    ageRange: "22-27",
     regionalCluster: "Greek / Balkan Mediterranean creative",
     skinToneRange: "warm light-olive to soft golden Hellenic band",
-    bodyDirection: "tall lean creative-model build with long slender neck",
+    bodyDirection: "tall lean creative streetwear build with long slender neck — never bodybuilder",
     facialProportionFamily: "slim diamond-triangular artistic midface family",
     hairTextureFamily: "medium chestnut-brown loose waves — creative editorial",
     facialHairFamily: "clean-shaven to extremely sparse upper-lip shadow family",
-    expressionFamily: "artistic relaxed contemporary presence",
+    expressionFamily: "artistic relaxed contemporary presence — approachable, never runway severity",
     fashionDirection: "off-white / muted stone oversized heavyweight tee — lifestyle editorial",
     brandRole: "Lifestyle · Editorial Social · Storytelling",
     crossSlotExclusions: [
@@ -721,15 +721,15 @@ export const MEDITERRANEAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
     slot: "D",
     id: "med-lane-d-levantine-hero",
     name: "Levantine Modern Hero",
-    ageRange: "25-31",
+    ageRange: "22-27",
     regionalCluster: "Lebanese / Levantine Eastern Mediterranean",
     skinToneRange: "warm medium-rich olive to deeper golden-bronze Levantine band",
-    bodyDirection: "tall lean-athletic with slightly broader shoulders — flagship hero",
-    facialProportionFamily: "broad balanced rectangular campaign hero family",
-    hairTextureFamily: "thick near-black dense coarse texture — Levantine hero",
-    facialHairFamily: "short even beard / dense jawline stubble family",
-    expressionFamily: "premium hero presence — calm authority without CEO energy",
-    fashionDirection: "charcoal heavyweight hoodie or washed-dark oversized tee — flagship",
+    bodyDirection: "tall lean-athletic with slightly broader shoulders — streetwear casting, never bodybuilder",
+    facialProportionFamily: "broad balanced rectangular streetwear casting family — never oversized jaw",
+    hairTextureFamily: "thick near-black dense coarse texture — Levantine casting",
+    facialHairFamily: "short even beard / dense jawline stubble family — natural growth, never CGI",
+    expressionFamily: "relaxed approachable confidence — calm presence without CEO or cinematic-hero energy",
+    fashionDirection: "charcoal heavyweight hoodie or washed-dark oversized tee — flagship streetwear",
     brandRole: "Flagship Campaign · Product Hero · Video",
     crossSlotExclusions: [
       "Spanish Iberian soft oval",

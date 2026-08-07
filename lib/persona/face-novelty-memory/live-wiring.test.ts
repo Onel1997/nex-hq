@@ -164,7 +164,9 @@ describe("3. embedding persisted", () => {
       { workspaceId: WS, archetypeId: ARCH, creationProjectId: PROJECT, candidateId: "cand-emb", assetId: "asset-emb", identityFingerprint: makeFp("emb"), sourceProvider: PROVIDER, sourceModel: MODEL },
       { evaluator, embeddingRepo: embRepo },
     );
-    const stored = await embRepo.loadEmbeddingsForWorkspace(WS);
+    const stored = await embRepo.loadEmbeddingsForWorkspace(WS, undefined, {
+      currentCreationProjectId: PROJECT,
+    });
     assert.ok(stored.length > 0, "embedding must be stored");
     const has = await embRepo.hasEmbedding(check.recordId, WS);
     assert.ok(has, "hasEmbedding must be true");
@@ -206,7 +208,23 @@ describe("5. duplicate candidate is hard-rejected", () => {
       candidateId: "cand-prior", assetId: "asset-prior",
       identityFingerprint: fp0, sourceProvider: PROVIDER, sourceModel: MODEL,
     });
-    embRepo.saveWithContext({ noveltyRecordId: rec0.id, workspaceId: WS, assetId: "asset-prior", candidateId: "cand-prior", embedding: emb, embeddingDimension: 128, embeddingModel: "faceRecognitionNet", embeddingVersion: FACE_SIMILARITY_EVALUATOR_VERSION, detectionConfidence: 0.97, faceCount: 1, detectionStatus: "performed", similarityThresholdVersion: FACE_SIMILARITY_THRESHOLD_VERSION });
+    embRepo.saveWithContext({
+      noveltyRecordId: rec0.id,
+      workspaceId: WS,
+      assetId: "asset-prior",
+      candidateId: "cand-prior",
+      creationProjectId: PROJECT,
+      liveEvaluationEvidence: { finalDecision: "allowed" },
+      historicalProtectionStatus: "unprotected",
+      embedding: emb,
+      embeddingDimension: 128,
+      embeddingModel: "faceRecognitionNet",
+      embeddingVersion: FACE_SIMILARITY_EVALUATOR_VERSION,
+      detectionConfidence: 0.97,
+      faceCount: 1,
+      detectionStatus: "performed",
+      similarityThresholdVersion: FACE_SIMILARITY_THRESHOLD_VERSION,
+    });
     await markCandidateShown(repo, rec0.id, WS);
 
     const history = await loadDiscoveryHistory(repo, WS, ARCH);

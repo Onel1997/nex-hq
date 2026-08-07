@@ -36,9 +36,30 @@ export {
   resolveFaceSimilarityEvaluator,
 } from "./face-similarity-adapter";
 
-export type { NoveltyRepository, NoveltyRecordFilter } from "./novelty-repository";
+export type { NoveltyRepository, NoveltyRecordFilter, HistoricalProtectionUpdate } from "./novelty-repository";
 export { MemoryNoveltyRepository } from "./novelty-repository";
 export { SupabaseNoveltyRepository } from "./supabase-novelty-repository";
+
+export {
+  isEmbeddingEligibleForComparison,
+  isHistoricalBlockingProtectionStatus,
+  normalizeHistoricalProtectionStatus,
+  resolveStrongerProtectionStatus,
+  HISTORICAL_FACE_PROTECTION_STATUSES,
+  HISTORICAL_BLOCKING_PROTECTION_STATUSES,
+} from "./embedding-comparison-eligibility";
+export type {
+  HistoricalFaceProtectionStatus,
+  HistoricalBlockingProtectionStatus,
+  HistoricalProtectionPromotionReason,
+  NoveltyLiveEvidenceShape,
+} from "./embedding-comparison-eligibility";
+
+export { promoteToHistoricallyProtectedIdentity } from "./historical-protection-promotion";
+export type {
+  PromoteHistoricalProtectionInput,
+  PromoteHistoricalProtectionResult,
+} from "./historical-protection-promotion";
 
 export { loadDiscoveryHistory, exhaustUnfinishedCandidates } from "./discovery-history";
 
@@ -98,7 +119,7 @@ export type { ThresholdConfig, FaceDetectionStatus } from "./similarity-threshol
 
 export type { FaceEmbeddingRecord, EmbeddingComparisonResult } from "./face-embedding-types";
 
-export type { EmbeddingRepository, EmbeddingUpdate } from "./embedding-repository";
+export type { EmbeddingRepository, EmbeddingUpdate, LoadEmbeddingsOptions } from "./embedding-repository";
 export { MemoryEmbeddingRepository } from "./embedding-repository";
 export { SupabaseEmbeddingRepository } from "./supabase-embedding-repository";
 

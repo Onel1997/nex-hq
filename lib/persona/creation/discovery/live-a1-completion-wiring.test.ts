@@ -163,7 +163,7 @@ describe("2.2A.1 live A1 discovery completion wiring", () => {
         const instances = sampleDiscoveryCast({
           blueprints,
           creationProjectId: project.id,
-          generationRunId: `${runId}-${slot}-${attemptNumber}`,
+          generationRunId: `${runId}-attempt-${attemptNumber}`,
           attemptNumber,
         });
         const identity = instances.find((i) => i.slot === slot)!;
@@ -285,7 +285,7 @@ describe("2.2A.1 live A1 discovery completion wiring", () => {
         const identity = sampleDiscoveryCast({
           blueprints,
           creationProjectId: project.id,
-          generationRunId: `${runId}-${attemptNumber}`,
+          generationRunId: `${runId}-attempt-${attemptNumber}`,
           attemptNumber,
         }).find((i) => i.slot === slot)!;
         return {
@@ -328,7 +328,7 @@ describe("2.2A.1 live A1 discovery completion wiring", () => {
         const identity = sampleDiscoveryCast({
           blueprints: listMediterraneanSlotBlueprints(),
           creationProjectId: project.id,
-          generationRunId: randomUUID(),
+          generationRunId: `fail-attempt-${attemptNumber}`,
           attemptNumber,
         }).find((i) => i.slot === slot)!;
         return { slot, attemptNumber, identity, prompt: "p" };
@@ -353,7 +353,7 @@ describe("2.2A.1 live A1 discovery completion wiring", () => {
       const identity = sampleDiscoveryCast({
         blueprints,
         creationProjectId: project.id,
-        generationRunId: `${runId}-${slot}-${attemptNumber}`,
+        generationRunId: `${runId}-attempt-${attemptNumber}`,
         attemptNumber,
       }).find((i) => i.slot === slot)!;
       return { slot, attemptNumber, identity, prompt: `p ${slot} ${attemptNumber}` };

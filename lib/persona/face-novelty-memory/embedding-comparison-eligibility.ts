@@ -1,30 +1,22 @@
 /**
- * Phase 2.0E — Which stored embeddings may enter the live comparison pool.
+ * Phase 2.0E / 2.2G — Which stored embeddings may enter the live comparison pool.
  *
- * Only faces that passed novelty evaluation (finalDecision === "allowed")
- * represent identities actually shown or consumed on the board.
- * Failed / blocked / evaluator-error records must not block future discovery.
+ * Phase 2.2G: cross-project historical blocking uses protected identities only.
+ * Same-run allowed faces still participate when currentCreationProjectId matches.
  */
 
-export type NoveltyLiveEvidenceShape = {
-  finalDecision?: string;
-} | null;
-
-/**
- * Returns true when a novelty record's stored embedding may be compared
- * against a newly generated candidate.
- */
-export function isEmbeddingEligibleForComparison(input: {
-  liveEvaluationEvidence?: NoveltyLiveEvidenceShape;
-}): boolean {
-  const evidence = input.liveEvaluationEvidence;
-  if (!evidence || typeof evidence !== "object") {
-    // Legacy rows without evidence — keep for backward compatibility.
-    return true;
-  }
-  const decision = evidence.finalDecision;
-  if (decision == null || decision === "") {
-    return true;
-  }
-  return decision === "allowed";
-}
+export type { NoveltyLiveEvidenceShape } from "./historical-protection";
+export {
+  isEmbeddingEligibleForComparison,
+  isAllowedNoveltyDecision,
+  isHistoricalBlockingProtectionStatus,
+  normalizeHistoricalProtectionStatus,
+  resolveStrongerProtectionStatus,
+  HISTORICAL_FACE_PROTECTION_STATUSES,
+  HISTORICAL_BLOCKING_PROTECTION_STATUSES,
+} from "./historical-protection";
+export type {
+  HistoricalFaceProtectionStatus,
+  HistoricalBlockingProtectionStatus,
+  HistoricalProtectionPromotionReason,
+} from "./historical-protection";

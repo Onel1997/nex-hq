@@ -23,7 +23,6 @@ import {
 } from "../candidate-intelligence";
 import { assertObfCastAnatomyDiversity } from "../candidate-intelligence/obf-l3-integration";
 import {
-  buildIdentityFingerprint,
   checkAndRegisterCandidate,
   loadDiscoveryHistory,
   markCandidateShown,
@@ -37,6 +36,7 @@ import {
 } from "../../face-novelty-memory/live-evaluator";
 import { MemoryLiveDiagnosticStore } from "../../face-novelty-memory/diagnostic-store";
 import { SupabaseLiveDiagnosticStore } from "../../face-novelty-memory/supabase-diagnostic-store";
+import { resolveMatchedSameRunSlot } from "../novelty-replacement";
 import {
   uploadPersonaCandidateBytes,
   buildPersonaCandidateAssetMetadata,
@@ -277,14 +277,25 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
   }
   const archetypeId = official.archetype.id;
 
-  const initialPlans: SlotPlan[] = [];
-  for (const slot of ["A", "B", "C", "D"] as DiscoverySlot[]) {
-    initialPlans.push(
-      await planSlotAttemptForProject({
+  const planSlotAttempt: CompletionEngineDeps["planSlotAttempt"] =
+    input.planSlotAttempt ??
+    (async ({ slot, attemptNumber, previousIdentity }) =>
+      planSlotAttemptForProject({
         project: input.project,
         generationRunId: input.generationRunId,
         slot,
+        attemptNumber,
+        previousIdentity,
+      }));
+
+  // Phase 2.2E — every attempt (including attempt 1) uses the same L3 planner.
+  const initialPlans: SlotPlan[] = [];
+  for (const slot of ["A", "B", "C", "D"] as DiscoverySlot[]) {
+    initialPlans.push(
+      await planSlotAttempt({
+        slot,
         attemptNumber: 1,
+        previousIdentity: null,
       }),
     );
   }
@@ -323,42 +334,38 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
           await embeddingRepo.loadEmbeddingsForWorkspace(
             input.scope.workspaceId,
             archetypeId,
+            { currentCreationProjectId: input.project.id },
           )
         ).length
       : 0;
-    const liveEvaluator = await buildLiveFaceEvaluator({
+    let liveEvaluator = await buildLiveFaceEvaluator({
       workspaceId: input.scope.workspaceId,
       archetypeId,
+      currentCreationProjectId: input.project.id,
     });
     assertLiveFaceEvaluatorNotNull(
       liveEvaluator,
       `a1_discovery_completion project=${input.project.id}`,
     );
 
-    evaluateNovelty = async ({ slot, candidateId, imageBytes }) => {
-      const candidateNumber = SLOT_TO_NUMBER[slot];
-      const variation =
-        official.variations[candidateNumber - 1] ??
-        resolveCandidateVariation(candidateNumber);
-      const blueprint = official.blueprints[candidateNumber - 1];
-      const identityFingerprint = buildIdentityFingerprint({
-        archetypeId,
-        blueprintId: blueprint?.id ?? `slot-${slot}`,
-        runVariationToken: official.runVariationToken ?? input.generationRunId,
-        faceGeometry: variation.faceGeometry,
-        jawShape: variation.jawShape,
-        noseShape: variation.noseShape,
-        eyeShape: variation.eyeShape,
-        lipShape: variation.lipShape,
-        hairTexture: variation.hairTexture,
-        haircut: variation.haircut,
-        facialHair: variation.facialHair,
-        bodyStructure: variation.bodyBuild,
-        skinTone: variation.skinTone,
-        ancestryDirection: variation.identityDescriptor,
-      });
-      const assets = await creationRepo.listCandidateAssets(input.scope, candidateId);
-      const primary = assets.find((a) => a.is_primary) ?? assets[0];
+    evaluateNovelty = async ({
+      slot,
+      attemptNumber: _attemptNumber,
+      candidateId,
+      assetId,
+      identity,
+      imageBytes,
+    }) => {
+      // Phase 2.2E — use the actual sampled L3 identity fingerprint for this
+      // attempt. Never rebuild from static blueprint/variation (retries would
+      // collide on identity_fingerprint_already_consumed).
+      const identityFingerprint = identity.identityFingerprint;
+      if (!identityFingerprint.trim()) {
+        throw new PersonaDomainError(
+          "Missing L3 identityFingerprint for novelty evaluation.",
+          "CONFIG",
+        );
+      }
       const check = await checkAndRegisterCandidate(
         noveltyRepo,
         noveltyHistory,
@@ -367,9 +374,8 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
           archetypeId,
           creationProjectId: input.project.id,
           candidateId,
-          assetId: primary?.id ?? candidateId,
+          assetId,
           identityFingerprint,
-          storageObjectKey: primary?.storage_path,
           signedUrl: `data:image/png;base64,${imageBytes.toString("base64")}`,
           sourceProvider: provider.providerName,
           sourceModel: provider.modelName,
@@ -379,8 +385,11 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
           embeddingRepo: embeddingRepo ?? undefined,
           diagnosticStore,
           priorEmbeddingsLoaded,
-          slot: candidateNumber,
+          slot: SLOT_TO_NUMBER[slot],
           evaluatorActive: true,
+          // Each paid attempt must persist a fresh embedding even if a prior
+          // novelty row for this candidate_id somehow still exists.
+          forceFreshEmbedding: true,
         },
       );
       noveltyHistory = await loadDiscoveryHistory(
@@ -393,6 +402,7 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
           await embeddingRepo.loadEmbeddingsForWorkspace(
             input.scope.workspaceId,
             archetypeId,
+            { currentCreationProjectId: input.project.id },
           )
         ).length;
       }
@@ -423,12 +433,55 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
         if (record) {
           await markCandidateShown(noveltyRepo, record.id, input.scope.workspaceId);
         }
+        // Phase 2.2G — rebuild evaluator so later slots see same-run allowed faces.
+        if (embeddingRepo) {
+          const imgMap = new Map<string, string>();
+          imgMap.set(assetId, `data:image/png;base64,${imageBytes.toString("base64")}`);
+          liveEvaluator = await buildLiveFaceEvaluator({
+            workspaceId: input.scope.workspaceId,
+            archetypeId,
+            currentCreationProjectId: input.project.id,
+            imageSourceMap: imgMap,
+          });
+          priorEmbeddingsLoaded = (
+            await embeddingRepo.loadEmbeddingsForWorkspace(
+              input.scope.workspaceId,
+              archetypeId,
+              { currentCreationProjectId: input.project.id },
+            )
+          ).length;
+        }
       }
+
+      let matchedProjectId: string | null = null;
+      const matchedCandidateId =
+        check.liveDebug?.closestPriorCandidateId ??
+        check.closestPriorCandidateId ??
+        null;
+      if (matchedCandidateId) {
+        const matched = await creationRepo.getCandidate(
+          input.scope,
+          matchedCandidateId,
+        );
+        matchedProjectId = matched?.creation_project_id ?? null;
+      }
+      const { matchedSameRun } = resolveMatchedSameRunSlot({
+        matchedCandidateId,
+        matchedProjectId,
+        currentProjectId: input.project.id,
+        matchedCandidateNumber: null,
+      });
+
       return {
         decision,
         reason: check.hardRejectReason ?? String(check.finalDecision),
-        highestSimilarity: check.liveDebug?.similarity ?? null,
-        matchedCandidateId: check.liveDebug?.closestPriorCandidateId ?? null,
+        highestSimilarity:
+          check.similarity ?? check.liveDebug?.similarity ?? null,
+        matchedCandidateId,
+        embeddingStatus: check.embeddingStatus ?? null,
+        euclideanDistance: check.euclideanDistance ?? null,
+        matchedProjectId,
+        matchedSameRun,
       };
     };
   }
@@ -437,14 +490,20 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
     input.persistCandidate ??
     (async ({ slot, attemptNumber, identity, providerResult }) => {
       const candidateNumber = SLOT_TO_NUMBER[slot];
+      // Phase 2.2E.2 — ONE logical candidate per board slot (unique
+      // creation_project_id + candidate_number). Retries update that row and
+      // attach a new asset; attempt history lives on persona_discovery_attempts.
       const existing = (
         await creationRepo.listCandidates(input.scope, input.project.id)
       ).find((c) => c.candidate_number === candidateNumber);
+
       const settings = {
+        ...(existing?.generation_settings ?? {}),
         provider: providerResult.providerName,
         providerModel: providerResult.providerModel,
         providerSeed: providerResult.providerSeed,
         providerRequestId: providerResult.providerRequestId,
+        discoveryAttemptNumber: attemptNumber,
         discoveryIdentity: {
           slot,
           attemptNumber,
@@ -457,7 +516,11 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
         },
         discoveryIdentitySample: identity,
         discoveryCompletionEngine: true,
+        // Clear any prior supersede flags — this row remains the slot's candidate.
+        boardSupersededByReplacement: undefined,
+        replacedByCandidateId: undefined,
       };
+
       let candidate = existing;
       if (!candidate) {
         candidate = await creationRepo.createCandidate(input.scope, {
@@ -490,10 +553,9 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
           provider: providerResult.providerName,
           provider_job_id: input.generationRunId,
           generation_seed: String(providerResult.providerSeed),
-          generation_settings: {
-            ...(candidate.generation_settings ?? {}),
-            ...settings,
-          },
+          generation_settings: settings,
+          distinguishing_features: identity.anatomyFingerprint,
+          rejection_reason: "",
           actual_generation_cost: Number(
             (
               (candidate.actual_generation_cost ?? 0) +
@@ -502,6 +564,20 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
           ),
         });
       }
+
+      // Demote prior primary portrait so the latest attempt asset is primary.
+      const priorAssets = await creationRepo.listCandidateAssets(
+        input.scope,
+        candidate.id,
+      );
+      for (const prior of priorAssets) {
+        if (prior.is_primary) {
+          await creationRepo.updateCandidateAsset(input.scope, prior.id, {
+            is_primary: false,
+          });
+        }
+      }
+
       const assetId = randomUUID();
       const uploaded =
         repoKind === "memory"
@@ -553,16 +629,7 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
     {
       provider,
       attemptRepo,
-      planSlotAttempt:
-        input.planSlotAttempt ??
-        (async ({ slot, attemptNumber, previousIdentity }) =>
-          planSlotAttemptForProject({
-            project: input.project,
-            generationRunId: input.generationRunId,
-            slot,
-            attemptNumber,
-            previousIdentity,
-          })),
+      planSlotAttempt,
       persistCandidate,
       evaluateNovelty,
     },

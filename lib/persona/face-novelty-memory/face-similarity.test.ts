@@ -124,6 +124,9 @@ async function registerShow(
     workspaceId: WS,
     assetId,
     candidateId,
+    creationProjectId: PROJECT,
+    liveEvaluationEvidence: { finalDecision: "allowed" },
+    historicalProtectionStatus: "unprotected",
     embedding,
     embeddingDimension: embedding.length,
     embeddingModel: "faceRecognitionNet",
@@ -493,7 +496,9 @@ describe("15. embeddings persisted once", () => {
       { workspaceId: WS, archetypeId: ARCH, creationProjectId: PROJECT, candidateId: "cand-emb-persist", assetId: "asset-emb-persist", identityFingerprint: makeFp("emb-persist"), sourceProvider: PROVIDER, sourceModel: MODEL },
       { evaluator: uniqueEval, embeddingRepo: embRepo },
     );
-    const stored = await embRepo.loadEmbeddingsForWorkspace(WS);
+    const stored = await embRepo.loadEmbeddingsForWorkspace(WS, ARCH, {
+      currentCreationProjectId: PROJECT,
+    });
     assert.ok(stored.length > 0, "embedding must be stored");
     const hasIt = await embRepo.hasEmbedding(check.recordId, WS);
     assert.ok(hasIt, "hasEmbedding should return true after persistence");

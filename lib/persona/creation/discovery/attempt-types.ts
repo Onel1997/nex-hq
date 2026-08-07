@@ -29,6 +29,14 @@ export type DiscoveryAttemptRecord = {
   noveltyDecision: string | null;
   highestSimilarity: number | null;
   matchedCandidateId: string | null;
+  /** Phase 2.2E — fresh embedding evaluation status for this attempt. */
+  embeddingStatus: "created" | "reused" | "missing" | null;
+  /** Phase 2.2E — closest prior Euclidean distance (biological evaluator). */
+  euclideanDistance: number | null;
+  /** Phase 2.2E — creation project of closest prior match. */
+  matchedProjectId: string | null;
+  /** Phase 2.2E — whether closest prior is same creation project. */
+  matchedSameRun: boolean | null;
   status: DiscoveryAttemptStatus;
   providerStartedAt: string | null;
   providerCompletedAt: string | null;

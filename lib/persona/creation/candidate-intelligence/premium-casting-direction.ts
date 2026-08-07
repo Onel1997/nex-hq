@@ -1,12 +1,13 @@
 /**
- * Phase 2.2B / 2.2C — Premium Discovery Director (creative direction only).
+ * Phase 2.2B / 2.2C / 2.2H — Primary Brand Face direction (creative only).
  *
- * Phase 2.2C goal: remove AI fashion-model look from A1 discovery faces.
- * Prefer real unretouched human casting photography over polished campaign avatars.
+ * Mediterranean Premium Hero = primary face of a premium modern streetwear brand.
+ * Customers must instantly believe he could genuinely represent the brand.
+ * Attractiveness from harmony, confidence, authenticity — NOT extreme masculinity
+ * or “most handsome man” casting.
  *
- * Quality inspiration: Zara / COS / Massimo Dutti / Mango Man / Fear of God /
- * Aime Leon Dore / Brunello Cucinelli / Jacquemus / Officine Générale.
- * Never copy identities, real people, or existing models.
+ * Quality inspiration (casting bar / wardrobe vibe only, never identity copy):
+ * Aimé Leon Dore, Fear of God ESSENTIALS, Our Legacy, COS, ARKET, Zara Studio.
  */
 
 import type { ArchetypeCandidateBlueprint, BrandArchetype } from "@/lib/brand-archetypes";
@@ -14,15 +15,12 @@ import type { DiscoverySlot } from "@/lib/persona/identity-blueprints";
 
 /** Quality reference brands — casting bar only, never identity copy. */
 export const PREMIUM_CASTING_QUALITY_REFERENCE = [
-  "Zara campaign",
+  "Aimé Leon Dore",
+  "Fear of God ESSENTIALS",
+  "Our Legacy",
   "COS",
-  "Massimo Dutti",
-  "Mango Man",
-  "Fear of God",
-  "Aime Leon Dore",
-  "Brunello Cucinelli",
-  "Jacquemus",
-  "Officine Générale",
+  "ARKET",
+  "Zara Studio",
 ] as const;
 
 export type OfficialArchetypeSlug =
@@ -69,12 +67,17 @@ export function genderEnforcementBlock(archetype: BrandArchetype): string {
 export function realHumanPhotographPriorityBlock(): string {
   return [
     "REAL HUMAN PHOTOGRAPH — A1 DISCOVERY PRIORITY",
-    "Output must read as a real unretouched human fashion casting photograph,",
+    "Output must read as a real unretouched commercial streetwear casting photograph,",
     "shot on a real camera by a real photographer — not an AI fashion model, not a CGI avatar,",
     "not Midjourney fashion, not an Instagram AI face, not a hyper-polished campaign still.",
-    "Attractive and premium, but believable as a living person with natural skin and asymmetry.",
-    "Identity and human realism matter more than fashion styling or cinematic polish.",
-    "This is premium agency casting photography — NOT a finished advertising campaign image.",
+    "PRIMARY BRAND FACE: premium modern streetwear brand ambassador — NOT a luxury fashion house.",
+    "Naturally attractive Mediterranean male ~22–27 — effortlessly stylish, approachable, memorable.",
+    "Someone you could realistically discover through premium streetwear casting in Milan, Barcelona, or Berlin.",
+    "Attractiveness from harmony, quiet confidence, and authenticity — not extreme masculine features.",
+    "Real premium brand ambassador energy — not fashion-week runway, not perfume campaign, not celebrity.",
+    "Emotional target: viewers think “he looks cool” — trustworthy, approachable, premium, modern, effortless, timeless.",
+    "NOT “the most handsome / most masculine man I’ve ever seen.”",
+    "Identity and human realism matter more than beauty, glamour, or cinematic polish.",
   ].join("\n");
 }
 
@@ -84,41 +87,70 @@ export function realHumanPhotographPriorityBlock(): string {
  */
 function mediterraneanPremiumBlock(): string {
   return [
-    "PREMIUM CASTING — Mediterranean Premium Hero (quality bar only)",
-    "You are a casting director reviewing four completely different real adult male models",
-    "on a simple agency casting board for Milaene premium streetwear / quiet luxury.",
+    "PREMIUM CASTING — Mediterranean Premium Hero / PRIMARY BRAND FACE (quality bar only)",
+    "Cast the primary face of a premium modern streetwear brand — not a luxury fashion house.",
+    "Review four completely different naturally attractive Mediterranean males aged about 22–27",
+    "on a simple commercial casting board for Milaene premium streetwear.",
+    "Each face should look like someone you could realistically discover through premium streetwear",
+    "casting in Milan, Barcelona, or Berlin — effortlessly stylish, approachable, and memorable.",
     "Biology and fashion presence come ONLY from each candidate's Discovery Identity Instance — do not homogenize faces.",
     "Each candidate must own permanent unique facial anatomy — different face width/length, jaw, chin, cheekbones,",
     "eyes and eye spacing, nose shape/width, eyebrows, lips, forehead, ears, hairline, hair texture,",
     "facial hair, exact age feel, and expression.",
     "Sample four different Mediterranean regional appearance clusters — never four men from the same cluster.",
-    "No brothers. No cousins. No twins. No recolored clones. No repetitive Mediterranean template.",
-    "No generic handsome AI man. No Instagram AI model. No Midjourney fashion face. No hyper-polished fashion avatar.",
+    "Four different real people from the same brand universe — never brothers, cousins, twins, or variations of one face.",
     "",
-    "Quality bar: real agency casting tests inspired by Zara / COS / Massimo Dutti / Mango Man /",
-    "Fear of God / Aime Leon Dore / Brunello Cucinelli / Jacquemus / Officine Générale —",
-    "photogenic, commercially memorable, instantly recognizable as distinct humans,",
-    "photorealistic and campaign-ready as Brand Faces later — but THIS A1 frame is casting, not finished ads.",
-    "NOT ordinary men. NOT passport / ID / LinkedIn / casting-database headshots.",
-    "NOT unreal beauty. NOT perfect symmetry. NOT beauty-filter skin. NOT plastic or wax skin.",
+    "PRIMARY BRAND FACE — FACIAL CHARACTER:",
+    "Soft masculine facial structure. Balanced proportions. Expressive but relaxed eyes.",
+    "Slightly thicker natural eyebrows. Subtle jawline. Defined but not exaggerated cheekbones.",
+    "Medium lips. Youthful healthy skin with natural texture — small imperfections welcome.",
+    "Slight stubble or clean shave. Friendly calm expression. Quiet confidence. Authentic charisma.",
+    "Attractiveness from harmony and authenticity — never extreme masculine features.",
     "",
-    "Photography: simple real European casting studio — plaster/concrete wall, natural daylight or soft studio,",
-    "real camera, restrained styling, minimal retouching, face clearly visible, believable fabric texture.",
+    "BODY: lean athletic — not muscular, not bodybuilder. Normal proportions. Healthy.",
+    "Looks wearable in oversized clothing.",
+    "",
+    "HAIR (premium contemporary streetwear): short textured curls, natural curly crop, clean taper fade,",
+    "low fade, relaxed wavy medium hair, or effortless messy curls — natural, never perfectly styled editorial hair.",
+    "",
+    "STYLING vibe (wardrobe references only): Fear of God ESSENTIALS, Aimé Leon Dore, Our Legacy, COS, ARKET, Zara Studio.",
+    "Simple premium basics. Neutral colors. Oversized silhouettes. No luxury logos. No flashy accessories.",
+    "",
+    "Quality bar: premium European streetwear casting test inspired by Aimé Leon Dore,",
+    "Fear of God ESSENTIALS, Our Legacy, COS, ARKET, Zara Studio — photorealistic, campaign-ready later,",
+    "commercially memorable — but THIS A1 frame is casting, not finished ads.",
+    "Fashion agency photography energy with natural daylight commercial campaign clarity.",
+    "",
+    "EMOTIONAL IMPRESSION: “He looks cool.” Trustworthy. Approachable. Premium. Modern. Effortless. Timeless.",
+    "NOT: “He is the most handsome man I’ve ever seen.”",
+    "",
+    "AVOID: hyper masculine faces, oversized jaw, bodybuilder face, aggressive hunter eyes,",
+    "perfume advertisement look, movie hero appearance, luxury runway model, overly sculpted cheekbones,",
+    "perfect symmetry, influencer aesthetic, intimidating expressions, looking older than 28,",
+    "beauty filters, plastic skin, CGI, Instagram model aesthetic, cinematic hero look.",
+    "NOT passport / ID / LinkedIn / casting-database headshots.",
+    "",
+    "Photography: natural daylight commercial fashion campaign energy — soft shadows, real skin,",
+    "no cinematic color grading, no perfume campaign lighting, no editorial fashion-week styling.",
+    "Simple casting wall, real camera (~50mm–85mm feel), restrained streetwear basics, face clearly visible.",
   ].join("\n");
 }
 
 function urbanCommunityBlock(): string {
   return [
     "PREMIUM CASTING — Urban Community Hero (quality bar only)",
-    "Cast DISTINCT adult male premium Black / Afro-European community streetwear models.",
+    "Cast DISTINCT adult male premium Black / Afro-European community streetwear faces (~22–28).",
     "Biology and fashion presence come ONLY from each candidate's discovery blueprint / L3.",
+    "Real people from the same brand universe — never brothers or face variations of one man.",
     "",
-    "Expression: relaxed confidence, fashion energy, community leader presence.",
+    "Expression: effortless confidence, approachable, relaxed — editorial streetwear energy.",
     "No exaggerated smiling. No influencer selfie energy. No gangster stereotype.",
+    "No hyper-masculine, runway, perfume-campaign, or cinematic-hero look.",
     "",
     "Photography: real agency casting test — soft natural or simple studio light, photorealistic,",
     "campaign-ready potential later; THIS frame is casting, not a finished ad.",
     "Natural pores, micro skin texture, real eye reflections — never plastic AI skin.",
+    "Authenticity is more important than beauty.",
     "NOT passport photo. NOT corporate headshot. NOT tourist snapshot.",
   ].join("\n");
 }
@@ -126,12 +158,13 @@ function urbanCommunityBlock(): string {
 function femaleLifestyleBlock(): string {
   return [
     "PREMIUM CASTING — Female Lifestyle Hero (quality bar only)",
-    "Cast DISTINCT adult female premium lifestyle models for luxury casual campaigns.",
+    "Cast DISTINCT adult female premium streetwear / lifestyle faces — real people, not beauty-campaign dolls.",
     "Biology and fashion presence come ONLY from each candidate's discovery blueprint / L3.",
     "",
     "Natural beauty. No heavy makeup. Healthy realistic skin with visible texture.",
     "Expression: authentic warmth when appropriate — never forced stock smile.",
-    "Zara / COS / Jacquemus casting quality. Photorealistic, campaign-ready potential — casting frame first.",
+    "COS / ARKET / Zara Studio / Acne Studios casting quality. Photorealistic, campaign-ready potential — casting frame first.",
+    "Authenticity is more important than beauty.",
     "",
     "NOT passport photo. NOT beauty-pageant glam. NOT plastic AI face. NOT Instagram filter.",
   ].join("\n");
@@ -160,22 +193,29 @@ export function premiumArchetypeCastingBlock(
 
 export function premiumFashionPresenceBlock(): string {
   return [
-    "FASHION MODEL QUALITY BAR — REAL HUMAN CASTING",
-    "The subject must appear as a real professional model a casting director would book —",
-    "agency-castable, photogenic, commercially memorable, and biologically distinct from other board slots.",
-    "Believable as a recurring brand ambassador for premium streetwear / quiet luxury.",
-    "Capable of carrying both product and lifestyle imagery later.",
-    "Visually distinctive without looking artificial.",
-    "Attractive in a modern fashion-commercial way — realistic, lived-in, not an idealized AI beauty clone.",
-    "Suitable for repeated image and video use.",
+    "PRIMARY BRAND FACE — COMMERCIAL STREETWEAR CASTING (not luxury fashion house)",
+    "Cast a naturally attractive Mediterranean male ~22–27 customers instantly believe could represent the brand.",
+    "Believable as someone discovered through premium streetwear casting in Milan, Barcelona, or Berlin.",
+    "Soft masculine structure · balanced proportions · expressive relaxed eyes · slightly thicker natural brows.",
+    "Subtle jawline · defined-not-exaggerated cheekbones · medium lips · youthful skin with natural texture.",
+    "Slight stubble or clean shave · friendly calm expression · quiet confidence · authentic charisma.",
+    "Lean athletic body — not muscular. Looks healthy and wearable in oversized basics.",
+    "Effortlessly stylish, approachable, memorable — real brand ambassador, not fashion-week runway.",
+    "Agency-castable, commercially memorable, biologically distinct from other board slots.",
+    "Emotional target: “He looks cool.” Trustworthy · approachable · premium · modern · effortless · timeless.",
+    "NOT the most handsome or most masculine man possible — harmony over extreme features.",
+    "Attractive in a lived-in commercial way — realistic, imperfect, not an idealized AI beauty clone.",
+    "Skin must look photographed — not porcelain, not waxy, not plastic beauty-filter skin.",
     "",
-    "Prioritize: facial character, recognizability, strong camera presence, proportion,",
-    "natural asymmetry, authentic unretouched skin, garment compatibility, long-term brand-face potential.",
-    "Do NOT request conventional perfect beauty only.",
+    "Do NOT cast: hyper masculine faces, oversized jaw, bodybuilder face, aggressive hunter eyes,",
+    "perfume advertisement look, movie hero, luxury runway model, overly sculpted cheekbones,",
+    "perfect symmetry, influencer aesthetic, intimidating expressions, looking older than 28.",
     "Do NOT beautify. Do NOT airbrush. Do NOT symmetrize. Do NOT add cinematic glow.",
     "",
-    `Quality bar inspired by (never copy): ${PREMIUM_CASTING_QUALITY_REFERENCE.join(", ")}.`,
-    "International premium editorial casting — photorealistic, campaign-ready later — not passport, not LinkedIn, not Midjourney fashion, not Instagram AI.",
+    `Wardrobe vibe inspired by (never copy identity): ${PREMIUM_CASTING_QUALITY_REFERENCE.join(", ")}.`,
+    "Simple premium basics · neutral colors · oversized · no luxury logos · no flashy accessories.",
+    "International premium streetwear casting — photorealistic, campaign-ready later —",
+    "not passport, not LinkedIn, not Midjourney fashion, not Instagram model aesthetic.",
   ].join("\n");
 }
 
@@ -186,23 +226,28 @@ export function premiumFashionPresenceBlock(): string {
 export function premiumPhotographyBlock(): string {
   return [
     "PREMIUM CASTING PHOTOGRAPHY — Official Brand Face A1",
-    "Shoot like a real European fashion casting photographer — not an AI image generator.",
+    "Natural daylight commercial fashion campaign energy — soft shadows, real skin.",
+    "Shoot like a real European streetwear casting photographer — not an AI image generator.",
     "Simple real casting environment: neutral plaster or concrete wall only.",
-    "Natural daylight or simple soft studio light — restrained, not cinematic.",
+    "Natural daylight preferred; simple soft studio fill only if needed — never perfume-campaign lighting.",
+    "No cinematic color grading. No editorial fashion-week styling. No orange/teal grade.",
     "Real high-end digital camera capture with authentic lens rendering and natural photographic depth.",
-    "Avoid extreme bokeh, heavy haze, excessive cinematic glow, and orange/teal color grading.",
-    "Real unretouched human skin: visible natural pores, subtle texture, pigmentation variation.",
+    "Avoid extreme bokeh, heavy haze, excessive cinematic glow.",
+    "Real unretouched human skin: visible natural pores, subtle texture, pigmentation variation,",
+    "small imperfections welcome — youthful healthy texture, never beauty-filter wipe.",
     "Slight facial asymmetry and slight eye asymmetry required — never perfect mirror symmetry.",
-    "Realistic under-eye texture. Natural lips. Realistic ears. Realistic hairline with individual imperfect strands.",
+    "Realistic under-eye texture. Natural medium lips. Realistic ears. Imperfect natural hair strands.",
+    "Hair feels natural contemporary streetwear — never perfectly styled editorial hair.",
     "Subtle beard density variation when facial hair is present — never stamped CGI beard.",
-    "Occasional subtle mole or freckles when L3 micro-marks allow — never beauty-filter wipe.",
-    "Believable fabric texture and soft garment wrinkles — clothing supports evaluation, does not dominate.",
+    "Believable fabric texture and soft oversized garment drape — clothing supports evaluation.",
     "Natural shadows with soft falloff. Slight real-camera micro-imperfections welcome.",
     "Natural neutral color grading — no orange skin, no teal grade, no oversaturation, no overexposure.",
     "Premium casting clarity — controlled casting set, NOT a finished advertising campaign.",
     "NOT passport lighting. NOT harsh ID photo flash. NOT over-sharpened AI polish.",
-    "NOT plastic skin, NOT wax skin, NOT airbrushed, NOT beauty filters, NOT CGI, NOT 3D render, NOT digital art.",
-    "NOT Midjourney fashion. NOT Instagram AI model. NOT hyper-polished fashion avatar. NOT perfect jawlines.",
+    "NOT plastic skin, NOT wax skin, NOT airbrushed, NOT beauty filters, NOT CGI, NOT 3D render.",
+    "NOT Midjourney fashion. NOT Instagram AI model. NOT Instagram model aesthetic.",
+    "NOT oversized jaw. NOT aggressive hunter eyes. NOT hyper-masculine. NOT bodybuilder.",
+    "NOT luxury runway model. NOT perfume advertisement. NOT movie hero. NOT cinematic hero look.",
   ].join("\n");
 }
 
@@ -235,20 +280,20 @@ export function slotCastingCameraBlock(slot: DiscoverySlot): string {
         "Head angle: gentle 8–12° turn toward camera-left with soft tilt.",
         "Lighting: large soft window daylight from camera-left, gentle fill — simple casting light.",
         "Background: warm grey mineral plaster — soft, even, low-contrast casting wall.",
-        "Micro-expression: friendly quiet luxury — calm almost-smile, soft eyes.",
+        "Micro-expression: friendly quiet confidence — calm almost-smile, soft approachable eyes.",
         "Do NOT reuse Slot B/C/D lens, height, lighting side, or crop.",
       ].join("\n");
     case "B":
       return [
         "CAMERA DIRECTION — SLOT B (independent setup)",
         "Lens: ~50mm documentary-fashion feel, slightly more environmental presence.",
-        "Camera height: eye-level to slightly below — athletic confident stance.",
+        "Camera height: eye-level to slightly below — natural streetwear stance.",
         "Distance: slightly wider upper-torso crop — more shoulder/garment mass visible. Face clearly visible.",
         "Depth of field: natural documentary falloff — avoid extreme bokeh or cinematic haze.",
         "Head angle: firmer 15–20° body rotation, chin level, direct hold.",
         "Lighting: clearer directional key from camera-right with natural cheek shadow — still simple studio/daylight.",
         "Background: cooler charcoal / stone casting wall — denser tonal weight.",
-        "Micro-expression: confident urban calm — cooler gaze, relaxed mouth, no smile.",
+        "Micro-expression: effortless urban calm — cooler gaze, relaxed mouth, no smile, no toughness.",
         "Do NOT reuse Slot A/C/D lens, height, lighting side, or crop.",
       ].join("\n");
     case "C":
@@ -261,20 +306,20 @@ export function slotCastingCameraBlock(slot: DiscoverySlot): string {
         "Head angle: soft three-quarter turn toward camera-right, thoughtful tilt.",
         "Lighting: soft high-window wrap with lighter open shadows — simple casting light.",
         "Background: pale off-white / soft mineral plaster — airy casting wall.",
-        "Micro-expression: creative editorial calm — soft focused eyes, composed mouth.",
+        "Micro-expression: creative editorial calm — soft focused eyes, composed relaxed mouth.",
         "Do NOT reuse Slot A/B/D lens, height, lighting side, or crop.",
       ].join("\n");
     case "D":
       return [
         "CAMERA DIRECTION — SLOT D (independent setup)",
-        "Lens: ~58–65mm campaign portrait feel — balanced hero casting presence.",
+        "Lens: ~58–65mm campaign portrait feel — balanced streetwear casting presence.",
         "Camera height: true eye-level — steady Mediterranean casting hold.",
         "Distance: classic agency test distance, chest-up with balanced crop. Face clearly visible.",
         "Depth of field: natural portrait falloff — avoid extreme bokeh and cinematic glow.",
         "Head angle: subtle 5–10° turn, strong frontal presence, minimal tilt.",
         "Lighting: warm soft key with gentle cheek dimension — natural daylight/studio, not teal/orange grade.",
         "Background: warm stone-grey concrete — casting-neutral wall.",
-        "Micro-expression: relaxed luxury confidence — warm attentive eyes, quiet authority.",
+        "Micro-expression: relaxed approachable confidence — warm attentive eyes, quiet authority without arrogance.",
         "Do NOT reuse Slot A/B/C lens, height, lighting side, or crop.",
       ].join("\n");
   }
@@ -301,14 +346,18 @@ export function a1CastingCompositionBlock(): string {
 
 export function a1PresenceRulesBlock(): string {
   return [
-    "CASTING PRESENCE — NOT AGGRESSION — NOT INSTAGRAM PERFORMANCE",
-    "Emotional range: calm, self-assured, approachable, modern, authentic,",
-    "slightly cool, quietly confident, socially believable, premium without arrogance.",
+    "CASTING PRESENCE — QUIET CONFIDENCE — EFFORTLESS CHARISMA — NOT AGGRESSION",
+    "Emotional range: youthful energy, quiet confidence, effortless charisma, approachable,",
+    "confident but relaxed, modern, authentic, socially believable,",
+    "premium streetwear presence without arrogance, runway severity, or movie-hero intensity.",
+    "Natural masculine presence that never looks intimidating — never aggressive.",
     "Micro-expression must follow THIS slot's identity + camera direction — not a shared board smile.",
     "Avoid: angry eyebrows, aggressive stare, hard confrontation, gangster energy,",
     "military posture, CEO authority, luxury realtor, blank lifeless expression,",
     "forced smile, frightened expression, tired eyes, sad expression,",
-    "exaggerated pout, runway severity, influencer duck-face, beauty-campaign glamour.",
+    "exaggerated pout, runway severity, fashion-week stare, influencer duck-face,",
+    "beauty-campaign glamour, cinematic / movie hero intensity, hyper-masculine toughness,",
+    "older-looking hardness, perfume-campaign coolness.",
   ].join("\n");
 }
 
@@ -432,7 +481,23 @@ export function premiumNegativePromptAdditions(): string {
     "overstyled hair",
     "runway severity",
     "fashion-week styling",
+    "fashion week runway model",
     "high-fashion costume",
+    "luxury perfume campaign",
+    "perfume campaign face",
+    "hyper masculine face",
+    "hyper-masculine",
+    "bodybuilder appearance",
+    "bodybuilder face",
+    "overly sharp jawline",
+    "overly sharp jawlines",
+    "movie hero appearance",
+    "movie hero look",
+    "perfect male model symmetry",
+    "fashion influencer aesthetics",
+    "fashion influencer look",
+    "older looking man",
+    "older looking men",
     "CEO portrait",
     "business headshot",
     "luxury realtor",
@@ -468,6 +533,8 @@ export function premiumNegativePromptAdditions(): string {
     "celebrity resemblance",
     "lookalike",
     "famous person",
+    "supermodel",
+    "professional supermodel",
     "fashion copy",
     "influencer selfie",
     "ring light influencer",
@@ -480,12 +547,15 @@ export function premiumNegativePromptAdditions(): string {
 export function buildPremiumRetryPromptSuffix(attempt: number): string {
   return [
     "",
-    `PREMIUM CASTING QUALITY RETRY (${attempt})`,
-    "Elevate immediately to a real unretouched human agency casting photograph.",
-    "Visible pores, natural asymmetry, realistic under-eye texture, photographic depth.",
-    "Distinct human identity for THIS slot only — not AI plastic skin, not Midjourney fashion.",
-    "Simple casting wall + soft daylight/studio — NOT a finished advertising campaign.",
-    "NOT passport, NOT LinkedIn, NOT Instagram AI model, NOT hyper-polished fashion avatar.",
+    `PREMIUM STREETWEAR CASTING QUALITY RETRY (${attempt})`,
+    "Elevate immediately to a real unretouched human streetwear casting photograph.",
+    "Age ~22–27, soft masculine harmony, quiet confidence, approachable calm expression.",
+    "Visible pores, natural asymmetry, small imperfections welcome, imperfect natural hair.",
+    "Distinct human identity for THIS slot only — “he looks cool,” not most-handsome casting.",
+    "NOT runway, perfume ad, hyper-masculine, oversized jaw, hunter eyes, bodybuilder,",
+    "Instagram model, movie hero, or cinematic grading.",
+    "Natural daylight + soft shadows + real skin — NOT a finished advertising campaign.",
+    "NOT passport, NOT LinkedIn, NOT Midjourney fashion, NOT plastic AI skin.",
   ].join("\n");
 }
 
