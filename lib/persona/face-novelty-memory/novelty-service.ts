@@ -57,13 +57,24 @@ export interface RegisterCandidateInput {
   sourceModel: string;
 }
 
-/** Register a newly generated candidate (state: generated). */
+/**
+ * Register a newly generated candidate (state: generated).
+ *
+ * Idempotent for discovery retries that reuse the same candidate_id:
+ * if a novelty row already exists for (workspace_id, candidate_id), reuse
+ * that row id and update it — never allocate a second row.
+ */
 export async function registerGeneratedCandidate(
   repo: NoveltyRepository,
   input: RegisterCandidateInput,
 ): Promise<FaceNoveltyRecord> {
+  const existing = await repo.findByCandidateId(
+    input.candidateId,
+    input.workspaceId,
+  );
+
   const record: FaceNoveltyRecord = {
-    id: randomUUID(),
+    id: existing?.id ?? randomUUID(),
     workspaceId: input.workspaceId,
     archetypeId: input.archetypeId,
     creationProjectId: input.creationProjectId,
@@ -77,7 +88,15 @@ export async function registerGeneratedCandidate(
     imageChecksum: input.imageChecksum,
     sourceProvider: input.sourceProvider,
     sourceModel: input.sourceModel,
-    createdAt: new Date().toISOString(),
+    // Preserve history on retry; only mint createdAt on first insert.
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+    firstShownAt: existing?.firstShownAt,
+    exhaustedAt: existing?.exhaustedAt,
+    savedAt: existing?.savedAt,
+    approvedAt: existing?.approvedAt,
+    shortlistedAt: existing?.shortlistedAt,
+    rejectedAt: existing?.rejectedAt,
+    embeddingVersion: existing?.embeddingVersion,
   };
   await repo.upsert(record);
   return record;

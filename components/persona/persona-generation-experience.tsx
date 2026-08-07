@@ -97,9 +97,10 @@ export function PersonaGenerationExperience({
       </div>
 
       <p className="ps-eyebrow">Discovery casting</p>
-      <h2 className="ps-gen-live-title">Generate 4 discovery faces</h2>
+      <h2 className="ps-gen-live-title">Finding 4 distinct Brand Faces</h2>
       <p className="ps-gen-live-subtitle">
-        One portrait per candidate — angle validation is a separate confirmed step.
+        Automatically resolving biological duplicates within your confirmed budget —
+        no manual Generate New Face required.
       </p>
 
       <div className="ps-gen-live-progress" aria-hidden>

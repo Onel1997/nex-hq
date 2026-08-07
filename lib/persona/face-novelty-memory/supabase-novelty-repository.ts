@@ -54,32 +54,41 @@ function mapRecord(row: Record<string, unknown>): FaceNoveltyRecord {
 const TABLE = "persona_face_novelty_records";
 
 export class SupabaseNoveltyRepository implements NoveltyRepository {
+  /**
+   * Persist a novelty record. Conflict target is
+   * persona_face_novelty_records_workspace_candidate_unique
+   * (workspace_id, candidate_id) so discovery retries update the existing
+   * row instead of inserting a second id for the same candidate.
+   */
   async upsert(record: FaceNoveltyRecord): Promise<void> {
     const client = createAdminClient();
-    const { error } = await client.from(TABLE).upsert({
-      id: record.id,
-      workspace_id: record.workspaceId,
-      archetype_id: record.archetypeId,
-      creation_project_id: record.creationProjectId,
-      candidate_id: record.candidateId,
-      asset_id: record.assetId,
-      state: record.state,
-      identity_fingerprint: record.identityFingerprint,
-      visual_fingerprint: record.visualFingerprint ?? null,
-      perceptual_hash: record.perceptualHash ?? null,
-      storage_object_key: record.storageObjectKey ?? null,
-      image_checksum: record.imageChecksum ?? null,
-      embedding_version: record.embeddingVersion ?? null,
-      source_provider: record.sourceProvider,
-      source_model: record.sourceModel,
-      created_at: record.createdAt,
-      first_shown_at: record.firstShownAt ?? null,
-      exhausted_at: record.exhaustedAt ?? null,
-      saved_at: record.savedAt ?? null,
-      approved_at: record.approvedAt ?? null,
-      shortlisted_at: record.shortlistedAt ?? null,
-      rejected_at: record.rejectedAt ?? null,
-    });
+    const { error } = await client.from(TABLE).upsert(
+      {
+        id: record.id,
+        workspace_id: record.workspaceId,
+        archetype_id: record.archetypeId,
+        creation_project_id: record.creationProjectId,
+        candidate_id: record.candidateId,
+        asset_id: record.assetId,
+        state: record.state,
+        identity_fingerprint: record.identityFingerprint,
+        visual_fingerprint: record.visualFingerprint ?? null,
+        perceptual_hash: record.perceptualHash ?? null,
+        storage_object_key: record.storageObjectKey ?? null,
+        image_checksum: record.imageChecksum ?? null,
+        embedding_version: record.embeddingVersion ?? null,
+        source_provider: record.sourceProvider,
+        source_model: record.sourceModel,
+        created_at: record.createdAt,
+        first_shown_at: record.firstShownAt ?? null,
+        exhausted_at: record.exhaustedAt ?? null,
+        saved_at: record.savedAt ?? null,
+        approved_at: record.approvedAt ?? null,
+        shortlisted_at: record.shortlistedAt ?? null,
+        rejected_at: record.rejectedAt ?? null,
+      },
+      { onConflict: "workspace_id,candidate_id" },
+    );
     throwDb(error, "Failed to upsert face novelty record");
   }
 

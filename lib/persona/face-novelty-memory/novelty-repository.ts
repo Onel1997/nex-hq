@@ -17,7 +17,11 @@ export interface NoveltyRecordFilter {
 }
 
 export interface NoveltyRepository {
-  /** Persist a new record.  Record id must be provided by caller (uuid). */
+  /**
+   * Persist a record. Idempotent on (workspace_id, candidate_id):
+   * retries update the existing row rather than inserting a duplicate.
+   * Prefer reusing the existing record id when one is already stored.
+   */
   upsert(record: FaceNoveltyRecord): Promise<void>;
   /** Update state (and timestamps) of an existing record. */
   updateState(
@@ -46,7 +50,35 @@ export interface NoveltyRepository {
 export class MemoryNoveltyRepository implements NoveltyRepository {
   private readonly records = new Map<string, FaceNoveltyRecord>();
 
+  /**
+   * Upsert by record id, enforcing the same uniqueness as
+   * persona_face_novelty_records_workspace_candidate_unique:
+   * one row per (workspace_id, candidate_id). Retries update in place.
+   */
   async upsert(record: FaceNoveltyRecord): Promise<void> {
+    for (const [id, existing] of this.records) {
+      if (
+        existing.workspaceId === record.workspaceId &&
+        existing.candidateId === record.candidateId &&
+        id !== record.id
+      ) {
+        // Same candidate under a different id — fold into the existing row.
+        this.records.delete(id);
+        this.records.set(id, {
+          ...record,
+          id,
+          createdAt: existing.createdAt,
+          firstShownAt: record.firstShownAt ?? existing.firstShownAt,
+          exhaustedAt: record.exhaustedAt ?? existing.exhaustedAt,
+          savedAt: record.savedAt ?? existing.savedAt,
+          approvedAt: record.approvedAt ?? existing.approvedAt,
+          shortlistedAt: record.shortlistedAt ?? existing.shortlistedAt,
+          rejectedAt: record.rejectedAt ?? existing.rejectedAt,
+          embeddingVersion: record.embeddingVersion ?? existing.embeddingVersion,
+        });
+        return;
+      }
+    }
     this.records.set(record.id, { ...record });
   }
 

@@ -459,6 +459,28 @@ export async function preparePaidGenerationConfirmation(
     }
   }
 
+  // Phase 2.2A — fail closed BEFORE paid confirmation when discovery provider missing.
+  // Never silently fall back to OpenAI when fal_flux was selected.
+  if (castingPhase === "a1_discovery") {
+    const { getDiscoveryProviderPreflight } = await import(
+      "./provider/discovery-provider-registry"
+    );
+    const { shouldUseFakePersonaProvider } = await import("./paid-generation-guard");
+    if (!shouldUseFakePersonaProvider()) {
+      const preflight = getDiscoveryProviderPreflight();
+      if (!preflight.configured) {
+        throw new PersonaDomainError(
+          "Brand Face Discovery provider is not configured.",
+          "CONFIG",
+          {
+            code: preflight.errorCode ?? "discovery_provider_not_configured",
+            discoveryProvider: preflight.providerId,
+          },
+        );
+      }
+    }
+  }
+
   const estimate = await estimateCreationCost(scope, projectId, {
     castingPhase,
     candidateIds: selectedIds,
@@ -571,6 +593,41 @@ export async function preparePaidGenerationConfirmation(
         castingPhase === "a1_discovery" ? "initial_discovery" : "a2_validation",
       selectedCandidateIds: selectedIds ?? [],
       timestamp: new Date().toISOString(),
+      ...(castingPhase === "a1_discovery"
+        ? await (async () => {
+            const { getDiscoveryProviderPreflight } = await import(
+              "./provider/discovery-provider-registry"
+            );
+            const { buildDiscoveryCompletionBudget } = await import(
+              "./discovery/completion-budget"
+            );
+            const { DEFAULT_DISCOVERY_ATTEMPTS_PER_SLOT } = await import(
+              "./provider/discovery-provider-config"
+            );
+            const preflight = getDiscoveryProviderPreflight();
+            const discoveryBudget = buildDiscoveryCompletionBudget({
+              providerId: preflight.providerId,
+              providerModel: preflight.providerModel,
+              slotCount: estimate.candidateCount,
+              maxAttemptsPerSlot: DEFAULT_DISCOVERY_ATTEMPTS_PER_SLOT,
+            });
+            return {
+              discoveryCompletionBudget: {
+                provider: preflight.providerDisplayName,
+                providerId: preflight.providerId,
+                model: preflight.providerModel,
+                maxAttemptsPerSlot: discoveryBudget.maxAttemptsPerSlot,
+                estimatedInitialCostEur: discoveryBudget.estimatedInitialCostEur,
+                authorizedMaxCostEur: discoveryBudget.authorizedMaxCostEur,
+                costStatus: "estimated" as const,
+                confirmationMessage: discoveryBudget.confirmationMessage,
+                faceProtection: "Ready",
+                historicalProtection: "Ready",
+                slotIdentityDiversity: "Ready",
+              },
+            };
+          })()
+        : {}),
     },
     created_by: scope.actorId,
   });
@@ -1019,6 +1076,157 @@ export async function confirmAndStartCandidateGeneration(
           "Keine fehlenden Winkel für die Auswahl — nichts zu generieren.",
           "WORKFLOW",
         );
+      }
+    }
+
+    // Phase 2.2A.1 — Official Brand Face A1 + fal_flux uses Discovery Completion Engine.
+    // Automatic blocked-slot resolution within confirmed max budget; no manual Generate New Face.
+    {
+      const officialProbe = resolveOfficialDiscoveryVariations({
+        project,
+        candidateNumbers: [1, 2, 3, 4],
+      });
+      const {
+        shouldUseDiscoveryCompletionEngine,
+        runOfficialBrandFaceA1DiscoveryCompletion,
+        resolveBudgetFromConfirmationPayload,
+      } = await import("./discovery/live-a1-completion-orchestrator");
+      const { resolveConfiguredDiscoveryProviderId, resolveFalModel } = await import(
+        "./provider/discovery-provider-config"
+      );
+      const budgetMeta = confirmationPayload.discoveryCompletionBudget as
+        | { providerId?: string }
+        | undefined;
+      const discoveryProviderId =
+        budgetMeta?.providerId === "fal_flux" || generator.id === "fal_flux"
+          ? "fal_flux"
+          : (budgetMeta?.providerId ?? resolveConfiguredDiscoveryProviderId());
+
+      if (
+        shouldUseDiscoveryCompletionEngine({
+          castingPhase,
+          officialBrandFace: officialProbe.officialBrandFace,
+          providerId: discoveryProviderId,
+        })
+      ) {
+        const budget = resolveBudgetFromConfirmationPayload(
+          confirmationPayload,
+          "fal_flux",
+          resolveFalModel(),
+        );
+        const completion = await runOfficialBrandFaceA1DiscoveryCompletion({
+          scope,
+          project,
+          generationRunId: durableJob.id,
+          budget,
+          maxBudgetConfirmed: true,
+          resume: confirmationPayload.discoveryResume === true,
+        });
+
+        const jobStatus =
+          completion.runState === "ready"
+            ? "completed"
+            : completion.runState === "ready_partial"
+              ? "partially_completed"
+              : "failed";
+
+        await jobRepo().updateJob(scope, durableJob.id, {
+          status: jobStatus,
+          provider_job_id: durableJob.id,
+          actual_cost: completion.actualCostEur,
+          cost_is_estimated: true,
+          error_message:
+            completion.runState === "failed"
+              ? "Discovery completion technical failure"
+              : null,
+          error_code:
+            completion.runState === "failed"
+              ? "DISCOVERY_TECHNICAL_FAILURE"
+              : completion.runState === "ready_partial"
+                ? "READY_PARTIAL"
+                : null,
+          completed_at: new Date().toISOString(),
+          confirmation_payload: {
+            ...(durableJob.confirmation_payload ?? {}),
+            generationSource: "fal_flux",
+            discoveryCompletionEngine: true,
+            discoveryRunState: completion.runState,
+            discoveryProgress: completion.progress,
+            discoveryBoard: completion.board,
+            providerExecution: {
+              provider: "fal_flux",
+              model: budget.providerModel,
+              startedAt: durableJob.started_at ?? now,
+              completedAt: new Date().toISOString(),
+              requestCount: completion.ledger.attemptsUsed,
+              successCount: completion.allowedSlots.length,
+              retryCount: Math.max(
+                0,
+                completion.ledger.attemptsUsed - completion.allowedSlots.length,
+              ),
+              creationProjectId: projectId,
+            },
+          },
+        });
+
+        await creationRepo().updateProject(scope, projectId, {
+          status:
+            completion.runState === "failed"
+              ? "failed"
+              : completion.board.length > 0
+                ? "review"
+                : "failed",
+          actual_cost: Number(
+            (project.actual_cost + completion.actualCostEur).toFixed(4),
+          ),
+          last_confirmation_token: null,
+        });
+
+        await logPersonaAuditEvent({
+          workspaceId: scope.workspaceId,
+          eventType:
+            completion.runState === "failed"
+              ? "candidate_generation.failed"
+              : "candidate_generation.completed",
+          recordId: projectId,
+          actorId: scope.actorId,
+          payload: {
+            durableJobId: durableJob.id,
+            discoveryRunState: completion.runState,
+            resultCount: completion.board.length,
+            actualCostEur: completion.actualCostEur,
+            costLabel: "estimated",
+            discoveryCompletionEngine: true,
+          },
+        });
+
+        return {
+          project: await requireProject(scope, projectId),
+          job: {
+            jobId: durableJob.id,
+            status:
+              jobStatus === "completed"
+                ? "completed"
+                : jobStatus === "partially_completed"
+                  ? "completed"
+                  : "failed",
+            provider: "fal_flux",
+            results: [],
+            actualCostEur: completion.actualCostEur,
+            errorMessage:
+              completion.runState === "failed"
+                ? "Discovery completion technical failure"
+                : undefined,
+          },
+          durableJob: await jobRepo().getJob(scope, durableJob.id),
+          candidates: filterCandidatesForGenerationRun(
+            await creationRepo().listCandidates(scope, projectId),
+            durableJob.id,
+          ),
+          generationRunId: durableJob.id,
+          costLabel: "estimated" as const,
+          discoveryCompletion: completion,
+        };
       }
     }
 

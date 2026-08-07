@@ -527,8 +527,10 @@ export function OfficialBrandFaceCastingView({
                 onChange={(e) => setConfirmCost(e.target.checked)}
               />
               <span>
-                I confirm the estimated cost and start A1 Discovery casting for{" "}
-                {brief.archetypeName}.
+                Generate 4 discovery faces with FLUX. Automatically replace
+                candidates rejected by biological face protection (up to 3
+                attempts per slot). I confirm the maximum authorized provider
+                spend and start A1 Discovery for {brief.archetypeName}.
               </span>
             </label>
           ) : (
