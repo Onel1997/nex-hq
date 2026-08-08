@@ -1,13 +1,25 @@
 /**
- * Phase 2.2B / 2.2C / 2.2H — Primary Brand Face direction (creative only).
+ * Phase 2.2B / 2.2C / 2.2H / 2.2I / 2.2J / 2.2K — Primary Brand Face direction (creative only).
  *
  * Mediterranean Premium Hero = primary face of a premium modern streetwear brand.
- * Customers must instantly believe he could genuinely represent the brand.
- * Attractiveness from harmony, confidence, authenticity — NOT extreme masculinity
- * or “most handsome man” casting.
+ * Phase 2.2I softens final casting quality toward timeless commercial premium
+ * streetwear — does NOT redesign the archetype.
+ * Phase 2.2J raises the QUALITY BAR toward the creative casting DNA that made a
+ * prior Candidate D successful — NEVER copies that face, identity, embedding,
+ * or anatomy template. A/B/C/D remain biologically distinct humans.
+ * Phase 2.2K further softens toward a cleaner, younger (22–25) soft-masculine
+ * e-commerce streetwear face — reduces traditional rugged / beard-heavy masculinity.
+ *
+ * Target balance: ~70% approachable commercial streetwear · ~20% premium polish · ~10% masculine edge.
+ * Target impression: “He looks good in that outfit.” / “I want to dress like him.”
+ * NOT: “That man has an extremely masculine/model face.”
+ *
+ * Attractiveness from harmony, relatability, trustworthiness — NOT extreme
+ * masculinity, editorial beauty, or “most handsome man” casting.
  *
  * Quality inspiration (casting bar / wardrobe vibe only, never identity copy):
- * Aimé Leon Dore, Fear of God ESSENTIALS, Our Legacy, COS, ARKET, Zara Studio.
+ * Fear of God ESSENTIALS, Aimé Leon Dore, Our Legacy, COS, ARKET, Zara Studio.
+ * Avoid: Dolce & Gabbana campaign, perfume ads, luxury runway, Instagram model.
  */
 
 import type { ArchetypeCandidateBlueprint, BrandArchetype } from "@/lib/brand-archetypes";
@@ -15,12 +27,60 @@ import type { DiscoverySlot } from "@/lib/persona/identity-blueprints";
 
 /** Quality reference brands — casting bar only, never identity copy. */
 export const PREMIUM_CASTING_QUALITY_REFERENCE = [
-  "Aimé Leon Dore",
   "Fear of God ESSENTIALS",
+  "Aimé Leon Dore",
   "Our Legacy",
   "COS",
   "ARKET",
   "Zara Studio",
+] as const;
+
+/**
+ * Phase 2.2J — creative casting QUALITY BAR inspired by a successful prior Candidate D.
+ * Tokens only — NEVER a face match, embedding, or locked anatomy template.
+ * Phase 2.2K softens further (cleaner / younger / less rugged) while keeping this bar.
+ */
+export const CANDIDATE_D_CREATIVE_DNA_QUALITY = [
+  "youthful Mediterranean appearance",
+  "narrow-to-medium face shape",
+  "soft masculine bone structure",
+  "natural medium jaw",
+  "relaxed open eyes",
+  "balanced brows",
+  "natural lips",
+  "cleaner contemporary textured dark hair",
+  "short textured curls / soft taper / low fade",
+  "clean shave or very light natural stubble",
+  "approachable neutral expression",
+  "quiet confidence",
+  "effortless charisma",
+  "slight individuality / imperfection",
+  "naturally handsome",
+  "premium everyday attractiveness",
+  "naturally belongs in Milaene",
+] as const;
+
+/** Phase 2.2K — softer primary streetwear face casting tokens. */
+export const SOFTER_PRIMARY_STREETWEAR_FACE_QUALITY = [
+  "apparent age 22–25",
+  "softer oval or subtle rectangular face",
+  "reduced facial width",
+  "reduced jaw width and sharpness",
+  "softer lower face",
+  "youthful cheeks",
+  "clean shave or very light stubble",
+  "70% approachable commercial streetwear",
+  "20% premium fashion polish",
+  "10% masculine edge",
+  "He looks good in that outfit",
+] as const;
+
+/** Explicit non-goals — prove we do not encode a prior Candidate D identity. */
+export const CANDIDATE_D_CREATIVE_DNA_NON_GOALS = [
+  "Do NOT copy any prior Candidate D face or identity",
+  "Do NOT attempt face matching to a previous board slot",
+  "Do NOT create a reference embedding from Candidate D",
+  "Do NOT use Candidate D as an anatomy template for A/B/C/D",
 ] as const;
 
 export type OfficialArchetypeSlug =
@@ -70,14 +130,76 @@ export function realHumanPhotographPriorityBlock(): string {
     "Output must read as a real unretouched commercial streetwear casting photograph,",
     "shot on a real camera by a real photographer — not an AI fashion model, not a CGI avatar,",
     "not Midjourney fashion, not an Instagram AI face, not a hyper-polished campaign still.",
-    "PRIMARY BRAND FACE: premium modern streetwear brand ambassador — NOT a luxury fashion house.",
-    "Naturally attractive Mediterranean male ~22–27 — effortlessly stylish, approachable, memorable.",
-    "Someone you could realistically discover through premium streetwear casting in Milan, Barcelona, or Berlin.",
-    "Attractiveness from harmony, quiet confidence, and authenticity — not extreme masculine features.",
-    "Real premium brand ambassador energy — not fashion-week runway, not perfume campaign, not celebrity.",
-    "Emotional target: viewers think “he looks cool” — trustworthy, approachable, premium, modern, effortless, timeless.",
-    "NOT “the most handsome / most masculine man I’ve ever seen.”",
+    "PRIMARY BRAND FACE: cleaner younger soft-masculine premium streetwear ambassador — NOT a rugged male model.",
+    "Naturally handsome Mediterranean male with apparent age ~22–25 — youthful, clean, approachable, modern, believable.",
+    "Someone who looks excellent in oversized T-shirts and hoodies without looking like a professional runway model.",
+    "Softer oval / subtle rectangular face · reduced facial width · natural medium jaw · softer lower face · youthful cheeks.",
+    "Relaxed open eyes · balanced brows · natural lips · approachable neutral expression · quiet youthful confidence.",
+    "Clean shave OR very light natural stubble only — never beard-heavy Mediterranean casting.",
+    "Target balance: ~70% approachable commercial streetwear · ~20% premium polish · ~10% masculine edge.",
+    "Emotional target: “He looks good in that outfit.” / “I want to dress like him.” / “He naturally belongs in Milaene.”",
+    "NOT “That man has an extremely masculine/model face.” NOT rugged hero. NOT alpha-male. NOT luxury fashion face.",
+    "Keep clear male identity with softer masculine proportions — never feminine-coded.",
     "Identity and human realism matter more than beauty, glamour, or cinematic polish.",
+  ].join("\n");
+}
+
+/**
+ * Phase 2.2J — shared QUALITY BAR only. Never a face/identity template.
+ * Phase 2.2K softens proportions further (cleaner / younger).
+ */
+function candidateDCreativeDnaQualityBarBlock(): string {
+  return [
+    "PHASE 2.2J — CANDIDATE D CREATIVE DNA (QUALITY BAR ONLY — NOT AN IDENTITY)",
+    "Raise casting quality toward the creative qualities that make a Brand Face feel like he naturally belongs in Milaene.",
+    "This is a QUALITY BAR for all four slots — NEVER a face match, NEVER a prior Candidate D identity copy,",
+    "NEVER a reference embedding, NEVER a shared anatomy template. A/B/C/D must remain four different humans.",
+    "",
+    "Prefer: youthful Mediterranean appearance · narrow-to-medium face · soft masculine bone structure ·",
+    "natural medium jaw · relaxed open eyes · balanced brows · natural lips · cleaner contemporary textured dark hair ·",
+    "short textured curls / soft taper / low fade · clean shave or very light natural stubble · approachable neutral expression ·",
+    "quiet confidence · effortless charisma · slight individuality / imperfection · naturally handsome ·",
+    "premium everyday attractiveness — memorable without extreme facial features.",
+    "",
+    "Believable wearing oversized heavyweight tees, premium hoodies, zip hoodies, relaxed trousers, minimal contemporary streetwear.",
+    "Soft masculine without looking hyper-masculine, rugged, or beard-heavy. Approachable. Recurring face of Milaene.",
+    "",
+    "Further reduce: square oversized jaws, extremely sharp jawlines, aggressive masculinity, heavy beard styling,",
+    "bodybuilder appearance, mature 27+ / 30+ look, runway-model intensity, perfume-campaign beauty, luxury-fashion hero posing,",
+    "dramatic cheekbones, intimidating eyes, perfect facial symmetry, Instagram influencer perfection, artificial beauty,",
+    "overly styled editorial hair, cinematic hero lighting, alpha-male casting, rugged Mediterranean hero energy.",
+  ].join("\n");
+}
+
+/** Phase 2.2K — softer primary streetwear face (proportional refinement only). */
+function softerPrimaryStreetwearFaceBlock(): string {
+  return [
+    "PHASE 2.2K — SOFTER PRIMARY STREETWEAR FACE (PROPORTIONAL REFINEMENT ONLY)",
+    "The Brand Face still reads too traditionally masculine — soften further without becoming feminine.",
+    "Keep clear male identity with softer masculine proportions.",
+    "",
+    "REDUCE: facial width · jaw width · jaw sharpness · chin projection · cheekbone prominence · brow heaviness ·",
+    "beard density · ruggedness · mature masculine hardness.",
+    "",
+    "INCREASE: narrow-to-medium face shape · softer oval / subtle rectangular face · smooth facial transitions ·",
+    "softer lower face · natural medium jaw · youthful cheeks · relaxed open eyes · balanced brows · natural lips ·",
+    "approachable neutral expression.",
+    "",
+    "AGE: strongly prefer apparent age 22–25. Avoid faces that visually read as 27+.",
+    "PRESENCE: calm · friendly · quietly confident · youthful · effortless · trustworthy.",
+    "NOT: dominant · intimidating · seductive · rugged · heroic · alpha-male.",
+    "",
+    "FACIAL HAIR preference: clean shave OR very light natural stubble.",
+    "Reduce: full beard · dense beard shadow · sharply lined beard · heavy moustache · strongly masculine facial-hair styling.",
+    "",
+    "HAIR preference: short textured curls · cropped curls · soft taper · low fade · short natural waves ·",
+    "slightly messy short textured hair. Medium hair only occasionally for diversity.",
+    "Reduce overly editorial long/wavy male-model hair across the board.",
+    "",
+    "TARGET BALANCE: ~70% approachable commercial streetwear · ~20% premium fashion polish · ~10% masculine edge.",
+    "Do NOT let masculine edge dominate the casting.",
+    "Viewer should think “He looks good in that outfit.” — not “That man has an extremely masculine/model face.”",
+    "Do NOT copy any previously generated person’s exact identity — proportional / casting-quality refinement only.",
   ].join("\n");
 }
 
@@ -88,50 +210,72 @@ export function realHumanPhotographPriorityBlock(): string {
 function mediterraneanPremiumBlock(): string {
   return [
     "PREMIUM CASTING — Mediterranean Premium Hero / PRIMARY BRAND FACE (quality bar only)",
+    "Phase 2.2I — keep Mediterranean Premium Hero direction; soften toward timeless commercial premium streetwear face.",
+    "Phase 2.2J — raise QUALITY BAR toward Candidate D creative casting DNA — NOT a face/identity copy.",
+    "Phase 2.2K — softer, cleaner, younger primary streetwear face — reduce traditional rugged masculinity.",
     "Cast the primary face of a premium modern streetwear brand — not a luxury fashion house.",
-    "Review four completely different naturally attractive Mediterranean males aged about 22–27",
+    "Review four completely different naturally handsome Mediterranean males with apparent age about 22–25",
     "on a simple commercial casting board for Milaene premium streetwear.",
-    "Each face should look like someone you could realistically discover through premium streetwear",
-    "casting in Milan, Barcelona, or Berlin — effortlessly stylish, approachable, and memorable.",
+    "Each face should look like a clean modern e-commerce streetwear model — youthful, soft masculine, Mediterranean,",
+    "clean, natural, approachable, commercially attractive — believable in a washed oversized T-shirt in a simple studio.",
     "Biology and fashion presence come ONLY from each candidate's Discovery Identity Instance — do not homogenize faces.",
     "Each candidate must own permanent unique facial anatomy — different face width/length, jaw, chin, cheekbones,",
     "eyes and eye spacing, nose shape/width, eyebrows, lips, forehead, ears, hairline, hair texture,",
     "facial hair, exact age feel, and expression.",
     "Sample four different Mediterranean regional appearance clusters — never four men from the same cluster.",
-    "Four different real people from the same brand universe — never brothers, cousins, twins, or variations of one face.",
+    "Four different real people from the same modern Milaene streetwear casting universe — never brothers, cousins, twins,",
+    "or four versions of one prior Candidate D face.",
     "",
-    "PRIMARY BRAND FACE — FACIAL CHARACTER:",
-    "Soft masculine facial structure. Balanced proportions. Expressive but relaxed eyes.",
-    "Slightly thicker natural eyebrows. Subtle jawline. Defined but not exaggerated cheekbones.",
-    "Medium lips. Youthful healthy skin with natural texture — small imperfections welcome.",
-    "Slight stubble or clean shave. Friendly calm expression. Quiet confidence. Authentic charisma.",
-    "Attractiveness from harmony and authenticity — never extreme masculine features.",
+    candidateDCreativeDnaQualityBarBlock(),
+    "",
+    softerPrimaryStreetwearFaceBlock(),
+    "",
+    "PRIMARY BRAND FACE — FACIAL CHARACTER (2.2I + 2.2J + 2.2K softer streetwear refinement):",
+    "Apparent age ~22–25 (avoid 27+). Softer facial harmony. Narrow-to-medium face. Softer oval / subtle rectangular shape.",
+    "Natural medium jaw — reduced jaw width and sharpness. Softer lower face. Reduced chin projection.",
+    "Youthful cheeks. Softer cheekbones — reduced prominence. Relaxed open eyes. Balanced brows — not heavy.",
+    "Natural lips. Approachable neutral expression. Quiet youthful confidence. Effortless charisma.",
+    "Cleaner contemporary textured dark hair — short textured curls, cropped curls, soft taper, low fade,",
+    "or short natural waves; medium hair only occasionally for diversity.",
+    "Clean shave OR very light natural stubble — strongly prefer low beard density.",
+    "Naturally handsome rather than striking. Premium everyday attractiveness — not editorial beauty.",
+    "Target balance: ~70% approachable commercial streetwear · ~20% premium polish · ~10% masculine edge.",
+    "Keep clear male identity with softer masculine proportions — never feminine-coded.",
+    "Reduce model perfection by about 10% while preserving premium quality and authentic Mediterranean identity.",
+    "Memorable without relying on extreme facial features.",
     "",
     "BODY: lean athletic — not muscular, not bodybuilder. Normal proportions. Healthy.",
-    "Looks wearable in oversized clothing.",
+    "Looks excellent in oversized heavyweight tees, premium hoodies, zip hoodies, and relaxed trousers.",
     "",
-    "HAIR (premium contemporary streetwear): short textured curls, natural curly crop, clean taper fade,",
-    "low fade, relaxed wavy medium hair, or effortless messy curls — natural, never perfectly styled editorial hair.",
+    "HAIR (cleaner contemporary streetwear): short textured curls, cropped curls, soft taper, low fade,",
+    "short natural waves, or slightly messy short textured hair — natural, never perfectly styled editorial hair.",
+    "Reduce long/wavy editorial male-model hair across the board.",
     "",
     "STYLING vibe (wardrobe references only): Fear of God ESSENTIALS, Aimé Leon Dore, Our Legacy, COS, ARKET, Zara Studio.",
     "Simple premium basics. Neutral colors. Oversized silhouettes. No luxury logos. No flashy accessories.",
     "",
-    "Quality bar: premium European streetwear casting test inspired by Aimé Leon Dore,",
-    "Fear of God ESSENTIALS, Our Legacy, COS, ARKET, Zara Studio — photorealistic, campaign-ready later,",
+    "Quality bar: clean modern e-commerce streetwear casting inspired by Fear of God ESSENTIALS, Aimé Leon Dore,",
+    "Our Legacy, COS, ARKET, Zara Studio — photorealistic, campaign-ready later,",
     "commercially memorable — but THIS A1 frame is casting, not finished ads.",
-    "Fashion agency photography energy with natural daylight commercial campaign clarity.",
+    "Commercial streetwear photography energy with soft natural daylight — never Dolce & Gabbana / perfume-ad drama.",
     "",
-    "EMOTIONAL IMPRESSION: “He looks cool.” Trustworthy. Approachable. Premium. Modern. Effortless. Timeless.",
-    "NOT: “He is the most handsome man I’ve ever seen.”",
+    "EMOTIONAL IMPRESSION: “He looks good in that outfit.” / “I want to dress like him.” / “This guy naturally belongs in Milaene.”",
+    "Calm. Friendly. Quietly confident. Youthful. Effortless. Trustworthy.",
+    "NOT: “That man has an extremely masculine/model face.” NOT rugged male model. NOT beard-heavy Mediterranean hero.",
+    "NOT dominant / intimidating / seductive / heroic / alpha-male. NOT luxury fashion face.",
     "",
-    "AVOID: hyper masculine faces, oversized jaw, bodybuilder face, aggressive hunter eyes,",
-    "perfume advertisement look, movie hero appearance, luxury runway model, overly sculpted cheekbones,",
-    "perfect symmetry, influencer aesthetic, intimidating expressions, looking older than 28,",
-    "beauty filters, plastic skin, CGI, Instagram model aesthetic, cinematic hero look.",
+    "AVOID: hyper masculine faces, square oversized jaws, extremely sharp jawlines, bodybuilder face,",
+    "aggressive hunter eyes / intimidating eyes, heavy beard / dense beard shadow / full beard / sharply lined beard,",
+    "heavy moustache, perfume advertisement look, movie hero appearance, luxury runway casting,",
+    "luxury-fashion hero posing, Dolce & Gabbana campaign energy, dramatic cheekbones, brow heaviness,",
+    "superhero facial structure, dramatic facial shadows, cinematic hero lighting,",
+    "perfect symmetry, influencer aesthetic / Instagram model aesthetics, artificial beauty,",
+    "looking older than 26 / visually 27+ / mature 30+ appearance, beauty filters, plastic skin, CGI,",
+    "overly styled editorial long/wavy male-model hair, editorial high-fashion intensity, rugged masculinity.",
     "NOT passport / ID / LinkedIn / casting-database headshots.",
     "",
-    "Photography: natural daylight commercial fashion campaign energy — soft shadows, real skin,",
-    "no cinematic color grading, no perfume campaign lighting, no editorial fashion-week styling.",
+    "Photography: soft natural daylight commercial streetwear energy — soft even shadows, real skin,",
+    "no dramatic facial shadows, no cinematic color grading, no perfume campaign lighting, no editorial fashion-week styling.",
     "Simple casting wall, real camera (~50mm–85mm feel), restrained streetwear basics, face clearly visible.",
   ].join("\n");
 }
@@ -193,28 +337,38 @@ export function premiumArchetypeCastingBlock(
 
 export function premiumFashionPresenceBlock(): string {
   return [
-    "PRIMARY BRAND FACE — COMMERCIAL STREETWEAR CASTING (not luxury fashion house)",
-    "Cast a naturally attractive Mediterranean male ~22–27 customers instantly believe could represent the brand.",
-    "Believable as someone discovered through premium streetwear casting in Milan, Barcelona, or Berlin.",
-    "Soft masculine structure · balanced proportions · expressive relaxed eyes · slightly thicker natural brows.",
-    "Subtle jawline · defined-not-exaggerated cheekbones · medium lips · youthful skin with natural texture.",
-    "Slight stubble or clean shave · friendly calm expression · quiet confidence · authentic charisma.",
-    "Lean athletic body — not muscular. Looks healthy and wearable in oversized basics.",
-    "Effortlessly stylish, approachable, memorable — real brand ambassador, not fashion-week runway.",
+    "PRIMARY BRAND FACE — CLEANER YOUNGER SOFT-MASCULINE STREETWEAR CASTING (not rugged / not luxury house)",
+    "Cast a naturally handsome Mediterranean male with apparent age ~22–25 customers believe could represent Milaene.",
+    "Clean modern e-commerce streetwear model energy — youthful, soft masculine, approachable, commercially attractive.",
+    "Softer oval / subtle rectangular face · reduced facial width · natural medium jaw · softer lower face · youthful cheeks.",
+    "Relaxed open eyes · balanced brows · natural lips · approachable neutral expression · quiet youthful confidence.",
+    "Cleaner contemporary textured dark hair — short textured curls, soft taper, low fade, short natural waves.",
+    "Clean shave OR very light natural stubble — never beard-heavy casting.",
+    "Naturally handsome rather than striking — premium everyday attractiveness, not editorial beauty.",
+    "Soft masculine without hyper-masculinity, ruggedness, or alpha-male edge.",
+    "Lean athletic body — not muscular. Looks excellent in oversized tees, premium hoodies, zip hoodies.",
+    "Target balance: ~70% approachable commercial streetwear · ~20% premium polish · ~10% masculine edge.",
+    "Reduce model perfection ~10% while preserving premium quality and authentic Mediterranean identity.",
     "Agency-castable, commercially memorable, biologically distinct from other board slots.",
-    "Emotional target: “He looks cool.” Trustworthy · approachable · premium · modern · effortless · timeless.",
-    "NOT the most handsome or most masculine man possible — harmony over extreme features.",
+    "Emotional target: “He looks good in that outfit.” / “I want to dress like him.” / “He naturally belongs in Milaene.”",
+    "NOT “That man has an extremely masculine/model face.” NOT luxury runway. NOT rugged Mediterranean hero.",
     "Attractive in a lived-in commercial way — realistic, imperfect, not an idealized AI beauty clone.",
     "Skin must look photographed — not porcelain, not waxy, not plastic beauty-filter skin.",
     "",
-    "Do NOT cast: hyper masculine faces, oversized jaw, bodybuilder face, aggressive hunter eyes,",
-    "perfume advertisement look, movie hero, luxury runway model, overly sculpted cheekbones,",
-    "perfect symmetry, influencer aesthetic, intimidating expressions, looking older than 28.",
+    "Do NOT cast: hyper masculine faces, square oversized jaws, extremely sharp jawlines, bodybuilder face,",
+    "aggressive hunter eyes, heavy beard / dense beard shadow / full beard, perfume advertisement look,",
+    "movie hero, luxury runway casting, luxury-fashion hero posing, Dolce & Gabbana campaign energy,",
+    "dramatic cheekbones, brow heaviness, superhero facial structure, dramatic facial shadows,",
+    "perfect symmetry, influencer / Instagram model aesthetics, intimidating expressions,",
+    "looking older than 26 / visually 27+ / mature 30+ appearance, artificial beauty, overly styled editorial hair,",
+    "dominant / seductive / rugged / heroic / alpha-male casting.",
     "Do NOT beautify. Do NOT airbrush. Do NOT symmetrize. Do NOT add cinematic glow.",
+    "Do NOT copy any prior Candidate D face — quality bar only, never identity match.",
+    "Keep clear male identity — never feminine-coded face on a male hero role.",
     "",
     `Wardrobe vibe inspired by (never copy identity): ${PREMIUM_CASTING_QUALITY_REFERENCE.join(", ")}.`,
     "Simple premium basics · neutral colors · oversized · no luxury logos · no flashy accessories.",
-    "International premium streetwear casting — photorealistic, campaign-ready later —",
+    "International commercial premium streetwear casting — photorealistic, campaign-ready later —",
     "not passport, not LinkedIn, not Midjourney fashion, not Instagram model aesthetic.",
   ].join("\n");
 }
@@ -226,28 +380,31 @@ export function premiumFashionPresenceBlock(): string {
 export function premiumPhotographyBlock(): string {
   return [
     "PREMIUM CASTING PHOTOGRAPHY — Official Brand Face A1",
-    "Natural daylight commercial fashion campaign energy — soft shadows, real skin.",
+    "Soft natural daylight commercial streetwear energy — soft even shadows, real skin.",
     "Shoot like a real European streetwear casting photographer — not an AI image generator.",
     "Simple real casting environment: neutral plaster or concrete wall only.",
     "Natural daylight preferred; simple soft studio fill only if needed — never perfume-campaign lighting.",
+    "Reduce dramatic facial shadows — soft commercial falloff only, never Rembrandt drama or perfume-ad contrast.",
     "No cinematic color grading. No editorial fashion-week styling. No orange/teal grade.",
     "Real high-end digital camera capture with authentic lens rendering and natural photographic depth.",
     "Avoid extreme bokeh, heavy haze, excessive cinematic glow.",
     "Real unretouched human skin: visible natural pores, subtle texture, pigmentation variation,",
     "small imperfections welcome — youthful healthy texture, never beauty-filter wipe.",
+    "Reduce model perfection ~10% — preserve natural skin texture and authentic Mediterranean identity.",
     "Slight facial asymmetry and slight eye asymmetry required — never perfect mirror symmetry.",
     "Realistic under-eye texture. Natural medium lips. Realistic ears. Imperfect natural hair strands.",
     "Hair feels natural contemporary streetwear — never perfectly styled editorial hair.",
     "Subtle beard density variation when facial hair is present — never stamped CGI beard.",
     "Believable fabric texture and soft oversized garment drape — clothing supports evaluation.",
-    "Natural shadows with soft falloff. Slight real-camera micro-imperfections welcome.",
+    "Natural shadows with soft even falloff. Slight real-camera micro-imperfections welcome.",
     "Natural neutral color grading — no orange skin, no teal grade, no oversaturation, no overexposure.",
-    "Premium casting clarity — controlled casting set, NOT a finished advertising campaign.",
+    "Premium commercial casting clarity — controlled casting set, NOT a finished advertising campaign.",
     "NOT passport lighting. NOT harsh ID photo flash. NOT over-sharpened AI polish.",
     "NOT plastic skin, NOT wax skin, NOT airbrushed, NOT beauty filters, NOT CGI, NOT 3D render.",
     "NOT Midjourney fashion. NOT Instagram AI model. NOT Instagram model aesthetic.",
     "NOT oversized jaw. NOT aggressive hunter eyes. NOT hyper-masculine. NOT bodybuilder.",
-    "NOT luxury runway model. NOT perfume advertisement. NOT movie hero. NOT cinematic hero look.",
+    "NOT luxury runway casting. NOT perfume advertisement. NOT Dolce & Gabbana campaign drama.",
+    "NOT movie hero. NOT cinematic hero look. NOT high-fashion editorial intensity.",
   ].join("\n");
 }
 
@@ -280,7 +437,7 @@ export function slotCastingCameraBlock(slot: DiscoverySlot): string {
         "Head angle: gentle 8–12° turn toward camera-left with soft tilt.",
         "Lighting: large soft window daylight from camera-left, gentle fill — simple casting light.",
         "Background: warm grey mineral plaster — soft, even, low-contrast casting wall.",
-        "Micro-expression: friendly quiet confidence — calm almost-smile, soft approachable eyes.",
+        "Micro-expression: friendly quiet confidence — warmer almost-smile, soft relaxed eyes with effortless smile potential.",
         "Do NOT reuse Slot B/C/D lens, height, lighting side, or crop.",
       ].join("\n");
     case "B":
@@ -291,35 +448,35 @@ export function slotCastingCameraBlock(slot: DiscoverySlot): string {
         "Distance: slightly wider upper-torso crop — more shoulder/garment mass visible. Face clearly visible.",
         "Depth of field: natural documentary falloff — avoid extreme bokeh or cinematic haze.",
         "Head angle: firmer 15–20° body rotation, chin level, direct hold.",
-        "Lighting: clearer directional key from camera-right with natural cheek shadow — still simple studio/daylight.",
+        "Lighting: clearer directional key from camera-right with soft commercial cheek dimension — still simple studio/daylight, never dramatic facial shadows.",
         "Background: cooler charcoal / stone casting wall — denser tonal weight.",
-        "Micro-expression: effortless urban calm — cooler gaze, relaxed mouth, no smile, no toughness.",
+        "Micro-expression: warmer urban calm — relaxed eyes, soft mouth with effortless smile potential, no toughness.",
         "Do NOT reuse Slot A/C/D lens, height, lighting side, or crop.",
       ].join("\n");
     case "C":
       return [
         "CAMERA DIRECTION — SLOT C (independent setup)",
-        "Lens: ~70mm editorial portrait feel with airy creative negative space.",
+        "Lens: ~70mm commercial portrait feel with airy creative negative space.",
         "Camera height: slightly below eye level — longer creative neck read.",
         "Distance: mid-torso framing with more headroom and open composition. Face clearly visible.",
-        "Depth of field: gentle editorial falloff — avoid extreme bokeh.",
+        "Depth of field: gentle commercial falloff — avoid extreme bokeh.",
         "Head angle: soft three-quarter turn toward camera-right, thoughtful tilt.",
-        "Lighting: soft high-window wrap with lighter open shadows — simple casting light.",
+        "Lighting: soft high-window wrap with lighter open shadows — simple casting light, no dramatic facial shadows.",
         "Background: pale off-white / soft mineral plaster — airy casting wall.",
-        "Micro-expression: creative editorial calm — soft focused eyes, composed relaxed mouth.",
+        "Micro-expression: creative commercial calm — relaxed warm eyes, composed mouth with effortless smile potential.",
         "Do NOT reuse Slot A/B/D lens, height, lighting side, or crop.",
       ].join("\n");
     case "D":
       return [
         "CAMERA DIRECTION — SLOT D (independent setup)",
-        "Lens: ~58–65mm campaign portrait feel — balanced streetwear casting presence.",
+        "Lens: ~58–65mm commercial streetwear casting feel — balanced premium presence.",
         "Camera height: true eye-level — steady Mediterranean casting hold.",
         "Distance: classic agency test distance, chest-up with balanced crop. Face clearly visible.",
         "Depth of field: natural portrait falloff — avoid extreme bokeh and cinematic glow.",
-        "Head angle: subtle 5–10° turn, strong frontal presence, minimal tilt.",
-        "Lighting: warm soft key with gentle cheek dimension — natural daylight/studio, not teal/orange grade.",
+        "Head angle: subtle 5–10° turn, soft frontal presence, minimal tilt.",
+        "Lighting: warm soft even key with gentle cheek dimension — natural daylight/studio, no Rembrandt drama, no teal/orange grade.",
         "Background: warm stone-grey concrete — casting-neutral wall.",
-        "Micro-expression: relaxed approachable confidence — warm attentive eyes, quiet authority without arrogance.",
+        "Micro-expression: warmer approachable confidence — relaxed eyes, quiet trustworthiness, effortless smile potential without a grin.",
         "Do NOT reuse Slot A/B/C lens, height, lighting side, or crop.",
       ].join("\n");
   }
@@ -346,18 +503,24 @@ export function a1CastingCompositionBlock(): string {
 
 export function a1PresenceRulesBlock(): string {
   return [
-    "CASTING PRESENCE — QUIET CONFIDENCE — EFFORTLESS CHARISMA — NOT AGGRESSION",
-    "Emotional range: youthful energy, quiet confidence, effortless charisma, approachable,",
-    "confident but relaxed, modern, authentic, socially believable,",
-    "premium streetwear presence without arrogance, runway severity, or movie-hero intensity.",
+    "CASTING PRESENCE — CALM FRIENDLY QUIET CONFIDENCE — YOUTHFUL — NOT AGGRESSION",
+    "Emotional range: apparent age ~22–25, quiet confidence, calm friendly warmth,",
+    "approachable, youthful, effortless, trustworthy, modern, authentic,",
+    "commercial premium streetwear presence without arrogance, runway severity, or movie-hero intensity.",
+    "Target: “He looks good in that outfit.” / “I want to dress like him.” / “He naturally belongs in Milaene.”",
+    "Never: extremely masculine/model face · rugged · overbearing · intimidating · seductive · heroic · alpha-male.",
+    "Approachable neutral expression with quiet youthful confidence — never forced smile, never aggressive.",
+    "Soft masculine without hyper-masculinity. Keep clear male identity — never feminine-coded.",
     "Natural masculine presence that never looks intimidating — never aggressive.",
-    "Micro-expression must follow THIS slot's identity + camera direction — not a shared board smile.",
+    "Micro-expression must follow THIS slot's identity + camera direction — not a shared board smile,",
+    "and never four copies of one prior Candidate D expression.",
     "Avoid: angry eyebrows, aggressive stare, hard confrontation, gangster energy,",
     "military posture, CEO authority, luxury realtor, blank lifeless expression,",
     "forced smile, frightened expression, tired eyes, sad expression,",
     "exaggerated pout, runway severity, fashion-week stare, influencer duck-face,",
     "beauty-campaign glamour, cinematic / movie hero intensity, hyper-masculine toughness,",
-    "older-looking hardness, perfume-campaign coolness.",
+    "luxury-fashion hero posing, high-fashion editorial intensity, older-looking hardness,",
+    "perfume-campaign coolness, rugged Mediterranean hero energy, beard-heavy masculinity.",
   ].join("\n");
 }
 
@@ -375,6 +538,7 @@ export function photographicRealismBlock(): string {
     "Require real eye reflections that look photographed — not glassy CGI eyes.",
     "Skin must look photographed, not generated — no wax, no plastic, no airbrush, no beauty filter.",
     "No perfect jawlines, no hyper-polished fashion avatar, no excessive cinematic glow.",
+    "Reduce model perfection ~10% — preserve natural skin texture and imperfections.",
     "Slight real-camera imperfections are desirable. Perfect AI symmetry is forbidden.",
   ].join("\n");
 }
@@ -485,23 +649,59 @@ export function premiumNegativePromptAdditions(): string {
     "high-fashion costume",
     "luxury perfume campaign",
     "perfume campaign face",
+    "Dolce and Gabbana campaign look",
+    "dramatic facial shadows",
+    "Rembrandt face lighting drama",
+    "high-fashion editorial intensity",
+    "editorial beauty casting",
+    "superhero facial structure",
+    "unreal fashion model",
     "hyper masculine face",
     "hyper-masculine",
     "bodybuilder appearance",
     "bodybuilder face",
     "overly sharp jawline",
     "overly sharp jawlines",
+    "pronounced square jaw",
+    "square oversized jaw",
+    "extremely sharp jawline",
+    "oversized facial width",
+    "heavy beard styling",
+    "full designer beard",
+    "dense beard shadow",
+    "sharply lined beard",
+    "heavy moustache",
+    "rugged Mediterranean hero",
+    "rugged male model",
+    "alpha-male casting",
+    "dominant masculine stare",
+    "seductive perfume stare",
+    "visually 27+",
+    "mature masculine hardness",
+    "brow heaviness",
+    "wide jaw casting",
+    "luxury-fashion hero posing",
+    "cinematic hero lighting",
+    "mature 30+ appearance",
+    "artificial beauty",
+    "copy of prior Candidate D face",
+    "four versions of one Candidate D",
+    "face matching to previous board Candidate D",
+    "reference embedding from Candidate D",
     "movie hero appearance",
     "movie hero look",
     "perfect male model symmetry",
     "fashion influencer aesthetics",
     "fashion influencer look",
+    "Instagram model aesthetics",
     "older looking man",
     "older looking men",
+    "looking older than 27",
     "CEO portrait",
     "business headshot",
     "luxury realtor",
     "intimidating expression",
+    "intimidating eyes",
     "aggressive stare",
     "gangster styling",
     "military stance",
@@ -548,13 +748,20 @@ export function buildPremiumRetryPromptSuffix(attempt: number): string {
   return [
     "",
     `PREMIUM STREETWEAR CASTING QUALITY RETRY (${attempt})`,
-    "Elevate immediately to a real unretouched human streetwear casting photograph.",
-    "Age ~22–27, soft masculine harmony, quiet confidence, approachable calm expression.",
-    "Visible pores, natural asymmetry, small imperfections welcome, imperfect natural hair.",
-    "Distinct human identity for THIS slot only — “he looks cool,” not most-handsome casting.",
-    "NOT runway, perfume ad, hyper-masculine, oversized jaw, hunter eyes, bodybuilder,",
-    "Instagram model, movie hero, or cinematic grading.",
-    "Natural daylight + soft shadows + real skin — NOT a finished advertising campaign.",
+    "Elevate immediately to a real unretouched human commercial streetwear casting photograph.",
+    "Apparent age ~22–25 (avoid 27+). Softer oval / subtle rectangular face. Reduced facial width.",
+    "Natural medium jaw · softer lower face · youthful cheeks · relaxed open eyes · balanced brows.",
+    "Clean shave OR very light natural stubble. Cleaner short textured curls / soft taper / low fade.",
+    "Calm friendly quiet confidence — soft masculine, never rugged / beard-heavy / alpha-male.",
+    "Target: “He looks good in that outfit.” / “I want to dress like him.” — not extremely masculine/model face.",
+    "Balance: ~70% approachable commercial · ~20% premium polish · ~10% masculine edge.",
+    "Visible pores, natural asymmetry, slight individuality — reduce model perfection ~10%.",
+    "Soft even shadows — no dramatic facial shadows, no cinematic hero lighting.",
+    "NOT runway, perfume ad, rugged hero, hyper-masculine, square oversized jaw, hunter eyes,",
+    "full beard, dense beard shadow, bodybuilder, Instagram model, movie hero, or mature 27+ look.",
+    "Do NOT copy any prior Candidate D face — quality bar only; keep THIS slot’s unique biology.",
+    "Keep clear male identity — never feminine-coded.",
+    "Natural daylight + soft even shadows + real skin — NOT a finished advertising campaign.",
     "NOT passport, NOT LinkedIn, NOT Midjourney fashion, NOT plastic AI skin.",
   ].join("\n");
 }

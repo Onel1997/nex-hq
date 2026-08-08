@@ -15,26 +15,26 @@ const DNA_MEDITERRANEAN = finalizeIdentityDna({
   version: "1.0.0",
   appearance: {
     faceGeometryFamily:
-      "soft masculine balanced everyday planes with slight natural asymmetry — harmony over extreme features",
+      "youthful soft masculine Mediterranean harmony — softer oval / subtle rectangular, reduced facial width, smooth transitions, mild natural asymmetry — naturally handsome not striking",
     proportions: "natural adult male proportions, lean athletic frame — never bodybuilder",
-    eyeFeeling: "expressive but relaxed eyes, soft lids, calm friendly gaze",
+    eyeFeeling: "relaxed open eyes, soft lids, calm friendly gaze — approachable neutral warmth",
     noseFamily: "medium straight natural bridge with soft tip",
-    lips: "natural medium lips, soft definition, calm closed mouth",
-    jawFamily: "subtle approachable jawline — never oversized, never razor-sharp fashion geometry",
-    beardFamily: "clean shave or soft slight stubble with uneven real density",
+    lips: "natural medium lips, soft definition, approachable neutral mouth",
+    jawFamily: "natural medium soft jaw — reduced width and sharpness, softer lower face, reduced chin projection — never oversized, never razor-sharp",
+    beardFamily: "clean shave or very light natural stubble only — never dense beard shadow, never full beard",
     skinToneFamily:
-      "warm light-medium olive, youthful healthy sun-kissed skin, visible subtle pores, small imperfections welcome",
+      "warm light-medium olive, youthful healthy sun-kissed skin (apparent age ~22–25), visible subtle pores, slight individuality / imperfection — reduce model perfection ~10%",
     hairFamily:
-      "dark brown natural contemporary streetwear hair — textured curls, curly crop, soft taper/low fade, or relaxed wavy medium — never perfect editorial styling",
+      "cleaner contemporary textured dark streetwear hair — short textured curls, cropped curls, soft taper/low fade, or short natural waves — medium hair only occasionally — never long editorial male-model waves",
   },
   presence: {
-    confidence: "quiet confidence — authentic charisma",
-    approachability: "high — customers instantly believe he could represent the brand",
-    calmness: "friendly calm commercial presence",
-    communityFeeling: "premium modern streetwear community credible",
-    luxuryFeeling: "understated premium — never CEO or perfume-campaign luxury",
-    authenticity: "high authentic Mediterranean warmth — effortless and timeless",
-    socialEnergy: "memorable brand ambassador energy — “he looks cool,” not most-handsome casting",
+    confidence: "quiet youthful confidence — effortless, never overbearing",
+    approachability: "very high — customers think he looks good in the outfit and naturally belongs in Milaene",
+    calmness: "calm friendly commercial streetwear presence — youthful and effortless",
+    communityFeeling: "premium modern streetwear community credible — easy to identify with",
+    luxuryFeeling: "understated premium — never CEO, perfume-campaign, rugged hero, or Dolce & Gabbana luxury",
+    authenticity: "high authentic Mediterranean warmth — clean, young, modern, soft masculine",
+    socialEnergy: "“He looks good in that outfit” / “I want to dress like him” — not extremely masculine/model face",
   },
   movement: {
     posture: "relaxed upright with soft natural stance",
@@ -44,13 +44,13 @@ const DNA_MEDITERRANEAN = finalizeIdentityDna({
   },
   photography: {
     framingPreference: "head-and-shoulders to half-body casting frames",
-    cameraEnergy: "soft eye contact, calm commercial camera presence",
-    expressionFamily: "friendly calm — quiet confidence, no forced smile, no scowl, no intimidation",
-    editorialRestraint: "natural daylight commercial polish — no fashion-week severity, no cinematic grade",
+    cameraEnergy: "soft eye contact, warmer commercial camera presence",
+    expressionFamily: "warmer calm — quiet confidence with effortless smile potential, no forced smile, no scowl, no intimidation",
+    editorialRestraint: "soft natural daylight commercial polish — no fashion-week severity, no dramatic facial shadows, no cinematic grade",
   },
   lifestyle: {
     fashionDirection:
-      "premium oversized streetwear basics — washed black / charcoal / off-white — ESSENTIALS / ALD / Our Legacy / COS / ARKET / Zara Studio vibe",
+      "premium oversized streetwear basics — washed black / charcoal / off-white — Zara Studio / ESSENTIALS / ALD / COS / Our Legacy / ARKET vibe",
     socialBehavior: "effortlessly stylish, approachable, memorable European lifestyle presence",
     communityRole: "primary premium streetwear Brand Face for homepage and campaign drops",
     campaignRole: "Homepage / Shopify / Premium Streetwear Drop Hero",
@@ -171,27 +171,27 @@ const ARCH_MEDITERRANEAN: BrandArchetype = {
   workspaceId: WORKSPACE_ID,
   status: "active",
   genderPresentation: "Male",
-  ageRange: "22-27",
+  ageRange: "22-25",
   ethnicityDirection: "European / Mediterranean",
   bodyDirection:
     "lean athletic — not muscular, not bodybuilder — normal healthy proportions wearable in oversized clothing",
   faceDirection:
-    "soft masculine Mediterranean harmony — subtle jaw, thicker natural brows, expressive relaxed eyes, approachable authenticity — brand ambassador not runway",
+    "youthful soft masculine Mediterranean harmony (apparent age ~22–25) — softer oval / subtle rectangular, reduced facial width, natural medium jaw, softer lower face, youthful cheeks, relaxed open eyes, balanced brows — clean, approachable, naturally handsome — Brand Face who looks good in oversized tees, not rugged / not catwalk casting",
   hairDirection:
-    "natural contemporary streetwear hair — textured curls, curly crop, taper/low fade, or relaxed wavy medium — never perfect editorial styling",
-  groomingDirection: "clean shave or slight natural stubble — never over-groomed",
+    "cleaner contemporary textured dark streetwear hair — short textured curls, cropped curls, soft taper/low fade, short natural waves — medium hair only occasionally — never long editorial male-model waves",
+  groomingDirection: "clean shave or very light natural stubble — never full beard, never dense beard shadow",
   personality:
-    "Quiet confidence, authentic charisma, approachable — customers instantly believe he could represent the brand",
+    "Calm, friendly, quietly confident, youthful, effortless, trustworthy — easy to identify with; customers think he looks good in the outfit",
   socialEnergy:
-    "“He looks cool” — trustworthy, premium, modern, effortless, timeless — not the most handsome man possible",
+    "“He looks good in that outfit” / “I want to dress like him” — soft masculine commercial streetwear, not extremely masculine/model face",
   commercialRole: "Homepage / Shopify / Campaign / Premium Streetwear Drop Hero",
   wardrobeDirection:
-    "Oversized tee, heavy hoodie, zip hoodie — washed black / charcoal / off-white — ESSENTIALS / ALD / Our Legacy / COS / ARKET / Zara Studio vibe",
+    "Oversized heavyweight tee, premium hoodie, zip hoodie, relaxed trousers — washed black / charcoal / off-white — ESSENTIALS / ALD / Our Legacy / COS / ARKET / Zara Studio vibe",
   photographyDirection:
-    "Natural daylight commercial fashion campaign — soft shadows, real skin — no cinematic grade, no perfume lighting",
+    "Soft natural daylight commercial streetwear — soft even shadows, real skin — no dramatic facial shadows, no cinematic hero lighting, no perfume lighting",
   cameraDirection: "Soft eye contact, head-and-shoulders to half-body",
-  lightingDirection: "Natural daylight, soft shadows, warm realistic skin",
-  communityRole: "Primary premium streetwear Brand Face customers trust",
+  lightingDirection: "Natural daylight, soft even shadows, warm realistic skin",
+  communityRole: "Primary premium streetwear Brand Face customers trust and relate to — recurring face of Milaene",
   campaignRole: "Homepage Hero / Campaign Hero / Product Hero",
   productAffinity: [
     {
@@ -224,9 +224,12 @@ const ARCH_MEDITERRANEAN: BrandArchetype = {
     "Runway fashion week",
     "Corporate headshot",
     "Intimidating stare",
-    "Hyper masculine / oversized jaw",
-    "Perfume campaign / movie hero",
-    "Looking older than 28",
+    "Hyper masculine / square oversized jaw / extremely sharp jawline",
+    "Perfume campaign / movie hero / Dolce & Gabbana drama",
+    "High-fashion editorial intensity / unreal fashion model / luxury catwalk casting",
+    "Heavy beard / dense beard shadow / rugged Mediterranean hero / alpha-male",
+    "Bodybuilder / visually 27+ / mature 30+ appearance",
+    "Looking older than 26",
   ],
   roles: [
     "homepage_hero",

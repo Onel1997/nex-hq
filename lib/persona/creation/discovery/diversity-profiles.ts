@@ -1,8 +1,7 @@
 /**
- * Phase 2.2A / 2.2B — Discovery Diversity Profiles (regions, not locked people).
+ * Phase 2.2A / 2.2B / 2.2I / 2.2J / 2.2K — Discovery Diversity Profiles.
  * Same Mediterranean Premium Hero archetype; biologically separated regions for A/B/C/D.
- *
- * Creative target: four casting-director briefs that never read as four brothers.
+ * Phase 2.2K softens toward cleaner younger soft-masculine streetwear — never copies a face.
  */
 
 import type { DiscoverySlot, HighLeveragePoolKey } from "@/lib/persona/identity-blueprints";
@@ -17,9 +16,7 @@ export type DiscoveryDiversityProfile = {
   readonly slot: DiscoverySlot;
   readonly regionId: DiversityRegionId;
   readonly label: string;
-  /** Casting-director brief — soft guidance for humans reading diversity intent. */
   readonly castingBrief: string;
-  /** Preferred high-leverage directions — soft guidance for sampling bias checks. */
   readonly preferredAxes: ReadonlyArray<{
     axis:
       | HighLeveragePoolKey
@@ -30,7 +27,6 @@ export type DiscoveryDiversityProfile = {
       | "eyebrows";
     direction: string;
   }>;
-  /** Regions that must not share neighboring high-leverage clusters. */
   readonly incompatibleRegions: readonly DiversityRegionId[];
 };
 
@@ -40,15 +36,16 @@ export const DISCOVERY_DIVERSITY_PROFILES: Record<DiscoverySlot, DiscoveryDivers
     regionId: "refined_longer_softer",
     label: "Refined / longer / softer geometry — quiet luxury",
     castingBrief:
-      "~23–25y · soft masculine oval · expressive relaxed eyes · slightly thicker brows · subtle jaw · clean shave or slight stubble · soft curls/waves or taper · “he looks cool”",
+      "~22–24y · Iberian soft oval · reduced facial width · relaxed open eyes · balanced brows · natural medium soft jaw · youthful cheeks · clean shave or very light stubble · short textured curls/taper · looks good in oversized tee — NOT a Levantine D twin",
     preferredAxes: [
-      { axis: "faceGeometry", direction: "longer oval soft masculine" },
-      { axis: "jaw", direction: "subtle tapered" },
-      { axis: "eyeShape", direction: "expressive relaxed almond" },
-      { axis: "eyebrows", direction: "slightly thicker natural" },
+      { axis: "faceGeometry", direction: "softer oval soft masculine — reduced width" },
+      { axis: "jaw", direction: "natural medium soft — reduced sharpness" },
+      { axis: "eyeShape", direction: "relaxed open warm almond" },
+      { axis: "eyebrows", direction: "balanced medium soft" },
       { axis: "noseBridge", direction: "narrow refined" },
-      { axis: "beardPattern", direction: "clean or slight stubble" },
-      { axis: "haircut", direction: "soft curls waves taper" },
+      { axis: "beardPattern", direction: "clean shave or very light stubble" },
+      { axis: "haircut", direction: "short textured curls soft taper" },
+      { axis: "cheekbones", direction: "youthful soft — reduced prominence" },
     ],
     incompatibleRegions: ["broader_stronger"],
   },
@@ -57,14 +54,16 @@ export const DISCOVERY_DIVERSITY_PROFILES: Record<DiscoverySlot, DiscoveryDivers
     regionId: "broader_stronger",
     label: "Broader / warmer street geometry — still soft masculine",
     castingBrief:
-      "~24–26y · broader soft-masculine rectangle · thicker brows · subtle-not-oversized jaw · short textured curls / low fade · lean athletic · approachable urban cool",
+      "~22–25y · Maghrebi soft-masculine subtle rectangle · reduced width · relaxed open eyes · balanced brows · natural medium jaw · clean shave or very light stubble · short textured curls / low fade · calm friendly youthful — NOT Candidate D twin",
     preferredAxes: [
-      { axis: "faceGeometry", direction: "broader soft rectangle" },
-      { axis: "jaw", direction: "subtle broader — never oversized" },
+      { axis: "faceGeometry", direction: "soft subtle rectangle — reduced width" },
+      { axis: "jaw", direction: "natural medium soft broader — never oversized square" },
       { axis: "eyeSpacing", direction: "slightly denser set" },
       { axis: "noseWidth", direction: "broader natural" },
-      { axis: "beardPattern", direction: "slight dense stubble or clean" },
-      { axis: "haircut", direction: "textured curls low fade" },
+      { axis: "beardPattern", direction: "clean shave or very light stubble" },
+      { axis: "haircut", direction: "short textured curls low fade" },
+      { axis: "cheekbones", direction: "youthful soft — never hollow" },
+      { axis: "eyebrows", direction: "balanced medium low" },
     ],
     incompatibleRegions: ["refined_longer_softer", "alternative_strong"],
   },
@@ -73,30 +72,35 @@ export const DISCOVERY_DIVERSITY_PROFILES: Record<DiscoverySlot, DiscoveryDivers
     regionId: "narrower_angular",
     label: "Narrower / creative geometry — soft masculine",
     castingBrief:
-      "~24–27y · thicker natural brows · longer/slimmer soft face · relaxed wavy medium or messy curls · olive creative skin · approachable artistic presence",
+      "~22–25y · Greek/Balkan narrower soft face · balanced brows · relaxed open eyes · youthful cheeks · clean shave · short natural waves / cropped messy curls (medium only occasionally) · calm friendly youthful — NOT Candidate D twin",
     preferredAxes: [
       { axis: "faceGeometry", direction: "narrow soft angular" },
-      { axis: "facialRatioVariant", direction: "defined-not-exaggerated cheek vertical" },
-      { axis: "haircut", direction: "relaxed wavy medium messy curls" },
-      { axis: "cheekbones", direction: "defined not sculpted" },
-      { axis: "eyebrows", direction: "slightly thicker natural" },
-      { axis: "noseBridge", direction: "straight refined" },
+      { axis: "facialRatioVariant", direction: "youthful soft cheek — never sculpted" },
+      { axis: "haircut", direction: "short natural waves cropped messy curls" },
+      { axis: "cheekbones", direction: "youthful soft" },
+      { axis: "eyebrows", direction: "balanced medium creative" },
+      { axis: "noseBridge", direction: "straight refined character" },
+      { axis: "eyeShape", direction: "relaxed open warm creative" },
+      { axis: "beardPattern", direction: "clean shave or sparse light stubble" },
     ],
     incompatibleRegions: [],
   },
   D: {
     slot: "D",
     regionId: "alternative_strong",
-    label: "Warm Mediterranean ambassador — soft masculine hero",
+    label: "Warm Levantine commercial ambassador — soft masculine quality lane",
     castingBrief:
-      "~24–26y · natural curly crop · subtle jaw · defined-not-exaggerated cheekbones · Mediterranean warmth · quiet confidence — brand ambassador not movie hero",
+      "~22–25y · Levantine balanced soft-masculine · cropped curly crop · natural medium soft jaw · youthful cheeks · relaxed open eyes · balanced brows · clean shave or very light stubble · looks good in oversized tee — QUALITY BAR exemplar, never locked prior Candidate D identity",
     preferredAxes: [
-      { axis: "faceGeometry", direction: "balanced rectangular soft masculine" },
-      { axis: "chin", direction: "natural broader — never oversized jaw" },
-      { axis: "eyeShape", direction: "expressive relaxed deeper lid" },
-      { axis: "noseTip", direction: "natural fuller soft" },
-      { axis: "cheekbones", direction: "defined not exaggerated" },
-      { axis: "haircut", direction: "natural curly textured crop" },
+      { axis: "faceGeometry", direction: "balanced subtle rectangular soft masculine — reduced width" },
+      { axis: "chin", direction: "softer natural — never oversized jaw" },
+      { axis: "eyeShape", direction: "relaxed open warm" },
+      { axis: "noseTip", direction: "natural fuller soft Levantine" },
+      { axis: "cheekbones", direction: "youthful soft supportive" },
+      { axis: "haircut", direction: "cropped curly textured crop" },
+      { axis: "jaw", direction: "natural medium soft-masculine" },
+      { axis: "eyebrows", direction: "balanced medium continuous" },
+      { axis: "beardPattern", direction: "clean shave or very light stubble" },
     ],
     incompatibleRegions: ["broader_stronger"],
   },
