@@ -1208,6 +1208,20 @@ function ReferencePackagePanel({
     maxAuthorizedSpend: number;
     provider: string;
     slots?: string[];
+    directionPlan?: {
+      requested_slot: string;
+      provider_direction_strategy: string;
+      provider_requested_direction: string;
+      direction_generation_unreliable: boolean;
+      invertedFallbackEligible: boolean;
+      disclosure: {
+        targetSlotLabel: string;
+        directionStrategyLabel: string;
+        reason: string | null;
+        providerInstructionNote: string;
+        finalAcceptanceNote: string;
+      };
+    };
   } | null>(null);
   const [regenSlot, setRegenSlot] = useState<string | null>(null);
 
@@ -1255,6 +1269,20 @@ function ReferencePackagePanel({
         };
         slots?: string[];
         providerCalled?: boolean;
+        directionPlan?: {
+          requested_slot: string;
+          provider_direction_strategy: string;
+          provider_requested_direction: string;
+          direction_generation_unreliable: boolean;
+          invertedFallbackEligible: boolean;
+          disclosure: {
+            targetSlotLabel: string;
+            directionStrategyLabel: string;
+            reason: string | null;
+            providerInstructionNote: string;
+            finalAcceptanceNote: string;
+          };
+        };
       };
       if (!res.ok) throw new Error(data.error ?? "Prepare failed");
       if (data.providerCalled) {
@@ -1263,7 +1291,11 @@ function ReferencePackagePanel({
       setPendingToken(data.confirmationToken ?? null);
       setPendingEstimate(
         data.estimate
-          ? { ...data.estimate, slots: data.slots }
+          ? {
+              ...data.estimate,
+              slots: data.slots,
+              directionPlan: data.directionPlan,
+            }
           : null,
       );
       setRegenSlot(slot ?? null);
@@ -1290,6 +1322,11 @@ function ReferencePackagePanel({
                 slot: regenSlot,
                 confirmationToken: pendingToken,
                 costConfirmed: true,
+                invertedFallbackConfirmed:
+                  pendingEstimate.directionPlan
+                    ?.provider_direction_strategy === "inverted_fallback"
+                    ? true
+                    : undefined,
               }
             : {
                 action: "confirm",
@@ -1353,8 +1390,11 @@ function ReferencePackagePanel({
           <li key={slot.slot} className="ps-ref-pkg-slot">
             <div className="ps-ref-pkg-slot-main">
               <strong>{slot.label}</strong>
-              <span>{slotPrimaryLabel(slot)}</span>
-              {slot.status !== "accepted" && (
+              <span>
+                {slot.coverageLabel ?? slotPrimaryLabel(slot)}
+              </span>
+              {slot.status !== "accepted" &&
+                !slot.directionGenerationUnreliable && (
                 <button
                   type="button"
                   className="ps-btn"
@@ -1365,7 +1405,14 @@ function ReferencePackagePanel({
                 </button>
               )}
             </div>
-            {slot.wrongCameraDirection ? (
+            {slot.directionGenerationUnreliable ? (
+              <p className="ps-ref-pkg-meta ps-inline-error">
+                OpenAI could not reliably produce this camera direction. Manual
+                upload, keep incomplete, or use another supported reference
+                workflow later.
+              </p>
+            ) : null}
+            {slot.wrongCameraDirection && !slot.directionGenerationUnreliable ? (
               <p className="ps-ref-pkg-meta ps-inline-error">
                 Wrong camera direction · Suggest: Reassign angle (if target free)
                 or Reject
@@ -1398,9 +1445,36 @@ function ReferencePackagePanel({
               <ul className="ps-ref-pkg-history" aria-label={`${slot.label} attempt history`}>
                 {slot.attemptHistory.map((att, idx) => (
                   <li key={att.id}>
-                    Attempt {idx + 1} — Generated for{" "}
+                    Attempt {idx + 1} — Target:{" "}
                     {REFERENCE_PACKAGE_SLOT_LABELS[att.reference_slot] ??
                       att.reference_slot}
+                    {att.provider_direction_strategy
+                      ? ` · Provider strategy: ${
+                          att.provider_direction_strategy ===
+                          "inverted_fallback"
+                            ? "inverted fallback"
+                            : "canonical"
+                        }`
+                      : ""}
+                    {att.provider_requested_direction
+                      ? ` · Provider requested: ${
+                          REFERENCE_PACKAGE_SLOT_LABELS[
+                            att.provider_requested_direction
+                          ] ?? att.provider_requested_direction
+                        }`
+                      : ""}
+                    {att.profile_identity_mode
+                      ? ` · Profile mode: ${att.profile_identity_mode}`
+                      : ""}
+                    {att.profile_prompt_version
+                      ? ` · Profile prompt: ${att.profile_prompt_version}`
+                      : ""}
+                    {att.detected_orientation
+                      ? ` · Actual detected: ${att.detected_orientation.replace(/_/g, " ")}`
+                      : ""}
+                    {att.angle_direction
+                      ? ` · Angle result: ${att.angle_direction}`
+                      : ""}
                     {att.identity_decision
                       ? ` · Identity evaluation: ${
                           att.identity_decision === "identity_warning"
@@ -1442,7 +1516,52 @@ function ReferencePackagePanel({
         </button>
       ) : (
         <div className="ps-ref-pkg-confirm" data-testid="reference-package-confirm">
-          {pendingEstimate.slots?.length === 1 ? (
+          {pendingEstimate.directionPlan ? (
+            <div
+              className="ps-ref-pkg-direction-plan"
+              data-testid="reference-package-direction-plan"
+            >
+              <p>
+                Target slot:{" "}
+                <strong>
+                  {pendingEstimate.directionPlan.disclosure.targetSlotLabel}
+                </strong>
+              </p>
+              <p>
+                Direction strategy:{" "}
+                <strong>
+                  {
+                    pendingEstimate.directionPlan.disclosure
+                      .directionStrategyLabel
+                  }
+                </strong>
+              </p>
+              {pendingEstimate.directionPlan.disclosure.reason ? (
+                <p>
+                  Reason:{" "}
+                  <strong>
+                    {pendingEstimate.directionPlan.disclosure.reason}
+                  </strong>
+                </p>
+              ) : null}
+              <p>
+                Provider instruction:{" "}
+                <strong>
+                  {
+                    pendingEstimate.directionPlan.disclosure
+                      .providerInstructionNote
+                  }
+                </strong>
+              </p>
+              <p>
+                Final acceptance:{" "}
+                {
+                  pendingEstimate.directionPlan.disclosure
+                    .finalAcceptanceNote
+                }
+              </p>
+            </div>
+          ) : pendingEstimate.slots?.length === 1 ? (
             <p>
               Slot: <strong>{pendingEstimate.slots[0]}</strong>
             </p>
@@ -1495,6 +1614,13 @@ function ReferencePackagePanel({
 
 function referencePreviewStatusLabel(asset: PersonaReferenceAssetView): string {
   const pkg = parseReferencePackageAssetNotes(asset.notes);
+  if (
+    pkg?.identity_decision === "identity_mismatch" &&
+    pkg.human_identity_review === "approved_override" &&
+    asset.status === "approved"
+  ) {
+    return "accepted — human identity override";
+  }
   if (pkg?.identity_decision === "identity_mismatch") return "mismatch";
   if (asset.status === "approved") return "accepted";
   if (asset.status === "rejected") return "rejected";
@@ -1530,6 +1656,9 @@ function ReferencePreviewLightbox({
   const isMaster = masterMeta != null;
   const isGenerated = pkgMeta != null;
   const [compare, setCompare] = useState(false);
+  const [masterComparedInSession, setMasterComparedInSession] = useState(false);
+  const [overrideConfirmOpen, setOverrideConfirmOpen] = useState(false);
+  const [overrideBusy, setOverrideBusy] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
   const [targetSlot, setTargetSlot] = useState<ReferencePackageSlot | "">("");
   const [reassignBusy, setReassignBusy] = useState(false);
@@ -1554,6 +1683,19 @@ function ReferencePreviewLightbox({
   const mismatchBlocksApprove =
     pkgMeta?.identity_decision === "identity_mismatch";
 
+  const angleCorrect = pkgMeta?.angle_direction === "correct";
+  const alreadyOverridden =
+    pkgMeta?.human_identity_review === "approved_override" &&
+    asset.status === "approved";
+  const canOfferIdentityOverride =
+    isGenerated &&
+    !isMaster &&
+    !identityLocked &&
+    mismatchBlocksApprove &&
+    angleCorrect &&
+    !alreadyOverridden &&
+    pkgMeta?.human_identity_review !== "rejected";
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -1561,6 +1703,43 @@ function ReferencePreviewLightbox({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  async function confirmIdentityOverride() {
+    if (!canOfferIdentityOverride || !masterComparedInSession) return;
+    setOverrideBusy(true);
+    onError(null);
+    try {
+      const res = await fetch(`/api/persona/${personaId}/reference-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "approve_identity_override",
+          assetId: asset.id,
+          masterCompared: true,
+          overrideConfirmed: true,
+        }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        providerCalled?: boolean;
+        newImageGenerated?: boolean;
+      };
+      if (!res.ok) {
+        throw new Error(data.error ?? "Identity override failed");
+      }
+      if (data.providerCalled || data.newImageGenerated) {
+        throw new Error(
+          "FAIL CLOSED: identity override must not call a provider or generate images",
+        );
+      }
+      setOverrideConfirmOpen(false);
+      onReassigned();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Identity override failed");
+    } finally {
+      setOverrideBusy(false);
+    }
+  }
 
   async function confirmReassign() {
     if (!targetSlot || !canReassign) return;
@@ -1624,11 +1803,30 @@ function ReferencePreviewLightbox({
                 REASSIGNED
               </span>
             ) : null}
+            {alreadyOverridden ? (
+              <span
+                className="ps-ref-override-badge"
+                data-testid="human-identity-override-badge"
+              >
+                HUMAN IDENTITY OVERRIDE
+              </span>
+            ) : null}
             <p className="ps-muted" style={{ margin: "0.25rem 0 0" }}>
               {isMaster ? "Master" : isGenerated ? "Generated reference" : "Reference"}{" "}
               · status: {referencePreviewStatusLabel(asset)}
               {pkgMeta?.identity_decision
-                ? ` · identity: ${pkgMeta.identity_decision}`
+                ? ` · machine identity: ${
+                    pkgMeta.identity_decision === "identity_mismatch"
+                      ? "mismatch"
+                      : pkgMeta.identity_decision === "identity_match"
+                        ? "match"
+                        : pkgMeta.identity_decision === "identity_warning"
+                          ? "warning"
+                          : pkgMeta.identity_decision
+                  }`
+                : ""}
+              {pkgMeta?.angle_direction
+                ? ` · camera: ${pkgMeta.angle_direction}`
                 : ""}
             </p>
             {isGenerated && requestedSlot && effectiveSlot ? (
@@ -1655,7 +1853,7 @@ function ReferencePreviewLightbox({
                 </li>
                 {pkgMeta?.identity_decision ? (
                   <li>
-                    Identity evaluation:{" "}
+                    Machine identity:{" "}
                     {pkgMeta.identity_decision === "identity_warning"
                       ? "warning"
                       : pkgMeta.identity_decision === "identity_match"
@@ -1663,6 +1861,20 @@ function ReferencePreviewLightbox({
                         : pkgMeta.identity_decision === "identity_mismatch"
                           ? "mismatch"
                           : pkgMeta.identity_decision}
+                  </li>
+                ) : null}
+                {pkgMeta?.angle_direction ? (
+                  <li>Camera direction: {pkgMeta.angle_direction}</li>
+                ) : null}
+                {pkgMeta?.human_identity_review === "approved_override" ? (
+                  <li data-testid="human-override-review-line">
+                    Human review: approved override
+                  </li>
+                ) : null}
+                {pkgMeta?.identity_source_confidence ? (
+                  <li>
+                    Identity source confidence:{" "}
+                    {pkgMeta.identity_source_confidence.replace(/_/g, " ")}
                   </li>
                 ) : null}
                 {pkgMeta?.angle_direction === "incorrect" ? (
@@ -1689,26 +1901,49 @@ function ReferencePreviewLightbox({
               <button
                 type="button"
                 className="ps-btn"
-                onClick={() => setCompare((v) => !v)}
+                onClick={() => {
+                  setCompare((v) => {
+                    const next = !v;
+                    if (next) setMasterComparedInSession(true);
+                    return next;
+                  });
+                }}
               >
                 {compare ? "Hide Master compare" : "Compare with Master"}
               </button>
             ) : null}
             {!isMaster ? (
               <>
-                <button
-                  type="button"
-                  className="ps-btn ps-btn-primary"
-                  disabled={busy || mismatchBlocksApprove}
-                  onClick={onApprove}
-                  title={
-                    mismatchBlocksApprove
-                      ? "Identity mismatch cannot become Accepted"
-                      : undefined
-                  }
-                >
-                  Approve
-                </button>
+                {canOfferIdentityOverride ? (
+                  <button
+                    type="button"
+                    className="ps-btn ps-btn-primary"
+                    disabled={busy || overrideBusy || !masterComparedInSession}
+                    data-testid="approve-identity-override"
+                    title={
+                      masterComparedInSession
+                        ? undefined
+                        : "Compare with Master first"
+                    }
+                    onClick={() => setOverrideConfirmOpen(true)}
+                  >
+                    Approve with identity override
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="ps-btn ps-btn-primary"
+                    disabled={busy || mismatchBlocksApprove}
+                    onClick={onApprove}
+                    title={
+                      mismatchBlocksApprove
+                        ? "Identity mismatch cannot become Accepted without human override"
+                        : undefined
+                    }
+                  >
+                    Approve
+                  </button>
+                )}
                 <button
                   type="button"
                   className="ps-btn"
@@ -1738,6 +1973,42 @@ function ReferencePreviewLightbox({
             </button>
           </div>
         </header>
+
+        {overrideConfirmOpen && canOfferIdentityOverride ? (
+          <div
+            className="ps-ref-override-confirm"
+            data-testid="identity-override-confirm"
+          >
+            <p>
+              Machine identity check: <strong>MISMATCH</strong>
+            </p>
+            <p>
+              Camera direction: <strong>CORRECT</strong>
+            </p>
+            <p className="ps-inline-error">
+              Warning: The automated identity system believes this image may not
+              depict the same person. Only continue if you manually compared it
+              with the Master Identity Reference and intentionally accept it as
+              the same Brand Identity.
+            </p>
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={overrideBusy || !masterComparedInSession}
+              onClick={() => void confirmIdentityOverride()}
+            >
+              Confirm human identity override
+            </button>
+            <button
+              type="button"
+              className="ps-btn"
+              disabled={overrideBusy}
+              onClick={() => setOverrideConfirmOpen(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
 
         {reassignOpen && canReassign ? (
           <div className="ps-ref-reassign" data-testid="reassign-angle-panel">

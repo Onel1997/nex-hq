@@ -106,6 +106,42 @@ function mapAttempt(row: Record<string, unknown>): ReferencePackageAttempt {
         : null,
     detected_yaw_degrees:
       row.detected_yaw_degrees == null ? null : Number(row.detected_yaw_degrees),
+    provider_direction_strategy:
+      row.provider_direction_strategy === "canonical" ||
+      row.provider_direction_strategy === "inverted_fallback"
+        ? row.provider_direction_strategy
+        : null,
+    provider_requested_direction: mapSlot(row.provider_requested_direction),
+    profile_identity_mode:
+      row.profile_identity_mode === "profile_identity_preservation_v1"
+        ? row.profile_identity_mode
+        : null,
+    profile_prompt_version:
+      row.profile_prompt_version == null
+        ? null
+        : String(row.profile_prompt_version),
+    human_identity_review:
+      row.human_identity_review === "approved_override" ||
+      row.human_identity_review === "rejected" ||
+      row.human_identity_review === "none"
+        ? row.human_identity_review
+        : null,
+    human_identity_reviewed_at:
+      row.human_identity_reviewed_at == null
+        ? null
+        : String(row.human_identity_reviewed_at),
+    human_identity_reviewed_by:
+      row.human_identity_reviewed_by == null
+        ? null
+        : String(row.human_identity_reviewed_by),
+    human_identity_override_reason:
+      row.human_identity_override_reason == null
+        ? null
+        : String(row.human_identity_override_reason),
+    identity_override_version:
+      row.identity_override_version == null
+        ? null
+        : String(row.identity_override_version),
     cost_eur: row.cost_eur == null ? null : Number(row.cost_eur),
     error_message:
       row.error_message == null ? null : String(row.error_message),
@@ -232,6 +268,12 @@ export class SupabaseReferencePackageRepository
         reference_slot: input.reference_slot,
         provider: "openai",
         status: input.status ?? "queued",
+        provider_direction_strategy:
+          input.provider_direction_strategy ?? "canonical",
+        provider_requested_direction:
+          input.provider_requested_direction ?? input.reference_slot,
+        profile_identity_mode: input.profile_identity_mode ?? null,
+        profile_prompt_version: input.profile_prompt_version ?? null,
       })
       .select("*")
       .single();

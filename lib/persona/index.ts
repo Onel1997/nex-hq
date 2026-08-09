@@ -282,16 +282,32 @@ export {
   CANONICAL_CAMERA_DIRECTIONS,
   CAMERA_DIRECTION_POLICY_VERSION,
   validateAngleDirectionFromPrompt,
+  validateAngleDirectionFromOrientation,
   isAngleDirectionUsable,
   isCurrentlyAcceptedUsable,
   resolveReferencePackageSlotCoverage,
   getAttemptEffectiveSlot,
   parseReferencePackageAssetNotes,
+  resolveProviderDirectionPlan,
+  invertProviderDirection,
+  DIRECTION_GENERATION_UNRELIABLE_MESSAGE,
+  INVERTED_FALLBACK_REASON,
+  PROFILE_IDENTITY_MODE,
+  PROFILE_PROMPT_VERSION,
+  isProfileIdentitySlot,
+  IDENTITY_CONSISTENCY_WARNING_EUCLIDEAN,
+  approveHumanIdentityOverride,
+  canProposeHumanIdentityOverride,
+  isMismatchOverrideUsable,
+  IDENTITY_OVERRIDE_VERSION,
+  resolveIdentitySourceConfidence,
 } from "./creation/reference-package";
 export type {
   ReferencePackageSlot,
   ReferencePackageStatusView,
   ReferencePackageCostEstimate,
+  ProviderDirectionPlan,
+  ProviderDirectionStrategy,
 } from "./creation/reference-package";
 export { FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD } from "./face-novelty-memory/similarity-threshold";
 export {

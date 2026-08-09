@@ -5,6 +5,14 @@
 import type { IdentityConsistencyDecision } from "./identity-consistency";
 import type { AngleDirection } from "./angle-direction";
 import type {
+  ProviderDirectionStrategy,
+  ProviderRequestedDirection,
+} from "./provider-direction-fallback";
+import type { ProfileIdentityMode } from "./profile-identity-preservation";
+import type {
+  HumanIdentityReview,
+} from "./human-identity-override";
+import type {
   ReferencePackageAttemptStatus,
   ReferencePackageSlot,
 } from "./slots";
@@ -79,6 +87,26 @@ export type ReferencePackageAttempt = {
     | "uncertain"
     | null;
   detected_yaw_degrees: number | null;
+  /**
+   * How the provider prompt direction was chosen.
+   * Canonical requested slot remains `reference_slot`.
+   */
+  provider_direction_strategy: ProviderDirectionStrategy | null;
+  /** Direction instruction actually sent to the provider. */
+  provider_requested_direction: ProviderRequestedDirection | null;
+  /** Profile-only identity mode (null for front / three-quarter). */
+  profile_identity_mode: ProfileIdentityMode | null;
+  /** Profile prompt builder version (null for non-profile). */
+  profile_prompt_version: string | null;
+  /**
+   * Human review of machine identity — never rewrites identity_decision.
+   * null/none = no human identity override decision yet.
+   */
+  human_identity_review: HumanIdentityReview | null;
+  human_identity_reviewed_at: string | null;
+  human_identity_reviewed_by: string | null;
+  human_identity_override_reason: string | null;
+  identity_override_version: string | null;
   cost_eur: number | null;
   error_message: string | null;
   created_at: string;
@@ -100,8 +128,13 @@ export type CreateReferencePackageAttemptInput = {
   session_id: string;
   persona_id: string;
   master_reference_id: string;
+  /** Canonical slot — never rewritten by inverted fallback. */
   reference_slot: ReferencePackageSlot;
   status?: ReferencePackageAttemptStatus;
+  provider_direction_strategy?: ProviderDirectionStrategy;
+  provider_requested_direction?: ProviderRequestedDirection;
+  profile_identity_mode?: ProfileIdentityMode | null;
+  profile_prompt_version?: string | null;
 };
 
 export type UpdateReferencePackageSessionInput = Partial<
@@ -131,6 +164,21 @@ export type ReferencePackageSlotView = {
   angleDirection: AngleDirection | null;
   detectedOrientation: ReferencePackageAttempt["detected_orientation"];
   wrongCameraDirection: boolean;
+  /** Next prepare would propose inverted provider fallback. */
+  invertedFallbackEligible: boolean;
+  /** Automatic paid retries stopped after exhausted fallback. */
+  directionGenerationUnreliable: boolean;
+  providerDirectionStrategy: ProviderDirectionStrategy | null;
+  providerRequestedDirection: ProviderRequestedDirection | null;
+  humanIdentityReview: HumanIdentityReview | null;
+  /** Qualifier when accepted via mismatch override. */
+  acceptedViaHumanIdentityOverride: boolean;
+  identitySourceConfidence:
+    | "machine_match"
+    | "human_warning_approved"
+    | "human_mismatch_override"
+    | null;
+  coverageLabel: string | null;
 };
 
 export type ReferencePackageStatusView = {
@@ -164,6 +212,20 @@ export type ReferencePackageAssetNotesMeta = {
   reassigned_by?: string | null;
   angle_review_source?: AngleReviewSource;
   angle_review_decision?: AngleReviewDecision;
+  provider_direction_strategy?: ProviderDirectionStrategy | null;
+  provider_requested_direction?: ProviderRequestedDirection | null;
+  profile_identity_mode?: ProfileIdentityMode | null;
+  profile_prompt_version?: string | null;
+  human_identity_review?: HumanIdentityReview | null;
+  human_identity_reviewed_at?: string | null;
+  human_identity_reviewed_by?: string | null;
+  human_identity_override_reason?: string | null;
+  identity_override_version?: string | null;
+  identity_source_confidence?:
+    | "machine_match"
+    | "human_warning_approved"
+    | "human_mismatch_override"
+    | null;
 };
 
 export function getAttemptEffectiveSlot(
@@ -185,6 +247,20 @@ export function buildReferencePackageAssetNotes(meta: {
   reassignedBy?: string | null;
   angleReviewSource?: AngleReviewSource;
   angleReviewDecision?: AngleReviewDecision;
+  providerDirectionStrategy?: ProviderDirectionStrategy | null;
+  providerRequestedDirection?: ProviderRequestedDirection | null;
+  profileIdentityMode?: ProfileIdentityMode | null;
+  profilePromptVersion?: string | null;
+  humanIdentityReview?: HumanIdentityReview | null;
+  humanIdentityReviewedAt?: string | null;
+  humanIdentityReviewedBy?: string | null;
+  humanIdentityOverrideReason?: string | null;
+  identityOverrideVersion?: string | null;
+  identitySourceConfidence?:
+    | "machine_match"
+    | "human_warning_approved"
+    | "human_mismatch_override"
+    | null;
 }): string {
   const requested = meta.requestedSlot ?? meta.slot;
   const effective = meta.effectiveSlot ?? meta.slot;
@@ -204,6 +280,16 @@ export function buildReferencePackageAssetNotes(meta: {
     reassigned_by: meta.reassignedBy ?? null,
     angle_review_source: meta.angleReviewSource ?? null,
     angle_review_decision: meta.angleReviewDecision ?? null,
+    provider_direction_strategy: meta.providerDirectionStrategy ?? null,
+    provider_requested_direction: meta.providerRequestedDirection ?? null,
+    profile_identity_mode: meta.profileIdentityMode ?? null,
+    profile_prompt_version: meta.profilePromptVersion ?? null,
+    human_identity_review: meta.humanIdentityReview ?? null,
+    human_identity_reviewed_at: meta.humanIdentityReviewedAt ?? null,
+    human_identity_reviewed_by: meta.humanIdentityReviewedBy ?? null,
+    human_identity_override_reason: meta.humanIdentityOverrideReason ?? null,
+    identity_override_version: meta.identityOverrideVersion ?? null,
+    identity_source_confidence: meta.identitySourceConfidence ?? null,
   })}`;
 }
 
@@ -226,6 +312,16 @@ export function parseReferencePackageAssetNotes(
       reassigned_by?: string | null;
       angle_review_source?: string | null;
       angle_review_decision?: string | null;
+      provider_direction_strategy?: string | null;
+      provider_requested_direction?: string | null;
+      profile_identity_mode?: string | null;
+      profile_prompt_version?: string | null;
+      human_identity_review?: string | null;
+      human_identity_reviewed_at?: string | null;
+      human_identity_reviewed_by?: string | null;
+      human_identity_override_reason?: string | null;
+      identity_override_version?: string | null;
+      identity_source_confidence?: string | null;
     };
     if (raw.replaces_master === true) return null;
     if (typeof raw.slot !== "string" || typeof raw.master_reference_id !== "string") {
@@ -259,6 +355,23 @@ export function parseReferencePackageAssetNotes(
         ? raw.reassigned_from
         : null;
 
+    const providerStrategy =
+      raw.provider_direction_strategy === "canonical" ||
+      raw.provider_direction_strategy === "inverted_fallback"
+        ? raw.provider_direction_strategy
+        : null;
+
+    const providerRequested =
+      typeof raw.provider_requested_direction === "string" &&
+      isReferencePackageSlot(raw.provider_requested_direction)
+        ? raw.provider_requested_direction
+        : null;
+
+    const profileMode =
+      raw.profile_identity_mode === "profile_identity_preservation_v1"
+        ? raw.profile_identity_mode
+        : null;
+
     return {
       slot: effectiveRaw,
       requested_slot: requestedRaw,
@@ -280,6 +393,41 @@ export function parseReferencePackageAssetNotes(
         raw.angle_review_decision === "confirmed" ||
         raw.angle_review_decision === "rejected"
           ? raw.angle_review_decision
+          : null,
+      provider_direction_strategy: providerStrategy,
+      provider_requested_direction: providerRequested,
+      profile_identity_mode: profileMode,
+      profile_prompt_version:
+        typeof raw.profile_prompt_version === "string"
+          ? raw.profile_prompt_version
+          : null,
+      human_identity_review:
+        raw.human_identity_review === "approved_override" ||
+        raw.human_identity_review === "rejected" ||
+        raw.human_identity_review === "none"
+          ? raw.human_identity_review
+          : null,
+      human_identity_reviewed_at:
+        typeof raw.human_identity_reviewed_at === "string"
+          ? raw.human_identity_reviewed_at
+          : null,
+      human_identity_reviewed_by:
+        typeof raw.human_identity_reviewed_by === "string"
+          ? raw.human_identity_reviewed_by
+          : null,
+      human_identity_override_reason:
+        typeof raw.human_identity_override_reason === "string"
+          ? raw.human_identity_override_reason
+          : null,
+      identity_override_version:
+        typeof raw.identity_override_version === "string"
+          ? raw.identity_override_version
+          : null,
+      identity_source_confidence:
+        raw.identity_source_confidence === "machine_match" ||
+        raw.identity_source_confidence === "human_warning_approved" ||
+        raw.identity_source_confidence === "human_mismatch_override"
+          ? raw.identity_source_confidence
           : null,
     };
   } catch {

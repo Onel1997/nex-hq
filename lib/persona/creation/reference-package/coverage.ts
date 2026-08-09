@@ -1,5 +1,5 @@
 /**
- * Phase 2.3D.2–2.3D.5 — Live Reference Package slot coverage.
+ * Phase 2.3D.2–2.3D.5 / 2.3D.8 — Live Reference Package slot coverage.
  *
  * Distinguishes:
  * 1) machine identity evaluation (preserved evidence)
@@ -8,7 +8,7 @@
  *
  * Coverage counts ONLY currently approved usable references on the EFFECTIVE slot.
  * identity_match OR identity_warning + human approved → usable.
- * identity_mismatch → never usable.
+ * identity_mismatch → usable ONLY with explicit human_identity_review=approved_override.
  */
 
 import type { PersonaReferenceAsset } from "@/lib/persona/domain/types";
@@ -24,6 +24,12 @@ import {
 } from "./slots";
 import { isAngleDirectionUsable, type AngleDirection } from "./angle-direction";
 import type { IdentityConsistencyDecision } from "./identity-consistency";
+import {
+  isMismatchOverrideUsable,
+  resolveIdentitySourceConfidence,
+  type HumanIdentityReview,
+  type IdentitySourceConfidence,
+} from "./human-identity-override";
 
 export type SlotCoverageResolution = {
   slot: ReferencePackageSlot;
@@ -39,6 +45,10 @@ export type SlotCoverageResolution = {
   angleDirection: AngleDirection | null;
   detectedOrientation: ReferencePackageAttempt["detected_orientation"];
   wrongCameraDirection: boolean;
+  humanIdentityReview: HumanIdentityReview | null;
+  acceptedViaHumanIdentityOverride: boolean;
+  identitySourceConfidence: IdentitySourceConfidence | null;
+  coverageLabel: string | null;
 };
 
 /** identity_match or identity_warning may become usable after explicit human approval. */
@@ -51,7 +61,8 @@ export function isIdentityDecisionEligibleForHumanApproval(
 /**
  * Usable when:
  * - asset.status === approved
- * - identity is match OR warning (never mismatch)
+ * - identity is match OR warning (normal path)
+ * - OR identity_mismatch + human approved_override (2.3D.8)
  * - angle_direction is not incorrect
  *
  * attempt.status === "mismatch" alone must NOT block identity_warning after approval
@@ -66,6 +77,19 @@ export function isCurrentlyAcceptedUsable(input: {
   if (input.asset.status !== "approved") return false;
 
   const decision = input.attempt.identity_decision;
+
+  if (
+    isMismatchOverrideUsable({
+      identityDecision: decision,
+      humanIdentityReview: input.attempt.human_identity_review,
+      angleDirection: input.attempt.angle_direction,
+      assetStatus: input.asset.status,
+      attemptStatus: input.attempt.status,
+    })
+  ) {
+    return true;
+  }
+
   if (decision === "identity_mismatch" || decision === "evaluation_failed") {
     return false;
   }
@@ -129,14 +153,18 @@ export function resolveSlotDisplayStatus(input: {
   }
 
   // Human-approved match/warning → Accepted.
+  // Mismatch + explicit human override + approved asset → Accepted (qualified).
   if (
     asset?.status === "approved" &&
-    isIdentityDecisionEligibleForHumanApproval(decision)
+    (isIdentityDecisionEligibleForHumanApproval(decision) ||
+      (decision === "identity_mismatch" &&
+        attempt?.human_identity_review === "approved_override"))
   ) {
     return "accepted";
   }
 
-  // True mismatch only when machine identity is identity_mismatch.
+  // True mismatch only when machine identity is identity_mismatch
+  // and not yet human-override-accepted.
   if (decision === "identity_mismatch") {
     return "mismatch";
   }
@@ -315,6 +343,25 @@ export function resolveReferencePackageSlotCoverage(input: {
       angleDirection: attempt?.angle_direction ?? null,
       detectedOrientation: attempt?.detected_orientation ?? null,
       wrongCameraDirection: attempt?.angle_direction === "incorrect",
+      humanIdentityReview: attempt?.human_identity_review ?? null,
+      acceptedViaHumanIdentityOverride: Boolean(
+        countsTowardCoverage &&
+          attempt?.identity_decision === "identity_mismatch" &&
+          attempt?.human_identity_review === "approved_override",
+      ),
+      identitySourceConfidence: resolveIdentitySourceConfidence({
+        identityDecision: attempt?.identity_decision,
+        humanIdentityReview: attempt?.human_identity_review,
+        assetApproved: asset?.status === "approved",
+      }),
+      coverageLabel:
+        countsTowardCoverage &&
+        attempt?.identity_decision === "identity_mismatch" &&
+        attempt?.human_identity_review === "approved_override"
+          ? "Accepted — Human Identity Override"
+          : countsTowardCoverage
+            ? "Accepted"
+            : null,
     };
   });
 

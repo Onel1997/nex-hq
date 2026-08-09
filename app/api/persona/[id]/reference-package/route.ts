@@ -6,6 +6,7 @@ import {
   prepareReferencePackageConfirmation,
   reassignReferencePackageAngle,
   recomputeReferencePackageAngleValidation,
+  approveHumanIdentityOverride,
 } from "@/lib/persona/creation/reference-package";
 import { isReferencePackageSlot } from "@/lib/persona/creation/reference-package/slots";
 import { dict, jsonError, jsonOk, requirePersonaScope } from "../../_utils";
@@ -37,9 +38,13 @@ export async function POST(request: Request, context: RouteContext) {
       action?: string;
       confirmationToken?: string;
       costConfirmed?: boolean;
+      invertedFallbackConfirmed?: boolean;
       slot?: string;
       assetId?: string;
       targetSlot?: string;
+      masterCompared?: boolean;
+      overrideConfirmed?: boolean;
+      reason?: string;
     };
     const action = body.action ?? "prepare";
 
@@ -95,6 +100,7 @@ export async function POST(request: Request, context: RouteContext) {
         slots: prepared.slots,
         masterReferenceId: prepared.masterReferenceId,
         sessionId: prepared.session.id,
+        directionPlan: prepared.directionPlan,
       });
     }
 
@@ -109,6 +115,10 @@ export async function POST(request: Request, context: RouteContext) {
         {
           confirmationToken: String(body.confirmationToken ?? ""),
           costConfirmed: body.costConfirmed === true,
+          invertedFallbackConfirmed:
+            body.invertedFallbackConfirmed === undefined
+              ? undefined
+              : body.invertedFallbackConfirmed === true,
         },
       );
       return jsonOk({ success: true, action: "confirm_regenerate", ...result });
@@ -149,6 +159,28 @@ export async function POST(request: Request, context: RouteContext) {
       return jsonOk({
         success: true,
         action: "recompute_angle",
+        ...result,
+      });
+    }
+
+    if (action === "approve_identity_override") {
+      if (!body.assetId) {
+        return jsonOk({ error: dict.persona.errors.invalidRequest }, 400);
+      }
+      const result = await approveHumanIdentityOverride(
+        gated.scope,
+        personaId,
+        {
+          assetId: body.assetId,
+          masterCompared: body.masterCompared === true,
+          overrideConfirmed: body.overrideConfirmed === true,
+          reason:
+            typeof body.reason === "string" ? body.reason : undefined,
+        },
+      );
+      return jsonOk({
+        success: true,
+        action: "approve_identity_override",
         ...result,
       });
     }

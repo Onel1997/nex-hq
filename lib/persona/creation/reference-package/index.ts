@@ -35,6 +35,25 @@ export type {
 } from "./orientation-from-landmarks";
 
 export {
+  invertProviderDirection,
+  oppositeOrientationsForSlot,
+  isOppositeOrientationFailure,
+  resolveProviderDirectionPlan,
+  validatedAttemptsForCanonicalSlot,
+  DIRECTION_FALLBACK_POLICY_VERSION,
+  MAX_CANONICAL_DIRECTION_ATTEMPTS,
+  MAX_INVERTED_FALLBACK_ATTEMPTS,
+  DIRECTION_GENERATION_UNRELIABLE_MESSAGE,
+  INVERTED_FALLBACK_REASON,
+  PROVIDER_DIRECTION_STRATEGIES,
+} from "./provider-direction-fallback";
+export type {
+  ProviderDirectionStrategy,
+  ProviderRequestedDirection,
+  ProviderDirectionPlan,
+} from "./provider-direction-fallback";
+
+export {
   REFERENCE_PACKAGE_SLOTS,
   REFERENCE_PACKAGE_SLOT_LABELS,
   REFERENCE_PACKAGE_ATTEMPT_STATUSES,
@@ -98,4 +117,38 @@ export {
   getAttemptEffectiveSlot,
 } from "./types";
 
-export { buildReferencePackageAnglePrompt } from "./prompts";
+export { buildReferencePackageAnglePrompt, buildReferencePackageAnglePromptDetailed } from "./prompts";
+
+export {
+  PROFILE_IDENTITY_MODE,
+  PROFILE_PROMPT_VERSION,
+  isProfileIdentitySlot,
+  resolveProfileIdentityMeta,
+  PROFILE_IDENTITY_FIRST_OPENER,
+  PROFILE_HARD_IDENTITY_ANCHORS,
+  PROFILE_DRIFT_NEGATIVES,
+  PROFILE_PHOTOGRAPHY_SIMPLE,
+  PROFILE_FORBIDDEN_CASTING_MARKERS,
+} from "./profile-identity-preservation";
+export type { ProfileIdentityMode } from "./profile-identity-preservation";
+
+export {
+  IDENTITY_OVERRIDE_VERSION,
+  HUMAN_IDENTITY_OVERRIDE_REASON_DEFAULT,
+  canProposeHumanIdentityOverride,
+  isMismatchOverrideUsable,
+  resolveIdentitySourceConfidence,
+} from "./human-identity-override";
+export type {
+  HumanIdentityReview,
+  IdentitySourceConfidence,
+} from "./human-identity-override";
+
+export {
+  approveHumanIdentityOverride,
+  getAttemptIdentityProvenance,
+} from "./approve-human-identity-override";
+export type {
+  ApproveHumanIdentityOverrideInput,
+  ApproveHumanIdentityOverrideResult,
+} from "./approve-human-identity-override";

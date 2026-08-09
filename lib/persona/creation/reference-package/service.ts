@@ -41,7 +41,7 @@ import {
   isIdentityAcceptedForPackage,
   type IdentityConsistencyEvaluation,
 } from "./identity-consistency";
-import { buildReferencePackageAnglePrompt } from "./prompts";
+import { buildReferencePackageAnglePromptDetailed } from "./prompts";
 import {
   getReferencePackageRepository,
   type ReferencePackageRepository,
@@ -59,6 +59,11 @@ import {
 } from "./angle-direction";
 import { extractFaceOrientationFromImageBytes } from "./extract-orientation";
 import type { OrientationEstimate } from "./orientation-from-landmarks";
+import {
+  DIRECTION_GENERATION_UNRELIABLE_MESSAGE,
+  resolveProviderDirectionPlan,
+  type ProviderDirectionPlan,
+} from "./provider-direction-fallback";
 import {
   REFERENCE_PACKAGE_SLOTS,
   REFERENCE_PACKAGE_SLOT_LABELS,
@@ -289,13 +294,16 @@ export async function prepareReferencePackageConfirmation(
   }
 
   // Never include currently approved slots in a multi-slot prepare.
+  // Never include slots where direction generation is unreliable.
   slots = slots.filter((slot) => {
     const row = coverage.slots.find((s) => s.slot === slot);
-    return !row?.countsTowardCoverage;
+    if (row?.countsTowardCoverage) return false;
+    const plan = resolveProviderDirectionPlan(attempts, slot);
+    return plan.allowPaidRegeneration;
   });
   if (slots.length === 0) {
     throw new PersonaDomainError(
-      "No regenerable slots — approved references are protected.",
+      "No regenerable slots — approved references are protected or direction generation is unreliable.",
       "WORKFLOW",
     );
   }
@@ -448,6 +456,15 @@ export async function confirmAndGenerateReferencePackage(
   }> = [];
 
   for (const slot of slots) {
+    const attemptsForPlan = await repo.listAttemptsForPersona(scope, personaId);
+    const directionPlan = resolveProviderDirectionPlan(attemptsForPlan, slot);
+    if (!directionPlan.allowPaidRegeneration) {
+      throw new PersonaDomainError(
+        DIRECTION_GENERATION_UNRELIABLE_MESSAGE,
+        "WORKFLOW",
+        { slot },
+      );
+    }
     const attempt = await generateOneAngle(scope, {
       personaId,
       sessionId: session.id,
@@ -455,6 +472,7 @@ export async function confirmAndGenerateReferencePackage(
       masterStoragePath: master.reference.storage_path,
       masterMimeType: master.reference.mime_type,
       slot,
+      directionPlan,
       deps: options.deps,
     });
     results.push({ slot, attempt });
@@ -501,16 +519,43 @@ async function generateOneAngle(
     masterStoragePath: string;
     masterMimeType: string;
     slot: ReferencePackageSlot;
+    directionPlan?: ProviderDirectionPlan;
     deps?: ReferencePackageDeps;
   },
 ): Promise<ReferencePackageAttempt> {
   const repo = pkgRepo(input.deps);
+  const directionPlan =
+    input.directionPlan ??
+    resolveProviderDirectionPlan([], input.slot);
+
+  if (!directionPlan.allowPaidRegeneration) {
+    throw new PersonaDomainError(
+      DIRECTION_GENERATION_UNRELIABLE_MESSAGE,
+      "WORKFLOW",
+      { slot: input.slot },
+    );
+  }
+
+  // Canonical slot is always input.slot / directionPlan.requested_slot.
+  const canonicalSlot = input.slot;
+  const providerStrategy = directionPlan.provider_direction_strategy;
+  const providerDirection = directionPlan.provider_requested_direction;
+
+  const builtPrompt = buildReferencePackageAnglePromptDetailed(canonicalSlot, {
+    providerRequestedDirection: providerDirection,
+    providerDirectionStrategy: providerStrategy,
+  });
+
   let attempt = await repo.createAttempt(scope, {
     session_id: input.sessionId,
     persona_id: input.personaId,
     master_reference_id: input.masterReferenceId,
-    reference_slot: input.slot,
+    reference_slot: canonicalSlot,
     status: "generating",
+    provider_direction_strategy: providerStrategy,
+    provider_requested_direction: providerDirection,
+    profile_identity_mode: builtPrompt.profile_identity_mode,
+    profile_prompt_version: builtPrompt.profile_prompt_version,
   });
 
   try {
@@ -524,9 +569,11 @@ async function generateOneAngle(
 
     const edit =
       input.deps?.editFromMaster ?? editOpenAiImageFromReference;
-    const prompt = buildReferencePackageAnglePrompt(input.slot);
+    const prompt = builtPrompt.prompt;
+    // Prompt markers validate the direction we asked the provider for.
+    // Actual-image validation below always judges the CANONICAL slot.
     const promptValidation = validateAngleDirectionFromPrompt({
-      slot: input.slot,
+      slot: providerDirection,
       prompt,
     });
 
@@ -551,15 +598,20 @@ async function generateOneAngle(
       input.deps?.extractOrientation ??
       ((bytes: Buffer) => extractFaceOrientationFromImageBytes(bytes));
     const orientationRaw = await extractOrientation(generatedBytes, {
-      slot: input.slot,
+      slot: canonicalSlot,
     });
     const orientation = toOrientationEstimate(orientationRaw);
 
+    // FINAL TRUTH: compare ACTUAL output against CANONICAL requested_slot.
     const angleValidation: AngleDirectionValidation =
       validateAngleDirectionFromOrientation({
-        slot: input.slot,
+        slot: canonicalSlot,
         orientation,
-        promptValidation,
+        promptValidation: {
+          ...promptValidation,
+          // Re-attribute validation to canonical slot for persistence/audit.
+          slot: canonicalSlot,
+        },
       });
 
     attempt = await repo.updateAttempt(scope, attempt.id, {
@@ -569,6 +621,10 @@ async function generateOneAngle(
       angle_direction: angleValidation.angle_direction,
       detected_orientation: angleValidation.detected_orientation,
       detected_yaw_degrees: angleValidation.detected_yaw_degrees,
+      provider_direction_strategy: providerStrategy,
+      provider_requested_direction: providerDirection,
+      profile_identity_mode: builtPrompt.profile_identity_mode,
+      profile_prompt_version: builtPrompt.profile_prompt_version,
     });
 
     const extract = input.deps?.extractEmbedding ?? extractFaceEmbedding;
@@ -589,13 +645,17 @@ async function generateOneAngle(
 
     // Always persist generated bytes for history/debug — new attempt = new asset.
     const assetId = randomUUID();
-    const meta = slotToReferenceMeta(input.slot);
+    const meta = slotToReferenceMeta(canonicalSlot);
     const notes = buildReferencePackageAssetNotes({
-      slot: input.slot,
+      slot: canonicalSlot,
       attemptId: attempt.id,
       masterReferenceId: input.masterReferenceId,
       identityDecision: evaluation.decision,
       angleDirection: angleValidation.angle_direction,
+      providerDirectionStrategy: providerStrategy,
+      providerRequestedDirection: providerDirection,
+      profileIdentityMode: builtPrompt.profile_identity_mode,
+      profilePromptVersion: builtPrompt.profile_prompt_version,
     });
 
     let generatedAssetId: string | null = null;
@@ -607,7 +667,7 @@ async function generateOneAngle(
         workspaceId: scope.workspaceId,
         personaId: input.personaId,
         assetId,
-        filename: `${input.slot}.png`,
+        filename: `${canonicalSlot}.png`,
       });
       const dims = extractImageDimensions(generatedBytes, "image/png");
       const asset = await personaRepo().createReferenceAsset(scope, {
@@ -635,7 +695,7 @@ async function generateOneAngle(
         workspaceId: scope.workspaceId,
         personaId: input.personaId,
         assetId,
-        filename: `${input.slot}.png`,
+        filename: `${canonicalSlot}.png`,
         bytes: generatedBytes,
         mimeType: "image/png",
       });
@@ -690,6 +750,10 @@ async function generateOneAngle(
       angle_direction: angleValidation.angle_direction,
       detected_orientation: angleValidation.detected_orientation,
       detected_yaw_degrees: angleValidation.detected_yaw_degrees,
+      provider_direction_strategy: providerStrategy,
+      provider_requested_direction: providerDirection,
+      profile_identity_mode: builtPrompt.profile_identity_mode,
+      profile_prompt_version: builtPrompt.profile_prompt_version,
       error_message: accepted
         ? null
         : !angleOk
@@ -703,6 +767,8 @@ async function generateOneAngle(
     return repo.updateAttempt(scope, attempt.id, {
       status: "failed",
       error_message: message,
+      provider_direction_strategy: providerStrategy,
+      provider_requested_direction: providerDirection,
     });
   }
 }
@@ -735,20 +801,33 @@ export async function getReferencePackageStatus(
   const assets = await personaRepo().listReferenceAssets(scope, personaId);
   const coverage = resolveReferencePackageSlotCoverage({ attempts, assets });
 
-  const slots: ReferencePackageSlotView[] = coverage.slots.map((row) => ({
-    slot: row.slot,
-    label: REFERENCE_PACKAGE_SLOT_LABELS[row.slot],
-    status: row.status,
-    latestAttempt: row.latestAttempt,
-    acceptedAssetId: row.countsTowardCoverage ? row.activeAssetId : null,
-    attemptHistory: row.attemptHistory,
-    identityDecision: row.identityDecision,
-    humanReview: row.humanReview,
-    angleManuallyReassigned: row.angleManuallyReassigned,
-    angleDirection: row.angleDirection,
-    detectedOrientation: row.detectedOrientation,
-    wrongCameraDirection: row.wrongCameraDirection,
-  }));
+  const slots: ReferencePackageSlotView[] = coverage.slots.map((row) => {
+    const plan = resolveProviderDirectionPlan(attempts, row.slot);
+    return {
+      slot: row.slot,
+      label: REFERENCE_PACKAGE_SLOT_LABELS[row.slot],
+      status: row.status,
+      latestAttempt: row.latestAttempt,
+      acceptedAssetId: row.countsTowardCoverage ? row.activeAssetId : null,
+      attemptHistory: row.attemptHistory,
+      identityDecision: row.identityDecision,
+      humanReview: row.humanReview,
+      angleManuallyReassigned: row.angleManuallyReassigned,
+      angleDirection: row.angleDirection,
+      detectedOrientation: row.detectedOrientation,
+      wrongCameraDirection: row.wrongCameraDirection,
+      invertedFallbackEligible: plan.invertedFallbackEligible,
+      directionGenerationUnreliable: plan.direction_generation_unreliable,
+      providerDirectionStrategy:
+        row.latestAttempt?.provider_direction_strategy ?? null,
+      providerRequestedDirection:
+        row.latestAttempt?.provider_requested_direction ?? null,
+      humanIdentityReview: row.humanIdentityReview,
+      acceptedViaHumanIdentityOverride: row.acceptedViaHumanIdentityOverride,
+      identitySourceConfidence: row.identitySourceConfidence,
+      coverageLabel: row.coverageLabel,
+    };
+  });
 
   return {
     personaId,
@@ -768,6 +847,8 @@ export async function getReferencePackageStatus(
 
 /**
  * Prepare + confirm regenerate for a single failed/mismatched/rejected slot.
+ * May propose inverted_fallback when recent opposite-orientation failures exist.
+ * Zero provider calls.
  */
 export async function prepareReferencePackageAngleRegeneration(
   scope: WorkspaceScope,
@@ -791,11 +872,27 @@ export async function prepareReferencePackageAngleRegeneration(
       { slot },
     );
   }
-  return prepareReferencePackageConfirmation(scope, personaId, {
+
+  const directionPlan = resolveProviderDirectionPlan(attempts, slot);
+  if (!directionPlan.allowPaidRegeneration) {
+    throw new PersonaDomainError(
+      DIRECTION_GENERATION_UNRELIABLE_MESSAGE,
+      "WORKFLOW",
+      { slot, directionPlan },
+    );
+  }
+
+  const prepared = await prepareReferencePackageConfirmation(scope, personaId, {
     slots: [slot],
     forceExactSlots: true,
     deps,
   });
+
+  return {
+    ...prepared,
+    directionPlan,
+    providerCalled: false as const,
+  };
 }
 
 export async function confirmAndRegenerateReferencePackageAngle(
@@ -805,6 +902,8 @@ export async function confirmAndRegenerateReferencePackageAngle(
   options: {
     confirmationToken: string;
     costConfirmed: boolean;
+    /** Explicit acknowledgement when prepare proposed inverted_fallback. */
+    invertedFallbackConfirmed?: boolean;
     deps?: ReferencePackageDeps;
   },
 ) {
@@ -813,6 +912,36 @@ export async function confirmAndRegenerateReferencePackageAngle(
       slot,
     });
   }
+
+  const attempts = await pkgRepo(options.deps).listAttemptsForPersona(
+    scope,
+    personaId,
+  );
+  const directionPlan = resolveProviderDirectionPlan(attempts, slot);
+  if (!directionPlan.allowPaidRegeneration) {
+    throw new PersonaDomainError(
+      DIRECTION_GENERATION_UNRELIABLE_MESSAGE,
+      "WORKFLOW",
+      { slot },
+    );
+  }
+  if (!options.costConfirmed) {
+    throw new PersonaDomainError(
+      "Explizite Kostenbestätigung erforderlich.",
+      "WORKFLOW",
+    );
+  }
+  if (
+    directionPlan.provider_direction_strategy === "inverted_fallback" &&
+    options.invertedFallbackConfirmed === false
+  ) {
+    throw new PersonaDomainError(
+      "Inverted provider fallback requires explicit confirmation before provider call.",
+      "WORKFLOW",
+      { slot },
+    );
+  }
+
   return confirmAndGenerateReferencePackage(scope, personaId, {
     confirmationToken: options.confirmationToken,
     costConfirmed: options.costConfirmed,
@@ -879,7 +1008,7 @@ export async function recomputeReferencePackageAngleValidation(
   }
 
   const effectiveSlot = getAttemptEffectiveSlot(attempt);
-  const prompt = buildReferencePackageAnglePrompt(effectiveSlot);
+  const prompt = buildReferencePackageAnglePromptDetailed(effectiveSlot).prompt;
   const promptValidation = validateAngleDirectionFromPrompt({
     slot: effectiveSlot,
     prompt,

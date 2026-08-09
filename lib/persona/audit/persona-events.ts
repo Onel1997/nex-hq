@@ -13,6 +13,7 @@ export type PersonaAuditEventType =
   | "persona.reference_uploaded"
   | "persona.reference_approved"
   | "persona.reference_rejected"
+  | "reference.identity_override_approved"
   | "persona.primary_reference_changed"
   | "persona_creation_project.created"
   | "candidate_generation.started"

@@ -169,6 +169,17 @@ export class MemoryReferencePackageRepository
       angle_direction: null,
       detected_orientation: null,
       detected_yaw_degrees: null,
+      provider_direction_strategy:
+        input.provider_direction_strategy ?? "canonical",
+      provider_requested_direction:
+        input.provider_requested_direction ?? input.reference_slot,
+      profile_identity_mode: input.profile_identity_mode ?? null,
+      profile_prompt_version: input.profile_prompt_version ?? null,
+      human_identity_review: null,
+      human_identity_reviewed_at: null,
+      human_identity_reviewed_by: null,
+      human_identity_override_reason: null,
+      identity_override_version: null,
       cost_eur: null,
       error_message: null,
       created_at: now,
