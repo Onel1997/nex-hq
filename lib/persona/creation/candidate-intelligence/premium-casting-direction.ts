@@ -1,5 +1,5 @@
 /**
- * Phase 2.2B / 2.2C / 2.2H / 2.2I / 2.2J / 2.2K — Primary Brand Face direction (creative only).
+ * Phase 2.2B / 2.2C / 2.2H / 2.2I / 2.2J / 2.2K / 2.2L — Primary Brand Face direction (creative only).
  *
  * Mediterranean Premium Hero = primary face of a premium modern streetwear brand.
  * Phase 2.2I softens final casting quality toward timeless commercial premium
@@ -9,6 +9,8 @@
  * or anatomy template. A/B/C/D remain biologically distinct humans.
  * Phase 2.2K further softens toward a cleaner, younger (22–25) soft-masculine
  * e-commerce streetwear face — reduces traditional rugged / beard-heavy masculinity.
+ * Phase 2.2L restores strong A/B/C/D casting diversity (hair silhouettes + face
+ * geometry) while keeping the 2.2K softer commercial quality — never four brothers.
  *
  * Target balance: ~70% approachable commercial streetwear · ~20% premium polish · ~10% masculine edge.
  * Target impression: “He looks good in that outfit.” / “I want to dress like him.”
@@ -17,7 +19,7 @@
  * Attractiveness from harmony, relatability, trustworthiness — NOT extreme
  * masculinity, editorial beauty, or “most handsome man” casting.
  *
- * Quality inspiration (casting bar / wardrobe vibe only, never identity copy):
+ * Quality inspiration (casting bar /wardrobe vibe only, never identity copy):
  * Fear of God ESSENTIALS, Aimé Leon Dore, Our Legacy, COS, ARKET, Zara Studio.
  * Avoid: Dolce & Gabbana campaign, perfume ads, luxury runway, Instagram model.
  */
@@ -49,7 +51,7 @@ export const CANDIDATE_D_CREATIVE_DNA_QUALITY = [
   "balanced brows",
   "natural lips",
   "cleaner contemporary textured dark hair",
-  "short textured curls / soft taper / low fade",
+  "slot-specific streetwear haircut — never one shared board haircut",
   "clean shave or very light natural stubble",
   "approachable neutral expression",
   "quiet confidence",
@@ -74,6 +76,24 @@ export const SOFTER_PRIMARY_STREETWEAR_FACE_QUALITY = [
   "10% masculine edge",
   "He looks good in that outfit",
 ] as const;
+
+/**
+ * Phase 2.2L — mandatory A/B/C/D casting diversity (creative only).
+ * Hair silhouette families + face-geometry families must stay visibly distinct.
+ */
+export const CASTING_DIVERSITY_HAIR_SILHOUETTES = {
+  A: "short textured crop / short curls / clean taper — low-maintenance streetwear — NO medium-long waves",
+  B: "very short crop / buzz-adjacent texture OR tight short curls with fade — cleaner hairline — NO loose long curls",
+  C: "medium-length relaxed waves — creative streetwear lane — ONLY slot that strongly prefers longer/wavier hair",
+  D: "short messy curls OR short natural textured hair OR soft taper with texture — NO long editorial hair",
+} as const;
+
+export const CASTING_DIVERSITY_FACE_GEOMETRY = {
+  A: "softer oval / slightly rectangular — medium nose — softer jaw — open relaxed eyes",
+  B: "narrower elongated face — different nose bridge/nostril structure — more compact jaw — different brow shape",
+  C: "slightly wider upper face — softer lower face — distinct eye spacing — different cheek structure",
+  D: "balanced narrow-to-medium face — subtle angularity — distinct nose tip / lips / chin relationship — warm approachable eyes",
+} as const;
 
 /** Explicit non-goals — prove we do not encode a prior Candidate D identity. */
 export const CANDIDATE_D_CREATIVE_DNA_NON_GOALS = [
@@ -133,9 +153,10 @@ export function realHumanPhotographPriorityBlock(): string {
     "PRIMARY BRAND FACE: cleaner younger soft-masculine premium streetwear ambassador — NOT a rugged male model.",
     "Naturally handsome Mediterranean male with apparent age ~22–25 — youthful, clean, approachable, modern, believable.",
     "Someone who looks excellent in oversized T-shirts and hoodies without looking like a professional runway model.",
-    "Softer oval / subtle rectangular face · reduced facial width · natural medium jaw · softer lower face · youthful cheeks.",
+    "Softer soft-masculine Mediterranean proportions · reduced facial width · natural medium jaw · softer lower face · youthful cheeks.",
     "Relaxed open eyes · balanced brows · natural lips · approachable neutral expression · quiet youthful confidence.",
     "Clean shave OR very light natural stubble only — never beard-heavy Mediterranean casting.",
+    "Hair silhouette and face geometry MUST follow THIS slot’s casting lane — never one shared wavy medium-length haircut across A/B/C/D.",
     "Target balance: ~70% approachable commercial streetwear · ~20% premium polish · ~10% masculine edge.",
     "Emotional target: “He looks good in that outfit.” / “I want to dress like him.” / “He naturally belongs in Milaene.”",
     "NOT “That man has an extremely masculine/model face.” NOT rugged hero. NOT alpha-male. NOT luxury fashion face.",
@@ -157,7 +178,7 @@ function candidateDCreativeDnaQualityBarBlock(): string {
     "",
     "Prefer: youthful Mediterranean appearance · narrow-to-medium face · soft masculine bone structure ·",
     "natural medium jaw · relaxed open eyes · balanced brows · natural lips · cleaner contemporary textured dark hair ·",
-    "short textured curls / soft taper / low fade · clean shave or very light natural stubble · approachable neutral expression ·",
+    "slot-specific streetwear haircut (never one shared board haircut) · clean shave or very light natural stubble · approachable neutral expression ·",
     "quiet confidence · effortless charisma · slight individuality / imperfection · naturally handsome ·",
     "premium everyday attractiveness — memorable without extreme facial features.",
     "",
@@ -168,6 +189,7 @@ function candidateDCreativeDnaQualityBarBlock(): string {
     "bodybuilder appearance, mature 27+ / 30+ look, runway-model intensity, perfume-campaign beauty, luxury-fashion hero posing,",
     "dramatic cheekbones, intimidating eyes, perfect facial symmetry, Instagram influencer perfection, artificial beauty,",
     "overly styled editorial hair, cinematic hero lighting, alpha-male casting, rugged Mediterranean hero energy.",
+    "Candidate D creative DNA is a QUALITY BAR only — NEVER the anatomy template that makes A/B/C/D look like brothers.",
   ].join("\n");
 }
 
@@ -181,7 +203,7 @@ function softerPrimaryStreetwearFaceBlock(): string {
     "REDUCE: facial width · jaw width · jaw sharpness · chin projection · cheekbone prominence · brow heaviness ·",
     "beard density · ruggedness · mature masculine hardness.",
     "",
-    "INCREASE: narrow-to-medium face shape · softer oval / subtle rectangular face · smooth facial transitions ·",
+    "INCREASE: soft-masculine youthful proportions within THIS slot’s geometry family · smooth facial transitions ·",
     "softer lower face · natural medium jaw · youthful cheeks · relaxed open eyes · balanced brows · natural lips ·",
     "approachable neutral expression.",
     "",
@@ -192,14 +214,56 @@ function softerPrimaryStreetwearFaceBlock(): string {
     "FACIAL HAIR preference: clean shave OR very light natural stubble.",
     "Reduce: full beard · dense beard shadow · sharply lined beard · heavy moustache · strongly masculine facial-hair styling.",
     "",
-    "HAIR preference: short textured curls · cropped curls · soft taper · low fade · short natural waves ·",
-    "slightly messy short textured hair. Medium hair only occasionally for diversity.",
-    "Reduce overly editorial long/wavy male-model hair across the board.",
+    "HAIR: keep cleaner contemporary streetwear quality — but hair SILHOUETTE is SLOT-SPECIFIC.",
+    "Do NOT apply one board-wide short-curl / soft-taper / medium-wave haircut to A/B/C/D.",
+    "Follow THIS slot’s mandatory hair family. Only Slot C strongly prefers medium-length relaxed waves.",
+    "Reduce overly editorial long/wavy male-model hair on slots A, B, and D.",
     "",
     "TARGET BALANCE: ~70% approachable commercial streetwear · ~20% premium fashion polish · ~10% masculine edge.",
     "Do NOT let masculine edge dominate the casting.",
     "Viewer should think “He looks good in that outfit.” — not “That man has an extremely masculine/model face.”",
     "Do NOT copy any previously generated person’s exact identity — proportional / casting-quality refinement only.",
+  ].join("\n");
+}
+
+/**
+ * Phase 2.2L — restore strong A/B/C/D casting diversity (creative only).
+ * Keeps 2.2K softer commercial quality while forbidding sibling / same-haircut collapse.
+ */
+function castingDiversityAntiCollapseBlock(): string {
+  return [
+    "PHASE 2.2L — STRONG A/B/C/D CASTING DIVERSITY (ANTI-COLLAPSE)",
+    "Keep the softer, younger, commercial streetwear QUALITY from 2.2K.",
+    "BUT restore immediate visual separation — four different people, never brothers,",
+    "never four variations of one Mediterranean male-model archetype,",
+    "never four copies of a prior Candidate D face.",
+    "",
+    "MANDATORY HAIR DIVERSITY — minimum 3 clearly different haircut silhouettes across A/B/C/D:",
+    `Slot A: ${CASTING_DIVERSITY_HAIR_SILHOUETTES.A}`,
+    `Slot B: ${CASTING_DIVERSITY_HAIR_SILHOUETTES.B}`,
+    `Slot C: ${CASTING_DIVERSITY_HAIR_SILHOUETTES.C}`,
+    `Slot D: ${CASTING_DIVERSITY_HAIR_SILHOUETTES.D}`,
+    "Do NOT allow all four candidates to use wavy medium-length hair.",
+    "Do NOT share the same middle-part hairstyle across slots.",
+    "Do NOT share the same haircut silhouette across slots.",
+    "",
+    "MANDATORY FACE-GEOMETRY DIVERSITY — different facial geometry family per slot:",
+    `Slot A: ${CASTING_DIVERSITY_FACE_GEOMETRY.A}`,
+    `Slot B: ${CASTING_DIVERSITY_FACE_GEOMETRY.B}`,
+    `Slot C: ${CASTING_DIVERSITY_FACE_GEOMETRY.C}`,
+    `Slot D: ${CASTING_DIVERSITY_FACE_GEOMETRY.D}`,
+    "Do NOT reuse the same jaw width, eye shape, nose structure, brow structure, hairline, or lip proportions across all four.",
+    "",
+    "REGIONAL CASTING LANES (modern believable casting — not stereotypes):",
+    "A — Iberian / Southern European commercial · B — Maghrebi / North African Mediterranean ·",
+    "C — Greek / Balkan creative streetwear · D — Levantine / Eastern Mediterranean ambassador.",
+    "",
+    "ANTI-COLLAPSE — explicitly discourage:",
+    "same wavy hairstyle across slots · same middle-part hairstyle · same jaw shape · same eyebrow shape ·",
+    "same beard pattern · same eye shape · four conventionally handsome Mediterranean male-model variants ·",
+    "sibling appearance · repeated facial proportions · Candidate D anatomy template applied to A/B/C.",
+    "A/B/C/D should look like four people who could appear in the same Milaene campaign —",
+    "not four versions of one casting archetype.",
   ].join("\n");
 }
 
@@ -213,6 +277,7 @@ function mediterraneanPremiumBlock(): string {
     "Phase 2.2I — keep Mediterranean Premium Hero direction; soften toward timeless commercial premium streetwear face.",
     "Phase 2.2J — raise QUALITY BAR toward Candidate D creative casting DNA — NOT a face/identity copy.",
     "Phase 2.2K — softer, cleaner, younger primary streetwear face — reduce traditional rugged masculinity.",
+    "Phase 2.2L — restore strong A/B/C/D hair + face-geometry diversity while keeping 2.2K softer commercial quality.",
     "Cast the primary face of a premium modern streetwear brand — not a luxury fashion house.",
     "Review four completely different naturally handsome Mediterranean males with apparent age about 22–25",
     "on a simple commercial casting board for Milaene premium streetwear.",
@@ -225,18 +290,21 @@ function mediterraneanPremiumBlock(): string {
     "Sample four different Mediterranean regional appearance clusters — never four men from the same cluster.",
     "Four different real people from the same modern Milaene streetwear casting universe — never brothers, cousins, twins,",
     "or four versions of one prior Candidate D face.",
+    "Haircuts must show at least three distinct silhouettes — only Slot C strongly prefers medium/long waves.",
     "",
     candidateDCreativeDnaQualityBarBlock(),
     "",
     softerPrimaryStreetwearFaceBlock(),
     "",
-    "PRIMARY BRAND FACE — FACIAL CHARACTER (2.2I + 2.2J + 2.2K softer streetwear refinement):",
-    "Apparent age ~22–25 (avoid 27+). Softer facial harmony. Narrow-to-medium face. Softer oval / subtle rectangular shape.",
-    "Natural medium jaw — reduced jaw width and sharpness. Softer lower face. Reduced chin projection.",
+    castingDiversityAntiCollapseBlock(),
+    "",
+    "PRIMARY BRAND FACE — FACIAL CHARACTER (2.2I + 2.2J + 2.2K softer streetwear + 2.2L diversity):",
+    "Apparent age ~22–25 (avoid 27+). Soft masculine facial harmony within THIS slot’s geometry family.",
+    "Natural medium jaw — reduced jaw width and sharpness vs rugged casting. Softer lower face. Reduced chin projection.",
     "Youthful cheeks. Softer cheekbones — reduced prominence. Relaxed open eyes. Balanced brows — not heavy.",
     "Natural lips. Approachable neutral expression. Quiet youthful confidence. Effortless charisma.",
-    "Cleaner contemporary textured dark hair — short textured curls, cropped curls, soft taper, low fade,",
-    "or short natural waves; medium hair only occasionally for diversity.",
+    "Cleaner contemporary textured dark hair — but SILHOUETTE follows slot lane (A short crop/taper · B very short/tight fade ·",
+    "C medium relaxed waves · D short messy curls / soft taper). Never four identical wavy medium lengths.",
     "Clean shave OR very light natural stubble — strongly prefer low beard density.",
     "Naturally handsome rather than striking. Premium everyday attractiveness — not editorial beauty.",
     "Target balance: ~70% approachable commercial streetwear · ~20% premium polish · ~10% masculine edge.",
@@ -247,9 +315,9 @@ function mediterraneanPremiumBlock(): string {
     "BODY: lean athletic — not muscular, not bodybuilder. Normal proportions. Healthy.",
     "Looks excellent in oversized heavyweight tees, premium hoodies, zip hoodies, and relaxed trousers.",
     "",
-    "HAIR (cleaner contemporary streetwear): short textured curls, cropped curls, soft taper, low fade,",
-    "short natural waves, or slightly messy short textured hair — natural, never perfectly styled editorial hair.",
-    "Reduce long/wavy editorial male-model hair across the board.",
+    "HAIR (slot-diverse contemporary streetwear): assign clearly different hair families per slot —",
+    "minimum 3 distinct silhouettes; only C owns the longer/wavier creative lane.",
+    "Natural, never perfectly styled editorial hair on every slot.",
     "",
     "STYLING vibe (wardrobe references only): Fear of God ESSENTIALS, Aimé Leon Dore, Our Legacy, COS, ARKET, Zara Studio.",
     "Simple premium basics. Neutral colors. Oversized silhouettes. No luxury logos. No flashy accessories.",
@@ -271,7 +339,9 @@ function mediterraneanPremiumBlock(): string {
     "superhero facial structure, dramatic facial shadows, cinematic hero lighting,",
     "perfect symmetry, influencer aesthetic / Instagram model aesthetics, artificial beauty,",
     "looking older than 26 / visually 27+ / mature 30+ appearance, beauty filters, plastic skin, CGI,",
-    "overly styled editorial long/wavy male-model hair, editorial high-fashion intensity, rugged masculinity.",
+    "same wavy medium-length hair across A/B/C/D, same middle-part hairstyle, sibling appearance,",
+    "four conventionally handsome Mediterranean male-model variants, repeated facial proportions,",
+    "overly styled editorial long/wavy male-model hair on every slot, editorial high-fashion intensity, rugged masculinity.",
     "NOT passport / ID / LinkedIn / casting-database headshots.",
     "",
     "Photography: soft natural daylight commercial streetwear energy — soft even shadows, real skin,",
@@ -340,9 +410,10 @@ export function premiumFashionPresenceBlock(): string {
     "PRIMARY BRAND FACE — CLEANER YOUNGER SOFT-MASCULINE STREETWEAR CASTING (not rugged / not luxury house)",
     "Cast a naturally handsome Mediterranean male with apparent age ~22–25 customers believe could represent Milaene.",
     "Clean modern e-commerce streetwear model energy — youthful, soft masculine, approachable, commercially attractive.",
-    "Softer oval / subtle rectangular face · reduced facial width · natural medium jaw · softer lower face · youthful cheeks.",
+    "Soft-masculine youthful proportions within THIS slot’s face-geometry family — reduced facial width · natural medium jaw · softer lower face · youthful cheeks.",
     "Relaxed open eyes · balanced brows · natural lips · approachable neutral expression · quiet youthful confidence.",
-    "Cleaner contemporary textured dark hair — short textured curls, soft taper, low fade, short natural waves.",
+    "Cleaner contemporary textured dark hair — SILHOUETTE follows THIS slot (A short crop/taper · B very short/tight fade ·",
+    "C medium relaxed waves · D short messy curls / soft taper) — never board-wide identical waves.",
     "Clean shave OR very light natural stubble — never beard-heavy casting.",
     "Naturally handsome rather than striking — premium everyday attractiveness, not editorial beauty.",
     "Soft masculine without hyper-masculinity, ruggedness, or alpha-male edge.",
@@ -360,7 +431,8 @@ export function premiumFashionPresenceBlock(): string {
     "movie hero, luxury runway casting, luxury-fashion hero posing, Dolce & Gabbana campaign energy,",
     "dramatic cheekbones, brow heaviness, superhero facial structure, dramatic facial shadows,",
     "perfect symmetry, influencer / Instagram model aesthetics, intimidating expressions,",
-    "looking older than 26 / visually 27+ / mature 30+ appearance, artificial beauty, overly styled editorial hair,",
+    "looking older than 26 / visually 27+ / mature 30+ appearance, artificial beauty,",
+    "same wavy medium hair across slots, sibling appearance, four Mediterranean male-model clones,",
     "dominant / seductive / rugged / heroic / alpha-male casting.",
     "Do NOT beautify. Do NOT airbrush. Do NOT symmetrize. Do NOT add cinematic glow.",
     "Do NOT copy any prior Candidate D face — quality bar only, never identity match.",
@@ -438,7 +510,10 @@ export function slotCastingCameraBlock(slot: DiscoverySlot): string {
         "Lighting: large soft window daylight from camera-left, gentle fill — simple casting light.",
         "Background: warm grey mineral plaster — soft, even, low-contrast casting wall.",
         "Micro-expression: friendly quiet confidence — warmer almost-smile, soft relaxed eyes with effortless smile potential.",
-        "Do NOT reuse Slot B/C/D lens, height, lighting side, or crop.",
+        "PHASE 2.2L SLOT A CASTING LOCK:",
+        `Hair: ${CASTING_DIVERSITY_HAIR_SILHOUETTES.A}`,
+        `Face geometry: ${CASTING_DIVERSITY_FACE_GEOMETRY.A}`,
+        "Do NOT reuse Slot B/C/D lens, height, lighting side, crop, haircut silhouette, or facial geometry family.",
       ].join("\n");
     case "B":
       return [
@@ -451,7 +526,10 @@ export function slotCastingCameraBlock(slot: DiscoverySlot): string {
         "Lighting: clearer directional key from camera-right with soft commercial cheek dimension — still simple studio/daylight, never dramatic facial shadows.",
         "Background: cooler charcoal / stone casting wall — denser tonal weight.",
         "Micro-expression: warmer urban calm — relaxed eyes, soft mouth with effortless smile potential, no toughness.",
-        "Do NOT reuse Slot A/C/D lens, height, lighting side, or crop.",
+        "PHASE 2.2L SLOT B CASTING LOCK:",
+        `Hair: ${CASTING_DIVERSITY_HAIR_SILHOUETTES.B}`,
+        `Face geometry: ${CASTING_DIVERSITY_FACE_GEOMETRY.B}`,
+        "Do NOT reuse Slot A/C/D lens, height, lighting side, crop, haircut silhouette, or facial geometry family.",
       ].join("\n");
     case "C":
       return [
@@ -464,7 +542,11 @@ export function slotCastingCameraBlock(slot: DiscoverySlot): string {
         "Lighting: soft high-window wrap with lighter open shadows — simple casting light, no dramatic facial shadows.",
         "Background: pale off-white / soft mineral plaster — airy casting wall.",
         "Micro-expression: creative commercial calm — relaxed warm eyes, composed mouth with effortless smile potential.",
-        "Do NOT reuse Slot A/B/D lens, height, lighting side, or crop.",
+        "PHASE 2.2L SLOT C CASTING LOCK:",
+        `Hair: ${CASTING_DIVERSITY_HAIR_SILHOUETTES.C}`,
+        `Face geometry: ${CASTING_DIVERSITY_FACE_GEOMETRY.C}`,
+        "This is the ONLY slot that strongly prefers medium-length relaxed waves.",
+        "Do NOT reuse Slot A/B/D lens, height, lighting side, crop, haircut silhouette, or facial geometry family.",
       ].join("\n");
     case "D":
       return [
@@ -477,7 +559,11 @@ export function slotCastingCameraBlock(slot: DiscoverySlot): string {
         "Lighting: warm soft even key with gentle cheek dimension — natural daylight/studio, no Rembrandt drama, no teal/orange grade.",
         "Background: warm stone-grey concrete — casting-neutral wall.",
         "Micro-expression: warmer approachable confidence — relaxed eyes, quiet trustworthiness, effortless smile potential without a grin.",
-        "Do NOT reuse Slot A/B/C lens, height, lighting side, or crop.",
+        "PHASE 2.2L SLOT D CASTING LOCK:",
+        `Hair: ${CASTING_DIVERSITY_HAIR_SILHOUETTES.D}`,
+        `Face geometry: ${CASTING_DIVERSITY_FACE_GEOMETRY.D}`,
+        "QUALITY BAR exemplar for youth / approachability / soft masculinity — NEVER the anatomy template for A/B/C.",
+        "Do NOT reuse Slot A/B/C lens, height, lighting side, crop, haircut silhouette, or facial geometry family.",
       ].join("\n");
   }
 }
@@ -562,6 +648,15 @@ export function premiumNegativePromptAdditions(): string {
     "cousins",
     "twins",
     "family resemblance across candidates",
+    "sibling appearance across candidates",
+    "same wavy medium-length hair across candidates",
+    "same middle-part hairstyle across candidates",
+    "same haircut silhouette across candidates",
+    "same jaw shape across candidates",
+    "same eyebrow shape across candidates",
+    "same eye shape across candidates",
+    "same beard pattern across candidates",
+    "four Mediterranean male-model variants",
     "duplicate person",
     "same identity",
     "duplicate identity",
@@ -749,9 +844,9 @@ export function buildPremiumRetryPromptSuffix(attempt: number): string {
     "",
     `PREMIUM STREETWEAR CASTING QUALITY RETRY (${attempt})`,
     "Elevate immediately to a real unretouched human commercial streetwear casting photograph.",
-    "Apparent age ~22–25 (avoid 27+). Softer oval / subtle rectangular face. Reduced facial width.",
+    "Apparent age ~22–25 (avoid 27+). Soft-masculine youthful proportions within THIS slot’s geometry family.",
     "Natural medium jaw · softer lower face · youthful cheeks · relaxed open eyes · balanced brows.",
-    "Clean shave OR very light natural stubble. Cleaner short textured curls / soft taper / low fade.",
+    "Clean shave OR very light natural stubble. Hair silhouette MUST follow THIS slot’s casting lock — never board-wide identical waves.",
     "Calm friendly quiet confidence — soft masculine, never rugged / beard-heavy / alpha-male.",
     "Target: “He looks good in that outfit.” / “I want to dress like him.” — not extremely masculine/model face.",
     "Balance: ~70% approachable commercial · ~20% premium polish · ~10% masculine edge.",
@@ -759,7 +854,7 @@ export function buildPremiumRetryPromptSuffix(attempt: number): string {
     "Soft even shadows — no dramatic facial shadows, no cinematic hero lighting.",
     "NOT runway, perfume ad, rugged hero, hyper-masculine, square oversized jaw, hunter eyes,",
     "full beard, dense beard shadow, bodybuilder, Instagram model, movie hero, or mature 27+ look.",
-    "Do NOT copy any prior Candidate D face — quality bar only; keep THIS slot’s unique biology.",
+    "Do NOT copy any prior Candidate D face — quality bar only; keep THIS slot’s unique biology and haircut.",
     "Keep clear male identity — never feminine-coded.",
     "Natural daylight + soft even shadows + real skin — NOT a finished advertising campaign.",
     "NOT passport, NOT LinkedIn, NOT Midjourney fashion, NOT plastic AI skin.",

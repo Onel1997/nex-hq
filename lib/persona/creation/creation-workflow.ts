@@ -44,6 +44,69 @@ export type CreationWorkflowStep =
   | "identity_lock"
   | "approved_brand_cast";
 
+/**
+ * Phase 2.3B — Brand Face continuation lifecycle (derived UI only).
+ * Selection alone never means Identity Lock has started.
+ */
+export type BrandFaceUiLifecycle =
+  | "discovery_review"
+  | "selected"
+  | "draft_persona"
+  | "reference_package"
+  | "identity_lock"
+  | "approved";
+
+export const BRAND_FACE_UI_LIFECYCLE_LABELS: Record<BrandFaceUiLifecycle, string> = {
+  discovery_review: "Discovery / Review",
+  selected: "Selected Brand Face",
+  draft_persona: "Draft Persona",
+  reference_package: "Reference Package",
+  identity_lock: "Identity Lock",
+  approved: "Approved Brand Cast",
+};
+
+export function resolveBrandFaceUiLifecycle(input: {
+  projectStatus: CreationProjectStatus;
+  generationStage?: GenerationStage | null;
+  selectedCandidate?: {
+    status: string;
+    converted_persona_id?: string | null;
+  } | null;
+  persona?: {
+    status: string;
+    approved?: boolean;
+    identity_lock_status?: string | null;
+  } | null;
+}): BrandFaceUiLifecycle {
+  const persona = input.persona;
+  if (persona?.status === "Approved" && persona.approved) {
+    return "approved";
+  }
+  if (
+    persona &&
+    (persona.identity_lock_status === "approved" ||
+      persona.identity_lock_status === "review" ||
+      persona.identity_lock_status === "needs_revision")
+  ) {
+    return "identity_lock";
+  }
+  if (persona && persona.identity_lock_status === "collecting_references") {
+    return "reference_package";
+  }
+  if (persona || input.selectedCandidate?.converted_persona_id) {
+    return "draft_persona";
+  }
+  if (
+    input.projectStatus === "selected" ||
+    input.selectedCandidate?.status === "selected"
+  ) {
+    return "selected";
+  }
+  // Historical projects may still store generation_stage=identity_lock after
+  // Auswählen with no persona — do not treat that as Identity Lock started.
+  void input.generationStage;
+  return "discovery_review";
+}
 const PREPARE_CONFIRMATION_STATUSES: ReadonlyArray<CreationProjectStatus> = [
   "draft",
   "ready",
@@ -193,13 +256,35 @@ export function evaluatePreparePaidConfirmationGate(args: {
 
 export function resolveCreationWorkflowStep(
   project: PersonaCreationProject,
+  options?: {
+    selectedCandidate?: {
+      status: string;
+      converted_persona_id?: string | null;
+    } | null;
+    persona?: {
+      status: string;
+      approved?: boolean;
+      identity_lock_status?: string | null;
+    } | null;
+  },
 ): CreationWorkflowStep {
   if (project.status === "generating") return "generation_running";
   if (project.status === "review") return "candidates_generated";
   if (project.status === "selected") {
-    return project.generation_stage === "identity_lock"
-      ? "identity_lock"
-      : "convert";
+    const lifecycle = resolveBrandFaceUiLifecycle({
+      projectStatus: project.status,
+      generationStage: project.generation_stage,
+      selectedCandidate: options?.selectedCandidate ?? null,
+      persona: options?.persona ?? null,
+    });
+    if (lifecycle === "approved") return "approved_brand_cast";
+    if (lifecycle === "identity_lock") return "identity_lock";
+    if (lifecycle === "draft_persona" || lifecycle === "reference_package") {
+      return "identity_lock";
+    }
+    // Selected with no persona — convert is the next real step.
+    // Do not treat premature generation_stage=identity_lock as lock started.
+    return "convert";
   }
   if (
     (project.status === "draft" || project.status === "ready") &&

@@ -6,7 +6,7 @@ import type { CandidateStatus, PersonaCandidate } from "@/lib/persona/domain/cre
 const STATUS_LABEL: Record<string, string> = {
   ready: "READY",
   shortlisted: "SHORTLISTED",
-  selected: "SELECTED",
+  selected: "SELECTED BRAND FACE",
   rejected: "REJECTED",
   needs_manual_references: "REFERENCE",
   queued: "QUEUED",
@@ -52,6 +52,11 @@ export function CandidateStatusBadge({
 }) {
   if (candidate.converted_persona_id) {
     return <PersonaStatusChip label="PRODUCTION" tone="production" />;
+  }
+  if (candidate.status === "selected") {
+    return (
+      <PersonaStatusChip label="SELECTED BRAND FACE" tone="selected" />
+    );
   }
   return (
     <PersonaStatusChip

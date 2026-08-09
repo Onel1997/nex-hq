@@ -221,7 +221,7 @@ describe("Phase 2.2J Candidate D creative DNA refinement", () => {
       assert.doesNotMatch(text, /PHASE 2\.2J — CANDIDATE D CREATIVE DNA/);
       assert.doesNotMatch(text, /CANDIDATE_D_CREATIVE_DNA_QUALITY/);
     }
-    assert.equal(SLOT_BLUEPRINT_VERSION, "2.2K.0");
-    assert.equal(getMediterraneanSlotBlueprint("A").version, "2.2K.0");
+    assert.equal(SLOT_BLUEPRINT_VERSION, "2.2L.0");
+    assert.equal(getMediterraneanSlotBlueprint("A").version, "2.2L.0");
   });
 });

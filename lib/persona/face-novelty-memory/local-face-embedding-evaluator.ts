@@ -143,6 +143,24 @@ async function ensureModelsLoaded(): Promise<typeof import("@vladmandic/face-api
   return _faceapiModule!;
 }
 
+/** Shared loader for landmark extraction (same models / canvas patch). */
+export async function loadFaceApiForLandmarks(): Promise<
+  typeof import("@vladmandic/face-api")
+> {
+  const faceapi = await ensureModelsLoaded();
+  await ensureCanvasMonkeyPatch(faceapi);
+  return faceapi;
+}
+
+/** Decode image bytes for face-api (node-canvas). */
+export async function decodeImageForFaceApi(
+  imageBytes: Buffer,
+): Promise<{ img: unknown; width: number; height: number }> {
+  const { loadImage } = await import("canvas");
+  const img = await loadImage(imageBytes);
+  return { img, width: img.width, height: img.height };
+}
+
 export interface FaceExtractionResult {
   status: FaceDetectionStatus;
   /** 128-dim embedding — do not log or expose in debug output. */

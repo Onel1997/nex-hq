@@ -431,7 +431,7 @@ export type CreateReferenceAssetInput = Omit<
 export type UpdateReferenceAssetInput = Partial<
   Omit<
     PersonaReferenceAsset,
-    "id" | "workspace_id" | "persona_id" | "storage_path" | "created_at" | "updated_at"
+    "id" | "workspace_id" | "persona_id" | "created_at" | "updated_at"
   >
 >;
 

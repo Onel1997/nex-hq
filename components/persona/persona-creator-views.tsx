@@ -65,9 +65,12 @@ import {
 } from "@/components/persona/candidate-board";
 import { CandidateStatusBadge } from "@/components/persona/candidate-status-badge";
 import {
+  BRAND_FACE_UI_LIFECYCLE_LABELS,
   canPrepareManualSlots,
   evaluatePreparePaidConfirmationGate,
+  resolveBrandFaceUiLifecycle,
 } from "@/lib/persona/creation/creation-workflow";
+import { isSelectedBrandFaceAwaitingConversion } from "@/lib/persona/face-novelty-memory/board-visibility";
 import {
   assertProjectSelectionSync,
   canRenderProjectCandidates,
@@ -1290,8 +1293,20 @@ export function CreationProjectsView({
             <p className="ps-project-id-debug">ID {projectIdPrefix(selected.id)}</p>
           ) : null}
           <p className="ps-muted">
-            {studio.candidates.length} Kandidaten · Stage {selected.generation_stage} · Status{" "}
-            {selected.status} · Provider {selected.provider_mode} · Ist-Kosten{" "}
+            {studio.candidates.length} Kandidaten · Lifecycle{" "}
+            {
+              BRAND_FACE_UI_LIFECYCLE_LABELS[
+                resolveBrandFaceUiLifecycle({
+                  projectStatus: selected.status,
+                  generationStage: selected.generation_stage,
+                  selectedCandidate:
+                    studio.candidates.find((c) => c.status === "selected") ??
+                    null,
+                  persona: null,
+                })
+              ]
+            }{" "}
+            · Status {selected.status} · Provider {selected.provider_mode} · Ist-Kosten{" "}
             {selected.actual_cost.toFixed(2)} €
           </p>
           {studio.discoveryLifecycle ? (
@@ -1719,10 +1734,34 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     () => (integrityMismatch ? [] : rankCandidatesForBoard(visibleCandidates)),
     [visibleCandidates, integrityMismatch],
   );
-  const selected = useMemo(
-    () => visibleCandidates.find((c) => c.id === studio.selectedCandidateId) ?? null,
-    [visibleCandidates, studio.selectedCandidateId],
+  const selectedBrandFace = useMemo(
+    () =>
+      visibleCandidates.find((c) => isSelectedBrandFaceAwaitingConversion(c)) ??
+      null,
+    [visibleCandidates],
   );
+  const selected = useMemo(() => {
+    if (!studio.selectedCandidateId) return selectedBrandFace;
+    return (
+      visibleCandidates.find((c) => c.id === studio.selectedCandidateId) ??
+      selectedBrandFace
+    );
+  }, [visibleCandidates, studio.selectedCandidateId, selectedBrandFace]);
+  const brandFaceLifecycle = useMemo(() => {
+    const project = studio.creationProjects.find((p) => p.id === studio.selectedProjectId);
+    if (!project) return null;
+    return resolveBrandFaceUiLifecycle({
+      projectStatus: project.status,
+      generationStage: project.generation_stage,
+      selectedCandidate: selectedBrandFace ?? selected,
+      persona: null,
+    });
+  }, [
+    studio.creationProjects,
+    studio.selectedProjectId,
+    selectedBrandFace,
+    selected,
+  ]);
   const selectedIsDebugRun = useMemo(
     () => (selected ? isDebugRunCandidate(selected, studio.generationJobs) : false),
     [selected, studio.generationJobs],
@@ -1745,6 +1784,13 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     setNotes(selected?.user_notes ?? "");
     setLightboxIndex(null);
   }, [selected?.id, selected?.user_notes]);
+
+  // Phase 2.3B — after refresh, keep the selected Brand Face focused + actionable.
+  useEffect(() => {
+    if (!selectedBrandFace) return;
+    if (studio.selectedCandidateId === selectedBrandFace.id) return;
+    void studio.loadCandidate(selectedBrandFace.id);
+  }, [selectedBrandFace?.id, studio.selectedCandidateId, studio.loadCandidate]);
 
   useEffect(() => {
     if (!DEBUG_MODE || !studio.selectedProjectId) return;
@@ -2571,6 +2617,85 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
         </details>
       ) : null}
 
+      {!studio.projectDetailLoading && !integrityMismatch && selectedBrandFace ? (
+        <div className="ps-selected-brand-face-panel" data-testid="selected-brand-face-panel">
+          <div className="ps-selected-brand-face-panel-header">
+            {studio.selectedProjectId &&
+            resolvePreviewUrlForCandidate({
+              projectId: studio.selectedProjectId,
+              candidate: selectedBrandFace,
+              previews: studio.candidatePreviews,
+            }) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                className="ps-selected-brand-face-thumb"
+                src={resolvePreviewUrlForCandidate({
+                  projectId: studio.selectedProjectId,
+                  candidate: selectedBrandFace,
+                  previews: studio.candidatePreviews,
+                })!}
+                alt={selectedBrandFace.candidate_name}
+              />
+            ) : (
+              <div className="ps-selected-brand-face-thumb-empty">No preview</div>
+            )}
+            <div>
+              <p className="ps-eyebrow">Selected Brand Face</p>
+              <h2 style={{ margin: "0.15rem 0" }}>
+                {discoverySlotLabel(selectedBrandFace.candidate_number)} ·{" "}
+                {selectedBrandFace.candidate_name}
+              </h2>
+              <p className="ps-muted" style={{ margin: 0 }}>
+                Lifecycle:{" "}
+                {brandFaceLifecycle
+                  ? BRAND_FACE_UI_LIFECYCLE_LABELS[brandFaceLifecycle]
+                  : "Selected Brand Face"}
+                {" · "}Next: Stage B / Reference Package, then Convert to Draft Persona.
+                Selection alone does not approve Brand Cast or start Identity Lock.
+              </p>
+            </div>
+          </div>
+          <div className="ps-actions">
+            <button
+              type="button"
+              disabled={
+                selectedBrandFace
+                  ? isDebugRunCandidate(selectedBrandFace, studio.generationJobs)
+                  : true
+              }
+              onClick={() =>
+                void studio
+                  .patchCandidate(selectedBrandFace.id, { action: "stage_b_package" })
+                  .catch((e: Error) => setError(e.message))
+              }
+            >
+              Stage B / Reference Package
+            </button>
+            <button
+              type="button"
+              disabled={
+                selectedBrandFace
+                  ? isDebugRunCandidate(selectedBrandFace, studio.generationJobs)
+                  : true
+              }
+              onClick={() =>
+                void studio
+                  .convertCandidate(selectedBrandFace.id)
+                  .catch((e: Error) => setError(e.message))
+              }
+            >
+              Convert to Draft Persona
+            </button>
+            <button
+              type="button"
+              onClick={() => void studio.loadCandidate(selectedBrandFace.id)}
+            >
+              Open details
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {!studio.projectDetailLoading && !integrityMismatch && rankedBoard.length > 0 ? (
         <div className="ps-ci-grid">
           {rankedBoard.map(({ candidate: c, isRecommendedBrandFace }) => (
@@ -2652,9 +2777,43 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
           />
 
           <div className="ps-actions">
+            {isSelectedBrandFaceAwaitingConversion(selected) ? (
+              <>
+                <button
+                  type="button"
+                  disabled={selectedIsDebugRun}
+                  title={
+                    selectedIsDebugRun
+                      ? "Debug-Lauf ohne UI-Bestätigung — nicht für Brand Cast"
+                      : undefined
+                  }
+                  onClick={() =>
+                    void studio
+                      .patchCandidate(selected.id, { action: "stage_b_package" })
+                      .catch((e: Error) => setError(e.message))
+                  }
+                >
+                  Stage B / Reference Package
+                </button>
+                <button
+                  type="button"
+                  disabled={selectedIsDebugRun}
+                  title={
+                    selectedIsDebugRun
+                      ? "Debug-Lauf ohne UI-Bestätigung — nicht für Brand Cast"
+                      : undefined
+                  }
+                  onClick={() =>
+                    void studio.convertCandidate(selected.id).catch((e: Error) => setError(e.message))
+                  }
+                >
+                  Convert to Draft Persona
+                </button>
+              </>
+            ) : null}
             <button
               type="button"
-              disabled={selectedIsDebugRun}
+              disabled={selectedIsDebugRun || selected.status === "selected"}
               title={
                 selectedIsDebugRun
                   ? "Debug-Lauf ohne UI-Bestätigung — nicht für Brand Cast"
@@ -2664,16 +2823,18 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             >
               Shortlist
             </button>
-            <button
-              type="button"
-              onClick={() =>
-                void studio.patchCandidate(selected.id, { action: "stage_b_package" }).catch((e: Error) =>
-                  setError(e.message),
-                )
-              }
-            >
-              Stage B / Referenzpaket
-            </button>
+            {!isSelectedBrandFaceAwaitingConversion(selected) ? (
+              <button
+                type="button"
+                onClick={() =>
+                  void studio.patchCandidate(selected.id, { action: "stage_b_package" }).catch((e: Error) =>
+                    setError(e.message),
+                  )
+                }
+              >
+                Stage B / Referenzpaket
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() =>
@@ -2684,28 +2845,32 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             </button>
             <button
               type="button"
-              disabled={selectedIsDebugRun}
+              disabled={selectedIsDebugRun || selected.status === "selected"}
               title={
                 selectedIsDebugRun
                   ? "Debug-Lauf ohne UI-Bestätigung — nicht für Brand Cast"
-                  : undefined
+                  : selected.status === "selected"
+                    ? "Bereits Selected Brand Face"
+                    : undefined
               }
               onClick={() => void act({ status: "selected" })}
             >
               Auswählen
             </button>
-            <button
-              type="button"
-              disabled={selectedIsDebugRun}
-              title={
-                selectedIsDebugRun
-                  ? "Debug-Lauf ohne UI-Bestätigung — nicht für Brand Cast"
-                  : undefined
-              }
-              onClick={() => void studio.convertCandidate(selected.id).catch((e: Error) => setError(e.message))}
-            >
-              In Draft-Persona überführen
-            </button>
+            {!isSelectedBrandFaceAwaitingConversion(selected) ? (
+              <button
+                type="button"
+                disabled={selectedIsDebugRun}
+                title={
+                  selectedIsDebugRun
+                    ? "Debug-Lauf ohne UI-Bestätigung — nicht für Brand Cast"
+                    : undefined
+                }
+                onClick={() => void studio.convertCandidate(selected.id).catch((e: Error) => setError(e.message))}
+              >
+                In Draft-Persona überführen
+              </button>
+            ) : null}
             <label className="ps-upload">
               Ersatz-Referenz hochladen
               <input

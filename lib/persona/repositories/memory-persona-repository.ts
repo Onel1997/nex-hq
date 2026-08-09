@@ -723,7 +723,7 @@ export class MemoryPersonaRepository implements PersonaRepository {
       id: current.id,
       workspace_id: current.workspace_id,
       persona_id: current.persona_id,
-      storage_path: current.storage_path,
+      storage_path: patch.storage_path ?? current.storage_path,
       created_at: current.created_at,
       updated_at: nowIso(),
     };

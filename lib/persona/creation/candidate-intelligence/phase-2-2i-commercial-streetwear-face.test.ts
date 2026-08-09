@@ -143,10 +143,10 @@ describe("Phase 2.2I commercial streetwear brand face refinement", () => {
   });
 
   it("bumps L2 slot blueprints to 2.2I and removes Rembrandt / square-hero jaw pools", () => {
-    assert.match(SLOT_BLUEPRINT_VERSION, /^2\.2[IJK]\.0$/);
+    assert.match(SLOT_BLUEPRINT_VERSION, /^2\.2[IJKL]\.0$/);
     for (const bp of listMediterraneanSlotBlueprints()) {
       assert.match(bp.ageRange, /^22-2[56]$/, bp.slot);
-      assert.match(bp.version, /^2\.2[IJK]\.0$/);
+      assert.match(bp.version, /^2\.2[IJKL]\.0$/);
       assert.match(bp.qualityBar, /22–2[56]|I want to dress like him|looks good in that outfit|naturally belongs in Milaene/);
     }
     const d = getMediterraneanSlotBlueprint("D");

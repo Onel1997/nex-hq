@@ -185,6 +185,6 @@ describe("Phase 2.2K softer primary streetwear face", () => {
       const text = readFileSync(join(ROOT, rel), "utf8");
       assert.doesNotMatch(text, /PHASE 2\.2K — SOFTER PRIMARY STREETWEAR FACE/);
     }
-    assert.equal(SLOT_BLUEPRINT_VERSION, "2.2K.0");
+    assert.equal(SLOT_BLUEPRINT_VERSION, "2.2L.0");
   });
 });

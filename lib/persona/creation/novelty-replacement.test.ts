@@ -416,8 +416,8 @@ describe("Phase 2.1E novelty replacement", () => {
 
   it("13–16. Slot A Soft Luxury pools are broader; no forced freckles/narrow/soft-oval", () => {
     const a = getMediterraneanSlotBlueprint("A");
-    assert.equal(SLOT_BLUEPRINT_VERSION, "2.2K.0");
-    assert.equal(a.version, "2.2K.0");
+    assert.equal(SLOT_BLUEPRINT_VERSION, "2.2L.0");
+    assert.equal(a.version, "2.2L.0");
     assert.ok(a.controlledPools.faceGeometry.length >= 5);
     assert.ok(a.controlledPools.forehead.length >= 5);
     assert.ok(a.controlledPools.eyeSpacing.length >= 5);

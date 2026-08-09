@@ -186,6 +186,8 @@ export type { LiveEvaluatorConfig } from "./live-evaluator";
 export {
   partitionBoardCandidates,
   isNoveltyBoardVisible,
+  isSelectedBrandFaceAwaitingConversion,
+  isBoardImageStatus,
   toNoveltyFailureSlot,
   canSelectCandidateOnBoard,
 } from "./board-visibility";

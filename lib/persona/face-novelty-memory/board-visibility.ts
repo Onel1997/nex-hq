@@ -1,11 +1,12 @@
 /**
  * Candidate Board visibility — fail-closed filtering and failure-slot DTOs.
  *
- * A candidate is board-visible only when:
- *   status === "ready"
- *   AND novelty evaluation status === "performed"
- *   AND final novelty decision === "allowed"
+ * A candidate is board-visible when:
+ *   (status === "ready" OR status === "selected" without conversion)
+ *   AND novelty evaluation status === "performed" (when debug present)
+ *   AND final novelty decision === "allowed" (when debug present)
  *
+ * Phase 2.3B — selected Brand Faces stay visible until converted to a Persona.
  * Failed/blocked candidates never include image URLs in board payloads.
  */
 
@@ -30,7 +31,7 @@ export type NoveltyFailureSlotDto = {
 };
 
 export type BoardCandidatePartition = {
-  /** Only ready + performed + allowed candidates (full PersonaCandidate). */
+  /** Ready + selected (unconverted) + performed + allowed candidates. */
   visibleCandidates: PersonaCandidate[];
   /** Non-image failure slots for the board UI. */
   failureSlots: NoveltyFailureSlotDto[];
@@ -44,20 +45,38 @@ function readLiveDebug(
   return raw as SafeFaceNoveltyLiveDebug;
 }
 
-/**
- * Whether a candidate may appear as a normal board card with image.
- */
-export function isNoveltyBoardVisible(candidate: PersonaCandidate): boolean {
-  if (candidate.status !== "ready") return false;
+/** Phase 2.3B — selected Brand Face awaiting Draft Persona conversion. */
+export function isSelectedBrandFaceAwaitingConversion(
+  candidate: Pick<PersonaCandidate, "status" | "converted_persona_id">,
+): boolean {
+  return candidate.status === "selected" && !candidate.converted_persona_id;
+}
+
+function passesNoveltyVisibilityGate(candidate: PersonaCandidate): boolean {
   if (!isCandidateVisibleOnBoard(candidate.status)) return false;
 
   const debug = readLiveDebug(candidate);
-  // Legacy ready candidates without debug (pre-novelty path / A2) remain visible.
+  // Legacy candidates without debug (pre-novelty path / A2) remain visible.
   if (!debug) return true;
   if (debug.finalDecision !== "allowed") return false;
   // Fail-closed: performed evaluation is required when novelty debug is present.
   if (debug.faceDetectionStatus !== "performed") return false;
   return true;
+}
+
+/**
+ * Whether a candidate may appear as a board card with image.
+ * Ready casting cards and unconverted selected Brand Faces are visible.
+ */
+export function isNoveltyBoardVisible(candidate: PersonaCandidate): boolean {
+  if (candidate.status === "ready") {
+    return passesNoveltyVisibilityGate(candidate);
+  }
+  // Selected Brand Face stays actionable until Draft Persona conversion.
+  if (isSelectedBrandFaceAwaitingConversion(candidate)) {
+    return passesNoveltyVisibilityGate(candidate);
+  }
+  return false;
 }
 
 export function toNoveltyFailureSlot(
@@ -160,4 +179,9 @@ export function canSelectCandidateOnBoard(candidate: {
   status: CandidateStatus;
 }): boolean {
   return candidate.status === "ready";
+}
+
+/** Board statuses that keep image payloads after refresh (Phase 2.3B). */
+export function isBoardImageStatus(status: CandidateStatus): boolean {
+  return status === "ready" || status === "selected";
 }

@@ -15,17 +15,17 @@ const DNA_MEDITERRANEAN = finalizeIdentityDna({
   version: "1.0.0",
   appearance: {
     faceGeometryFamily:
-      "youthful soft masculine Mediterranean harmony — softer oval / subtle rectangular, reduced facial width, smooth transitions, mild natural asymmetry — naturally handsome not striking",
+      "youthful soft masculine Mediterranean harmony — slot-specific geometry families (A soft oval/slight rectangle · B narrower elongated · C wider-upper softer-lower · D balanced narrow-to-medium subtle angular) — mild natural asymmetry — naturally handsome not striking",
     proportions: "natural adult male proportions, lean athletic frame — never bodybuilder",
-    eyeFeeling: "relaxed open eyes, soft lids, calm friendly gaze — approachable neutral warmth",
-    noseFamily: "medium straight natural bridge with soft tip",
-    lips: "natural medium lips, soft definition, approachable neutral mouth",
-    jawFamily: "natural medium soft jaw — reduced width and sharpness, softer lower face, reduced chin projection — never oversized, never razor-sharp",
+    eyeFeeling: "relaxed open eyes, soft lids, calm friendly gaze — approachable neutral warmth — eye shape varies by slot",
+    noseFamily: "slot-specific natural nose families — medium Iberian / broader Maghrebi / character Greek / aquiline-leaning Levantine — never one shared nose template",
+    lips: "natural medium lips, soft definition, approachable neutral mouth — lip proportions vary by slot",
+    jawFamily: "natural medium soft jaw — reduced width and sharpness, softer lower face, reduced chin projection — jaw width differs across A/B/C/D — never oversized, never razor-sharp",
     beardFamily: "clean shave or very light natural stubble only — never dense beard shadow, never full beard",
     skinToneFamily:
       "warm light-medium olive, youthful healthy sun-kissed skin (apparent age ~22–25), visible subtle pores, slight individuality / imperfection — reduce model perfection ~10%",
     hairFamily:
-      "cleaner contemporary textured dark streetwear hair — short textured curls, cropped curls, soft taper/low fade, or short natural waves — medium hair only occasionally — never long editorial male-model waves",
+      "cleaner contemporary textured dark streetwear hair with MANDATORY slot diversity — A short textured crop/taper · B very short crop / tight fade · C medium-length relaxed waves (ONLY longer/wavier lane) · D short messy curls / soft taper — never four identical wavy medium lengths",
   },
   presence: {
     confidence: "quiet youthful confidence — effortless, never overbearing",
@@ -176,9 +176,9 @@ const ARCH_MEDITERRANEAN: BrandArchetype = {
   bodyDirection:
     "lean athletic — not muscular, not bodybuilder — normal healthy proportions wearable in oversized clothing",
   faceDirection:
-    "youthful soft masculine Mediterranean harmony (apparent age ~22–25) — softer oval / subtle rectangular, reduced facial width, natural medium jaw, softer lower face, youthful cheeks, relaxed open eyes, balanced brows — clean, approachable, naturally handsome — Brand Face who looks good in oversized tees, not rugged / not catwalk casting",
+    "youthful soft masculine Mediterranean harmony (apparent age ~22–25) — soft-masculine commercial streetwear with STRONG A/B/C/D face-geometry diversity (A soft oval/slight rectangle · B narrower elongated · C wider-upper softer-lower · D balanced subtle angular) — natural medium jaw, softer lower face, youthful cheeks, relaxed open eyes, balanced brows — clean, approachable, naturally handsome — Brand Face who looks good in oversized tees, not rugged / not catwalk casting — never four brothers / never Candidate D anatomy template for all slots",
   hairDirection:
-    "cleaner contemporary textured dark streetwear hair — short textured curls, cropped curls, soft taper/low fade, short natural waves — medium hair only occasionally — never long editorial male-model waves",
+    "cleaner contemporary textured dark streetwear hair with MANDATORY silhouette diversity — A short textured crop/short curls/clean taper · B very short crop or tight short curls with fade · C medium-length relaxed waves (ONLY longer/wavier lane) · D short messy curls or soft taper with texture — minimum 3 distinct silhouettes — never all wavy medium-length",
   groomingDirection: "clean shave or very light natural stubble — never full beard, never dense beard shadow",
   personality:
     "Calm, friendly, quietly confident, youthful, effortless, trustworthy — easy to identify with; customers think he looks good in the outfit",

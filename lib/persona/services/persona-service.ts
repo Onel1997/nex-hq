@@ -52,6 +52,11 @@ import {
   deletePersonaReferenceObject,
   uploadPersonaReferenceBytes,
 } from "../storage/reference-storage";
+import {
+  ensureMasterIdentityReferenceFromSelectedCandidate,
+  parseMasterIdentityNotes,
+} from "../creation/master-identity-reference";
+import { parseReferencePackageAssetNotes } from "../creation/reference-package";
 
 function repo(): PersonaRepository {
   return getPersonaRepository();
@@ -541,6 +546,15 @@ export async function listReferenceAssetViews(
   scope: WorkspaceScope,
   personaId: string,
 ): Promise<PersonaReferenceAssetView[]> {
+  const persona = await requirePersona(scope, personaId);
+  // Phase 2.3C — idempotent heal: link original selected portrait as Master Identity.
+  if (persona.source_candidate_id) {
+    try {
+      await ensureMasterIdentityReferenceFromSelectedCandidate(scope, personaId);
+    } catch {
+      // Heal is best-effort — do not block reference library reads.
+    }
+  }
   const assets = await listReferenceAssets(scope, personaId);
   const views: PersonaReferenceAssetView[] = [];
   for (const asset of assets) {
@@ -673,6 +687,58 @@ export async function updateReferenceAsset(
   const current = await repo().getReferenceAsset(scope, id);
   if (!current) {
     throw new PersonaDomainError(`Reference asset not found: ${id}`, "NOT_FOUND");
+  }
+
+  const masterMeta = parseMasterIdentityNotes(current.notes);
+  if (masterMeta) {
+    if (
+      patch.storage_path != null &&
+      patch.storage_path !== current.storage_path
+    ) {
+      throw new PersonaDomainError(
+        "Master Identity Reference storage path is immutable.",
+        "WORKFLOW",
+        { assetId: id },
+      );
+    }
+    if (patch.is_primary === false) {
+      throw new PersonaDomainError(
+        "Master Identity Reference must remain primary.",
+        "WORKFLOW",
+        { assetId: id },
+      );
+    }
+    if (patch.notes != null && !parseMasterIdentityNotes(patch.notes)) {
+      throw new PersonaDomainError(
+        "Master Identity Reference notes cannot be cleared or replaced.",
+        "WORKFLOW",
+        { assetId: id },
+      );
+    }
+  }
+
+  if (
+    parseReferencePackageAssetNotes(current.notes) &&
+    patch.is_primary === true
+  ) {
+    throw new PersonaDomainError(
+      "Generated Stage B references cannot become Master Identity.",
+      "WORKFLOW",
+      { assetId: id },
+    );
+  }
+
+  const pkgNotes = parseReferencePackageAssetNotes(current.notes);
+  if (
+    pkgNotes &&
+    patch.status === "approved" &&
+    pkgNotes.identity_decision === "identity_mismatch"
+  ) {
+    throw new PersonaDomainError(
+      "Identity mismatch references cannot become Accepted.",
+      "WORKFLOW",
+      { assetId: id },
+    );
   }
 
   if (patch.is_primary === true && (patch.status === "rejected" || current.status === "rejected")) {

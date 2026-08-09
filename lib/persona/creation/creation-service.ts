@@ -45,6 +45,8 @@ import {
 } from "./candidate-storage";
 import { getCreationRepository } from "./creation-factory";
 import { getGenerationJobRepository } from "./generation-job-factory";
+import { ensureMasterIdentityReferenceFromSelectedCandidate } from "./master-identity-reference";
+import { getMasterIdentityReferenceForPersona } from "./master-identity-reference";
 import {
   createConfirmationToken,
   estimateFingerprintFromCost,
@@ -1786,6 +1788,49 @@ export async function requestStageBReferencePackage(
   }
 
   if (!OPENAI_PROVIDER_CAPABILITY.stageBIdentityConsistentExpansion) {
+    // Phase 2.3B — never downgrade a selected Brand Face off the board /
+    // convert path. Keep status=selected; mark manual refs in settings.
+    if (candidate.status === "selected") {
+      let masterIdentityReferenceAssetId: string | null = null;
+      if (candidate.converted_persona_id) {
+        // Ensure Master Identity is linked before Stage B records identity source.
+        try {
+          const ensured = await ensureMasterIdentityReferenceFromSelectedCandidate(
+            scope,
+            candidate.converted_persona_id,
+            { preferredCandidateAssetId: candidate.primary_preview_asset_id },
+          );
+          masterIdentityReferenceAssetId = ensured.reference.id;
+        } catch {
+          const master = await getMasterIdentityReferenceForPersona(
+            scope,
+            candidate.converted_persona_id,
+          );
+          masterIdentityReferenceAssetId = master?.reference.id ?? null;
+        }
+      }
+      const updated = await creationRepo().updateCandidate(scope, candidateId, {
+        visual_risks:
+          "Automatische Identitäts-Expansion mit aktuellem Provider nicht zuverlässig. " +
+          "Bitte Referenzpaket manuell hochladen und Identitätsprüfung durchführen. " +
+          "Master Identity Reference bleibt die unveränderliche Identitätsquelle.",
+        generation_settings: {
+          ...(candidate.generation_settings ?? {}),
+          stageBRequiresManualReferences: true,
+          stageBRequestedAt: new Date().toISOString(),
+          // Phase 2.3C — Stage B angles must use Master Identity as source.
+          masterIdentityReferenceAssetId,
+          identitySource: "master_identity_reference",
+        },
+      });
+      return {
+        candidate: updated,
+        automaticExpansion: false as const,
+        reason: OPENAI_PROVIDER_CAPABILITY.note,
+        requiredAction: "manual_upload" as const,
+        masterIdentityReferenceAssetId,
+      };
+    }
     const updated = await creationRepo().updateCandidate(scope, candidateId, {
       status: "needs_manual_references",
       visual_risks:
@@ -3923,7 +3968,7 @@ export async function resolveActiveDiscoveryConfirmationForProject(
 /**
  * Candidate Board payload — fail-closed.
  * Only candidates belonging to the current completed generation run are eligible.
- * Only ready + performed + allowed candidates include images / selectable payload.
+ * Only ready / selected (unconverted) + performed + allowed candidates include images / selectable payload.
  * Failed/blocked return as safe failure-slot DTOs (no signed URLs).
  */
 export async function listCandidateBoardPayload(
@@ -4129,9 +4174,10 @@ export async function updateCandidateReview(
       status: "selected",
       selected_at: new Date().toISOString(),
     });
+    // Phase 2.3B — selection alone does NOT start Identity Lock.
+    // Keep generation_stage unchanged; UI lifecycle derives "selected" / "convert".
     await creationRepo().updateProject(scope, candidate.creation_project_id, {
       status: "selected",
-      generation_stage: "identity_lock",
     });
     // Phase 2.2G — selection promotes embedding into historical protection pool.
     await promoteHistoricalProtectionIfPersisted({
@@ -4365,7 +4411,7 @@ export async function ensureManualCandidateSlots(
 export async function convertCandidateToPersona(
   scope: WorkspaceScope,
   candidateId: string,
-): Promise<{ persona: Persona; candidate: PersonaCandidate }> {
+): Promise<{ persona: Persona; candidate: PersonaCandidate; alreadyConverted: boolean }> {
   const candidate = await requireCandidate(scope, candidateId);
 
   if (candidate.status !== "selected") {
@@ -4374,10 +4420,38 @@ export async function convertCandidateToPersona(
       "WORKFLOW",
     );
   }
+  // Phase 2.3B — idempotent: never create a second persona for the same candidate.
   if (candidate.converted_persona_id) {
+    const existing = await personaRepo().getPersona(
+      scope,
+      candidate.converted_persona_id,
+    );
+    if (existing) {
+      // Phase 2.3C — heal Master Identity Reference on re-entry (no file copy).
+      try {
+        await ensureMasterIdentityReferenceFromSelectedCandidate(
+          scope,
+          existing.id,
+          { preferredCandidateAssetId: candidate.primary_preview_asset_id },
+        );
+      } catch (err) {
+        // Convert without a portrait remains allowed; heal is best-effort.
+        if (
+          !(err instanceof PersonaDomainError && err.code === "NOT_FOUND")
+        ) {
+          throw err;
+        }
+      }
+      const healed = await personaRepo().getPersona(scope, existing.id);
+      return {
+        persona: healed ?? existing,
+        candidate,
+        alreadyConverted: true,
+      };
+    }
     throw new PersonaDomainError(
-      "Dieser Kandidat wurde bereits in eine Persona überführt.",
-      "WORKFLOW",
+      "Dieser Kandidat verweist auf eine fehlende Persona — Konvertierung blockiert.",
+      "NOT_FOUND",
       { personaId: candidate.converted_persona_id },
     );
   }
@@ -4467,17 +4541,23 @@ export async function convertCandidateToPersona(
   for (const asset of assets.filter(
     (a) => a.status === "ready" || a.status === "uploaded",
   )) {
-    const assetId = randomUUID();
+    const isPrimaryPortrait =
+      asset.is_primary || asset.asset_type === "portrait_front";
+    // Phase 2.3C — Master Identity Reference reuses the original candidate
+    // storage object (no duplicate file). Secondary angles may still copy.
     const mapped = mapAssetTypeToReference(asset.asset_type);
-    const destPath = isMemory
-      ? `workspace/${scope.workspaceId}/personas/${persona.id}/references/${assetId}-${asset.asset_type}.png`
-      : await copyCandidateAssetToPersonaReference({
-          sourceStoragePath: asset.storage_path,
-          workspaceId: scope.workspaceId,
-          personaId: persona.id,
-          assetId,
-          filename: `${asset.asset_type}.png`,
-        });
+    const destPath =
+      isPrimaryPortrait
+        ? asset.storage_path
+        : isMemory
+          ? `workspace/${scope.workspaceId}/personas/${persona.id}/references/${randomUUID()}-${asset.asset_type}.png`
+          : await copyCandidateAssetToPersonaReference({
+              sourceStoragePath: asset.storage_path,
+              workspaceId: scope.workspaceId,
+              personaId: persona.id,
+              assetId: randomUUID(),
+              filename: `${asset.asset_type}.png`,
+            });
 
     const ref = await personaRepo().createReferenceAsset(scope, {
       persona_id: persona.id,
@@ -4492,14 +4572,16 @@ export async function convertCandidateToPersona(
       framing: mapped.framing,
       expression: project.expression_direction,
       body_visibility: mapped.framing === "full_body" ? "full" : "partial",
-      notes: `From candidate ${candidate.id}`,
+      notes: isPrimaryPortrait
+        ? `From candidate ${candidate.id} (pending master identity link)`
+        : `From candidate ${candidate.id}`,
       source_type: "generated_external",
       rights_confirmed: false,
       status: "uploaded",
-      is_primary: asset.is_primary || asset.asset_type === "portrait_front",
+      is_primary: isPrimaryPortrait,
     });
 
-    if (ref.is_primary || asset.asset_type === "portrait_front") {
+    if (isPrimaryPortrait) {
       primaryRefId = ref.id;
     }
   }
@@ -4516,6 +4598,18 @@ export async function convertCandidateToPersona(
   const updatedCandidate = await creationRepo().updateCandidate(scope, candidateId, {
     converted_persona_id: persona.id,
   });
+
+  // Phase 2.3C — promote primary portrait to immutable Master Identity Reference.
+  const hasReadyPortrait = assets.some(
+    (a) =>
+      (a.status === "ready" || a.status === "uploaded") &&
+      (a.is_primary || a.asset_type === "portrait_front"),
+  );
+  if (hasReadyPortrait) {
+    await ensureMasterIdentityReferenceFromSelectedCandidate(scope, persona.id, {
+      preferredCandidateAssetId: candidate.primary_preview_asset_id,
+    });
+  }
 
   await promoteHistoricalProtectionIfPersisted({
     workspaceId: scope.workspaceId,
@@ -4553,7 +4647,11 @@ export async function convertCandidateToPersona(
     throw new PersonaDomainError("Persona nach Konvertierung nicht gefunden", "NOT_FOUND");
   }
 
-  return { persona: finalPersona, candidate: updatedCandidate };
+  return {
+    persona: finalPersona,
+    candidate: updatedCandidate,
+    alreadyConverted: false,
+  };
 }
 
 export function emptyIdentityChecklist(): IdentityReviewChecklist {

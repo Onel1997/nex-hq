@@ -196,14 +196,31 @@ export {
   canPreparePaidConfirmation,
   canStartPaidGeneration,
   evaluatePreparePaidConfirmationGate,
+  resolveBrandFaceUiLifecycle,
   resolveCreationWorkflowStep,
+  BRAND_FACE_UI_LIFECYCLE_LABELS,
 } from "./creation/creation-workflow";
 export type {
+  BrandFaceUiLifecycle,
   CreationWorkflowAction,
   CreationWorkflowStep,
   PaidGenerationSafetyContext,
   PreparePaidConfirmationGateReasons,
 } from "./creation/creation-workflow";
+export {
+  ensureMasterIdentityReferenceFromSelectedCandidate,
+  findMasterIdentityReference,
+  getMasterIdentityReferenceForPersona,
+  isMasterIdentityReference,
+  parseMasterIdentityNotes,
+  buildMasterIdentityNotes,
+  MASTER_IDENTITY_REFERENCE_TYPE,
+  MASTER_IDENTITY_SOURCE,
+} from "./creation/master-identity-reference";
+export type {
+  EnsureMasterIdentityResult,
+  MasterIdentityReferenceMeta,
+} from "./creation/master-identity-reference";
 export {
   DISCOVERY_SAFE_ERROR_CODES,
   isInitialDiscoveryJob,
@@ -244,6 +261,39 @@ export {
   getQualityModeProfile,
   OPENAI_PROVIDER_CAPABILITY,
 } from "./creation/quality-modes";
+export {
+  REFERENCE_PACKAGE_SLOTS,
+  REFERENCE_PACKAGE_SLOT_LABELS,
+  STAGE_B_REFERENCE_PACKAGE_CAPABILITY,
+  estimateReferencePackageCost,
+  prepareReferencePackageConfirmation,
+  confirmAndGenerateReferencePackage,
+  getReferencePackageStatus,
+  prepareReferencePackageAngleRegeneration,
+  confirmAndRegenerateReferencePackageAngle,
+  reassignReferencePackageAngle,
+  TARGET_SLOT_ACCEPTED_MESSAGE,
+  evaluateIdentityConsistency,
+  IDENTITY_CONSISTENCY_POLICY_VERSION,
+  IDENTITY_CONSISTENCY_MATCH_EUCLIDEAN,
+  MemoryReferencePackageRepository,
+  setReferencePackageRepositoryForTests,
+  buildReferencePackageAnglePrompt,
+  CANONICAL_CAMERA_DIRECTIONS,
+  CAMERA_DIRECTION_POLICY_VERSION,
+  validateAngleDirectionFromPrompt,
+  isAngleDirectionUsable,
+  isCurrentlyAcceptedUsable,
+  resolveReferencePackageSlotCoverage,
+  getAttemptEffectiveSlot,
+  parseReferencePackageAssetNotes,
+} from "./creation/reference-package";
+export type {
+  ReferencePackageSlot,
+  ReferencePackageStatusView,
+  ReferencePackageCostEstimate,
+} from "./creation/reference-package";
+export { FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD } from "./face-novelty-memory/similarity-threshold";
 export {
   getGenerationJobRepository,
   setGenerationJobRepositoryForTests,

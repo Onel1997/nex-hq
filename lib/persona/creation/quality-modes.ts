@@ -107,13 +107,22 @@ export function stageAValidationTypesForMode(): CandidateAssetType[] {
 
 export const OPENAI_PROVIDER_CAPABILITY = {
   stageADiscovery: true as const,
+  /** Candidate shortlist auto-expansion remains fail-closed (legacy path). */
   stageBIdentityConsistentExpansion: false as const,
+  /**
+   * Phase 2.3D — Persona Reference Package uses OpenAI images.edit with
+   * Master Identity Reference (input_fidelity=high). Text-only forbidden.
+   */
+  stageBPersonaReferencePackageImageEdit: true as const,
+  stageBAllowsTextOnlyFallback: false as const,
+  stageBUsesFlux: false as const,
   commercialResolution: true as const,
   controlledStyling: true as const,
   distinctCandidates: true as const,
   requiresManualIdentityReview: true as const,
   note:
     "OpenAI gpt-image-1 is suitable for Stage A discovery portraits. " +
-    "Same-person reference package expansion is not reliable — " +
-    "Stage B requires manual references and identity review.",
+    "Stage B Persona Reference Package uses openai.images.edit conditioned on " +
+    "the Master Identity Reference (input_fidelity=high). Text-only fallback is forbidden. " +
+    "Legacy candidate shortlist auto-expansion remains disabled.",
 };

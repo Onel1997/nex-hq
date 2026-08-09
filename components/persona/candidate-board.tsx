@@ -67,7 +67,7 @@ export function rankCandidatesForBoard(
     (row) => row.source.visualStatus === "completed",
   );
 
-  return ranked.map((row) => ({
+  const mapped = ranked.map((row) => ({
     candidate: row.source.candidate,
     rank: row.rank,
     // Do not fabricate Recommended Brand Face from metadata-only scores.
@@ -76,6 +76,20 @@ export function rankCandidatesForBoard(
       : false,
     overallScore: row.overallScore,
   }));
+
+  // Phase 2.3B — selected Brand Face stays pinned at the front of the board.
+  return mapped.sort((a, b) => {
+    const aSelected =
+      a.candidate.status === "selected" && !a.candidate.converted_persona_id
+        ? 1
+        : 0;
+    const bSelected =
+      b.candidate.status === "selected" && !b.candidate.converted_persona_id
+        ? 1
+        : 0;
+    if (aSelected !== bSelected) return bSelected - aSelected;
+    return a.rank - b.rank;
+  });
 }
 
 export function getCandidateDiversityWarning(
@@ -249,7 +263,7 @@ export function CandidateBoardCard({
   return (
     <button
       type="button"
-      className={`ps-ci-card${active ? " is-active" : ""}${isRecommendedBrandFace ? " is-recommended" : ""}`}
+      className={`ps-ci-card${active ? " is-active" : ""}${isRecommendedBrandFace ? " is-recommended" : ""}${candidate.status === "selected" && !candidate.converted_persona_id ? " is-selected-brand-face" : ""}`}
       onClick={onSelect}
     >
       <div className="ps-ci-card-hero">
@@ -259,7 +273,9 @@ export function CandidateBoardCard({
         ) : (
           <div className="ps-ci-card-hero-empty">No preview</div>
         )}
-        {isRecommendedBrandFace ? (
+        {candidate.status === "selected" && !candidate.converted_persona_id ? (
+          <span className="ps-ci-selected-badge">SELECTED BRAND FACE</span>
+        ) : isRecommendedBrandFace ? (
           <span className="ps-ci-recommended-badge">★ Recommended Brand Face</span>
         ) : null}
         <div className="ps-ci-card-hero-meta">

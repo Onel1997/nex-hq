@@ -24,8 +24,12 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
-import type { Persona, PersonaStatus } from "@/lib/persona/domain/types";
+import { useEffect, useState } from "react";
+import type {
+  Persona,
+  PersonaReferenceAssetView,
+  PersonaStatus,
+} from "@/lib/persona/domain/types";
 import {
   BrandCastView,
   CandidatesView,
@@ -36,6 +40,11 @@ import {
   PersonaStatusChip,
   personaStatusTone,
 } from "@/components/persona/persona-status-chip";
+import { parseMasterIdentityNotes } from "@/lib/persona/creation/master-identity-reference";
+import { REFERENCE_PACKAGE_SLOT_LABELS, REFERENCE_PACKAGE_SLOTS } from "@/lib/persona/creation/reference-package/slots";
+import type { ReferencePackageSlot } from "@/lib/persona/creation/reference-package/slots";
+import { parseReferencePackageAssetNotes } from "@/lib/persona/creation/reference-package/types";
+import type { ReferencePackageStatusView } from "@/lib/persona/creation/reference-package/types";
 
 const NAV: Array<{
   id: PersonaStudioSection;
@@ -377,6 +386,7 @@ function PersonaDetail({
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
@@ -391,11 +401,18 @@ function PersonaDetail({
   }
 
   const readiness = studio.selectedReadiness;
-  const references = studio.selectedReferences.filter((a) => {
+  const allReferences = studio.selectedReferences;
+  const masterReference =
+    allReferences.find((a) => parseMasterIdentityNotes(a.notes)) ?? null;
+  const references = allReferences.filter((a) => {
     if (filterType !== "all" && a.asset_type !== filterType) return false;
     if (filterStatus !== "all" && a.status !== filterStatus) return false;
     return true;
   });
+  const previewAsset =
+    previewAssetId == null
+      ? null
+      : (allReferences.find((a) => a.id === previewAssetId) ?? null);
 
   return (
     <div className="ps-detail">
@@ -450,6 +467,20 @@ function PersonaDetail({
       </dl>
 
       {persona.notes ? <p className="ps-notes">{persona.notes}</p> : null}
+
+      {error ? <p className="ps-inline-error">{error}</p> : null}
+
+      <ReferencePackagePanel
+        personaId={persona.id}
+        busy={busy}
+        onBusy={setBusy}
+        onError={setError}
+        onRefresh={() => studio.selectPersona(persona.id)}
+        referenceRevision={studio.selectedReferences
+          .map((a) => `${a.id}:${a.status}`)
+          .sort()
+          .join("|")}
+      />
 
       <section className="ps-section">
         <h3>Referenzbibliothek</h3>
@@ -537,23 +568,75 @@ function PersonaDetail({
         </div>
 
         <ul className="ps-card-list">
-          {references.map((asset) => (
-            <li key={asset.id} className="ps-lib-card">
+          {references.map((asset) => {
+            const masterMeta = parseMasterIdentityNotes(asset.notes);
+            const pkgMeta = parseReferencePackageAssetNotes(asset.notes);
+            const isGeneratedPkg = pkgMeta != null;
+            const canSetPrimary = !masterMeta && !isGeneratedPkg;
+            const slotLabel = pkgMeta
+              ? REFERENCE_PACKAGE_SLOT_LABELS[pkgMeta.slot] ?? pkgMeta.slot
+              : asset.view_angle;
+            return (
+            <li
+              key={asset.id}
+              className={`ps-lib-card${masterMeta ? " is-master-identity" : ""}`}
+              data-testid={masterMeta ? "master-identity-reference" : undefined}
+            >
               <div>
                 {asset.signed_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={asset.signed_url}
-                    alt={asset.notes || asset.asset_type}
-                    className="ps-ref-thumb"
-                  />
+                  <button
+                    type="button"
+                    className="ps-ref-thumb-btn"
+                    onClick={() => setPreviewAssetId(asset.id)}
+                    aria-label={`Open large preview: ${slotLabel}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={asset.signed_url}
+                      alt={
+                        masterMeta
+                          ? "MASTER IDENTITY REFERENCE — Original selected Brand Face"
+                          : asset.notes || asset.asset_type
+                      }
+                      className="ps-ref-thumb"
+                    />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="ps-btn"
+                    onClick={() => setPreviewAssetId(asset.id)}
+                  >
+                    Open preview
+                  </button>
+                )}
+                {masterMeta ? (
+                  <div className="ps-master-identity-banner">
+                    <PersonaStatusChip
+                      label="MASTER IDENTITY REFERENCE"
+                      tone="selected"
+                    />
+                    <p className="ps-muted" style={{ margin: "0.35rem 0 0" }}>
+                      Original selected Brand Face
+                      {masterMeta.original_provider
+                        ? ` · ${masterMeta.original_provider}`
+                        : ""}
+                    </p>
+                  </div>
                 ) : null}
                 <strong>
-                  {asset.asset_type}
+                  {masterMeta
+                    ? "Master portrait"
+                    : pkgMeta
+                      ? slotLabel
+                      : asset.asset_type}
                   {asset.is_primary ? " · primary" : ""}
                 </strong>
                 <span>
                   {asset.view_angle} · {asset.framing} · {asset.status}
+                  {pkgMeta?.identity_decision === "identity_mismatch"
+                    ? " · mismatch"
+                    : ""}
                 </span>
                 <em>
                   {asset.expression || "—"} · rights:{" "}
@@ -561,6 +644,7 @@ function PersonaDetail({
                 </em>
               </div>
               <div className="ps-actions">
+                {canSetPrimary ? (
                 <button
                   type="button"
                   className="ps-btn"
@@ -577,6 +661,16 @@ function PersonaDetail({
                 >
                   Primär
                 </button>
+                ) : masterMeta ? (
+                  <span className="ps-muted" style={{ fontSize: "0.75rem" }}>
+                    Immutable source — cannot be replaced
+                  </span>
+                ) : (
+                  <span className="ps-muted" style={{ fontSize: "0.75rem" }}>
+                    Supporting reference — cannot become Master
+                  </span>
+                )}
+                {!masterMeta ? (
                 <button
                   type="button"
                   className="ps-btn"
@@ -592,6 +686,8 @@ function PersonaDetail({
                 >
                   Freigeben
                 </button>
+                ) : null}
+                {!masterMeta ? (
                 <button
                   type="button"
                   className="ps-btn"
@@ -607,6 +703,8 @@ function PersonaDetail({
                 >
                   Ablehnen
                 </button>
+                ) : null}
+                {!masterMeta ? (
                 <button
                   type="button"
                   className="ps-btn"
@@ -622,6 +720,8 @@ function PersonaDetail({
                 >
                   Archiv
                 </button>
+                ) : null}
+                {!masterMeta ? (
                 <button
                   type="button"
                   className="ps-btn ps-btn-danger"
@@ -633,11 +733,51 @@ function PersonaDetail({
                 >
                   Löschen
                 </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="ps-btn"
+                  onClick={() => setPreviewAssetId(asset.id)}
+                >
+                  Preview
+                </button>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       </section>
+
+      {previewAsset ? (
+        <ReferencePreviewLightbox
+          asset={previewAsset}
+          master={masterReference}
+          personaId={persona.id}
+          identityLocked={persona.identity_lock_status === "approved"}
+          busy={busy}
+          onClose={() => setPreviewAssetId(null)}
+          onApprove={() =>
+            void run(async () => {
+              await studio.patchReference(persona.id, previewAsset.id, {
+                status: "approved",
+                rights_confirmed: true,
+              });
+            })
+          }
+          onReject={() =>
+            void run(async () => {
+              await studio.patchReference(persona.id, previewAsset.id, {
+                status: "rejected",
+                is_primary: false,
+              });
+            })
+          }
+          onReassigned={() => {
+            void studio.selectPersona(persona.id);
+          }}
+          onError={(msg) => setError(msg)}
+        />
+      ) : null}
 
       <section className="ps-section">
         <h3>Preferred libraries</h3>
@@ -1039,6 +1179,630 @@ function LibraryPanel({
         ))}
       </ul>
       )}
+    </div>
+  );
+}
+
+function ReferencePackagePanel({
+  personaId,
+  busy,
+  onBusy,
+  onError,
+  onRefresh,
+  referenceRevision,
+}: {
+  personaId: string;
+  busy: boolean;
+  onBusy: (v: boolean) => void;
+  onError: (msg: string | null) => void;
+  onRefresh: () => void;
+  /** Changes when reference asset statuses change — reloads package coverage. */
+  referenceRevision: string;
+}) {
+  const [status, setStatus] = useState<ReferencePackageStatusView | null>(null);
+  const [pendingToken, setPendingToken] = useState<string | null>(null);
+  const [pendingEstimate, setPendingEstimate] = useState<{
+    imageCount: number;
+    estimatedMin: number;
+    estimatedMax: number;
+    maxAuthorizedSpend: number;
+    provider: string;
+    slots?: string[];
+  } | null>(null);
+  const [regenSlot, setRegenSlot] = useState<string | null>(null);
+
+  async function loadStatus() {
+    const res = await fetch(`/api/persona/${personaId}/reference-package`);
+    const data = (await res.json()) as {
+      error?: string;
+      status?: ReferencePackageStatusView;
+    };
+    if (!res.ok) throw new Error(data.error ?? "Reference Package status failed");
+    setStatus(data.status ?? null);
+  }
+
+  useEffect(() => {
+    void loadStatus().catch((err) =>
+      onError(err instanceof Error ? err.message : "Status failed"),
+    );
+    // Reload on persona open and whenever reference statuses change (approve/reject).
+    // No provider call.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personaId, referenceRevision]);
+
+  async function prepare(slot?: string) {
+    onBusy(true);
+    onError(null);
+    try {
+      const res = await fetch(`/api/persona/${personaId}/reference-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          slot
+            ? { action: "prepare_regenerate", slot }
+            : { action: "prepare" },
+        ),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        confirmationToken?: string;
+        estimate?: {
+          imageCount: number;
+          estimatedMin: number;
+          estimatedMax: number;
+          maxAuthorizedSpend: number;
+          provider: string;
+        };
+        slots?: string[];
+        providerCalled?: boolean;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Prepare failed");
+      if (data.providerCalled) {
+        throw new Error("FAIL CLOSED: provider must not run on prepare");
+      }
+      setPendingToken(data.confirmationToken ?? null);
+      setPendingEstimate(
+        data.estimate
+          ? { ...data.estimate, slots: data.slots }
+          : null,
+      );
+      setRegenSlot(slot ?? null);
+      await loadStatus();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Prepare failed");
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  async function confirm() {
+    if (!pendingToken || !pendingEstimate) return;
+    onBusy(true);
+    onError(null);
+    try {
+      const res = await fetch(`/api/persona/${personaId}/reference-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          regenSlot
+            ? {
+                action: "confirm_regenerate",
+                slot: regenSlot,
+                confirmationToken: pendingToken,
+                costConfirmed: true,
+              }
+            : {
+                action: "confirm",
+                confirmationToken: pendingToken,
+                costConfirmed: true,
+              },
+        ),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Generation failed");
+      setPendingToken(null);
+      setPendingEstimate(null);
+      setRegenSlot(null);
+      await loadStatus();
+      onRefresh();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Generation failed");
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  const slotStatusLabel: Record<string, string> = {
+    missing: "Missing",
+    queued: "Queued",
+    generating: "Generating",
+    identity_check: "Identity Check",
+    review: "Review",
+    accepted: "Accepted",
+    mismatch: "Mismatch",
+    failed: "Failed",
+    rejected: "Rejected",
+  };
+
+  function slotPrimaryLabel(slot: {
+    status: string;
+    wrongCameraDirection?: boolean;
+  }): string {
+    if (slot.wrongCameraDirection) return "Wrong camera direction";
+    return slotStatusLabel[slot.status] ?? slot.status;
+  }
+
+  return (
+    <section className="ps-section" data-testid="reference-package-panel">
+      <h3>REFERENCE PACKAGE</h3>
+      <p className="ps-muted">
+        Same person, different camera angles · subject-perspective direction lock ·
+        OpenAI image edit · Master Identity as source
+      </p>
+      {status?.referencePackageReady ? (
+        <PersonaStatusChip label="Reference Package Ready" tone="selected" />
+      ) : (
+        <span className="ps-muted">
+          Coverage {status?.acceptedCount ?? 0}/{status?.requiredCount ?? 5}{" "}
+          (approved only)
+        </span>
+      )}
+
+      <ul className="ps-ref-pkg-slots">
+        {(status?.slots ?? []).map((slot) => (
+          <li key={slot.slot} className="ps-ref-pkg-slot">
+            <div className="ps-ref-pkg-slot-main">
+              <strong>{slot.label}</strong>
+              <span>{slotPrimaryLabel(slot)}</span>
+              {slot.status !== "accepted" && (
+                <button
+                  type="button"
+                  className="ps-btn"
+                  disabled={busy}
+                  onClick={() => void prepare(slot.slot)}
+                >
+                  Regenerate this angle
+                </button>
+              )}
+            </div>
+            {slot.wrongCameraDirection ? (
+              <p className="ps-ref-pkg-meta ps-inline-error">
+                Wrong camera direction · Suggest: Reassign angle (if target free)
+                or Reject
+              </p>
+            ) : null}
+            {(slot.identityDecision ||
+              slot.humanReview ||
+              slot.angleManuallyReassigned) && (
+              <p className="ps-ref-pkg-meta ps-muted">
+                {slot.identityDecision
+                  ? `Identity: ${
+                      slot.identityDecision === "identity_warning"
+                        ? "warning"
+                        : slot.identityDecision === "identity_match"
+                          ? "match"
+                          : slot.identityDecision === "identity_mismatch"
+                            ? "mismatch"
+                            : slot.identityDecision
+                    }`
+                  : null}
+                {slot.humanReview
+                  ? `${slot.identityDecision ? " · " : ""}Human review: ${slot.humanReview}`
+                  : null}
+                {slot.angleManuallyReassigned
+                  ? `${slot.identityDecision || slot.humanReview ? " · " : ""}Angle: manually reassigned`
+                  : null}
+              </p>
+            )}
+            {slot.attemptHistory && slot.attemptHistory.length > 0 ? (
+              <ul className="ps-ref-pkg-history" aria-label={`${slot.label} attempt history`}>
+                {slot.attemptHistory.map((att, idx) => (
+                  <li key={att.id}>
+                    Attempt {idx + 1} — Generated for{" "}
+                    {REFERENCE_PACKAGE_SLOT_LABELS[att.reference_slot] ??
+                      att.reference_slot}
+                    {att.identity_decision
+                      ? ` · Identity evaluation: ${
+                          att.identity_decision === "identity_warning"
+                            ? "warning"
+                            : att.identity_decision === "identity_match"
+                              ? "match"
+                              : att.identity_decision === "identity_mismatch"
+                                ? "mismatch"
+                                : att.identity_decision
+                        }`
+                      : ""}
+                    {att.reassigned_from && att.effective_slot
+                      ? ` · Reassigned → ${
+                          REFERENCE_PACKAGE_SLOT_LABELS[att.effective_slot] ??
+                          att.effective_slot
+                        }`
+                      : ""}
+                    {att.effective_slot &&
+                    slot.humanReview === "approved" &&
+                    att.generated_asset_id === slot.acceptedAssetId
+                      ? " · Human review: approved"
+                      : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+
+      {!pendingEstimate ? (
+        <button
+          type="button"
+          className="ps-btn ps-btn-primary"
+          disabled={busy || status?.referencePackageReady === true}
+          onClick={() => void prepare()}
+        >
+          Prepare missing Reference Package angles
+        </button>
+      ) : (
+        <div className="ps-ref-pkg-confirm" data-testid="reference-package-confirm">
+          {pendingEstimate.slots?.length === 1 ? (
+            <p>
+              Slot: <strong>{pendingEstimate.slots[0]}</strong>
+            </p>
+          ) : (
+            <p>
+              Slots:{" "}
+              <strong>{(pendingEstimate.slots ?? []).join(", ") || "package"}</strong>
+            </p>
+          )}
+          <p>
+            <strong>{pendingEstimate.imageCount}</strong> image
+            {pendingEstimate.imageCount === 1 ? "" : "s"} · Provider:{" "}
+            <strong>{pendingEstimate.provider}</strong>
+          </p>
+          <p>
+            Estimated €{pendingEstimate.estimatedMin.toFixed(2)} – €
+            {pendingEstimate.estimatedMax.toFixed(2)}
+          </p>
+          <p>
+            Maximum authorized spend: €
+            {pendingEstimate.maxAuthorizedSpend.toFixed(2)}
+          </p>
+          <button
+            type="button"
+            className="ps-btn ps-btn-primary"
+            disabled={busy}
+            onClick={() => void confirm()}
+          >
+            {pendingEstimate.imageCount === 1
+              ? "Confirm & regenerate"
+              : "Confirm & generate"}
+          </button>
+          <button
+            type="button"
+            className="ps-btn"
+            disabled={busy}
+            onClick={() => {
+              setPendingToken(null);
+              setPendingEstimate(null);
+              setRegenSlot(null);
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function referencePreviewStatusLabel(asset: PersonaReferenceAssetView): string {
+  const pkg = parseReferencePackageAssetNotes(asset.notes);
+  if (pkg?.identity_decision === "identity_mismatch") return "mismatch";
+  if (asset.status === "approved") return "accepted";
+  if (asset.status === "rejected") return "rejected";
+  if (asset.status === "review" || asset.status === "uploaded") return "review";
+  return asset.status;
+}
+
+function ReferencePreviewLightbox({
+  asset,
+  master,
+  personaId,
+  identityLocked,
+  busy,
+  onClose,
+  onApprove,
+  onReject,
+  onReassigned,
+  onError,
+}: {
+  asset: PersonaReferenceAssetView;
+  master: PersonaReferenceAssetView | null;
+  personaId: string;
+  identityLocked: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onReassigned: () => void;
+  onError: (msg: string | null) => void;
+}) {
+  const masterMeta = parseMasterIdentityNotes(asset.notes);
+  const pkgMeta = parseReferencePackageAssetNotes(asset.notes);
+  const isMaster = masterMeta != null;
+  const isGenerated = pkgMeta != null;
+  const [compare, setCompare] = useState(false);
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [targetSlot, setTargetSlot] = useState<ReferencePackageSlot | "">("");
+  const [reassignBusy, setReassignBusy] = useState(false);
+
+  const requestedSlot = pkgMeta?.requested_slot ?? pkgMeta?.slot;
+  const effectiveSlot = pkgMeta?.effective_slot ?? pkgMeta?.slot;
+  const isReassigned =
+    Boolean(pkgMeta?.reassigned_from) ||
+    (requestedSlot != null &&
+      effectiveSlot != null &&
+      requestedSlot !== effectiveSlot);
+
+  const slotLabel = isMaster
+    ? "MASTER IDENTITY REFERENCE"
+    : effectiveSlot
+      ? REFERENCE_PACKAGE_SLOT_LABELS[effectiveSlot] ?? effectiveSlot
+      : `${asset.asset_type} · ${asset.view_angle}`;
+
+  const canReassign =
+    isGenerated && !isMaster && !identityLocked && pkgMeta != null;
+
+  const mismatchBlocksApprove =
+    pkgMeta?.identity_decision === "identity_mismatch";
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function confirmReassign() {
+    if (!targetSlot || !canReassign) return;
+    setReassignBusy(true);
+    onError(null);
+    try {
+      const res = await fetch(`/api/persona/${personaId}/reference-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reassign_angle",
+          assetId: asset.id,
+          targetSlot,
+        }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        providerCalled?: boolean;
+      };
+      if (!res.ok) {
+        throw new Error(
+          data.error ?? "Target slot already has an accepted reference.",
+        );
+      }
+      if (data.providerCalled) {
+        throw new Error("FAIL CLOSED: reassignment must not call a provider");
+      }
+      setReassignOpen(false);
+      setTargetSlot("");
+      onReassigned();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Reassign failed");
+    } finally {
+      setReassignBusy(false);
+    }
+  }
+
+  const showCompare =
+    compare && isGenerated && master?.signed_url && asset.signed_url;
+
+  return (
+    <div
+      className="ps-ref-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Reference large preview"
+      data-testid="reference-preview-lightbox"
+    >
+      <button
+        type="button"
+        className="ps-ref-lightbox-backdrop"
+        aria-label="Close preview"
+        onClick={onClose}
+      />
+      <div className="ps-ref-lightbox-panel">
+        <header className="ps-ref-lightbox-header">
+          <div>
+            <strong>{slotLabel}</strong>
+            {isReassigned ? (
+              <span className="ps-ref-reassigned-badge" data-testid="reassigned-badge">
+                REASSIGNED
+              </span>
+            ) : null}
+            <p className="ps-muted" style={{ margin: "0.25rem 0 0" }}>
+              {isMaster ? "Master" : isGenerated ? "Generated reference" : "Reference"}{" "}
+              · status: {referencePreviewStatusLabel(asset)}
+              {pkgMeta?.identity_decision
+                ? ` · identity: ${pkgMeta.identity_decision}`
+                : ""}
+            </p>
+            {isGenerated && requestedSlot && effectiveSlot ? (
+              <dl className="ps-ref-angle-meta">
+                <div>
+                  <dt>Requested angle</dt>
+                  <dd>
+                    {REFERENCE_PACKAGE_SLOT_LABELS[requestedSlot] ?? requestedSlot}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Effective angle</dt>
+                  <dd>
+                    {REFERENCE_PACKAGE_SLOT_LABELS[effectiveSlot] ?? effectiveSlot}
+                  </dd>
+                </div>
+              </dl>
+            ) : null}
+            {isGenerated && requestedSlot ? (
+              <ul className="ps-ref-angle-history" aria-label="Angle history">
+                <li>
+                  Generated for{" "}
+                  {REFERENCE_PACKAGE_SLOT_LABELS[requestedSlot] ?? requestedSlot}
+                </li>
+                {pkgMeta?.identity_decision ? (
+                  <li>
+                    Identity evaluation:{" "}
+                    {pkgMeta.identity_decision === "identity_warning"
+                      ? "warning"
+                      : pkgMeta.identity_decision === "identity_match"
+                        ? "match"
+                        : pkgMeta.identity_decision === "identity_mismatch"
+                          ? "mismatch"
+                          : pkgMeta.identity_decision}
+                  </li>
+                ) : null}
+                {pkgMeta?.angle_direction === "incorrect" ? (
+                  <li className="ps-inline-error">
+                    Wrong camera direction — Reassign angle or Reject
+                  </li>
+                ) : null}
+                {isReassigned && effectiveSlot ? (
+                  <li>
+                    Reassigned →{" "}
+                    {REFERENCE_PACKAGE_SLOT_LABELS[effectiveSlot] ?? effectiveSlot}
+                  </li>
+                ) : null}
+                {asset.status === "approved" ? (
+                  <li>Human review: approved</li>
+                ) : asset.status === "rejected" ? (
+                  <li>Human review: rejected</li>
+                ) : null}
+              </ul>
+            ) : null}
+          </div>
+          <div className="ps-ref-lightbox-actions">
+            {isGenerated && master?.signed_url ? (
+              <button
+                type="button"
+                className="ps-btn"
+                onClick={() => setCompare((v) => !v)}
+              >
+                {compare ? "Hide Master compare" : "Compare with Master"}
+              </button>
+            ) : null}
+            {!isMaster ? (
+              <>
+                <button
+                  type="button"
+                  className="ps-btn ps-btn-primary"
+                  disabled={busy || mismatchBlocksApprove}
+                  onClick={onApprove}
+                  title={
+                    mismatchBlocksApprove
+                      ? "Identity mismatch cannot become Accepted"
+                      : undefined
+                  }
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  className="ps-btn"
+                  disabled={busy}
+                  onClick={onReject}
+                >
+                  Reject
+                </button>
+                {canReassign ? (
+                  <button
+                    type="button"
+                    className="ps-btn"
+                    disabled={busy || reassignBusy}
+                    onClick={() => setReassignOpen((v) => !v)}
+                  >
+                    Reassign angle
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <span className="ps-muted" style={{ fontSize: "0.8rem" }}>
+                Immutable Master — cannot approve as replacement or delete
+              </span>
+            )}
+            <button type="button" className="ps-btn" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </header>
+
+        {reassignOpen && canReassign ? (
+          <div className="ps-ref-reassign" data-testid="reassign-angle-panel">
+            <p className="ps-muted">
+              Reassign this paid generation to the correct subject-perspective
+              slot. No new image will be generated.
+            </p>
+            <label>
+              Target slot
+              <select
+                value={targetSlot}
+                onChange={(e) =>
+                  setTargetSlot(e.target.value as ReferencePackageSlot | "")
+                }
+                aria-label="Target angle slot"
+              >
+                <option value="">Select slot…</option>
+                {REFERENCE_PACKAGE_SLOTS.filter((s) => s !== effectiveSlot).map(
+                  (slot) => (
+                    <option key={slot} value={slot}>
+                      {REFERENCE_PACKAGE_SLOT_LABELS[slot]}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={!targetSlot || reassignBusy || busy}
+              onClick={() => void confirmReassign()}
+            >
+              Confirm reassignment
+            </button>
+          </div>
+        ) : null}
+
+        {showCompare ? (
+          <div className="ps-ref-lightbox-compare" data-testid="reference-master-compare">
+            <figure>
+              <figcaption>Master</figcaption>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={master.signed_url!}
+                alt="MASTER IDENTITY REFERENCE"
+              />
+            </figure>
+            <figure>
+              <figcaption>Generated reference · {slotLabel}</figcaption>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={asset.signed_url!} alt={slotLabel} />
+            </figure>
+          </div>
+        ) : asset.signed_url ? (
+          <div className="ps-ref-lightbox-stage">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={asset.signed_url}
+              alt={slotLabel}
+            />
+          </div>
+        ) : (
+          <p className="ps-muted">No signed URL available for this reference.</p>
+        )}
+      </div>
     </div>
   );
 }

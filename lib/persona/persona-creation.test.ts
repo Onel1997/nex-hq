@@ -406,13 +406,13 @@ describe("Persona Studio Phase 1.2 creation workflow", () => {
 
     const refs = await personaRepo.listReferenceAssets(scopeA, persona.id);
     assert.ok(refs.length >= 1);
-    assert.match(refs[0].storage_path, /\/personas\//);
+    // Phase 2.3C — primary Master Identity reuses candidate storage_path (no copy).
+    assert.match(refs[0].storage_path, /persona-creation/);
     assert.ok(!isPublicPermanentPersonaUrl(refs[0].storage_path));
 
-    await assert.rejects(
-      () => convertCandidateToPersona(scopeA, candidate.id),
-      (err: unknown) => err instanceof PersonaDomainError,
-    );
+    const second = await convertCandidateToPersona(scopeA, candidate.id);
+    assert.equal(second.alreadyConverted, true);
+    assert.equal(second.persona.id, persona.id);
   });
 
   it("16. identity review checklist persists", async () => {
