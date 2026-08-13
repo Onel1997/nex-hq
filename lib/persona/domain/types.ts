@@ -29,6 +29,7 @@ export const REFERENCE_STATUSES = [
   "approved",
   "rejected",
   "archived",
+  "superseded",
 ] as const;
 export type ReferenceStatus = (typeof REFERENCE_STATUSES)[number];
 
@@ -222,6 +223,8 @@ export interface PersonaReferenceAsset {
   notes: string;
   source_type: SourceType;
   rights_confirmed: boolean;
+  /** Set when a newer replacement was approved (2.3D.10). */
+  superseded_by_asset_id?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

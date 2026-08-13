@@ -301,6 +301,23 @@ export {
   isMismatchOverrideUsable,
   IDENTITY_OVERRIDE_VERSION,
   resolveIdentitySourceConfidence,
+  createMirroredReferenceVersion,
+  canProposeMirrorSalvage,
+  MIRROR_SALVAGE_PROVIDER,
+  horizontalMirrorImageBytes,
+  assertHorizontallyMirroredPngPixels,
+  prepareAcceptedAngleReplacement,
+  confirmAcceptedAngleReplacement,
+  approveAndReplaceAcceptedReference,
+  rejectAcceptedReplacement,
+  canProposeAcceptedReplacement,
+  resolveIncumbentAcceptedForSlot,
+  resolvePendingReplacementForSlot,
+  reconcileReferencePackageState,
+  deriveReferenceUsability,
+  isFinalizedApprovedReplacement,
+  assertReferenceAssetDeletable,
+  REFERENCE_PACKAGE_RECONCILER_VERSION,
 } from "./creation/reference-package";
 export type {
   ReferencePackageSlot,
@@ -308,6 +325,9 @@ export type {
   ReferencePackageCostEstimate,
   ProviderDirectionPlan,
   ProviderDirectionStrategy,
+  CreateMirroredVersionResult,
+  ReferencePackageSlotState,
+  ReconciledReferencePackageState,
 } from "./creation/reference-package";
 export { FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD } from "./face-novelty-memory/similarity-threshold";
 export {

@@ -12,11 +12,14 @@ import type { ProfileIdentityMode } from "./profile-identity-preservation";
 import type {
   HumanIdentityReview,
 } from "./human-identity-override";
+import type { DerivationType } from "./mirror-salvage";
 import type {
   ReferencePackageAttemptStatus,
   ReferencePackageSlot,
 } from "./slots";
 import { isReferencePackageSlot } from "./slots";
+
+export type ReferencePackageAttemptProvider = "openai" | "derived_local";
 
 export const REFERENCE_PACKAGE_SESSION_STATUSES = [
   "idle",
@@ -70,7 +73,7 @@ export type ReferencePackageAttempt = {
   reassigned_by: string | null;
   angle_review_source: AngleReviewSource;
   angle_review_decision: AngleReviewDecision;
-  provider: "openai";
+  provider: ReferencePackageAttemptProvider;
   provider_request_id: string | null;
   generated_asset_id: string | null;
   status: ReferencePackageAttemptStatus;
@@ -107,6 +110,15 @@ export type ReferencePackageAttempt = {
   human_identity_reviewed_by: string | null;
   human_identity_override_reason: string | null;
   identity_override_version: string | null;
+  /** Source asset for local deterministic salvage (2.3D.9). */
+  derived_from_asset_id: string | null;
+  derivation_type: DerivationType | null;
+  derived_at: string | null;
+  derived_by: string | null;
+  /** Paid regeneration targeting an accepted reference (2.3D.10). */
+  replacement_for_asset_id: string | null;
+  replacement_for_slot: ReferencePackageSlot | null;
+  replacement_candidate: boolean;
   cost_eur: number | null;
   error_message: string | null;
   created_at: string;
@@ -131,10 +143,18 @@ export type CreateReferencePackageAttemptInput = {
   /** Canonical slot — never rewritten by inverted fallback. */
   reference_slot: ReferencePackageSlot;
   status?: ReferencePackageAttemptStatus;
+  provider?: ReferencePackageAttemptProvider;
   provider_direction_strategy?: ProviderDirectionStrategy;
   provider_requested_direction?: ProviderRequestedDirection;
   profile_identity_mode?: ProfileIdentityMode | null;
   profile_prompt_version?: string | null;
+  derived_from_asset_id?: string | null;
+  derivation_type?: DerivationType | null;
+  derived_at?: string | null;
+  derived_by?: string | null;
+  replacement_for_asset_id?: string | null;
+  replacement_for_slot?: ReferencePackageSlot | null;
+  replacement_candidate?: boolean;
 };
 
 export type UpdateReferencePackageSessionInput = Partial<
@@ -154,9 +174,18 @@ export type UpdateReferencePackageAttemptInput = Partial<
 export type ReferencePackageSlotView = {
   slot: ReferencePackageSlot;
   label: string;
+  /** Canonical reconciled state (Phase 2.3D.11). */
+  state: import("./reconcile-reference-package-state").ReferencePackageSlotState;
+  /** @deprecated Prefer `state` — legacy attempt status alias. */
   status: ReferencePackageAttemptStatus;
   latestAttempt: ReferencePackageAttempt | null;
+  /** Active approved usable asset for this slot (from reconciler). */
   acceptedAssetId: string | null;
+  pendingReplacementAssetId: string | null;
+  usable: boolean;
+  replacementState: import("./reconcile-reference-package-state").ReplacementState;
+  replacementPredecessorMissing: boolean;
+  provenance: import("./reconcile-reference-package-state").ReferenceProvenance;
   attemptHistory: ReferencePackageAttempt[];
   identityDecision: IdentityConsistencyDecision | null;
   humanReview: "approved" | "rejected" | "pending" | null;
@@ -186,6 +215,8 @@ export type ReferencePackageStatusView = {
   masterReferenceId: string | null;
   session: ReferencePackageSession | null;
   slots: ReferencePackageSlotView[];
+  /** Canonical reconciled package state (Phase 2.3D.11). */
+  referencePackageState: import("./reconcile-reference-package-state").ReconciledReferencePackageState;
   acceptedCount: number;
   requiredCount: number;
   referencePackageReady: boolean;
@@ -206,6 +237,14 @@ export type ReferencePackageAssetNotesMeta = {
   master_reference_id: string;
   identity_decision: IdentityConsistencyDecision | null;
   angle_direction?: AngleDirection | null;
+  detected_orientation?:
+    | "image_left"
+    | "image_right"
+    | "frontal"
+    | "profile_left"
+    | "profile_right"
+    | "uncertain"
+    | null;
   attempt_id?: string;
   reassigned_from?: ReferencePackageSlot | null;
   reassigned_at?: string | null;
@@ -226,6 +265,18 @@ export type ReferencePackageAssetNotesMeta = {
     | "human_warning_approved"
     | "human_mismatch_override"
     | null;
+  derivation_type?: DerivationType | null;
+  derived_from_asset_id?: string | null;
+  derived_at?: string | null;
+  derived_by?: string | null;
+  original_requested_slot?: ReferencePackageSlot | null;
+  replacement_for_asset_id?: string | null;
+  replacement_for_slot?: ReferencePackageSlot | null;
+  replacement_candidate?: boolean | null;
+  superseded_by_asset_id?: string | null;
+  superseded_at?: string | null;
+  replacement_approved_at?: string | null;
+  replacement_approved_by?: string | null;
 };
 
 export function getAttemptEffectiveSlot(
@@ -240,6 +291,14 @@ export function buildReferencePackageAssetNotes(meta: {
   masterReferenceId: string;
   identityDecision: IdentityConsistencyDecision;
   angleDirection?: AngleDirection | null;
+  detectedOrientation?:
+    | "image_left"
+    | "image_right"
+    | "frontal"
+    | "profile_left"
+    | "profile_right"
+    | "uncertain"
+    | null;
   requestedSlot?: ReferencePackageSlot;
   effectiveSlot?: ReferencePackageSlot;
   reassignedFrom?: ReferencePackageSlot | null;
@@ -261,6 +320,18 @@ export function buildReferencePackageAssetNotes(meta: {
     | "human_warning_approved"
     | "human_mismatch_override"
     | null;
+  derivationType?: DerivationType | null;
+  derivedFromAssetId?: string | null;
+  derivedAt?: string | null;
+  derivedBy?: string | null;
+  originalRequestedSlot?: ReferencePackageSlot | null;
+  replacementForAssetId?: string | null;
+  replacementForSlot?: ReferencePackageSlot | null;
+  replacementCandidate?: boolean | null;
+  supersededByAssetId?: string | null;
+  supersededAt?: string | null;
+  replacementApprovedAt?: string | null;
+  replacementApprovedBy?: string | null;
 }): string {
   const requested = meta.requestedSlot ?? meta.slot;
   const effective = meta.effectiveSlot ?? meta.slot;
@@ -275,6 +346,7 @@ export function buildReferencePackageAssetNotes(meta: {
     master_reference_id: meta.masterReferenceId,
     identity_decision: meta.identityDecision,
     angle_direction: meta.angleDirection ?? null,
+    detected_orientation: meta.detectedOrientation ?? null,
     reassigned_from: meta.reassignedFrom ?? null,
     reassigned_at: meta.reassignedAt ?? null,
     reassigned_by: meta.reassignedBy ?? null,
@@ -290,6 +362,18 @@ export function buildReferencePackageAssetNotes(meta: {
     human_identity_override_reason: meta.humanIdentityOverrideReason ?? null,
     identity_override_version: meta.identityOverrideVersion ?? null,
     identity_source_confidence: meta.identitySourceConfidence ?? null,
+    derivation_type: meta.derivationType ?? null,
+    derived_from_asset_id: meta.derivedFromAssetId ?? null,
+    derived_at: meta.derivedAt ?? null,
+    derived_by: meta.derivedBy ?? null,
+    original_requested_slot: meta.originalRequestedSlot ?? requested,
+    replacement_for_asset_id: meta.replacementForAssetId ?? null,
+    replacement_for_slot: meta.replacementForSlot ?? null,
+    replacement_candidate: meta.replacementCandidate ?? null,
+    superseded_by_asset_id: meta.supersededByAssetId ?? null,
+    superseded_at: meta.supersededAt ?? null,
+    replacement_approved_at: meta.replacementApprovedAt ?? null,
+    replacement_approved_by: meta.replacementApprovedBy ?? null,
   })}`;
 }
 
@@ -306,6 +390,7 @@ export function parseReferencePackageAssetNotes(
       replaces_master?: boolean;
       identity_decision?: string;
       angle_direction?: string | null;
+      detected_orientation?: string | null;
       attempt_id?: string;
       reassigned_from?: string | null;
       reassigned_at?: string | null;
@@ -322,6 +407,18 @@ export function parseReferencePackageAssetNotes(
       human_identity_override_reason?: string | null;
       identity_override_version?: string | null;
       identity_source_confidence?: string | null;
+      derivation_type?: string | null;
+      derived_from_asset_id?: string | null;
+      derived_at?: string | null;
+      derived_by?: string | null;
+      original_requested_slot?: string | null;
+      replacement_for_asset_id?: string | null;
+      replacement_for_slot?: string | null;
+      replacement_candidate?: boolean | null;
+      superseded_by_asset_id?: string | null;
+      superseded_at?: string | null;
+      replacement_approved_at?: string | null;
+      replacement_approved_by?: string | null;
     };
     if (raw.replaces_master === true) return null;
     if (typeof raw.slot !== "string" || typeof raw.master_reference_id !== "string") {
@@ -379,6 +476,15 @@ export function parseReferencePackageAssetNotes(
       master_reference_id: raw.master_reference_id,
       identity_decision: decision,
       angle_direction: angleDirection,
+      detected_orientation:
+        raw.detected_orientation === "image_left" ||
+        raw.detected_orientation === "image_right" ||
+        raw.detected_orientation === "frontal" ||
+        raw.detected_orientation === "profile_left" ||
+        raw.detected_orientation === "profile_right" ||
+        raw.detected_orientation === "uncertain"
+          ? raw.detected_orientation
+          : null,
       attempt_id: typeof raw.attempt_id === "string" ? raw.attempt_id : undefined,
       reassigned_from: reassignedFrom,
       reassigned_at:
@@ -428,6 +534,48 @@ export function parseReferencePackageAssetNotes(
         raw.identity_source_confidence === "human_warning_approved" ||
         raw.identity_source_confidence === "human_mismatch_override"
           ? raw.identity_source_confidence
+          : null,
+      derivation_type:
+        raw.derivation_type === "horizontal_mirror"
+          ? raw.derivation_type
+          : null,
+      derived_from_asset_id:
+        typeof raw.derived_from_asset_id === "string"
+          ? raw.derived_from_asset_id
+          : null,
+      derived_at:
+        typeof raw.derived_at === "string" ? raw.derived_at : null,
+      derived_by:
+        typeof raw.derived_by === "string" ? raw.derived_by : null,
+      original_requested_slot:
+        typeof raw.original_requested_slot === "string" &&
+        isReferencePackageSlot(raw.original_requested_slot)
+          ? raw.original_requested_slot
+          : null,
+      replacement_for_asset_id:
+        typeof raw.replacement_for_asset_id === "string"
+          ? raw.replacement_for_asset_id
+          : null,
+      replacement_for_slot:
+        typeof raw.replacement_for_slot === "string" &&
+        isReferencePackageSlot(raw.replacement_for_slot)
+          ? raw.replacement_for_slot
+          : null,
+      replacement_candidate:
+        raw.replacement_candidate === true ? true : null,
+      superseded_by_asset_id:
+        typeof raw.superseded_by_asset_id === "string"
+          ? raw.superseded_by_asset_id
+          : null,
+      superseded_at:
+        typeof raw.superseded_at === "string" ? raw.superseded_at : null,
+      replacement_approved_at:
+        typeof raw.replacement_approved_at === "string"
+          ? raw.replacement_approved_at
+          : null,
+      replacement_approved_by:
+        typeof raw.replacement_approved_by === "string"
+          ? raw.replacement_approved_by
           : null,
     };
   } catch {

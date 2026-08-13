@@ -7,6 +7,12 @@ import {
   reassignReferencePackageAngle,
   recomputeReferencePackageAngleValidation,
   approveHumanIdentityOverride,
+  createMirroredReferenceVersion,
+  prepareAcceptedAngleReplacement,
+  confirmAcceptedAngleReplacement,
+  approveAndReplaceAcceptedReference,
+  rejectAcceptedReplacement,
+  keepCurrentAcceptedReplacement,
 } from "@/lib/persona/creation/reference-package";
 import { isReferencePackageSlot } from "@/lib/persona/creation/reference-package/slots";
 import { dict, jsonError, jsonOk, requirePersonaScope } from "../../_utils";
@@ -45,6 +51,8 @@ export async function POST(request: Request, context: RouteContext) {
       masterCompared?: boolean;
       overrideConfirmed?: boolean;
       reason?: string;
+      confirmed?: boolean;
+      replaceConfirmed?: boolean;
     };
     const action = body.action ?? "prepare";
 
@@ -183,6 +191,90 @@ export async function POST(request: Request, context: RouteContext) {
         action: "approve_identity_override",
         ...result,
       });
+    }
+
+    if (action === "create_mirrored_version") {
+      if (!body.assetId) {
+        return jsonOk({ error: dict.persona.errors.invalidRequest }, 400);
+      }
+      const result = await createMirroredReferenceVersion(
+        gated.scope,
+        personaId,
+        {
+          assetId: body.assetId,
+          confirmed: body.confirmed !== false,
+        },
+      );
+      return jsonOk({
+        success: true,
+        action: "create_mirrored_version",
+        ...result,
+      });
+    }
+
+    if (action === "prepare_regenerate_accepted") {
+      if (!body.assetId) {
+        return jsonOk({ error: dict.persona.errors.invalidRequest }, 400);
+      }
+      const result = await prepareAcceptedAngleReplacement(
+        gated.scope,
+        personaId,
+        { assetId: body.assetId },
+      );
+      return jsonOk({ success: true, ...result });
+    }
+
+    if (action === "confirm_regenerate_accepted") {
+      if (!body.assetId || !body.confirmationToken) {
+        return jsonOk({ error: dict.persona.errors.invalidRequest }, 400);
+      }
+      const result = await confirmAcceptedAngleReplacement(
+        gated.scope,
+        personaId,
+        {
+          assetId: body.assetId,
+          confirmationToken: body.confirmationToken,
+          costConfirmed: body.costConfirmed === true,
+        },
+      );
+      return jsonOk({ success: true, ...result });
+    }
+
+    if (action === "approve_replacement") {
+      if (!body.assetId) {
+        return jsonOk({ error: dict.persona.errors.invalidRequest }, 400);
+      }
+      const result = await approveAndReplaceAcceptedReference(
+        gated.scope,
+        personaId,
+        {
+          assetId: body.assetId,
+          replaceConfirmed: body.replaceConfirmed !== false,
+        },
+      );
+      return jsonOk({ success: true, action: "approve_replacement", ...result });
+    }
+
+    if (action === "reject_replacement") {
+      if (!body.assetId) {
+        return jsonOk({ error: dict.persona.errors.invalidRequest }, 400);
+      }
+      const result = await rejectAcceptedReplacement(gated.scope, personaId, {
+        assetId: body.assetId,
+      });
+      return jsonOk({ success: true, action: "reject_replacement", ...result });
+    }
+
+    if (action === "keep_current_replacement") {
+      if (!body.assetId) {
+        return jsonOk({ error: dict.persona.errors.invalidRequest }, 400);
+      }
+      const result = await keepCurrentAcceptedReplacement(
+        gated.scope,
+        personaId,
+        { assetId: body.assetId },
+      );
+      return jsonOk({ success: true, action: "keep_current_replacement", ...result });
     }
 
     return jsonOk({ error: dict.persona.errors.invalidRequest }, 400);

@@ -45,6 +45,7 @@ import { REFERENCE_PACKAGE_SLOT_LABELS, REFERENCE_PACKAGE_SLOTS } from "@/lib/pe
 import type { ReferencePackageSlot } from "@/lib/persona/creation/reference-package/slots";
 import { parseReferencePackageAssetNotes } from "@/lib/persona/creation/reference-package/types";
 import type { ReferencePackageStatusView } from "@/lib/persona/creation/reference-package/types";
+import { canProposeMirrorSalvage } from "@/lib/persona/creation/reference-package/mirror-salvage";
 
 const NAV: Array<{
   id: PersonaStudioSection;
@@ -727,7 +728,14 @@ function PersonaDetail({
                   className="ps-btn ps-btn-danger"
                   disabled={busy}
                   onClick={() => {
-                    if (!window.confirm("Referenz wirklich löschen?")) return;
+                    const pkgMeta = parseReferencePackageAssetNotes(asset.notes);
+                    const historical =
+                      asset.status === "superseded" ||
+                      (pkgMeta != null && asset.status !== "review");
+                    const msg = historical
+                      ? "Historische Referenz wird entfernt. Die aktuelle genehmigte Referenz bleibt unverändert. Fortfahren?"
+                      : "Referenz wirklich löschen?";
+                    if (!window.confirm(msg)) return;
                     void run(() => studio.removeReference(persona.id, asset.id));
                   }}
                 >
@@ -752,6 +760,7 @@ function PersonaDetail({
         <ReferencePreviewLightbox
           asset={previewAsset}
           master={masterReference}
+          allReferences={allReferences}
           personaId={persona.id}
           identityLocked={persona.identity_lock_status === "approved"}
           busy={busy}
@@ -774,6 +783,10 @@ function PersonaDetail({
           }
           onReassigned={() => {
             void studio.selectPersona(persona.id);
+          }}
+          onMirroredCreated={(derivedAssetId) => {
+            void studio.selectPersona(persona.id);
+            setPreviewAssetId(derivedAssetId);
           }}
           onError={(msg) => setError(msg)}
         />
@@ -1224,6 +1237,9 @@ function ReferencePackagePanel({
     };
   } | null>(null);
   const [regenSlot, setRegenSlot] = useState<string | null>(null);
+  const [regenAcceptedAssetId, setRegenAcceptedAssetId] = useState<string | null>(
+    null,
+  );
 
   async function loadStatus() {
     const res = await fetch(`/api/persona/${personaId}/reference-package`);
@@ -1299,6 +1315,52 @@ function ReferencePackagePanel({
           : null,
       );
       setRegenSlot(slot ?? null);
+      setRegenAcceptedAssetId(null);
+      await loadStatus();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Prepare failed");
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  async function prepareAcceptedReplacement(incumbentAssetId: string) {
+    onBusy(true);
+    onError(null);
+    try {
+      const res = await fetch(`/api/persona/${personaId}/reference-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "prepare_regenerate_accepted",
+          assetId: incumbentAssetId,
+        }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        confirmationToken?: string;
+        estimate?: {
+          imageCount: number;
+          estimatedMin: number;
+          estimatedMax: number;
+          maxAuthorizedSpend: number;
+          provider: string;
+        };
+        providerCalled?: boolean;
+        slot?: string;
+      };
+      if (!res.ok) throw new Error(data.error ?? "Prepare failed");
+      if (data.providerCalled) {
+        throw new Error("FAIL CLOSED: provider must not run on prepare");
+      }
+      setPendingToken(data.confirmationToken ?? null);
+      setPendingEstimate(
+        data.estimate
+          ? { ...data.estimate, slots: data.slot ? [data.slot] : undefined }
+          : null,
+      );
+      setRegenSlot(data.slot ?? null);
+      setRegenAcceptedAssetId(incumbentAssetId);
       await loadStatus();
     } catch (err) {
       onError(err instanceof Error ? err.message : "Prepare failed");
@@ -1316,7 +1378,14 @@ function ReferencePackagePanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          regenSlot
+          regenAcceptedAssetId
+            ? {
+                action: "confirm_regenerate_accepted",
+                assetId: regenAcceptedAssetId,
+                confirmationToken: pendingToken,
+                costConfirmed: true,
+              }
+            : regenSlot
             ? {
                 action: "confirm_regenerate",
                 slot: regenSlot,
@@ -1335,13 +1404,20 @@ function ReferencePackagePanel({
               },
         ),
       });
-      const data = (await res.json()) as { error?: string };
+      const data = (await res.json()) as {
+        error?: string;
+        replacementAssetId?: string;
+      };
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
       setPendingToken(null);
       setPendingEstimate(null);
       setRegenSlot(null);
+      setRegenAcceptedAssetId(null);
       await loadStatus();
       onRefresh();
+      if (data.replacementAssetId) {
+        // Parent refresh will reload references; open happens on next preview click.
+      }
     } catch (err) {
       onError(err instanceof Error ? err.message : "Generation failed");
     } finally {
@@ -1356,17 +1432,24 @@ function ReferencePackagePanel({
     identity_check: "Identity Check",
     review: "Review",
     accepted: "Accepted",
+    identity_warning: "Identity warning",
+    identity_mismatch: "Mismatch",
+    wrong_camera_direction: "Wrong camera direction",
     mismatch: "Mismatch",
     failed: "Failed",
     rejected: "Rejected",
   };
 
   function slotPrimaryLabel(slot: {
+    state?: string;
     status: string;
+    coverageLabel?: string | null;
     wrongCameraDirection?: boolean;
   }): string {
+    if (slot.coverageLabel) return slot.coverageLabel;
     if (slot.wrongCameraDirection) return "Wrong camera direction";
-    return slotStatusLabel[slot.status] ?? slot.status;
+    const key = slot.state ?? slot.status;
+    return slotStatusLabel[key] ?? key;
   }
 
   return (
@@ -1391,9 +1474,10 @@ function ReferencePackagePanel({
             <div className="ps-ref-pkg-slot-main">
               <strong>{slot.label}</strong>
               <span>
-                {slot.coverageLabel ?? slotPrimaryLabel(slot)}
+                {slotPrimaryLabel(slot)}
               </span>
-              {slot.status !== "accepted" &&
+              {slot.state !== "accepted" &&
+                !slot.usable &&
                 !slot.directionGenerationUnreliable && (
                 <button
                   type="button"
@@ -1402,6 +1486,22 @@ function ReferencePackagePanel({
                   onClick={() => void prepare(slot.slot)}
                 >
                   Regenerate this angle
+                </button>
+              )}
+              {(slot.state === "accepted" || slot.usable) &&
+                slot.acceptedAssetId &&
+                !slot.pendingReplacementAssetId &&
+                !status?.identityLocked && (
+                <button
+                  type="button"
+                  className="ps-btn"
+                  disabled={busy}
+                  data-testid="regenerate-accepted-angle"
+                  onClick={() =>
+                    void prepareAcceptedReplacement(slot.acceptedAssetId!)
+                  }
+                >
+                  Regenerate accepted angle
                 </button>
               )}
             </div>
@@ -1448,6 +1548,18 @@ function ReferencePackagePanel({
                     Attempt {idx + 1} — Target:{" "}
                     {REFERENCE_PACKAGE_SLOT_LABELS[att.reference_slot] ??
                       att.reference_slot}
+                    {att.provider === "derived_local" ||
+                    att.derivation_type === "horizontal_mirror"
+                      ? " · Derived salvage: Horizontal mirror"
+                      : att.provider === "openai"
+                        ? " · Generated by OpenAI"
+                        : ""}
+                    {att.replacement_candidate
+                      ? " · Replacement candidate"
+                      : ""}
+                    {att.replacement_for_asset_id
+                      ? ` · Replaces asset: ${att.replacement_for_asset_id}`
+                      : ""}
                     {att.provider_direction_strategy
                       ? ` · Provider strategy: ${
                           att.provider_direction_strategy ===
@@ -1470,7 +1582,9 @@ function ReferencePackagePanel({
                       ? ` · Profile prompt: ${att.profile_prompt_version}`
                       : ""}
                     {att.detected_orientation
-                      ? ` · Actual detected: ${att.detected_orientation.replace(/_/g, " ")}`
+                      ? att.derivation_type === "horizontal_mirror"
+                        ? ` · Actual after mirror: ${att.detected_orientation.replace(/_/g, " ")}`
+                        : ` · Actual detected: ${att.detected_orientation.replace(/_/g, " ")}`
                       : ""}
                     {att.angle_direction
                       ? ` · Angle result: ${att.angle_direction}`
@@ -1486,6 +1600,12 @@ function ReferencePackagePanel({
                                 : att.identity_decision
                         }`
                       : ""}
+                    {att.derivation_type === "horizontal_mirror" ||
+                    att.provider === "derived_local"
+                      ? " · Cost: €0.00"
+                      : att.cost_eur != null
+                        ? ` · Cost: €${att.cost_eur.toFixed(2)}`
+                        : ""}
                     {att.reassigned_from && att.effective_slot
                       ? ` · Reassigned → ${
                           REFERENCE_PACKAGE_SLOT_LABELS[att.effective_slot] ??
@@ -1631,6 +1751,7 @@ function referencePreviewStatusLabel(asset: PersonaReferenceAssetView): string {
 function ReferencePreviewLightbox({
   asset,
   master,
+  allReferences,
   personaId,
   identityLocked,
   busy,
@@ -1638,10 +1759,12 @@ function ReferencePreviewLightbox({
   onApprove,
   onReject,
   onReassigned,
+  onMirroredCreated,
   onError,
 }: {
   asset: PersonaReferenceAssetView;
   master: PersonaReferenceAssetView | null;
+  allReferences: PersonaReferenceAssetView[];
   personaId: string;
   identityLocked: boolean;
   busy: boolean;
@@ -1649,6 +1772,7 @@ function ReferencePreviewLightbox({
   onApprove: () => void;
   onReject: () => void;
   onReassigned: () => void;
+  onMirroredCreated?: (derivedAssetId: string) => void;
   onError: (msg: string | null) => void;
 }) {
   const masterMeta = parseMasterIdentityNotes(asset.notes);
@@ -1662,6 +1786,8 @@ function ReferencePreviewLightbox({
   const [reassignOpen, setReassignOpen] = useState(false);
   const [targetSlot, setTargetSlot] = useState<ReferencePackageSlot | "">("");
   const [reassignBusy, setReassignBusy] = useState(false);
+  const [mirrorBusy, setMirrorBusy] = useState(false);
+  const [replacementBusy, setReplacementBusy] = useState(false);
 
   const requestedSlot = pkgMeta?.requested_slot ?? pkgMeta?.slot;
   const effectiveSlot = pkgMeta?.effective_slot ?? pkgMeta?.slot;
@@ -1670,6 +1796,11 @@ function ReferencePreviewLightbox({
     (requestedSlot != null &&
       effectiveSlot != null &&
       requestedSlot !== effectiveSlot);
+  const isDerivedMirror = pkgMeta?.derivation_type === "horizontal_mirror";
+  const isReplacementCandidate = pkgMeta?.replacement_candidate === true;
+  const incumbentAsset = isReplacementCandidate && pkgMeta?.replacement_for_asset_id
+    ? allReferences.find((a) => a.id === pkgMeta.replacement_for_asset_id) ?? null
+    : null;
 
   const slotLabel = isMaster
     ? "MASTER IDENTITY REFERENCE"
@@ -1696,6 +1827,30 @@ function ReferencePreviewLightbox({
     !alreadyOverridden &&
     pkgMeta?.human_identity_review !== "rejected";
 
+  const mirrorGate =
+    isGenerated && requestedSlot
+      ? canProposeMirrorSalvage({
+          isMaster: false,
+          isStageBGenerated: true,
+          identityLocked,
+          assetStatus: asset.status,
+          identityDecision: pkgMeta?.identity_decision,
+          angleDirection: pkgMeta?.angle_direction,
+          detectedOrientation: pkgMeta?.detected_orientation ?? null,
+          slot: requestedSlot,
+        })
+      : { ok: false as const, reason: "n/a" };
+  // Live wrong-direction assets may predate detected_orientation in notes —
+  // still offer the action; server re-checks exact opposite from attempt rows.
+  const canOfferMirrorSalvage =
+    isGenerated &&
+    !isMaster &&
+    !identityLocked &&
+    !isDerivedMirror &&
+    pkgMeta?.angle_direction === "incorrect" &&
+    (pkgMeta?.identity_decision === "identity_match" ||
+      pkgMeta?.identity_decision === "identity_warning") &&
+    (mirrorGate.ok || pkgMeta?.detected_orientation == null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -1777,6 +1932,109 @@ function ReferencePreviewLightbox({
     }
   }
 
+  async function approveAndReplace() {
+    if (!isReplacementCandidate) return;
+    setReplacementBusy(true);
+    onError(null);
+    try {
+      const res = await fetch(`/api/persona/${personaId}/reference-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "approve_replacement",
+          assetId: asset.id,
+          replaceConfirmed: true,
+        }),
+      });
+      const data = (await res.json()) as { error?: string; providerCalled?: boolean };
+      if (!res.ok) throw new Error(data.error ?? "Approve and replace failed");
+      if (data.providerCalled) {
+        throw new Error("FAIL CLOSED: approve and replace must not call a provider");
+      }
+      onReassigned();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Approve and replace failed");
+    } finally {
+      setReplacementBusy(false);
+    }
+  }
+
+  async function rejectReplacement() {
+    if (!isReplacementCandidate) return;
+    setReplacementBusy(true);
+    onError(null);
+    try {
+      const res = await fetch(`/api/persona/${personaId}/reference-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reject_replacement",
+          assetId: asset.id,
+        }),
+      });
+      const data = (await res.json()) as { error?: string; providerCalled?: boolean };
+      if (!res.ok) throw new Error(data.error ?? "Reject replacement failed");
+      if (data.providerCalled) {
+        throw new Error("FAIL CLOSED: reject replacement must not call a provider");
+      }
+      onReassigned();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Reject replacement failed");
+    } finally {
+      setReplacementBusy(false);
+    }
+  }
+
+  async function keepCurrentReplacement() {
+    await rejectReplacement();
+  }
+
+  async function createMirroredVersion() {
+    if (!canOfferMirrorSalvage) return;
+    setMirrorBusy(true);
+    onError(null);
+    try {
+      const res = await fetch(`/api/persona/${personaId}/reference-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_mirrored_version",
+          assetId: asset.id,
+          confirmed: true,
+        }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        providerCalled?: boolean;
+        openaiCalled?: boolean;
+        fluxCalled?: boolean;
+        assetId?: string;
+        providerCost?: number;
+      };
+      if (!res.ok) {
+        throw new Error(data.error ?? "Create mirrored version failed");
+      }
+      if (data.providerCalled || data.openaiCalled || data.fluxCalled) {
+        throw new Error(
+          "FAIL CLOSED: mirrored version must not call OpenAI or FLUX",
+        );
+      }
+      if (data.providerCost !== 0) {
+        throw new Error("FAIL CLOSED: mirrored version must cost €0.00");
+      }
+      if (!data.assetId) {
+        throw new Error("Mirrored asset id missing from response");
+      }
+      onMirroredCreated?.(data.assetId);
+    } catch (err) {
+      onError(
+        err instanceof Error ? err.message : "Create mirrored version failed",
+      );
+    } finally {
+      setMirrorBusy(false);
+    }
+  }
+
   const showCompare =
     compare && isGenerated && master?.signed_url && asset.signed_url;
 
@@ -1811,8 +2069,32 @@ function ReferencePreviewLightbox({
                 HUMAN IDENTITY OVERRIDE
               </span>
             ) : null}
+            {isDerivedMirror ? (
+              <span
+                className="ps-ref-derived-badge"
+                data-testid="derived-mirror-badge"
+              >
+                DERIVED MIRROR
+              </span>
+            ) : null}
+            {isReplacementCandidate ? (
+              <span
+                className="ps-ref-replacement-badge"
+                data-testid="replacement-candidate-badge"
+              >
+                REPLACEMENT CANDIDATE
+              </span>
+            ) : null}
             <p className="ps-muted" style={{ margin: "0.25rem 0 0" }}>
-              {isMaster ? "Master" : isGenerated ? "Generated reference" : "Reference"}{" "}
+              {isMaster
+                ? "Master"
+                : isReplacementCandidate
+                  ? "Replacement candidate"
+                  : isDerivedMirror
+                    ? "Derived mirror salvage"
+                    : isGenerated
+                      ? "Generated reference"
+                      : "Reference"}{" "}
               · status: {referencePreviewStatusLabel(asset)}
               {pkgMeta?.identity_decision
                 ? ` · machine identity: ${
@@ -1828,6 +2110,7 @@ function ReferencePreviewLightbox({
               {pkgMeta?.angle_direction
                 ? ` · camera: ${pkgMeta.angle_direction}`
                 : ""}
+              {isDerivedMirror ? " · Cost: €0.00" : ""}
             </p>
             {isGenerated && requestedSlot && effectiveSlot ? (
               <dl className="ps-ref-angle-meta">
@@ -1879,8 +2162,35 @@ function ReferencePreviewLightbox({
                 ) : null}
                 {pkgMeta?.angle_direction === "incorrect" ? (
                   <li className="ps-inline-error">
-                    Wrong camera direction — Reassign angle or Reject
+                    Wrong camera direction — Create mirrored version, Reassign
+                    angle, or Reject
                   </li>
+                ) : null}
+                {isDerivedMirror ? (
+                  <li data-testid="derived-mirror-source-line">
+                    Source: Original generated{" "}
+                    {REFERENCE_PACKAGE_SLOT_LABELS[
+                      pkgMeta?.original_requested_slot ??
+                        pkgMeta?.requested_slot ??
+                        requestedSlot!
+                    ] ?? "reference"}
+                    {pkgMeta?.derived_from_asset_id
+                      ? ` (${pkgMeta.derived_from_asset_id.slice(0, 8)}…)`
+                      : ""}
+                  </li>
+                ) : null}
+                {isReplacementCandidate && incumbentAsset ? (
+                  <li data-testid="replacement-incumbent-line">
+                    Current accepted reference:{" "}
+                    {REFERENCE_PACKAGE_SLOT_LABELS[
+                      parseReferencePackageAssetNotes(incumbentAsset.notes)
+                        ?.slot ?? "front"
+                    ] ?? "reference"}{" "}
+                    ({incumbentAsset.id.slice(0, 8)}…)
+                  </li>
+                ) : null}
+                {isReplacementCandidate ? (
+                  <li>New candidate: {slotLabel}</li>
                 ) : null}
                 {isReassigned && effectiveSlot ? (
                   <li>
@@ -1912,7 +2222,53 @@ function ReferencePreviewLightbox({
                 {compare ? "Hide Master compare" : "Compare with Master"}
               </button>
             ) : null}
-            {!isMaster ? (
+            {canOfferMirrorSalvage ? (
+              <button
+                type="button"
+                className="ps-btn ps-btn-primary"
+                disabled={busy || mirrorBusy}
+                data-testid="create-mirrored-version"
+                onClick={() => void createMirroredVersion()}
+              >
+                {mirrorBusy ? "Mirroring…" : "Create mirrored version"}
+              </button>
+            ) : null}
+            {isReplacementCandidate ? (
+              <>
+                <button
+                  type="button"
+                  className="ps-btn ps-btn-primary"
+                  disabled={
+                    busy ||
+                    replacementBusy ||
+                    mismatchBlocksApprove ||
+                    pkgMeta?.angle_direction === "incorrect"
+                  }
+                  data-testid="approve-and-replace"
+                  onClick={() => void approveAndReplace()}
+                >
+                  Approve and replace
+                </button>
+                <button
+                  type="button"
+                  className="ps-btn"
+                  disabled={busy || replacementBusy}
+                  data-testid="keep-current-replacement"
+                  onClick={() => void keepCurrentReplacement()}
+                >
+                  Keep current
+                </button>
+                <button
+                  type="button"
+                  className="ps-btn"
+                  disabled={busy || replacementBusy}
+                  data-testid="reject-replacement"
+                  onClick={() => void rejectReplacement()}
+                >
+                  Reject replacement
+                </button>
+              </>
+            ) : !isMaster ? (
               <>
                 {canOfferIdentityOverride ? (
                   <button
@@ -1933,12 +2289,18 @@ function ReferencePreviewLightbox({
                   <button
                     type="button"
                     className="ps-btn ps-btn-primary"
-                    disabled={busy || mismatchBlocksApprove}
+                    disabled={
+                      busy ||
+                      mismatchBlocksApprove ||
+                      pkgMeta?.angle_direction === "incorrect"
+                    }
                     onClick={onApprove}
                     title={
                       mismatchBlocksApprove
                         ? "Identity mismatch cannot become Accepted without human override"
-                        : undefined
+                        : pkgMeta?.angle_direction === "incorrect"
+                          ? "Wrong camera direction cannot be approved — create a mirrored version first"
+                          : undefined
                     }
                   >
                     Approve

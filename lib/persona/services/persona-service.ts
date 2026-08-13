@@ -54,9 +54,15 @@ import {
 } from "../storage/reference-storage";
 import {
   ensureMasterIdentityReferenceFromSelectedCandidate,
+  isMasterIdentityReference,
   parseMasterIdentityNotes,
 } from "../creation/master-identity-reference";
 import { parseReferencePackageAssetNotes } from "../creation/reference-package";
+import {
+  assertReferenceAssetDeletable,
+  reconcileReferencePackageState,
+} from "../creation/reference-package/reconcile-reference-package-state";
+import { getReferencePackageRepository } from "../creation/reference-package/repository";
 
 function repo(): PersonaRepository {
   return getPersonaRepository();
@@ -811,6 +817,36 @@ export async function deleteReferenceAsset(
   const current = await repo().getReferenceAsset(scope, id);
   if (!current) {
     throw new PersonaDomainError(`Reference asset not found: ${id}`, "NOT_FOUND");
+  }
+
+  const isMaster =
+    isMasterIdentityReference(current) ||
+    Boolean(parseMasterIdentityNotes(current.notes));
+
+  if (isMaster) {
+    throw new PersonaDomainError(
+      "Master Identity Reference cannot be deleted.",
+      "WORKFLOW",
+      { assetId: id },
+    );
+  }
+
+  const pkgMeta = parseReferencePackageAssetNotes(current.notes);
+  if (pkgMeta) {
+    const pkgRepo = getReferencePackageRepository();
+    const [attempts, assets] = await Promise.all([
+      pkgRepo.listAttemptsForPersona(scope, current.persona_id),
+      repo().listReferenceAssets(scope, current.persona_id),
+    ]);
+    const reconciled = reconcileReferencePackageState({ attempts, assets });
+    const gate = assertReferenceAssetDeletable({
+      asset: current,
+      isMaster,
+      reconciled,
+    });
+    if (!gate.ok) {
+      throw new PersonaDomainError(gate.reason, "WORKFLOW", { assetId: id });
+    }
   }
 
   const persona = await requirePersona(scope, current.persona_id);

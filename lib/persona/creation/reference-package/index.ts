@@ -152,3 +152,61 @@ export type {
   ApproveHumanIdentityOverrideInput,
   ApproveHumanIdentityOverrideResult,
 } from "./approve-human-identity-override";
+
+export {
+  canProposeMirrorSalvage,
+  isExactOppositeOrientationForMirror,
+  isMirrorSalvageUsableAfterApproval,
+  mirroredOrientation,
+  MIRROR_SALVAGE_PROVIDER,
+  MIRROR_SALVAGE_POLICY_VERSION,
+  DERIVATION_TYPES,
+} from "./mirror-salvage";
+export type { DerivationType } from "./mirror-salvage";
+
+export {
+  horizontalMirrorImageBytes,
+  assertHorizontallyMirroredPngPixels,
+} from "./horizontal-mirror";
+
+export {
+  createMirroredReferenceVersion,
+} from "./create-mirrored-version";
+export type {
+  CreateMirroredVersionInput,
+  CreateMirroredVersionResult,
+  CreateMirroredVersionDeps,
+} from "./create-mirrored-version";
+
+export {
+  canProposeAcceptedReplacement,
+  isReplacementCandidateUsable,
+  prepareAcceptedAngleReplacement,
+  confirmAcceptedAngleReplacement,
+  approveAndReplaceAcceptedReference,
+  rejectAcceptedReplacement,
+  keepCurrentAcceptedReplacement,
+  ACCEPTED_REPLACEMENT_POLICY_VERSION,
+} from "./accepted-replacement";
+
+export {
+  resolveIncumbentAcceptedForSlot,
+  resolvePendingReplacementForSlot,
+} from "./coverage";
+
+export {
+  reconcileReferencePackageState,
+  deriveReferenceUsability,
+  isFinalizedApprovedReplacement,
+  assertReferenceAssetDeletable,
+  REFERENCE_PACKAGE_RECONCILER_VERSION,
+} from "./reconcile-reference-package-state";
+export type {
+  ReferencePackageSlotState,
+  ReplacementState,
+  ReferenceProvenance,
+  ReconciledReferencePackageSlot,
+  ReconciledReferencePackageState,
+} from "./reconcile-reference-package-state";
+
+export { generateOneAngleForReplacement } from "./service";

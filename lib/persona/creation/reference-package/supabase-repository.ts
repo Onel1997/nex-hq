@@ -75,7 +75,7 @@ function mapAttempt(row: Record<string, unknown>): ReferencePackageAttempt {
       row.angle_review_decision === "rejected"
         ? row.angle_review_decision
         : null,
-    provider: "openai",
+    provider: row.provider === "derived_local" ? "derived_local" : "openai",
     provider_request_id:
       row.provider_request_id == null ? null : String(row.provider_request_id),
     generated_asset_id:
@@ -142,6 +142,22 @@ function mapAttempt(row: Record<string, unknown>): ReferencePackageAttempt {
       row.identity_override_version == null
         ? null
         : String(row.identity_override_version),
+    derived_from_asset_id:
+      row.derived_from_asset_id == null
+        ? null
+        : String(row.derived_from_asset_id),
+    derivation_type:
+      row.derivation_type === "horizontal_mirror"
+        ? "horizontal_mirror"
+        : null,
+    derived_at: row.derived_at == null ? null : String(row.derived_at),
+    derived_by: row.derived_by == null ? null : String(row.derived_by),
+    replacement_for_asset_id:
+      row.replacement_for_asset_id == null
+        ? null
+        : String(row.replacement_for_asset_id),
+    replacement_for_slot: mapSlot(row.replacement_for_slot),
+    replacement_candidate: row.replacement_candidate === true,
     cost_eur: row.cost_eur == null ? null : Number(row.cost_eur),
     error_message:
       row.error_message == null ? null : String(row.error_message),
@@ -266,7 +282,7 @@ export class SupabaseReferencePackageRepository
         session_id: input.session_id,
         master_reference_id: input.master_reference_id,
         reference_slot: input.reference_slot,
-        provider: "openai",
+        provider: input.provider === "derived_local" ? "derived_local" : "openai",
         status: input.status ?? "queued",
         provider_direction_strategy:
           input.provider_direction_strategy ?? "canonical",
@@ -274,6 +290,13 @@ export class SupabaseReferencePackageRepository
           input.provider_requested_direction ?? input.reference_slot,
         profile_identity_mode: input.profile_identity_mode ?? null,
         profile_prompt_version: input.profile_prompt_version ?? null,
+        derived_from_asset_id: input.derived_from_asset_id ?? null,
+        derivation_type: input.derivation_type ?? null,
+        derived_at: input.derived_at ?? null,
+        derived_by: input.derived_by ?? null,
+        replacement_for_asset_id: input.replacement_for_asset_id ?? null,
+        replacement_for_slot: input.replacement_for_slot ?? null,
+        replacement_candidate: input.replacement_candidate ?? false,
       })
       .select("*")
       .single();

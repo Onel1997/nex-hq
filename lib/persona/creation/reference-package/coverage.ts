@@ -36,6 +36,9 @@ export type SlotCoverageResolution = {
   status: ReferencePackageAttemptStatus;
   latestAttempt: ReferencePackageAttempt | null;
   activeAssetId: string | null;
+  /** Incumbent accepted asset still counting toward coverage during pending replacement. */
+  incumbentAcceptedAssetId: string | null;
+  pendingReplacementAssetId: string | null;
   countsTowardCoverage: boolean;
   attemptHistory: ReferencePackageAttempt[];
   /** Machine identity evidence — never rewritten by human approval. */
@@ -219,8 +222,98 @@ export function resolveHumanReview(
 ): "approved" | "rejected" | "pending" | null {
   if (!asset) return null;
   if (asset.status === "approved") return "approved";
-  if (asset.status === "rejected" || asset.status === "archived") return "rejected";
+  if (
+    asset.status === "rejected" ||
+    asset.status === "archived" ||
+    asset.status === "superseded"
+  ) {
+    return "rejected";
+  }
   if (asset.status === "review" || asset.status === "uploaded") return "pending";
+  return null;
+}
+
+/** Active accepted reference for slot — excludes superseded and replacement candidates. */
+export function resolveIncumbentAcceptedForSlot(
+  slot: ReferencePackageSlot,
+  attempts: readonly ReferencePackageAttempt[],
+  assets: readonly PersonaReferenceAsset[],
+): {
+  asset: PersonaReferenceAsset | null;
+  attempt: ReferencePackageAttempt | null;
+} {
+  const history = attemptsHistoryForSlot(attempts, slot);
+  const recency = (a: ReferencePackageAttempt) =>
+    a.reassigned_at && a.reassigned_at > a.updated_at
+      ? a.reassigned_at
+      : a.updated_at;
+
+  // Prefer attempt-linked approved assets (works with or without pkg notes).
+  const linked = [...history].sort((a, b) => recency(b).localeCompare(recency(a)));
+  for (const attempt of linked) {
+    if (!attempt.generated_asset_id) continue;
+    if (attempt.replacement_candidate) continue;
+    const asset = assets.find((a) => a.id === attempt.generated_asset_id);
+    if (!asset) continue;
+    if (asset.status === "superseded") continue;
+    const meta = parseReferencePackageAssetNotes(asset.notes);
+    if (meta?.replacement_candidate) continue;
+    if (isCurrentlyAcceptedUsable({ attempt, asset })) {
+      return { asset, attempt };
+    }
+  }
+
+  const candidates = assets
+    .filter((asset) => {
+      const meta = parseReferencePackageAssetNotes(asset.notes);
+      if (!meta) return false;
+      if (meta.effective_slot !== slot && meta.slot !== slot) return false;
+      if (asset.status === "superseded") return false;
+      if (meta.replacement_candidate) return false;
+      if (asset.status !== "approved") return false;
+      return true;
+    })
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+
+  for (const asset of candidates) {
+    const attempt =
+      history.find((a) => a.generated_asset_id === asset.id) ??
+      attempts.find((a) => a.generated_asset_id === asset.id) ??
+      null;
+    if (attempt && isCurrentlyAcceptedUsable({ attempt, asset })) {
+      return { asset, attempt };
+    }
+  }
+  return { asset: null, attempt: null };
+}
+
+/** Pending replacement candidate in review for a slot. */
+export function resolvePendingReplacementForSlot(
+  slot: ReferencePackageSlot,
+  attempts: readonly ReferencePackageAttempt[],
+  assets: readonly PersonaReferenceAsset[],
+): {
+  asset: PersonaReferenceAsset;
+  attempt: ReferencePackageAttempt;
+} | null {
+  const pendingAttempts = attempts
+    .filter(
+      (a) =>
+        a.replacement_candidate &&
+        (a.replacement_for_slot === slot ||
+          getAttemptEffectiveSlot(a) === slot),
+    )
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+  for (const attempt of pendingAttempts) {
+    if (!attempt.generated_asset_id) continue;
+    const asset = assets.find((a) => a.id === attempt.generated_asset_id);
+    if (!asset) continue;
+    const meta = parseReferencePackageAssetNotes(asset.notes);
+    if (asset.status === "review" && meta?.replacement_candidate) {
+      return { asset, attempt };
+    }
+  }
   return null;
 }
 
@@ -291,97 +384,10 @@ export function resolveActiveAssetForSlot(
   return byNotes[0] ?? null;
 }
 
-export function resolveReferencePackageSlotCoverage(input: {
-  attempts: readonly ReferencePackageAttempt[];
-  assets: readonly PersonaReferenceAsset[];
-}): {
-  slots: SlotCoverageResolution[];
-  acceptedCount: number;
-  referencePackageReady: boolean;
-} {
-  const latest = latestAttemptPerSlot(input.attempts);
-  const countedAssetIds = new Set<string>();
-
-  const slots: SlotCoverageResolution[] = REFERENCE_PACKAGE_SLOTS.map((slot) => {
-    const attempt = latest.get(slot) ?? null;
-    const asset = resolveActiveAssetForSlot(slot, attempt, input.assets);
-    const status = resolveSlotDisplayStatus({ attempt, asset });
-    let countsTowardCoverage = isCurrentlyAcceptedUsable({ attempt, asset });
-
-    // Same asset must not count twice across slots.
-    if (countsTowardCoverage && asset) {
-      if (countedAssetIds.has(asset.id)) {
-        countsTowardCoverage = false;
-      } else {
-        countedAssetIds.add(asset.id);
-      }
-    }
-
-    return {
-      slot,
-      status: countsTowardCoverage
-        ? "accepted"
-        : status === "accepted" && !countsTowardCoverage
-          ? // approved but not usable (e.g. mismatch blocked) → show mismatch/review
-            attempt?.identity_decision === "identity_mismatch"
-              ? "mismatch"
-              : attempt?.angle_direction === "incorrect"
-                ? "failed"
-                : "review"
-          : status,
-      latestAttempt: attempt,
-      activeAssetId: asset?.id ?? null,
-      countsTowardCoverage,
-      attemptHistory: attemptsHistoryForSlot(input.attempts, slot),
-      identityDecision: attempt?.identity_decision ?? null,
-      humanReview: resolveHumanReview(asset),
-      angleManuallyReassigned: Boolean(
-        attempt?.reassigned_from ||
-          (attempt?.effective_slot &&
-            attempt.effective_slot !== attempt.reference_slot),
-      ),
-      angleDirection: attempt?.angle_direction ?? null,
-      detectedOrientation: attempt?.detected_orientation ?? null,
-      wrongCameraDirection: attempt?.angle_direction === "incorrect",
-      humanIdentityReview: attempt?.human_identity_review ?? null,
-      acceptedViaHumanIdentityOverride: Boolean(
-        countsTowardCoverage &&
-          attempt?.identity_decision === "identity_mismatch" &&
-          attempt?.human_identity_review === "approved_override",
-      ),
-      identitySourceConfidence: resolveIdentitySourceConfidence({
-        identityDecision: attempt?.identity_decision,
-        humanIdentityReview: attempt?.human_identity_review,
-        assetApproved: asset?.status === "approved",
-      }),
-      coverageLabel:
-        countsTowardCoverage &&
-        attempt?.identity_decision === "identity_mismatch" &&
-        attempt?.human_identity_review === "approved_override"
-          ? "Accepted — Human Identity Override"
-          : countsTowardCoverage
-            ? "Accepted"
-            : null,
-    };
-  });
-
-  for (const row of slots) {
-    if (!row.countsTowardCoverage && row.status === "accepted") {
-      row.status =
-        row.identityDecision === "identity_mismatch" ? "mismatch" : "review";
-    }
-  }
-
-  const acceptedCount = slots.filter((s) => s.countsTowardCoverage).length;
-  return {
-    slots,
-    acceptedCount,
-    referencePackageReady: acceptedCount === REFERENCE_PACKAGE_SLOTS.length,
-  };
-}
-
 export function slotsNeedingGenerationFromCoverage(
-  coverage: ReturnType<typeof resolveReferencePackageSlotCoverage>,
+  coverage: {
+    slots: SlotCoverageResolution[];
+  },
   onlySlot?: ReferencePackageSlot,
 ): ReferencePackageSlot[] {
   const slots = onlySlot ? [onlySlot] : [...REFERENCE_PACKAGE_SLOTS];
@@ -393,13 +399,17 @@ export function slotsNeedingGenerationFromCoverage(
 
 /** Block regenerating a slot that already has an approved usable reference. */
 export function assertSlotMayBeRegenerated(
-  coverage: ReturnType<typeof resolveReferencePackageSlotCoverage>,
+  coverage: {
+    slots: SlotCoverageResolution[];
+  },
   slot: ReferencePackageSlot,
 ): void {
-  const row = coverage.slots.find((s) => s.slot === slot);
+  const row = coverage.slots.find((s: SlotCoverageResolution) => s.slot === slot);
   if (row?.countsTowardCoverage) {
     throw new Error(
       `Slot ${slot} has an approved usable reference and must not be regenerated.`,
     );
   }
 }
+
+export { resolveReferencePackageSlotCoverage } from "./reconcile-reference-package-state";
