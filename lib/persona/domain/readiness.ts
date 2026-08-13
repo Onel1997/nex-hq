@@ -1,3 +1,14 @@
+/**
+ * Legacy readiness helpers (profile / approval gaps / asset-metadata completeness).
+ *
+ * Phase 2.4B: Persona detail readiness MUST use
+ * `resolvePersonaReadiness` / `getPersonaReadiness`, which derive
+ * `references_complete` from `reconcileReferencePackageState` only.
+ *
+ * Do not use `computePersonaReadiness` for Stage B header / Identity Lock gates —
+ * its legacy full-body checklist can disagree with Reference Package Ready 5/5.
+ */
+
 import type {
   Framing,
   Persona,

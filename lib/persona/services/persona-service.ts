@@ -63,9 +63,38 @@ import {
   reconcileReferencePackageState,
 } from "../creation/reference-package/reconcile-reference-package-state";
 import { getReferencePackageRepository } from "../creation/reference-package/repository";
+import {
+  assertLockedIdentityAssetMutable,
+  getIdentityLockSnapshot,
+  isPersonaIdentityLocked,
+} from "../creation/identity-lock";
+import { findMasterIdentityReference } from "../creation/master-identity-reference";
 
 function repo(): PersonaRepository {
   return getPersonaRepository();
+}
+
+async function assertReferenceMutableWhenIdentityLocked(
+  scope: WorkspaceScope,
+  personaId: string,
+  asset: Pick<PersonaReferenceAsset, "id">,
+): Promise<void> {
+  const persona = await requirePersona(scope, personaId);
+  if (!isPersonaIdentityLocked(persona)) return;
+  const [snapshot, refs] = await Promise.all([
+    getIdentityLockSnapshot(scope, personaId),
+    repo().listReferenceAssets(scope, personaId),
+  ]);
+  const master = findMasterIdentityReference(refs);
+  const gate = assertLockedIdentityAssetMutable({
+    persona,
+    asset,
+    snapshot,
+    master,
+  });
+  if (!gate.ok) {
+    throw new PersonaDomainError(gate.reason, "WORKFLOW", { assetId: asset.id });
+  }
 }
 
 async function requirePersona(
@@ -299,9 +328,25 @@ export async function transitionPersona(
 }
 
 export async function getPersonaReadiness(scope: WorkspaceScope, id: string) {
-  const persona = await requirePersona(scope, id);
-  const assets = await repo().listReferenceAssets(scope, id);
-  return computePersonaReadiness(persona, assets);
+  const { resolvePersonaReadiness } = await import(
+    "@/lib/persona/domain/persona-readiness-resolver"
+  );
+  const canonical = await resolvePersonaReadiness(scope, id);
+  return {
+    ...canonical.legacyReport,
+    visual_status: canonical.visualStatus,
+    reference_package_ready: canonical.referencePackageReady,
+    reference_coverage: canonical.referenceCoverage,
+    identity_locked: canonical.identityLocked,
+    identity_ready: canonical.identityReady,
+    image_identity_ready: canonical.imageIdentityReady,
+    video_identity_ready: canonical.videoIdentityReady,
+    image_use_approved: canonical.imageUseApproved,
+    video_use_approved: canonical.videoUseApproved,
+    brand_cast_approved: canonical.brandCastApproved,
+    eligible_for_identity_lock: canonical.eligibleForIdentityLock,
+    blocking_reasons: canonical.blockingReasons,
+  };
 }
 
 export async function listImageReadyPersonas(
@@ -695,6 +740,8 @@ export async function updateReferenceAsset(
     throw new PersonaDomainError(`Reference asset not found: ${id}`, "NOT_FOUND");
   }
 
+  await assertReferenceMutableWhenIdentityLocked(scope, current.persona_id, current);
+
   const masterMeta = parseMasterIdentityNotes(current.notes);
   if (masterMeta) {
     if (
@@ -818,6 +865,8 @@ export async function deleteReferenceAsset(
   if (!current) {
     throw new PersonaDomainError(`Reference asset not found: ${id}`, "NOT_FOUND");
   }
+
+  await assertReferenceMutableWhenIdentityLocked(scope, current.persona_id, current);
 
   const isMaster =
     isMasterIdentityReference(current) ||

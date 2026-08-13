@@ -173,6 +173,7 @@ export class MemoryPersonaRepository implements PersonaRepository {
       brand_fit_score: input.brand_fit_score ?? 0,
       approved: status === "Approved",
       identity_lock_version: input.identity_lock_version ?? 1,
+      identity_locked_at: input.identity_locked_at ?? null,
       image_use_approved: input.image_use_approved ?? false,
       video_use_approved: input.video_use_approved ?? false,
       primary_reference_asset_id: input.primary_reference_asset_id ?? null,

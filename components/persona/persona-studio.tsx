@@ -45,6 +45,7 @@ import { REFERENCE_PACKAGE_SLOT_LABELS, REFERENCE_PACKAGE_SLOTS } from "@/lib/pe
 import type { ReferencePackageSlot } from "@/lib/persona/creation/reference-package/slots";
 import { parseReferencePackageAssetNotes } from "@/lib/persona/creation/reference-package/types";
 import type { ReferencePackageStatusView } from "@/lib/persona/creation/reference-package/types";
+import type { IdentityLockEligibilityView } from "@/lib/persona/creation/identity-lock/types";
 import { canProposeMirrorSalvage } from "@/lib/persona/creation/reference-package/mirror-salvage";
 
 const NAV: Array<{
@@ -426,18 +427,57 @@ function PersonaDetail({
       </header>
 
       {readiness ? (
-        <div className="ps-readiness">
-          <span className={`ps-ready-chip ps-ready-${readiness.state}`}>
-            {readiness.state}
+        <div className="ps-readiness" data-testid="persona-readiness-header">
+          <span
+            className={`ps-ready-chip ps-ready-${readiness.visual_status ?? readiness.state}`}
+            data-testid="persona-visual-status"
+          >
+            {(readiness.visual_status ?? readiness.state)
+              .replace(/_/g, " ")
+              .toUpperCase()}
+          </span>
+          {readiness.reference_coverage ? (
+            <span data-testid="persona-reference-coverage">
+              Coverage {readiness.reference_coverage.accepted}/
+              {readiness.reference_coverage.required}
+            </span>
+          ) : null}
+          <span>
+            Identity:{" "}
+            {readiness.identity_locked ? "LOCKED" : "NOT LOCKED"}
           </span>
           <span>
-            Image ready: {readiness.image_ready ? "yes" : "no"} · Video ready:{" "}
-            {readiness.video_ready ? "yes" : "no"}
+            Image identity:{" "}
+            {readiness.image_identity_ready || readiness.identity_locked
+              ? "READY"
+              : "NOT READY YET"}
           </span>
-          {!readiness.completeness.visually_complete ? (
-            <span className="ps-inline-error">Visuell unvollständig</span>
+          <span>
+            Image use:{" "}
+            {readiness.image_use_approved ?? persona.image_use_approved
+              ? "APPROVED"
+              : "NOT APPROVED"}
+          </span>
+          <span>
+            Video use:{" "}
+            {readiness.video_use_approved ?? persona.video_use_approved
+              ? "APPROVED"
+              : "NOT APPROVED"}
+          </span>
+          <span>
+            Brand Cast:{" "}
+            {readiness.brand_cast_approved ?? persona.approved
+              ? "APPROVED"
+              : "NOT APPROVED"}
+          </span>
+          {readiness.references_complete ? (
+            <span data-testid="persona-visual-complete">
+              Reference Package Ready
+            </span>
           ) : (
-            <span>Visuell vollständig</span>
+            <span className="ps-inline-error" data-testid="persona-visual-incomplete">
+              References incomplete
+            </span>
           )}
         </div>
       ) : null}
@@ -469,7 +509,22 @@ function PersonaDetail({
 
       {persona.notes ? <p className="ps-notes">{persona.notes}</p> : null}
 
-      {error ? <p className="ps-inline-error">{error}</p> : null}
+      {error ? (
+        <div className="ps-section ps-inline-error" data-testid="persona-section-error">
+          <strong>Section error</strong>
+          <p>{error}</p>
+          <button
+            type="button"
+            className="ps-btn"
+            onClick={() => {
+              setError(null);
+              studio.selectPersona(persona.id);
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       <ReferencePackagePanel
         personaId={persona.id}
@@ -477,6 +532,19 @@ function PersonaDetail({
         onBusy={setBusy}
         onError={setError}
         onRefresh={() => studio.selectPersona(persona.id)}
+        referenceRevision={studio.selectedReferences
+          .map((a) => `${a.id}:${a.status}`)
+          .sort()
+          .join("|")}
+      />
+
+      <IdentityLockPanel
+        persona={persona}
+        references={allReferences}
+        busy={busy}
+        onBusy={setBusy}
+        onError={setError}
+        onLocked={() => studio.selectPersona(persona.id)}
         referenceRevision={studio.selectedReferences
           .map((a) => `${a.id}:${a.status}`)
           .sort()
@@ -1193,6 +1261,262 @@ function LibraryPanel({
       </ul>
       )}
     </div>
+  );
+}
+
+function IdentityLockPanel({
+  persona,
+  references,
+  busy,
+  onBusy,
+  onError,
+  onLocked,
+  referenceRevision,
+}: {
+  persona: Persona;
+  references: PersonaReferenceAssetView[];
+  busy: boolean;
+  onBusy: (v: boolean) => void;
+  onError: (msg: string | null) => void;
+  onLocked: () => void;
+  referenceRevision: string;
+}) {
+  const [eligibility, setEligibility] = useState<IdentityLockEligibilityView | null>(
+    null,
+  );
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
+  const identityLocked = persona.identity_lock_status === "approved";
+  const refById = new Map(references.map((r) => [r.id, r]));
+  const master = references.find((r) => parseMasterIdentityNotes(r.notes)) ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/persona/${persona.id}/identity-lock`);
+        const data = (await res.json().catch(() => null)) as {
+          eligibility?: IdentityLockEligibilityView;
+          error?: string;
+          code?: string;
+        } | null;
+        if (!res.ok) {
+          throw new Error(
+            data?.error ??
+              `Identity lock status failed (${res.status})`,
+          );
+        }
+        if (!cancelled && data?.eligibility) setEligibility(data.eligibility);
+      } catch (err) {
+        if (!cancelled) {
+          onError(
+            err instanceof Error
+              ? err.message
+              : "Identity lock status failed",
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [persona.id, referenceRevision, identityLocked, onError]);
+
+  async function confirmLock() {
+    onBusy(true);
+    setLockError(null);
+    onError(null);
+    try {
+      const res = await fetch(`/api/persona/${persona.id}/identity-lock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "lock", confirmIdentityLock: true }),
+      });
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+        stage?: string;
+        requestId?: string;
+        code?: string;
+        persona?: Persona;
+      } | null;
+      if (!res.ok) {
+        const parts = [
+          body?.error ?? res.statusText,
+          body?.stage ? `stage=${body.stage}` : null,
+          body?.requestId ? `requestId=${body.requestId}` : null,
+        ].filter(Boolean);
+        throw new Error(parts.join(" · "));
+      }
+      setConfirmOpen(false);
+      setLockError(null);
+      // Reload persona + readiness + identity-lock eligibility (no manual refresh).
+      onLocked();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Identity lock failed";
+      setLockError(msg);
+      // Contained Identity Lock error — do not claim success / do not mutate refs.
+      onError(null);
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  const preview = eligibility?.preview;
+  const canonicalSlots = preview?.canonicalReferences ?? [];
+
+  function provenanceBadge(provenance: string): string {
+    switch (provenance) {
+      case "human_warning_approved":
+        return "Human warning approved";
+      case "human_mismatch_override":
+        return "Human override";
+      case "derived_mirror":
+        return "Derived mirror";
+      case "reassigned":
+        return "Reassigned";
+      case "replacement_approved":
+        return "Replacement approved";
+      default:
+        return "Machine match";
+    }
+  }
+
+  return (
+    <section className="ps-section" data-testid="identity-lock-panel">
+      <h3>IDENTITY LOCK</h3>
+      {identityLocked ? (
+        <>
+          <PersonaStatusChip label="IDENTITY LOCKED" tone="selected" />
+          <p className="ps-muted">
+            Official identity package · 1 Master + 5 supporting references
+            {persona.identity_locked_at
+              ? ` · locked ${new Date(persona.identity_locked_at).toLocaleString()}`
+              : ""}
+          </p>
+        </>
+      ) : (
+        <p className="ps-muted">
+          Lock this exact Master + five canonical references as the permanent Brand
+          Model identity. No generation — explicit approval only.
+        </p>
+      )}
+
+      {eligibility ? (
+        <div className="ps-muted">
+          Coverage {eligibility.coverage.accepted}/{eligibility.coverage.required} ·
+          Reference Package:{" "}
+          {eligibility.referencePackageReady ? "Ready" : "Incomplete"}
+        </div>
+      ) : null}
+
+      {!identityLocked && eligibility && !eligibility.eligibleForIdentityLock ? (
+        <ul className="ps-inline-error">
+          {eligibility.blockingReasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      <div className="ps-ref-pkg-slots">
+        {master ? (
+          <div className="ps-ref-pkg-slot" data-testid="identity-lock-master">
+            <strong>MASTER IDENTITY</strong>
+            {master.signed_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={master.signed_url}
+                alt="Master Identity Reference"
+                className="ps-ref-thumb"
+              />
+            ) : (
+              <span className="ps-muted">Master reference</span>
+            )}
+          </div>
+        ) : (
+          <p className="ps-inline-error">Master Identity Reference missing</p>
+        )}
+
+        <ul className="ps-ref-pkg-slots">
+          {canonicalSlots.map((slot) => {
+            const asset = refById.get(slot.assetId);
+            return (
+              <li
+                key={slot.slot}
+                className="ps-ref-pkg-slot"
+                data-testid={`identity-lock-slot-${slot.slot}`}
+              >
+                <strong>{REFERENCE_PACKAGE_SLOT_LABELS[slot.slot]}</strong>
+                {asset?.signed_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={asset.signed_url}
+                    alt={REFERENCE_PACKAGE_SLOT_LABELS[slot.slot]}
+                    className="ps-ref-thumb"
+                  />
+                ) : null}
+                <span className="ps-ref-pkg-meta">{provenanceBadge(slot.provenance)}</span>
+                {slot.effectiveSlot !== slot.slot ? (
+                  <span className="ps-ref-pkg-meta">Effective: {slot.effectiveSlot}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {!identityLocked && eligibility?.eligibleForIdentityLock ? (
+        <button
+          type="button"
+          className="ps-btn ps-btn-primary"
+          disabled={busy}
+          data-testid="lock-brand-identity"
+          onClick={() => setConfirmOpen(true)}
+        >
+          LOCK BRAND IDENTITY
+        </button>
+      ) : null}
+
+      {confirmOpen ? (
+        <div className="ps-ref-pkg-confirm" data-testid="identity-lock-confirm">
+          <h4>Lock this Brand Identity?</h4>
+          <p>
+            This Master + these five references will become the official permanent
+            identity package for this Brand Model. Future Image Studio and Video
+            Studio outputs will use this identity. Normal reference editing will be
+            disabled after locking.
+          </p>
+          <p className="ps-muted">No provider cost.</p>
+          {lockError ? (
+            <div className="ps-inline-error" data-testid="identity-lock-error">
+              <strong>Identity Lock failed</strong>
+              <p>{lockError}</p>
+            </div>
+          ) : null}
+          <div className="ps-btn-row">
+            <button
+              type="button"
+              className="ps-btn"
+              disabled={busy}
+              onClick={() => {
+                setConfirmOpen(false);
+                setLockError(null);
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={busy}
+              data-testid="confirm-identity-lock"
+              onClick={() => void confirmLock()}
+            >
+              Confirm Identity Lock
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }
 

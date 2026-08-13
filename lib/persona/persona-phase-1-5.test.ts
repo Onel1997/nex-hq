@@ -21,6 +21,7 @@ import {
   ensureManualCandidateSlots,
   convertCandidateToPersona,
   submitIdentityReview,
+  getIdentityLockEligibility,
   lockPersonaIdentity,
   IDENTITY_REVIEW_CHECK_KEYS,
   OPENAI_PROVIDER_CAPABILITY,
@@ -289,16 +290,14 @@ describe("Persona Studio Phase 1.5 generation jobs & confirmation", () => {
     await updateCandidateReview(scopeA, candidates[0]!.id, { status: "ready" });
     await updateCandidateReview(scopeA, candidates[0]!.id, { status: "selected" });
     const { persona } = await convertCandidateToPersona(scopeA, candidates[0]!.id);
-    const checklist = emptyIdentityChecklist();
-    for (const key of IDENTITY_REVIEW_CHECK_KEYS) checklist[key] = true;
-    await submitIdentityReview(scopeA, persona.id, {
-      checklist,
-      reviewer_notes: "All clear",
-    });
-    const locked = await lockPersonaIdentity(scopeA, persona.id);
-    assert.ok(locked.identity_lock_version >= 1);
-    assert.equal(locked.image_use_approved, false);
-    assert.equal(locked.video_use_approved, false);
+    const eligibility = await getIdentityLockEligibility(scopeA, persona.id);
+    assert.equal(
+      eligibility.eligibleForIdentityLock,
+      false,
+      "Identity lock requires 5/5 Reference Package — not checklist alone",
+    );
+    assert.equal(persona.image_use_approved, false);
+    assert.equal(persona.video_use_approved, false);
   });
 
   it("21. manual upload has workflow parity (shortlist → select → convert)", async () => {

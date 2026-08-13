@@ -48,6 +48,16 @@ export {
 } from "./domain/readiness";
 
 export {
+  resolvePersonaReadiness,
+  resolvePersonaReadinessFromFacts,
+  PERSONA_VISUAL_STATUSES,
+} from "./domain/persona-readiness-resolver";
+export type {
+  PersonaCanonicalReadiness,
+  PersonaVisualStatus,
+} from "./domain/persona-readiness-resolver";
+
+export {
   PERSONA_STATUS_TRANSITIONS,
   applyPersonaStatus,
   approvePersona,
@@ -329,6 +339,28 @@ export type {
   ReferencePackageSlotState,
   ReconciledReferencePackageState,
 } from "./creation/reference-package";
+export {
+  IDENTITY_LOCK_POLICY_VERSION,
+  computeReferencePackageFingerprint,
+  validateIdentityLockEligibility,
+  getIdentityLockEligibility,
+  lockBrandIdentity,
+  resolveLockedBrandIdentity,
+  getIdentityLockSnapshot,
+  isPersonaIdentityLocked,
+  assertLockedIdentityAssetMutable,
+  setIdentityLockRepositoryForTests,
+  MemoryIdentityLockRepository,
+  coerceUuidOrNull,
+  IdentityLockError,
+} from "./creation/identity-lock";
+export type {
+  IdentityLockEligibilityView,
+  LockedBrandIdentity,
+  PersonaIdentityLockSnapshot,
+  HistoricalProtectionPromotionStatus,
+  IdentityLockStage,
+} from "./creation/identity-lock";
 export { FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD } from "./face-novelty-memory/similarity-threshold";
 export {
   getGenerationJobRepository,

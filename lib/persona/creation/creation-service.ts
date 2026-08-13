@@ -4699,55 +4699,15 @@ export async function submitIdentityReview(
 export async function lockPersonaIdentity(
   scope: WorkspaceScope,
   personaId: string,
+  input?: { confirmIdentityLock?: boolean },
 ): Promise<Persona> {
-  const persona = await personaRepo().getPersona(scope, personaId);
-  if (!persona) {
-    throw new PersonaDomainError("Persona not found", "NOT_FOUND");
-  }
-  const reviews = await creationRepo().listIdentityReviews(scope, personaId);
-  const latest = reviews[0];
-  if (!latest?.all_passed) {
-    throw new PersonaDomainError(
-      "Identity Lock erfordert eine bestandene manuelle Checkliste.",
-      "WORKFLOW",
-    );
-  }
-
-  const updated = await personaRepo().updatePersona(scope, personaId, {
-    identity_lock_status: "approved",
-    identity_lock_version: (persona.identity_lock_version || 1) + 1,
-    image_identity_ready: latest.checklist.suitable_for_image_generation,
-    video_identity_ready: latest.checklist.suitable_for_video_generation,
+  const { lockBrandIdentity } = await import(
+    "@/lib/persona/creation/identity-lock/identity-lock-service"
+  );
+  const result = await lockBrandIdentity(scope, personaId, {
+    confirmIdentityLock: input?.confirmIdentityLock ?? true,
   });
-
-  try {
-    const sourceCandidate = await creationRepo().findCandidateByConvertedPersonaId(
-      scope,
-      personaId,
-    );
-    if (sourceCandidate) {
-      await promoteHistoricalProtectionIfPersisted({
-        workspaceId: scope.workspaceId,
-        candidateId: sourceCandidate.id,
-        status: "identity_locked",
-        reason: "identity_locked",
-        source: "creation.lock_persona_identity",
-        actorId: scope.actorId,
-      });
-    }
-  } catch (err) {
-    console.error("[Phase 2.2G] historical protection promote on identity lock failed", err);
-  }
-
-  await logPersonaAuditEvent({
-    workspaceId: scope.workspaceId,
-    eventType: "persona.identity_locked",
-    recordId: personaId,
-    actorId: scope.actorId,
-    payload: { identity_lock_version: updated.identity_lock_version },
-  });
-
-  return updated;
+  return result.persona;
 }
 
 function isMalePersona(p: Persona): boolean {

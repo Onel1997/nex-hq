@@ -37,11 +37,14 @@ export async function POST(request: Request, ctx: Ctx) {
   try {
     const body = (await request.json()) as {
       action?: string;
+      confirmIdentityLock?: boolean;
       checklist?: IdentityReviewChecklist;
       reviewer_notes?: string;
     };
     if (body.action === "lock") {
-      const persona = await lockPersonaIdentity(gate.scope, id);
+      const persona = await lockPersonaIdentity(gate.scope, id, {
+        confirmIdentityLock: body.confirmIdentityLock === true,
+      });
       return jsonOk({ persona });
     }
     if (!body.checklist) {

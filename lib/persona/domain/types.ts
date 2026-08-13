@@ -65,6 +65,8 @@ export type SourceType = (typeof SOURCE_TYPES)[number];
 export const PERSONA_READINESS_STATES = [
   "profile_incomplete",
   "references_incomplete",
+  "reference_package_ready",
+  "identity_locked",
   "image_ready",
   "video_ready",
   "production_ready",
@@ -93,6 +95,8 @@ export interface Persona {
   brand_fit_score: number;
   approved: boolean;
   identity_lock_version: number;
+  /** Phase 2.4A — when official Brand Identity was locked. */
+  identity_locked_at: string | null;
   image_use_approved: boolean;
   video_use_approved: boolean;
   primary_reference_asset_id: string | null;
@@ -289,6 +293,24 @@ export interface PersonaReadinessReport {
   production_ready: boolean;
   missing: string[];
   completeness: ReferenceCompleteness;
+  /** Phase 2.4B — canonical visual / gate status. */
+  visual_status?:
+    | "references_incomplete"
+    | "reference_package_ready"
+    | "identity_locked"
+    | "image_ready"
+    | "brand_cast_approved";
+  reference_package_ready?: boolean;
+  reference_coverage?: { accepted: number; required: number };
+  identity_locked?: boolean;
+  identity_ready?: boolean;
+  image_identity_ready?: boolean;
+  video_identity_ready?: boolean;
+  image_use_approved?: boolean;
+  video_use_approved?: boolean;
+  brand_cast_approved?: boolean;
+  eligible_for_identity_lock?: boolean;
+  blocking_reasons?: string[];
 }
 
 export type CreatePersonaInput = Omit<
@@ -305,6 +327,7 @@ export type CreatePersonaInput = Omit<
   | "preferred_brand_look_ids"
   | "preferred_outfit_ids"
   | "identity_lock_version"
+  | "identity_locked_at"
   | "primary_reference_asset_id"
   | "created_by"
   | "image_use_approved"
@@ -339,6 +362,7 @@ export type CreatePersonaInput = Omit<
   preferred_brand_look_ids?: string[];
   preferred_outfit_ids?: string[];
   identity_lock_version?: number;
+  identity_locked_at?: string | null;
   primary_reference_asset_id?: string | null;
   created_by?: string | null;
   image_use_approved?: boolean;

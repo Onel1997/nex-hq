@@ -64,8 +64,39 @@ export function jsonError(error: unknown, fallback = dict.persona.errors.unexpec
                       : error.message;
 
     return NextResponse.json(
-      { success: false, error: localized, code: error.code, details: error.details },
+      {
+        success: false,
+        error: localized,
+        code: error.code,
+        details: error.details,
+        stage:
+          typeof error.details?.stage === "string"
+            ? error.details.stage
+            : undefined,
+        requestId:
+          typeof error.details?.requestId === "string"
+            ? error.details.requestId
+            : undefined,
+      },
       { status },
+    );
+  }
+
+  // PostgREST / Supabase errors are plain objects with { message, code }.
+  if (
+    typeof error === "object" &&
+    error &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+  ) {
+    const pg = error as { message: string; code?: string };
+    return NextResponse.json(
+      {
+        success: false,
+        error: pg.message || fallback,
+        code: pg.code ?? "UPSTREAM_ERROR",
+      },
+      { status: 500 },
     );
   }
 
