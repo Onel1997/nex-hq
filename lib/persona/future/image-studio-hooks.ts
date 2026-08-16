@@ -10,6 +10,8 @@ export interface ImageStudioPersonaHandoff {
 /**
  * Phase 1.1 placeholder — Image Studio not wired.
  * Returns null always (even for image-ready personas).
+ * Phase 2.4D consumer query: listImageStudioEligibleBrandModels
+ * (identity_locked ∧ image_identity_ready ∧ image_use_approved ∧ brand_cast_approved).
  */
 export function buildImageStudioPersonaHandoff(
   persona: Persona,
@@ -21,6 +23,7 @@ export function buildImageStudioPersonaHandoff(
   return null;
 }
 
+/** Hooks remain inactive until Image Studio is built. */
 export function listImageStudioIntegrationHooks(): string[] {
   return [];
 }

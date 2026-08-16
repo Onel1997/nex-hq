@@ -748,6 +748,8 @@ describe("Phase 2.2E — real L3 retry identities + attempt novelty", () => {
       generation_settings: {
         boardSupersededByReplacement: true,
         replacedByCandidateId: "child",
+        boardSlotNumber: 1,
+        originalCandidateNumber: 1,
       },
       identity_summary: "",
       distinguishing_features: "",
@@ -762,6 +764,14 @@ describe("Phase 2.2E — real L3 retry identities + attempt novelty", () => {
       rejection_reason: "face_similarity_duplicate",
       actual_generation_cost: 0.04,
     });
+    // Phase 2.5B.3 — free UNIQUE(project, candidate_number) before child insert.
+    await repo.updateCandidate(makeScope(), parent.id, {
+      candidate_number: 1101,
+      generation_settings: {
+        ...(parent.generation_settings ?? {}),
+        supersededCandidateNumber: 1101,
+      },
+    });
     const child = await repo.createCandidate(makeScope(), {
       creation_project_id: project.id,
       candidate_number: 1,
@@ -772,7 +782,7 @@ describe("Phase 2.2E — real L3 retry identities + attempt novelty", () => {
       generation_seed: "2",
       generation_prompt: "",
       negative_prompt: "",
-      generation_settings: { discoveryAttemptNumber: 2 },
+      generation_settings: { discoveryAttemptNumber: 2, boardSlotNumber: 1 },
       identity_summary: "",
       distinguishing_features: "",
       visual_strengths: "",

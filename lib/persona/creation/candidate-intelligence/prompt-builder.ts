@@ -91,6 +91,7 @@ import {
   a1CastingCompositionBlock,
   a1CastingPhotographyBlock,
   a1PresenceRulesBlock,
+  compactObfPhotographyBlock,
   genderEnforcementBlock,
   photographicRealismBlock,
   premiumArchetypeCastingBlock,
@@ -100,6 +101,29 @@ import {
   realHumanPhotographPriorityBlock,
   slotCastingCameraBlock,
 } from "./premium-casting-direction";
+import {
+  OBF_DISCOVERY_NEGATIVE_COMPACT,
+  enforceOpenAiDiscoveryPromptBudget,
+  logPromptBudgetReport,
+  type PromptBudgetReport,
+} from "./prompt-budget";
+import {
+  anatomySampleFromDiscoveryInstance,
+  buildUrbanSiblingDnaReport,
+  diversityEscalationLevelFromAttempt,
+  mergeSiblingAvoidSamples,
+  urbanSiblingDnaOverlapTooHigh,
+  urbanSlotFaceDiversityBlock,
+  type UrbanAnatomySample,
+  type UrbanFaceDiversityDebug,
+} from "./urban-face-diversity";
+import {
+  buildUrbanFreshRunRecipe,
+  formatUrbanFreshDiscoveryIdentityPrompt,
+  toUrbanFreshRunDebug,
+  type UrbanFreshRunDebug,
+  type UrbanFreshRunRecipe,
+} from "./urban-fresh-run-casting";
 
 export interface PromptBlocks {
   /** 1 — Identity DNA / archetype constraints */
@@ -173,6 +197,12 @@ export interface BuiltCandidatePrompt {
   officialBrandFace: boolean;
   /** Identity attempt used for L3 sampling (OBF). */
   identityAttemptNumber: number;
+  /** Phase 2.5B.1 — OpenAI discovery prompt budget report (OBF only). */
+  promptBudgetReport: PromptBudgetReport | null;
+  /** Phase 2.5B.2 — Urban face diversity / sibling DNA debug (Urban OBF only). */
+  urbanFaceDiversityDebug: UrbanFaceDiversityDebug | null;
+  /** Phase 2.5B.5 — per-project Urban fresh-run casting recipe debug. */
+  urbanFreshRunDebug: UrbanFreshRunDebug | null;
 }
 
 function framingForAsset(
@@ -182,6 +212,9 @@ function framingForAsset(
     discoveryBlueprint?: ArchetypeCandidateBlueprint | null;
     officialBrandFace?: boolean;
     slot?: import("@/lib/persona/identity-blueprints").DiscoverySlot | null;
+    archetypeSlug?: string | null;
+    urbanHairLabel?: string | null;
+    urbanFaceMood?: string | null;
   },
 ): string {
   const fitLabel = memory.fit.labels[0] ?? "premium";
@@ -190,7 +223,10 @@ function framingForAsset(
   const officialBrandFace = options?.officialBrandFace === true;
   const slotCamera =
     officialBrandFace && options?.slot
-      ? slotCastingCameraBlock(options.slot)
+      ? slotCastingCameraBlock(options.slot, options.archetypeSlug, {
+          urbanHairLabel: options.urbanHairLabel,
+          urbanFaceMood: options.urbanFaceMood,
+        })
       : "";
 
   switch (assetType) {
@@ -288,6 +324,7 @@ function buildEnvironmentLightingBlock(
   options?: {
     discoveryBlueprint?: ArchetypeCandidateBlueprint | null;
     obfCastingSet?: string;
+    officialBrandFace?: boolean;
   },
 ): string {
   const castingSet =
@@ -299,6 +336,15 @@ function buildEnvironmentLightingBlock(
           `Background (candidate-specific): ${variation.background}.`,
           `Light: ${archetype?.lightingDirection ?? variation.lighting}.`,
         ].join("\n"));
+
+  if (options?.officialBrandFace) {
+    return [
+      compactObfPhotographyBlock(),
+      "",
+      castingSet,
+      "Keep Stage A controlled and neutral — not a campaign location.",
+    ].join("\n");
+  }
 
   return [
     premiumPhotographyBlock(),
@@ -315,7 +361,19 @@ function buildNegativePrompt(
   project: PersonaCreationProject,
   memory: BrandMemory,
   archetype?: BrandArchetype,
+  options?: { officialBrandFace?: boolean },
 ): string {
+  if (options?.officialBrandFace) {
+    const archetypeAvoid = (archetype?.avoid ?? []).slice(0, 6).join(", ");
+    return [
+      OBF_DISCOVERY_NEGATIVE_COMPACT,
+      archetypeAvoid,
+      project.excluded_features || "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+  }
+
   const forbiddenProducts = memory.forbiddenProductTypes
     .slice(0, 6)
     .join(", ");
@@ -399,6 +457,18 @@ export function buildCandidatePrompt(params: {
   premiumRetrySuffix?: string;
   /** Optional fixed timestamp for reproducible L3 sampling in tests. */
   identitySampledAt?: string;
+  /**
+   * Phase 2.5B.2 — already-built sibling anatomy samples in this run (prompt-level
+   * diversity + L3 avoid merge). No image similarity.
+   */
+  urbanSiblingSamples?: UrbanAnatomySample[] | null;
+  urbanSiblingSlots?: import("@/lib/persona/identity-blueprints").DiscoverySlot[] | null;
+  urbanSiblingCandidateIds?: string[] | null;
+  /**
+   * Phase 2.5B.6 — recent Urban discovery embeddings for fresh-face cluster bias.
+   * Prompt-only; never injects old candidate descriptions.
+   */
+  urbanFreshFaceSamples?: import("./urban-fresh-face-dna").UrbanFaceEmbeddingSample[] | null;
 }): BuiltCandidatePrompt {
   const brandMemory =
     params.brandMemory ?? loadBrandMemory(params.project.workspace_id);
@@ -439,6 +509,8 @@ export function buildCandidatePrompt(params: {
   let obfGarment = "";
   let obfCastingSet = "";
   let obfIdentityConstraints = "";
+  let urbanMutatedBeforeProvider = false;
+  let urbanFreshRunRecipe: UrbanFreshRunRecipe | null = null;
 
   if (officialBrandFace && officialArchetypeId) {
     const found = archetypeCatalog.archetypes.find((a) => a.id === officialArchetypeId);
@@ -448,6 +520,11 @@ export function buildCandidatePrompt(params: {
       );
     }
     brandArchetype = found;
+    if (brandArchetype.slug === "urban-community-hero") {
+      urbanFreshRunRecipe = buildUrbanFreshRunRecipe(params.project.id, {
+        recentFaceSamples: params.urbanFreshFaceSamples ?? null,
+      });
+    }
     const cast = listDiscoveryBlueprintsForArchetype(brandArchetype.id);
     assertDiscoveryCastBlueprintsUnique(cast);
     discoveryBlueprint =
@@ -459,7 +536,18 @@ export function buildCandidatePrompt(params: {
     assertBlueprintGenderMatchesArchetype(discoveryBlueprint, brandArchetype);
     runVariationToken = discoveryRunVariationToken(params.project.id);
 
-    const resolved = resolveObfDiscoveryIdentity({
+    const siblingSamples = (params.urbanSiblingSamples ?? []).filter(
+      (s) => s && Object.keys(s).length > 0,
+    );
+    const mergedSiblingAvoid =
+      brandArchetype.slug === "urban-community-hero"
+        ? mergeSiblingAvoidSamples([
+            ...(params.avoidSameRunSample ? [params.avoidSameRunSample] : []),
+            ...siblingSamples,
+          ])
+        : params.avoidSameRunSample ?? null;
+
+    let resolved = resolveObfDiscoveryIdentity({
       archetypeId: brandArchetype.id,
       candidateNumber: params.candidateNumber,
       creationProjectId: params.project.id,
@@ -469,13 +557,64 @@ export function buildCandidatePrompt(params: {
       slotBlueprint: params.slotBlueprint,
       sampledAt: params.identitySampledAt,
       previousAttemptSample: params.previousAttemptSample,
-      avoidSameRunSample: params.avoidSameRunSample,
+      avoidSameRunSample: mergedSiblingAvoid,
     });
+
+    let mutatedBeforeProvider = false;
+    if (
+      brandArchetype.slug === "urban-community-hero" &&
+      siblingSamples.length > 0 &&
+      !params.discoveryIdentityInstance
+    ) {
+      let currentSample = anatomySampleFromDiscoveryInstance(
+        resolved.discoveryIdentityInstance,
+      );
+      let overlap = urbanSiblingDnaOverlapTooHigh(currentSample, siblingSamples);
+      // Prompt-level DNA pre-check — mutate L3 before provider if overlap is too high.
+      for (
+        let mutateAttempt = 1;
+        overlap.tooHigh && mutateAttempt <= 3;
+        mutateAttempt += 1
+      ) {
+        mutatedBeforeProvider = true;
+        resolved = resolveObfDiscoveryIdentity({
+          archetypeId: brandArchetype.id,
+          candidateNumber: params.candidateNumber,
+          creationProjectId: params.project.id,
+          generationRunId,
+          attemptNumber: identityAttemptNumber + mutateAttempt,
+          slotBlueprint: params.slotBlueprint,
+          sampledAt: params.identitySampledAt,
+          previousAttemptSample: currentSample,
+          avoidSameRunSample: mergedSiblingAvoid,
+        });
+        currentSample = anatomySampleFromDiscoveryInstance(
+          resolved.discoveryIdentityInstance,
+        );
+        overlap = urbanSiblingDnaOverlapTooHigh(currentSample, siblingSamples);
+      }
+    }
+    urbanMutatedBeforeProvider = mutatedBeforeProvider;
+
     slotBlueprint = resolved.slotBlueprint;
     discoveryIdentityInstance = resolved.discoveryIdentityInstance;
     discoveryIdentityMetadata = resolved.metadata;
     discoveryIdentityDebug = isObfL3DebugEnabled() ? resolved.debug : null;
-    obfAnatomyBlock = resolved.anatomyPromptBlock;
+    if (
+      brandArchetype.slug === "urban-community-hero" &&
+      urbanFreshRunRecipe &&
+      discoveryIdentityInstance
+    ) {
+      // Phase 2.5B.5 — lightweight Urban brief; keep L3 fingerprints from sampled instance.
+      obfAnatomyBlock = formatUrbanFreshDiscoveryIdentityPrompt({
+        slot: discoveryIdentityInstance.slot,
+        exactAge: discoveryIdentityInstance.exactAge,
+        recipe: urbanFreshRunRecipe,
+      });
+      assertObfPromptHasNoLegacyBiology(obfAnatomyBlock, "Urban fresh L3 block");
+    } else {
+      obfAnatomyBlock = resolved.anatomyPromptBlock;
+    }
     obfAgeBody = formatObfAgeBodyDirectionPrompt(
       resolved.slotBlueprint,
       resolved.discoveryIdentityInstance,
@@ -493,11 +632,34 @@ export function buildCandidatePrompt(params: {
       resolved.slotBlueprint,
       resolved.discoveryIdentityInstance,
     );
-    obfIdentityConstraints = formatObfArchetypeConstraintsPrompt(
-      brandArchetype,
-      getIdentityDnaForArchetype(archetypeCatalog, brandArchetype),
-      resolved.slotBlueprint,
-    );
+    if (brandArchetype.slug === "urban-community-hero" && urbanFreshRunRecipe) {
+      const cue = urbanFreshRunRecipe.slots[resolved.slotBlueprint.slot];
+      obfIdentityConstraints = [
+        `1. ARCHETYPE AND GENDER CONSTRAINTS — ${brandArchetype.name}`,
+        "Official Brand Face casting lane — Urban Community Hero.",
+        "Adult male Black / Afro-European · apparent age 21–25 · lean / athletic.",
+        "Modern streetwear · realistic commercial fashion casting · natural skin · clean portrait.",
+        "Milaene-compatible look.",
+        `This run hair for Slot ${resolved.slotBlueprint.slot}: ${cue.hairLabel}.`,
+        `Slot mood: ${cue.mood}. Face emphasis: ${cue.facialEmphasis}.`,
+        "Create a new person not based on previous discovery faces.",
+        urbanFreshRunRecipe.freshFaceDirection,
+        "Exact face is NOT a locked anatomy recipe — use light casting cues in the L3 block.",
+      ].join("\n");
+      // Prefer run wardrobe tone over fixed L2 garment essay.
+      obfGarment = [
+        "GARMENT DIRECTION",
+        `Wardrobe tone for this run: ${cue.wardrobeTone}.`,
+        "Modern premium streetwear — oversized hoodie / tee / zip hoodie energy.",
+        "No logos, no graphics, no text.",
+      ].join("\n");
+    } else {
+      obfIdentityConstraints = formatObfArchetypeConstraintsPrompt(
+        brandArchetype,
+        getIdentityDnaForArchetype(archetypeCatalog, brandArchetype),
+        resolved.slotBlueprint,
+      );
+    }
   } else if (useArchetypes) {
     brandArchetype = resolveArchetypeForCandidate(
       archetypeCatalog,
@@ -607,16 +769,24 @@ export function buildCandidatePrompt(params: {
       ? formatBlueprintGarmentPrompt(discoveryBlueprint)
       : "";
 
-  const presenceRules = a1PresenceRulesBlock();
+  const presenceRules = a1PresenceRulesBlock({ compact: officialBrandFace });
 
   // OBF: exact skin/anatomy lives in L3 only — do not restate blueprint skin.
   const appearance = officialBrandFace
-    ? [
-        "AUTHENTIC HUMAN APPEARANCE — NATURAL HUMAN REALISM",
-        photographicRealismBlock(),
-        "Exact facial anatomy is defined only in the Discovery Identity Instance (L3) block.",
-        "This slot must look like a different real human from every other board slot — same brand family, never brothers.",
-      ].join("\n")
+    ? brandArchetype.slug === "urban-community-hero"
+      ? [
+          "AUTHENTIC HUMAN APPEARANCE — NATURAL HUMAN REALISM",
+          photographicRealismBlock({ compact: true }),
+          "Create a new person not based on previous discovery faces.",
+          "Do NOT force detailed fixed jaw / nose / lip / eye geometry.",
+          "This slot must look like a different real human from every other board slot.",
+        ].join("\n")
+      : [
+          "AUTHENTIC HUMAN APPEARANCE — NATURAL HUMAN REALISM",
+          photographicRealismBlock({ compact: true }),
+          "Exact facial anatomy is defined only in the Discovery Identity Instance (L3) block.",
+          "This slot must look like a different real human from every other board slot — never brothers.",
+        ].join("\n")
     : discoveryBlueprint
       ? [
           "AUTHENTIC HUMAN APPEARANCE (from candidate blueprint)",
@@ -652,44 +822,73 @@ export function buildCandidatePrompt(params: {
             `Social presence: ${effectiveVariation.socialPresence}.`,
           ].join("\n");
 
-  const brandDna = formatBrandMemoryForPersona(brandMemory, {
-    lifestyleDirection: params.project.fashion_style,
-    brandRole: params.project.brand_role,
-    visualKeywords: params.project.visual_keywords,
-    preferredBrandLooks: params.project.preferred_brand_looks,
-    creativeNotes: params.project.additional_description,
-  });
-  const wardrobe = formatBrandMemoryWardrobeForPersona(brandMemory, {
-    candidateWardrobe: effectiveVariation.wardrobe,
-    briefOutfitCue: params.project.preferred_outfits,
-    productWardrobeConstraints:
-      formatProductWardrobeConstraintsForPersona(productCatalog),
-  });
-  const referenceDirection = formatPersonaReferenceDirection(referenceCatalog);
+  const brandDna = officialBrandFace
+    ? [
+        `4. ${brandMemory.brandName.toUpperCase()} PREMIUM STREETWEAR BRAND DNA`,
+        "Quality bar: photorealistic commercial casting for oversized tees / hoodies.",
+        "Campaign-ready later — this A1 frame is casting, not a finished ad.",
+      ].join("\n")
+    : formatBrandMemoryForPersona(brandMemory, {
+        lifestyleDirection: params.project.fashion_style,
+        brandRole: params.project.brand_role,
+        visualKeywords: params.project.visual_keywords,
+        preferredBrandLooks: params.project.preferred_brand_looks,
+        creativeNotes: params.project.additional_description,
+      });
+  const wardrobe = officialBrandFace
+    ? [
+        "WARDROBE — simple Milaene-compatible streetwear casting",
+        `Candidate cue: ${effectiveVariation.wardrobe || params.project.preferred_outfits || "oversized hoodie / tee"}.`,
+        "Neutral tones · oversized · no other-brand logos · no suits · no luxury styling.",
+        formatProductWardrobeConstraintsForPersona(productCatalog),
+      ]
+        .filter((line) => line.trim().length > 0)
+        .join("\n")
+    : formatBrandMemoryWardrobeForPersona(brandMemory, {
+        candidateWardrobe: effectiveVariation.wardrobe,
+        briefOutfitCue: params.project.preferred_outfits,
+        productWardrobeConstraints:
+          formatProductWardrobeConstraintsForPersona(productCatalog),
+      });
+  const referenceDirection = officialBrandFace
+    ? ""
+    : formatPersonaReferenceDirection(referenceCatalog);
+  const urbanCue =
+    urbanFreshRunRecipe && slotBlueprint
+      ? urbanFreshRunRecipe.slots[slotBlueprint.slot]
+      : null;
   const camera = framingForAsset(params.assetType, brandMemory, {
     discoveryBlueprint,
     officialBrandFace,
     slot: slotBlueprint?.slot ?? null,
+    archetypeSlug: brandArchetype?.slug ?? null,
+    urbanHairLabel: urbanCue?.hairLabel ?? null,
+    urbanFaceMood: urbanCue?.faceShapeMood ?? null,
   });
   const lighting = buildEnvironmentLightingBlock(
     effectiveVariation,
     brandMemory,
     useArchetypes ? brandArchetype : undefined,
     officialBrandFace
-      ? { obfCastingSet }
+      ? { obfCastingSet, officialBrandFace: true }
       : { discoveryBlueprint },
   );
 
   // OBF: do not inject legacy identityDescriptor / permanent anatomy promptLines.
   const variationBlock = officialBrandFace
-    ? [
-        `CASTING LANE — ${slotBlueprint!.name} (Slot ${slotBlueprint!.slot})`,
-        `Fashion direction: ${slotBlueprint!.fashionDirection}.`,
-        `Brand role: ${slotBlueprint!.brandRole}.`,
-        formatArchetypeDirectionPrompt(brandArchetype),
-        "Exact facial anatomy is defined only in the Discovery Identity Instance (L3) block.",
-        "Build THIS slot's prompt independently — never homogenize face, lighting, crop, or styling with other board slots.",
-      ].join("\n")
+    ? brandArchetype.slug === "urban-community-hero" && urbanCue
+      ? [
+          `CASTING LANE — Slot ${slotBlueprint!.slot} (${urbanCue.mood})`,
+          `This run hair: ${urbanCue.hairLabel}.`,
+          `Face emphasis: ${urbanCue.facialEmphasis}.`,
+          "Fresh discovery person — light casting cues only.",
+        ].join("\n")
+      : [
+          `CASTING LANE — ${slotBlueprint!.name} (Slot ${slotBlueprint!.slot})`,
+          `Fashion direction: ${slotBlueprint!.fashionDirection}.`,
+          `Brand role: ${slotBlueprint!.brandRole}.`,
+          "Exact facial anatomy is defined only in the Discovery Identity Instance (L3) block.",
+        ].join("\n")
     : discoveryBlueprint
       ? [
           `CANDIDATE BLUEPRINT — ${discoveryBlueprint.name} (Slot ${discoveryBlueprint.slot})`,
@@ -705,18 +904,28 @@ export function buildCandidatePrompt(params: {
             ...effectiveVariation.promptLines,
           ].join("\n");
 
-  const editorialRules = formatBrandMemoryEditorialForPersona(brandMemory);
-  const premiumCasting = useArchetypes
-    ? [
-        premiumArchetypeCastingBlock(brandArchetype),
-        "",
-        premiumFashionPresenceBlock(),
-      ].join("\n")
-    : premiumFashionPresenceBlock();
+  const editorialRules = officialBrandFace
+    ? ""
+    : formatBrandMemoryEditorialForPersona(brandMemory);
+  // OBF: archetype casting block alone — do not append Mediterranean fashion-presence essay.
+  const premiumCasting = officialBrandFace
+    ? premiumArchetypeCastingBlock(brandArchetype, {
+        urbanHairLanes: urbanFreshRunRecipe?.hairLanes ?? null,
+      })
+    : useArchetypes
+      ? [
+          premiumArchetypeCastingBlock(brandArchetype, {
+            urbanHairLanes: urbanFreshRunRecipe?.hairLanes ?? null,
+          }),
+          "",
+          premiumFashionPresenceBlock(),
+        ].join("\n")
+      : premiumFashionPresenceBlock();
   const negative = buildNegativePrompt(
     params.project,
     brandMemory,
     useArchetypes ? brandArchetype : undefined,
+    { officialBrandFace },
   );
 
   // Phase 2.1B: remove identity-lock run token from OBF discovery.
@@ -730,6 +939,42 @@ export function buildCandidatePrompt(params: {
     `Campaign role: ${brandArchetype.campaignRole}.`,
     "Editorial fashion presence with authentic modern energy — reusable across Image, Video, Shopify and campaigns for years.",
   ].join("\n");
+
+  const urbanFaceDiversityBlock =
+    officialBrandFace &&
+    brandArchetype.slug === "urban-community-hero" &&
+    slotBlueprint
+      ? urbanSlotFaceDiversityBlock(slotBlueprint.slot, {
+          escalationLevel: diversityEscalationLevelFromAttempt(
+            identityAttemptNumber,
+          ),
+          recipe: urbanFreshRunRecipe,
+          creationProjectId: params.project.id,
+        })
+      : "";
+
+  const urbanFaceDiversityDebug: UrbanFaceDiversityDebug | null =
+    officialBrandFace &&
+    brandArchetype.slug === "urban-community-hero" &&
+    slotBlueprint &&
+    discoveryIdentityInstance
+      ? buildUrbanSiblingDnaReport({
+          slot: slotBlueprint.slot,
+          retryNumber: identityAttemptNumber,
+          siblingSlots: params.urbanSiblingSlots ?? [],
+          siblingCandidateIds: params.urbanSiblingCandidateIds ?? [],
+          currentSample: anatomySampleFromDiscoveryInstance(
+            discoveryIdentityInstance,
+          ),
+          siblingSamples: params.urbanSiblingSamples ?? [],
+          mutatedBeforeProvider: urbanMutatedBeforeProvider,
+          recipe: urbanFreshRunRecipe,
+        })
+      : null;
+
+  const urbanFreshRunDebug: UrbanFreshRunDebug | null = urbanFreshRunRecipe
+    ? toUrbanFreshRunDebug(urbanFreshRunRecipe)
+    : null;
 
   const blocks: PromptBlocks = {
     identity,
@@ -757,18 +1002,12 @@ export function buildCandidatePrompt(params: {
 
   const prompt = officialBrandFace
     ? [
-        // Phase 2.2C priority:
-        // 1. real human photograph
-        // 2. L3 identity
-        // 3. natural human realism
-        // 4. casting presence
-        // 5. simple wardrobe
-        // 6. camera/light
-        // 7. brand quality
-        realHumanPhotographPriorityBlock(),
+        // Phase 2.2C / 2.5B.1 / 2.5B.2 priority:
+        realHumanPhotographPriorityBlock(brandArchetype.slug),
         blocks.genderEnforcement,
         blocks.identity,
         blocks.biologicalIdentity,
+        urbanFaceDiversityBlock,
         blocks.appearance,
         blocks.ageBody,
         blocks.presence,
@@ -780,8 +1019,6 @@ export function buildCandidatePrompt(params: {
         blocks.premiumCasting,
         blocks.variation,
         blocks.brandDna,
-        blocks.editorialRules,
-        blocks.referenceDirection,
         params.premiumRetrySuffix ?? "",
       ]
         .filter((block) => block.trim().length > 0)
@@ -857,12 +1094,45 @@ export function buildCandidatePrompt(params: {
     runVariationToken,
     officialBrandFace,
     identityAttemptNumber,
+    promptBudgetReport: null,
+    urbanFaceDiversityDebug,
+    urbanFreshRunDebug,
   };
 }
 
-/** Compose final provider string (prompt + negative). */
-export function composeProviderPrompt(built: BuiltCandidatePrompt): string {
-  return `${built.prompt}\n\nAvoid: ${built.negativePrompt}`;
+/**
+ * Compose final provider string (prompt + negative).
+ * Official Brand Face: enforce OpenAI discovery budget before return.
+ */
+export function composeProviderPrompt(
+  built: BuiltCandidatePrompt,
+  options?: {
+    provider?: string;
+    logBudget?: boolean;
+  },
+): string {
+  const raw = `${built.prompt}\n\nAvoid: ${built.negativePrompt}`;
+  if (!built.officialBrandFace) {
+    return raw;
+  }
+
+  const enforced = enforceOpenAiDiscoveryPromptBudget({
+    prompt: raw,
+    provider: options?.provider ?? "openai",
+    candidateSlot: built.slotBlueprint?.slot ?? null,
+  });
+  built.promptBudgetReport = enforced.report;
+  if (built.urbanFreshRunDebug) {
+    built.urbanFreshRunDebug = {
+      ...built.urbanFreshRunDebug,
+      provider: options?.provider ?? "openai",
+      promptLength: enforced.prompt.length,
+    };
+  }
+  if (options?.logBudget !== false) {
+    logPromptBudgetReport(enforced.report);
+  }
+  return enforced.prompt;
 }
 
 /**

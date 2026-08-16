@@ -31,6 +31,9 @@ import {
   FACE_SIMILARITY_EUCLIDEAN_WARNING_THRESHOLD,
   FACE_SIMILARITY_EVALUATOR_VERSION,
   FACE_SIMILARITY_THRESHOLD_VERSION,
+  DISCOVERY_HARD_DUPLICATE_THRESHOLD,
+  DISCOVERY_WARNING_THRESHOLD,
+  DISCOVERY_SIMILARITY_THRESHOLD_VERSION,
   FACE_DETECTION_MIN_CONFIDENCE,
   FACE_DETECTION_MIN_BOX_FRACTION,
   FACE_SIMILARITY_EMBEDDING_DIMENSION,
@@ -385,6 +388,11 @@ export class LocalFaceEmbeddingEvaluator implements FaceSimilarityEvaluator {
   /** Optional image source for candidate (signed URL or path). */
   private imageSourceMap: Map<string, string>;
 
+  /** Discovery uses looser hard-block than identity-lock verification. */
+  private readonly duplicateThreshold: number;
+  private readonly warningThreshold: number;
+  private readonly thresholdVersion: string;
+
   constructor(
     priorEmbeddings: Array<{
       assetId: string;
@@ -392,9 +400,35 @@ export class LocalFaceEmbeddingEvaluator implements FaceSimilarityEvaluator {
       embedding: number[];
     }>,
     imageSourceMap?: Map<string, string>,
+    options?: {
+      /** Default discovery for Official Brand Face casting. */
+      mode?: "discovery" | "identity_lock";
+      euclideanDuplicateThreshold?: number;
+      euclideanWarningThreshold?: number;
+      thresholdVersion?: string;
+    },
   ) {
     this.priorEmbeddings = priorEmbeddings;
     this.imageSourceMap = imageSourceMap ?? new Map();
+    const mode = options?.mode ?? "discovery";
+    if (mode === "identity_lock") {
+      this.duplicateThreshold =
+        options?.euclideanDuplicateThreshold ??
+        FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD;
+      this.warningThreshold =
+        options?.euclideanWarningThreshold ??
+        FACE_SIMILARITY_EUCLIDEAN_WARNING_THRESHOLD;
+      this.thresholdVersion =
+        options?.thresholdVersion ?? FACE_SIMILARITY_THRESHOLD_VERSION;
+    } else {
+      this.duplicateThreshold =
+        options?.euclideanDuplicateThreshold ??
+        DISCOVERY_HARD_DUPLICATE_THRESHOLD;
+      this.warningThreshold =
+        options?.euclideanWarningThreshold ?? DISCOVERY_WARNING_THRESHOLD;
+      this.thresholdVersion =
+        options?.thresholdVersion ?? DISCOVERY_SIMILARITY_THRESHOLD_VERSION;
+    }
   }
 
   async evaluate(input: {
@@ -464,13 +498,15 @@ export class LocalFaceEmbeddingEvaluator implements FaceSimilarityEvaluator {
     const comparison = compareEmbeddings({
       candidateEmbedding: extraction.embedding,
       priorEmbeddings: this.priorEmbeddings,
+      euclideanDuplicateThreshold: this.duplicateThreshold,
+      euclideanWarningThreshold: this.warningThreshold,
     });
 
     return {
       status: "performed",
       closestMatchAssetId: comparison.closestMatchAssetId,
       similarity: comparison.closestSimilarity,
-      threshold: FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD,
+      threshold: this.duplicateThreshold,
       isDuplicate: comparison.isDuplicate,
       method: this.method,
       // Attach embedding for persistence — caller must persist, never log.
@@ -484,7 +520,7 @@ export class LocalFaceEmbeddingEvaluator implements FaceSimilarityEvaluator {
       _euclideanThreshold: comparison.euclideanThreshold,
       _warningThreshold: comparison.warningThreshold,
       _evaluatorVersion: this.version,
-      _thresholdVersion: FACE_SIMILARITY_THRESHOLD_VERSION,
+      _thresholdVersion: this.thresholdVersion,
     } as FaceSimilarityResult & Record<string, unknown>;
   }
 }

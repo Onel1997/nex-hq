@@ -501,7 +501,10 @@ export async function resolveLockedBrandIdentity(
     lockedAt: snapshot.identity_locked_at,
     imageUseApproved: persona.image_use_approved,
     videoUseApproved: persona.video_use_approved,
-    brandCastApproved: persona.approved,
+    brandCastApproved: Boolean(
+      persona.brand_cast_approved ||
+        (persona.approved && persona.status === "Approved"),
+    ),
     imageIdentityReady: persona.image_identity_ready,
     videoIdentityReady: persona.video_identity_ready,
   };

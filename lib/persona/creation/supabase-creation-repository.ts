@@ -35,8 +35,18 @@ function nullableStr(v: unknown): string | null {
   if (v == null) return null;
   return str(v);
 }
-function throwDb(error: { message: string } | null, msg: string) {
-  if (error) throw new PersonaDomainError(msg, "VALIDATION", { message: error.message });
+function throwDb(
+  error: { message: string; code?: string; details?: string; hint?: string } | null,
+  msg: string,
+) {
+  if (error) {
+    throw new PersonaDomainError(msg, "VALIDATION", {
+      message: error.message,
+      code: error.code ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+    });
+  }
 }
 
 function mapProject(row: Record<string, unknown>): PersonaCreationProject {

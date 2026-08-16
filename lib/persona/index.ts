@@ -177,12 +177,23 @@ export {
   NOVELTY_REPLACEMENT_POLL_INTERVAL_MS,
   NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS,
   NOVELTY_REPLACEMENT_TIMEOUT_MESSAGE,
+  NOVELTY_REPLACEMENT_TERMINAL_STATUSES,
+  REPLACEMENT_PERSIST_FAILED_USER_MESSAGE,
+  isTerminalNoveltyReplacementStatus,
   stageLabelForCheckpoint,
   evaluateReplacementJobStaleness,
   hasTerminalReplacementResult,
   readActiveNoveltyReplacements,
   resolveSlotReplacementStates,
 } from "./creation/novelty-replacement-result";
+
+export {
+  SUPERSEDED_CANDIDATE_NUMBER_BASE,
+  supersededCandidateNumber,
+  resolveBoardSlotNumber,
+  boardSlotLabel,
+  isCandidateNumberUniqueViolation,
+} from "./creation/novelty-replacement";
 
 export {
   imagesPerCandidateForStage,
@@ -361,6 +372,32 @@ export type {
   HistoricalProtectionPromotionStatus,
   IdentityLockStage,
 } from "./creation/identity-lock";
+export {
+  VIDEO_IDENTITY_READINESS_POLICY,
+  BRAND_CAST_REQUIRES_VIDEO_USE_APPROVED,
+  evaluateImageUseEligibility,
+  evaluateVideoUseEligibility,
+  evaluateBrandCastEligibility,
+  isImageStudioConsumerEligible,
+  evaluateVideoStudioConsumerEligibility,
+  getBrandModelApprovalsView,
+  approveImageUse,
+  approveVideoUse,
+  approveBrandCast,
+  listImageStudioEligibleBrandModels,
+  listVideoStudioEligibleBrandModels,
+  listOfficialBrandCastMembers,
+  UseApprovalError,
+} from "./creation/use-approvals";
+export type {
+  UseApprovalGate,
+  UseApprovalEligibility,
+  BrandModelApprovalsView,
+  UseApprovalResult,
+  BrandCastMemberCard,
+  ImageStudioBrandModelEligibility,
+  VideoStudioBrandModelEligibility,
+} from "./creation/use-approvals";
 export { FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD } from "./face-novelty-memory/similarity-threshold";
 export {
   getGenerationJobRepository,

@@ -259,6 +259,19 @@ export function CandidateBoardCard({
       : casting.visualStatus === "manual_review_required"
         ? "Manual review required"
         : "not_performed";
+  const discoveryNovelty = candidate.generation_settings?.discoveryNovelty as
+    | {
+        classification?: string;
+        distance?: number | null;
+        threshold?: number;
+        closestPriorCandidateId?: string | null;
+      }
+    | undefined;
+  const showSimilarityWarning =
+    discoveryNovelty?.classification === "WARNING" ||
+    (typeof candidate.generation_settings?.faceNoveltyLiveDebug === "object" &&
+      (candidate.generation_settings.faceNoveltyLiveDebug as { discoveryClassification?: string })
+        ?.discoveryClassification === "WARNING");
 
   return (
     <button
@@ -280,6 +293,14 @@ export function CandidateBoardCard({
         ) : null}
         <div className="ps-ci-card-hero-meta">
           <CandidateStatusBadge candidate={candidate} />
+          {showSimilarityWarning ? (
+            <span
+              className="ps-ci-score-pill"
+              title="Some resemblance to another face — still selectable"
+            >
+              Similarity warning
+            </span>
+          ) : null}
           {overall != null ? (
             <span className="ps-ci-score-pill" title="Brief Fit (metadata — not visual)">
               Brief {overall}
@@ -350,6 +371,7 @@ export function NoveltyFailureSlotCard({
   onGenerateNewFace,
   onRetryEvaluation,
   replacementUi,
+  onRetryFailedReplacement,
 }: {
   slot: import("@/lib/persona/face-novelty-memory/board-visibility").NoveltyFailureSlotDto;
   /** Phase 2.1E — paid novelty replacement (face_similarity_duplicate). */
@@ -357,7 +379,7 @@ export function NoveltyFailureSlotCard({
   /** Dev-only: re-evaluate the same stored asset without OpenAI. */
   onRetryEvaluation?: () => void | Promise<void>;
   replacementUi?: {
-    phase: "idle" | "confirming" | "generating" | "polling";
+    phase: "idle" | "confirming" | "generating" | "polling" | "failed";
     attemptNumber: number;
     maxAttempts: number;
     elapsedDisplay: string;
@@ -365,12 +387,15 @@ export function NoveltyFailureSlotCard({
     safeError?: string | null;
     providerMayHaveCompleted?: boolean;
   } | null;
+  onRetryFailedReplacement?: () => void | Promise<void>;
 }) {
   const isBlocked = slot.status === "novelty_blocked";
   const slotLabel = ["A", "B", "C", "D"][slot.slot - 1] ?? String(slot.slot);
   const exhausted = Boolean(slot.slotExhausted);
+  const isFailedReplacement = replacementUi?.phase === "failed";
   const isGenerating =
     replacementUi != null &&
+    !isFailedReplacement &&
     (replacementUi.phase === "generating" ||
       replacementUi.phase === "polling" ||
       replacementUi.phase === "confirming");
@@ -379,8 +404,40 @@ export function NoveltyFailureSlotCard({
     Boolean(slot.requiresReplacementConfirmation) &&
     Boolean(onGenerateNewFace) &&
     !isGenerating &&
+    !isFailedReplacement &&
     !exhausted;
   const showRetryEval = !isBlocked && Boolean(onRetryEvaluation) && !isGenerating;
+
+  if (isFailedReplacement && replacementUi) {
+    return (
+      <div
+        className="ps-ci-card"
+        data-novelty-slot="replacement-failed"
+        data-replacement-phase="failed"
+      >
+        <div className="ps-ci-card-hero">
+          <div className="ps-ci-card-hero-empty">Replacement failed</div>
+        </div>
+        <div className="ps-ci-card-body">
+          <strong>Candidate {slotLabel}</strong>
+          <p style={{ marginTop: "0.5rem" }}>
+            {replacementUi.safeError ??
+              "Replacement failed after provider generation. The generated result could not be saved. No additional generation will start automatically."}
+          </p>
+          {onRetryFailedReplacement ? (
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              style={{ marginTop: "0.75rem" }}
+              onClick={() => void onRetryFailedReplacement()}
+            >
+              Retry Candidate {slotLabel}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   if (isGenerating && replacementUi) {
     return (

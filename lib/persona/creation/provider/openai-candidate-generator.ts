@@ -24,6 +24,13 @@ import {
 } from "../candidate-intelligence";
 import { assertObfCastAnatomyDiversity } from "../candidate-intelligence/obf-l3-integration";
 import {
+  anatomySampleFromDiscoveryInstance,
+  type UrbanAnatomySample,
+} from "../candidate-intelligence/urban-face-diversity";
+import { loadUrbanFreshFaceBiasSamples } from "../candidate-intelligence/urban-fresh-face-bias-loader";
+import type { UrbanFaceEmbeddingSample } from "../candidate-intelligence/urban-fresh-face-dna";
+import { URBAN_ARCHETYPE_ID } from "@/lib/persona/identity-blueprints/urban-slot-blueprints";
+import {
   buildPremiumRetryPromptSuffix,
   DISCOVERY_QUALITY_MAX_REGENERATION_ATTEMPTS,
   passesDiscoveryQualityGate,
@@ -76,6 +83,10 @@ async function generateWithDiscoveryQualityFilter(input: {
   identityAttemptNumber: number;
   previousAttemptSample?: Record<string, string> | null;
   avoidSameRunSample?: Record<string, string> | null;
+  urbanSiblingSamples?: UrbanAnatomySample[] | null;
+  urbanSiblingSlots?: Array<"A" | "B" | "C" | "D"> | null;
+  urbanSiblingCandidateIds?: string[] | null;
+  urbanFreshFaceSamples?: UrbanFaceEmbeddingSample[] | null;
   abortSignal?: AbortSignal;
 }): Promise<{
   built: ReturnType<typeof buildCandidatePrompt>;
@@ -109,6 +120,12 @@ async function generateWithDiscoveryQualityFilter(input: {
           attemptNumber: input.identityAttemptNumber,
           previousAttemptSample: input.previousAttemptSample,
           avoidSameRunSample: input.avoidSameRunSample,
+          urbanSiblingSamples:
+            input.urbanSiblingSamples ?? input.item.urbanSiblingSamples ?? null,
+          urbanSiblingSlots:
+            input.urbanSiblingSlots ?? input.item.urbanSiblingSlots ?? null,
+          urbanSiblingCandidateIds: input.urbanSiblingCandidateIds ?? null,
+          urbanFreshFaceSamples: input.urbanFreshFaceSamples ?? null,
         });
 
     if (built.officialBrandFace && !built.discoveryIdentityInstance) {
@@ -119,14 +136,19 @@ async function generateWithDiscoveryQualityFilter(input: {
     }
 
     const { value: gen, attempts: providerAttempts } = await withTransientRetry(
-      () =>
-        generateOpenAiImage({
-          prompt: composeProviderPrompt(built),
+      () => {
+        const providerPrompt = composeProviderPrompt(built, {
+          provider: "openai",
+          logBudget: true,
+        });
+        return generateOpenAiImage({
+          prompt: providerPrompt,
           dimensions: "1024x1024",
           assetType: "persona_candidate",
           qualityOverride: input.quality,
           signal: input.abortSignal,
-        }),
+        });
+      },
       {
         maxAttempts: 3,
         baseDelayMs: 800,
@@ -227,6 +249,8 @@ type WorkItem = {
   assetType: CandidateAssetType;
   variation: CandidateVariationProfile;
   seed: string;
+  urbanSiblingSamples?: UrbanAnatomySample[];
+  urbanSiblingSlots?: Array<"A" | "B" | "C" | "D">;
 };
 
 export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
@@ -303,10 +327,48 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
       variations,
     });
 
+    const urbanContextByCandidate = new Map<
+      number,
+      {
+        siblingSamples: UrbanAnatomySample[];
+        siblingSlots: Array<"A" | "B" | "C" | "D">;
+      }
+    >();
+
+    let urbanFreshFaceSamples: UrbanFaceEmbeddingSample[] = [];
+    if (
+      resolved.officialBrandFace &&
+      resolved.archetype?.slug === "urban-community-hero"
+    ) {
+      urbanFreshFaceSamples = await loadUrbanFreshFaceBiasSamples({
+        workspaceId: input.project.workspace_id,
+        archetypeId: resolved.archetype.id || URBAN_ARCHETYPE_ID,
+        currentCreationProjectId: input.project.id,
+      });
+    }
+
     if (resolved.officialBrandFace) {
       const fingerprints = new Set<string>();
       const l3Instances = [];
+      const urbanSiblingSamples: UrbanAnatomySample[] = [];
+      const urbanSiblingSlots: Array<"A" | "B" | "C" | "D"> = [];
+      // Seed with any accepted siblings from a Generate New Face recovery path.
+      if (input.urbanSiblingSamples?.length) {
+        for (const sample of input.urbanSiblingSamples) {
+          urbanSiblingSamples.push(sample as UrbanAnatomySample);
+        }
+      }
+      if (input.urbanSiblingSlots?.length) {
+        urbanSiblingSlots.push(...input.urbanSiblingSlots);
+      }
+      // Sequential L3 resolution so B/C/D can avoid already-built sibling DNA
+      // before any provider call (prompt-level only — no image similarity).
       for (let i = 0; i < numbers.length; i += 1) {
+        const siblingSnapshot = {
+          siblingSamples: [...urbanSiblingSamples],
+          siblingSlots: [...urbanSiblingSlots],
+        };
+        urbanContextByCandidate.set(numbers[i]!, siblingSnapshot);
         const built = buildCandidatePrompt({
           project: input.project,
           assetType: "portrait_front",
@@ -317,6 +379,10 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
           attemptNumber: identityAttemptNumber,
           previousAttemptSample: input.previousAttemptSample ?? null,
           avoidSameRunSample: input.avoidSameRunSample ?? null,
+          urbanSiblingSamples: siblingSnapshot.siblingSamples,
+          urbanSiblingSlots: siblingSnapshot.siblingSlots,
+          urbanSiblingCandidateIds: input.urbanSiblingCandidateIds ?? null,
+          urbanFreshFaceSamples,
         });
         if (!built.discoveryIdentityInstance) {
           throw new PersonaDomainError(
@@ -327,6 +393,40 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
         }
         l3Instances.push(built.discoveryIdentityInstance);
         fingerprints.add(built.promptFingerprint);
+        if (built.brandArchetype.slug === "urban-community-hero") {
+          urbanSiblingSamples.push(
+            anatomySampleFromDiscoveryInstance(built.discoveryIdentityInstance),
+          );
+          urbanSiblingSlots.push(built.discoveryIdentityInstance.slot);
+          if (built.urbanFaceDiversityDebug) {
+            console.info("[persona-urban-diversity]", {
+              slot: built.urbanFaceDiversityDebug.slot,
+              baseFaceGeometry: built.urbanFaceDiversityDebug.baseFaceGeometry,
+              retryNumber: built.urbanFaceDiversityDebug.retryNumber,
+              diversityEscalationLevel:
+                built.urbanFaceDiversityDebug.diversityEscalationLevel,
+              siblingSlotsConsidered:
+                built.urbanFaceDiversityDebug.siblingSlotsConsidered,
+              siblingCandidateIds:
+                built.urbanFaceDiversityDebug.siblingCandidateIds,
+              mutatedBeforeProvider:
+                built.urbanFaceDiversityDebug.mutatedBeforeProvider,
+              maxOverlapDiffsObserved:
+                built.urbanFaceDiversityDebug.maxOverlapDiffsObserved,
+              variationSeed: built.urbanFreshRunDebug?.variationSeed,
+              hairLane: built.urbanFreshRunDebug?.hairLanes?.[
+                built.urbanFaceDiversityDebug.slot
+              ],
+              freshFaceDirection: built.urbanFreshRunDebug?.freshFaceDirection,
+              dominantClusterAvoided:
+                built.urbanFreshRunDebug?.dominantClusterAvoided,
+              facialEmphasis:
+                built.urbanFreshRunDebug?.facialEmphasis?.[
+                  built.urbanFaceDiversityDebug.slot
+                ],
+            });
+          }
+        }
       }
       assertObfCastAnatomyDiversity(l3Instances);
       if (fingerprints.size !== numbers.length) {
@@ -356,8 +456,16 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
       const candidateNumber = numbers[idx]!;
       const variation = variations[idx]!;
       const seed = `${jobId}-${candidateNumber}-${variation.id}`;
+      const urbanCtx = urbanContextByCandidate.get(candidateNumber);
       for (const assetType of assetTypes) {
-        work.push({ candidateNumber, assetType, variation, seed });
+        work.push({
+          candidateNumber,
+          assetType,
+          variation,
+          seed,
+          urbanSiblingSamples: urbanCtx?.siblingSamples,
+          urbanSiblingSlots: urbanCtx?.siblingSlots,
+        });
       }
     }
 
@@ -376,6 +484,8 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
         l3Metadata?: ReturnType<typeof buildCandidatePrompt>["discoveryIdentityMetadata"];
         l3Debug?: ReturnType<typeof buildCandidatePrompt>["discoveryIdentityDebug"];
         l3InstanceSample?: Record<string, string>;
+        urbanFaceDiversityDebug?: ReturnType<typeof buildCandidatePrompt>["urbanFaceDiversityDebug"];
+        urbanFreshRunDebug?: ReturnType<typeof buildCandidatePrompt>["urbanFreshRunDebug"];
       }
     >();
 
@@ -411,6 +521,10 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             identityAttemptNumber,
             previousAttemptSample: input.previousAttemptSample ?? null,
             avoidSameRunSample: input.avoidSameRunSample ?? null,
+            urbanSiblingSamples: item.urbanSiblingSamples ?? input.urbanSiblingSamples ?? null,
+            urbanSiblingSlots: item.urbanSiblingSlots ?? input.urbanSiblingSlots ?? null,
+            urbanSiblingCandidateIds: input.urbanSiblingCandidateIds ?? null,
+            urbanFreshFaceSamples,
             abortSignal: input.abortSignal,
           });
           const built = genResult.built;
@@ -425,6 +539,12 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             if (built.discoveryIdentityMetadata) {
               bucket.l3Metadata = built.discoveryIdentityMetadata;
               bucket.l3Debug = built.discoveryIdentityDebug;
+            }
+            if (built.urbanFaceDiversityDebug) {
+              bucket.urbanFaceDiversityDebug = built.urbanFaceDiversityDebug;
+            }
+            if (built.urbanFreshRunDebug) {
+              bucket.urbanFreshRunDebug = built.urbanFreshRunDebug;
             }
             if (built.discoveryIdentityInstance) {
               const inst = built.discoveryIdentityInstance;
@@ -559,6 +679,12 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
             : {}),
           ...(bucket.l3InstanceSample
             ? { discoveryIdentitySample: bucket.l3InstanceSample }
+            : {}),
+          ...(bucket.urbanFaceDiversityDebug
+            ? { urbanFaceDiversityDebug: bucket.urbanFaceDiversityDebug }
+            : {}),
+          ...(bucket.urbanFreshRunDebug
+            ? { urbanFreshRun: bucket.urbanFreshRunDebug }
             : {}),
           ...(input.replacementOfCandidateId
             ? {

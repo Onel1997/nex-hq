@@ -25,6 +25,18 @@ export function buildPersonaCandidateStoragePath(params: {
   return `workspace/${params.workspaceId}/persona-creation/${params.projectId}/candidates/${params.candidateId}/${params.assetId}-${safeName}`;
 }
 
+/** Job-scoped stash path — used when provider succeeds before candidate row exists. */
+export function buildNoveltyReplacementStashStoragePath(params: {
+  workspaceId: string;
+  projectId: string;
+  jobId: string;
+  assetId: string;
+  filename: string;
+}): string {
+  const safeName = params.filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+  return `workspace/${params.workspaceId}/persona-creation/${params.projectId}/replacement-jobs/${params.jobId}/${params.assetId}-${safeName}`;
+}
+
 /** Memory-repo / automated tests — private path metadata without Supabase I/O. */
 export function buildPersonaCandidateAssetMetadata(params: {
   workspaceId: string;
@@ -120,6 +132,95 @@ export async function uploadPersonaCandidateBytes(params: {
     );
   }
 
+  const dims = extractImageDimensions(params.bytes, params.mimeType);
+  return {
+    storagePath,
+    checksum: checksumBytes(params.bytes),
+    width: dims.width,
+    height: dims.height,
+  };
+}
+
+/** Persist provider bytes under the replacement job before candidate insert. */
+export async function uploadNoveltyReplacementStashBytes(params: {
+  workspaceId: string;
+  projectId: string;
+  jobId: string;
+  assetId: string;
+  filename: string;
+  bytes: Buffer;
+  mimeType: string;
+}): Promise<{
+  storagePath: string;
+  checksum: string;
+  width: number | null;
+  height: number | null;
+}> {
+  assertAllowedPersonaReferenceUpload({
+    mimeType: params.mimeType,
+    byteLength: params.bytes.length,
+  });
+
+  if (!params.workspaceId || !params.projectId || !params.jobId) {
+    throw new PersonaDomainError(
+      "Unbefugter Speicherzugriff.",
+      "UNAUTHORIZED_WORKSPACE",
+    );
+  }
+
+  await ensurePersonaReferencesBucket();
+  const storagePath = buildNoveltyReplacementStashStoragePath(params);
+  if (!storagePath.startsWith(`workspace/${params.workspaceId}/persona-creation/`)) {
+    throw new PersonaDomainError(
+      "Unbefugter Speicherzugriff.",
+      "UNAUTHORIZED_WORKSPACE",
+    );
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.storage
+    .from(PERSONA_REFERENCES_BUCKET)
+    .upload(storagePath, params.bytes, {
+      contentType: params.mimeType,
+      upsert: true,
+    });
+
+  if (error) {
+    throw new PersonaDomainError(
+      `Upload fehlgeschlagen: ${error.message}`,
+      "STORAGE_UPLOAD_FAILED",
+      { storagePath },
+    );
+  }
+
+  const dims = extractImageDimensions(params.bytes, params.mimeType);
+  return {
+    storagePath,
+    checksum: checksumBytes(params.bytes),
+    width: dims.width,
+    height: dims.height,
+  };
+}
+
+export function buildNoveltyReplacementStashMetadata(params: {
+  workspaceId: string;
+  projectId: string;
+  jobId: string;
+  assetId: string;
+  filename: string;
+  bytes: Buffer;
+  mimeType: string;
+}): {
+  storagePath: string;
+  checksum: string;
+  width: number | null;
+  height: number | null;
+} {
+  assertAllowedPersonaReferenceUpload({
+    mimeType: params.mimeType,
+    byteLength: params.bytes.length,
+  });
+  const storagePath = buildNoveltyReplacementStashStoragePath(params);
   const dims = extractImageDimensions(params.bytes, params.mimeType);
   return {
     storagePath,

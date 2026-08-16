@@ -28,7 +28,8 @@ export type IdentityConsistencyDecision =
 
 /**
  * Match band: Euclidean ≤ literature same-identity band (0.45).
- * Independently named — discovery novelty still owns 0.45 as "duplicate".
+ * Independently named — discovery novelty uses DISCOVERY_HARD_DUPLICATE_THRESHOLD (0.30).
+ * Identity Lock / Reference Package keep FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD (0.45).
  */
 export const IDENTITY_CONSISTENCY_MATCH_EUCLIDEAN =
   FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD;

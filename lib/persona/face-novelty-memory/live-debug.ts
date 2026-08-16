@@ -16,6 +16,9 @@ import {
   FACE_SIMILARITY_EVALUATOR_VERSION,
   FACE_SIMILARITY_THRESHOLD_VERSION,
   FACE_SIMILARITY_MODEL,
+  DISCOVERY_HARD_DUPLICATE_THRESHOLD,
+  DISCOVERY_WARNING_THRESHOLD,
+  classifyDiscoveryFaceDistance,
 } from "./similarity-threshold";
 
 // Avoid importing local-face-embedding-evaluator here — it pulls tfjs-node
@@ -51,6 +54,7 @@ export type SafeFaceNoveltyLiveDebug = {
   similarity?: number;
   finalDecision: "allowed" | "blocked" | "failed";
   hardRejectReason?: string;
+  softWarningReason?: string;
   requiresReplacementConfirmation: boolean;
   evaluationDurationMs?: number;
   evaluatedAt?: string;
@@ -61,6 +65,12 @@ export type SafeFaceNoveltyLiveDebug = {
   candidateProjectId?: string;
   evaluatorActive?: boolean;
   duplicateDecision?: boolean;
+  /** Phase 2.5B.4 — discovery novelty classification. */
+  discoveryClassification?: "PASS" | "WARNING" | "HARD_DUPLICATE";
+  /** Euclidean distance to closest prior (when compared). */
+  distance?: number | null;
+  /** Discovery hard-duplicate threshold used for this check. */
+  hardDuplicateThreshold?: number;
   /** Safe evaluator error fields — never include tokens or signed URLs. */
   safeErrorCode?: string;
   safeErrorMessage?: string;
@@ -214,6 +224,7 @@ export function buildSafeFaceNoveltyLiveDebug(
     similarity: partial.similarity,
     finalDecision: partial.finalDecision,
     hardRejectReason: partial.hardRejectReason,
+    softWarningReason: partial.softWarningReason,
     requiresReplacementConfirmation: partial.requiresReplacementConfirmation,
     evaluationDurationMs: partial.evaluationDurationMs,
     evaluatedAt: partial.evaluatedAt,
@@ -223,6 +234,19 @@ export function buildSafeFaceNoveltyLiveDebug(
     candidateProjectId: partial.candidateProjectId,
     evaluatorActive: partial.evaluatorActive ?? partial.evaluatorStatus !== "failed",
     duplicateDecision: partial.duplicateDecision,
+    discoveryClassification:
+      partial.discoveryClassification ??
+      (partial.finalDecision === "blocked" &&
+      partial.hardRejectReason === "face_similarity_duplicate"
+        ? "HARD_DUPLICATE"
+        : partial.softWarningReason?.startsWith("face_similarity_warning")
+          ? "WARNING"
+          : partial.distance != null
+            ? classifyDiscoveryFaceDistance(partial.distance)
+            : "PASS"),
+    distance: partial.distance ?? null,
+    hardDuplicateThreshold:
+      partial.hardDuplicateThreshold ?? DISCOVERY_HARD_DUPLICATE_THRESHOLD,
     safeErrorCode: partial.safeErrorCode,
     safeErrorMessage: partial.safeErrorMessage,
   };
@@ -359,12 +383,75 @@ export function maybeAttachNoveltyDebugToSettings(
   settings: Record<string, unknown>,
   debug: SafeFaceNoveltyLiveDebug | null,
   env: NodeJS.ProcessEnv = process.env,
+  discoveryFallback?: {
+    classification?: SafeFaceNoveltyLiveDebug["discoveryClassification"];
+    softWarningReason?: string | null;
+    distance?: number | null;
+    closestPriorCandidateId?: string | null;
+  },
 ): Record<string, unknown> {
+  const withDiscovery = attachDiscoveryNoveltySummary(
+    settings,
+    debug,
+    discoveryFallback,
+  );
   if (!debug || !isPersonaFaceNoveltyDebugEnabled(env)) {
-    return stripNoveltyDebugFromCandidateSettings(settings);
+    return stripNoveltyDebugFromCandidateSettings(withDiscovery);
   }
   return {
-    ...stripNoveltyDebugFromCandidateSettings(settings),
+    ...stripNoveltyDebugFromCandidateSettings(withDiscovery),
     faceNoveltyLiveDebug: buildSafeFaceNoveltyLiveDebug(debug),
+  };
+}
+
+/** Always-on discovery novelty summary for board UI (no embeddings / secrets). */
+export function attachDiscoveryNoveltySummary(
+  settings: Record<string, unknown>,
+  debug: SafeFaceNoveltyLiveDebug | null | undefined,
+  fallback?: {
+    classification?: SafeFaceNoveltyLiveDebug["discoveryClassification"];
+    softWarningReason?: string | null;
+    distance?: number | null;
+    closestPriorCandidateId?: string | null;
+  },
+): Record<string, unknown> {
+  const classification =
+    debug?.discoveryClassification ??
+    fallback?.classification ??
+    (debug?.hardRejectReason === "face_similarity_duplicate"
+      ? "HARD_DUPLICATE"
+      : debug?.softWarningReason?.startsWith("face_similarity_warning") ||
+          fallback?.softWarningReason?.startsWith("face_similarity_warning")
+        ? "WARNING"
+        : "PASS");
+  return {
+    ...settings,
+    discoveryNovelty: {
+      classification,
+      candidateSlot: debug?.slot ?? null,
+      comparisonCandidateId:
+        debug?.closestPriorCandidateId ??
+        fallback?.closestPriorCandidateId ??
+        null,
+      closestPriorCandidateId:
+        debug?.closestPriorCandidateId ??
+        fallback?.closestPriorCandidateId ??
+        null,
+      distance: debug?.distance ?? fallback?.distance ?? null,
+      threshold:
+        debug?.hardDuplicateThreshold ?? DISCOVERY_HARD_DUPLICATE_THRESHOLD,
+      warningThreshold: DISCOVERY_WARNING_THRESHOLD,
+      softWarningReason:
+        debug?.softWarningReason ?? fallback?.softWarningReason ?? null,
+    },
+    ...(settings.urbanFreshRun &&
+    typeof settings.urbanFreshRun === "object"
+      ? {
+          urbanFreshRun: {
+            ...(settings.urbanFreshRun as Record<string, unknown>),
+            noveltyClassification: classification,
+          },
+        }
+      : {}),
   };
 }

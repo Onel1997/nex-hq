@@ -1,13 +1,18 @@
 /**
- * Phase 2.2A — Brand Face Discovery provider configuration.
+ * Phase 2.2A / 2.5A — Brand Face Discovery provider configuration.
  * Server-side only. Never expose FAL_KEY to the browser.
+ *
+ * Phase 2.5A: Official Brand Face discovery defaults to OpenAI Images.
+ * FLUX remains available only when PERSONA_DISCOVERY_PROVIDER explicitly selects it.
+ * Never silently fall back to FLUX when OpenAI is unavailable.
  */
 
 export const DISCOVERY_PROVIDER_IDS = ["fal_flux", "openai", "fake"] as const;
 export type DiscoveryProviderId = (typeof DISCOVERY_PROVIDER_IDS)[number];
 
 export const DEFAULT_FAL_FLUX_MODEL = "fal-ai/flux/dev";
-export const DEFAULT_DISCOVERY_PROVIDER: DiscoveryProviderId = "fal_flux";
+/** Phase 2.5A — Official Brand Face Casting default. */
+export const DEFAULT_DISCOVERY_PROVIDER: DiscoveryProviderId = "openai";
 
 /** Recommended default: up to 3 attempts per slot within confirmed budget. */
 export const DEFAULT_DISCOVERY_ATTEMPTS_PER_SLOT = 3;
@@ -30,16 +35,24 @@ export function resolveFalModel(): string {
   return model && model.length > 0 ? model : DEFAULT_FAL_FLUX_MODEL;
 }
 
+/**
+ * Resolve discovery provider for NEW Official Brand Face runs.
+ * Explicit PERSONA_DISCOVERY_PROVIDER wins; otherwise OpenAI is the default.
+ * FLUX is never chosen implicitly just because FAL_KEY is present.
+ */
 export function resolveConfiguredDiscoveryProviderId(): DiscoveryProviderId {
   const raw = process.env.PERSONA_DISCOVERY_PROVIDER?.trim().toLowerCase();
-  if (raw === "openai") return "openai";
-  if (raw === "fake") return "fake";
   if (raw === "fal_flux" || raw === "fal" || raw === "flux") return "fal_flux";
-  // Default Official Brand Face discovery to fal_flux only when FAL is valid.
-  if (isFalConfigured()) return DEFAULT_DISCOVERY_PROVIDER;
-  // Do not silently fall back to OpenAI for A1 discovery when fal was expected.
-  if (process.env.OPENAI_API_KEY?.trim()) return "openai";
-  return "fake";
+  if (raw === "fake") return "fake";
+  if (raw === "openai") return "openai";
+
+  // Phase 2.5A default: OpenAI Images for Official Brand Face discovery.
+  if (process.env.OPENAI_API_KEY?.trim()) return DEFAULT_DISCOVERY_PROVIDER;
+
+  // No OpenAI key and no explicit provider — do not silently pick FLUX.
+  // Return openai so paid preflight fails with a clear OPENAI_API_KEY message.
+  // Tests without keys fall through to fake via shouldUseFakePersonaProvider.
+  return DEFAULT_DISCOVERY_PROVIDER;
 }
 
 export function assertDiscoveryProviderConfiguredForPaid(

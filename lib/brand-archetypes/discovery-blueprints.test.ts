@@ -294,17 +294,20 @@ describe("Phase 1.8E archetype-scoped discovery blueprints", () => {
       assert.equal(bp.gender, "male");
       assert.equal(bp.archetypeId, ARCH_URBAN);
     }
-    // Phase 2.1B: Urban L2 lanes not yet migrated — live OBF prompt must fail closed.
-    assert.throws(
-      () =>
-        buildCandidatePrompt({
-          project: projectForArchetype(ARCH_URBAN, "proj-urban"),
-          assetType: "portrait_front",
-          candidateNumber: 1,
-          generationRunId: "run-urban",
-        }),
-      /No L2 SlotBlueprints configured/i,
-    );
+    // Phase 2.5B: Urban L2 is live — OBF prompt must resolve male-only identity.
+    for (const n of [1, 2, 3, 4]) {
+      const built = buildCandidatePrompt({
+        project: projectForArchetype(ARCH_URBAN, `proj-urban-${n}`),
+        assetType: "portrait_front",
+        candidateNumber: n,
+        generationRunId: `run-urban-${n}`,
+      });
+      assert.equal(built.brandArchetype.genderPresentation, "Male");
+      assert.equal(built.slotBlueprint?.gender, "male");
+      assert.equal(built.discoveryBlueprint?.gender, "male");
+      assert.match(built.prompt, /\bmale\b/i);
+      assert.doesNotMatch(built.prompt, /\bfemale model\b/i);
+    }
   });
 
   it("Female OBF never assigns male identity to any slot", () => {

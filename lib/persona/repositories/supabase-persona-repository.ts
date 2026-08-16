@@ -148,7 +148,22 @@ function mapPersona(
     identity_locked_at:
       row.identity_locked_at == null ? null : String(row.identity_locked_at),
     image_use_approved: bool(row.image_use_approved, false),
+    image_use_approved_at:
+      row.image_use_approved_at == null ? null : String(row.image_use_approved_at),
+    image_use_approved_by: nullableStr(row.image_use_approved_by),
     video_use_approved: bool(row.video_use_approved, false),
+    video_use_approved_at:
+      row.video_use_approved_at == null ? null : String(row.video_use_approved_at),
+    video_use_approved_by: nullableStr(row.video_use_approved_by),
+    brand_cast_approved: bool(
+      row.brand_cast_approved,
+      bool(row.approved, status === "Approved"),
+    ),
+    brand_cast_approved_at:
+      row.brand_cast_approved_at == null
+        ? null
+        : String(row.brand_cast_approved_at),
+    brand_cast_approved_by: nullableStr(row.brand_cast_approved_by),
     primary_reference_asset_id: nullableStr(row.primary_reference_asset_id),
     visual_identity_notes: str(row.visual_identity_notes),
     distinguishing_features: str(row.distinguishing_features),
@@ -328,7 +343,14 @@ function personaRowPayload(
     "identity_lock_version",
     "identity_locked_at",
     "image_use_approved",
+    "image_use_approved_at",
+    "image_use_approved_by",
     "video_use_approved",
+    "video_use_approved_at",
+    "video_use_approved_by",
+    "brand_cast_approved",
+    "brand_cast_approved_at",
+    "brand_cast_approved_by",
     "primary_reference_asset_id",
     "visual_identity_notes",
     "distinguishing_features",
@@ -363,6 +385,13 @@ function personaRowPayload(
 
   if (status !== undefined) row.status = status;
   if (approved !== undefined) row.approved = approved;
+  if (
+    "brand_cast_approved" in input &&
+    (input as UpdatePersonaInput).brand_cast_approved === true
+  ) {
+    row.approved = true;
+    if (status === undefined) row.status = "Approved";
+  }
 
   return row;
 }
@@ -526,7 +555,14 @@ export class SupabasePersonaRepository implements PersonaRepository {
       identity_lock_version: input.identity_lock_version ?? 1,
       identity_locked_at: input.identity_locked_at ?? null,
       image_use_approved: input.image_use_approved ?? false,
+      image_use_approved_at: input.image_use_approved_at ?? null,
+      image_use_approved_by: input.image_use_approved_by ?? null,
       video_use_approved: input.video_use_approved ?? false,
+      video_use_approved_at: input.video_use_approved_at ?? null,
+      video_use_approved_by: input.video_use_approved_by ?? null,
+      brand_cast_approved: input.brand_cast_approved ?? false,
+      brand_cast_approved_at: input.brand_cast_approved_at ?? null,
+      brand_cast_approved_by: input.brand_cast_approved_by ?? null,
       primary_reference_asset_id: input.primary_reference_asset_id ?? null,
       visual_identity_notes: input.visual_identity_notes ?? "",
       distinguishing_features: input.distinguishing_features ?? "",

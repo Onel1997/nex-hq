@@ -1,7 +1,8 @@
 /**
  * Resolve Persona Creator provider mode from env + project settings.
- * Phase 2.2A: Official Brand Face A1 discovery prefers fal_flux when FAL is configured.
- * OpenAI remains available. Never silently fall back from fal → OpenAI for paid A1.
+ * Phase 2.5A: Official Brand Face A1 discovery defaults to OpenAI Images.
+ * FLUX is optional and only used when PERSONA_DISCOVERY_PROVIDER explicitly selects it.
+ * Never silently fall back to FLUX when OpenAI fails / is missing.
  */
 
 import { isOpenAiImagesConfigured } from "@/agents/image/providers/openai-images-provider";
@@ -22,11 +23,25 @@ export function resolveActiveDiscoveryProviderId(): DiscoveryProviderId {
   return resolveConfiguredDiscoveryProviderId();
 }
 
+function explicitDiscoveryProviderRequest():
+  | "fal_flux"
+  | "openai"
+  | "fake"
+  | null {
+  const explicit = process.env.PERSONA_DISCOVERY_PROVIDER?.trim().toLowerCase();
+  if (explicit === "fal_flux" || explicit === "fal" || explicit === "flux") {
+    return "fal_flux";
+  }
+  if (explicit === "openai") return "openai";
+  if (explicit === "fake") return "fake";
+  return null;
+}
+
 /**
  * Effective mode for a project:
  * - disabled: never invent candidates
  * - manual_upload: upload-only workflow
- * - image_provider: fal_flux (preferred) or openai when configured
+ * - image_provider: OpenAI by default; fal_flux only when explicitly selected
  * - hybrid: prefer provider when configured, else manual
  */
 export function resolveEffectiveProviderMode(
@@ -42,6 +57,7 @@ export function resolveEffectiveProviderMode(
   const openaiOk = isOpenAiImagesConfigured();
   const providerConfigured = falOk || openaiOk;
   const discoveryProviderId = resolveConfiguredDiscoveryProviderId();
+  const explicit = explicitDiscoveryProviderRequest();
 
   if (requested === "disabled") {
     return {
@@ -66,11 +82,7 @@ export function resolveEffectiveProviderMode(
 
   if (requested === "image_provider" || requested === "hybrid") {
     // Explicit fal selection must fail closed — never silently bill OpenAI.
-    const explicit = process.env.PERSONA_DISCOVERY_PROVIDER?.trim().toLowerCase();
-    if (
-      (explicit === "fal_flux" || explicit === "fal" || explicit === "flux") &&
-      !falOk
-    ) {
+    if (explicit === "fal_flux" && !falOk) {
       return {
         mode: requested === "hybrid" ? "manual_upload" : "disabled",
         providerConfigured: false,
@@ -81,32 +93,57 @@ export function resolveEffectiveProviderMode(
       };
     }
 
-    if (!providerConfigured) {
+    // Default / explicit OpenAI — fail closed; do not silently fall back to FLUX.
+    if (explicit !== "fal_flux" && discoveryProviderId === "openai" && !openaiOk) {
       return {
         mode: requested === "hybrid" ? "manual_upload" : "disabled",
         providerConfigured: false,
         providerId: null,
         setupMessage:
-          "Kein Bild-Provider konfiguriert (FAL_KEY / OPENAI_API_KEY fehlen). Generierung deaktiviert — manueller Upload möglich.",
-        discoveryProviderId: null,
+          "OpenAI Images is not configured (OPENAI_API_KEY missing). discovery_provider_not_configured",
+        discoveryProviderId: "openai",
       };
     }
 
-    const providerId =
-      discoveryProviderId === "fal_flux" && falOk
-        ? "fal_flux"
-        : discoveryProviderId === "openai" && openaiOk
-          ? PERSONA_CANDIDATE_PROVIDER_ID
-          : falOk
-            ? "fal_flux"
-            : PERSONA_CANDIDATE_PROVIDER_ID;
+    if (!providerConfigured && explicit !== "fal_flux") {
+      return {
+        mode: requested === "hybrid" ? "manual_upload" : "disabled",
+        providerConfigured: false,
+        providerId: null,
+        setupMessage:
+          "Kein Bild-Provider konfiguriert (OPENAI_API_KEY fehlt). Generierung deaktiviert — manueller Upload möglich.",
+        discoveryProviderId: "openai",
+      };
+    }
+
+    if (explicit === "fal_flux" && falOk) {
+      return {
+        mode: requested === "hybrid" ? "hybrid" : "image_provider",
+        providerConfigured: true,
+        providerId: "fal_flux",
+        setupMessage: null,
+        discoveryProviderId: "fal_flux",
+      };
+    }
+
+    // Phase 2.5A default path: OpenAI Images.
+    if (openaiOk) {
+      return {
+        mode: requested === "hybrid" ? "hybrid" : "image_provider",
+        providerConfigured: true,
+        providerId: PERSONA_CANDIDATE_PROVIDER_ID,
+        setupMessage: null,
+        discoveryProviderId: "openai",
+      };
+    }
 
     return {
-      mode: requested === "hybrid" ? "hybrid" : "image_provider",
-      providerConfigured: true,
-      providerId,
-      setupMessage: null,
-      discoveryProviderId: providerId as DiscoveryProviderId,
+      mode: requested === "hybrid" ? "manual_upload" : "disabled",
+      providerConfigured: false,
+      providerId: null,
+      setupMessage:
+        "OpenAI Images is not configured (OPENAI_API_KEY missing). discovery_provider_not_configured",
+      discoveryProviderId: "openai",
     };
   }
 
@@ -120,6 +157,6 @@ export function resolveEffectiveProviderMode(
 }
 
 export function defaultProviderModeForEnvironment(): ProviderMode {
-  if (isPersonaImageProviderConfigured()) return "image_provider";
+  if (isOpenAiImagesConfigured() || isFalConfigured()) return "image_provider";
   return "manual_upload";
 }

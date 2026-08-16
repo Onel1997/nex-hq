@@ -343,6 +343,19 @@ export interface BrandCastMilestoneProgress {
   missing_reference_requirements: string[];
   milestone_reached: boolean;
   milestone_label: string;
+  /** Phase 2.4D — official Brand Cast members for the Brand Cast view. */
+  members: BrandCastMemberSummary[];
+}
+
+export interface BrandCastMemberSummary {
+  personaId: string;
+  displayName: string;
+  role: string;
+  masterPortraitUrl: string | null;
+  identityLocked: boolean;
+  imageUseApproved: boolean;
+  videoStatus: "approved" | "not_approved" | "not_ready";
+  brandCastApproved: boolean;
 }
 
 export type CreateCreationProjectInput = Omit<

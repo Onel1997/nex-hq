@@ -98,7 +98,15 @@ export interface Persona {
   /** Phase 2.4A — when official Brand Identity was locked. */
   identity_locked_at: string | null;
   image_use_approved: boolean;
+  image_use_approved_at: string | null;
+  image_use_approved_by: string | null;
   video_use_approved: boolean;
+  video_use_approved_at: string | null;
+  video_use_approved_by: string | null;
+  /** Official Brand Cast membership (Phase 2.4D). Synced with legacy `approved` + status Approved. */
+  brand_cast_approved: boolean;
+  brand_cast_approved_at: string | null;
+  brand_cast_approved_by: string | null;
   primary_reference_asset_id: string | null;
   visual_identity_notes: string;
   distinguishing_features: string;
@@ -331,7 +339,14 @@ export type CreatePersonaInput = Omit<
   | "primary_reference_asset_id"
   | "created_by"
   | "image_use_approved"
+  | "image_use_approved_at"
+  | "image_use_approved_by"
   | "video_use_approved"
+  | "video_use_approved_at"
+  | "video_use_approved_by"
+  | "brand_cast_approved"
+  | "brand_cast_approved_at"
+  | "brand_cast_approved_by"
   | "visual_identity_notes"
   | "distinguishing_features"
   | "prohibited_changes"
@@ -366,7 +381,14 @@ export type CreatePersonaInput = Omit<
   primary_reference_asset_id?: string | null;
   created_by?: string | null;
   image_use_approved?: boolean;
+  image_use_approved_at?: string | null;
+  image_use_approved_by?: string | null;
   video_use_approved?: boolean;
+  video_use_approved_at?: string | null;
+  video_use_approved_by?: string | null;
+  brand_cast_approved?: boolean;
+  brand_cast_approved_at?: string | null;
+  brand_cast_approved_by?: string | null;
   visual_identity_notes?: string;
   distinguishing_features?: string;
   prohibited_changes?: string;

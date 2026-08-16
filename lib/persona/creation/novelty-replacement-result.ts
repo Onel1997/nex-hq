@@ -57,6 +57,8 @@ export type NoveltyReplacementCheckpoint =
   | "provider_response_received"
   | "provider_generation_completed"
   | "provider_payload_validated"
+  | "provider_asset_stashed"
+  | "candidate_slot_renumbered"
   | "candidate_row_created"
   | "candidate_created"
   | "asset_upload_started"
@@ -74,6 +76,32 @@ export type NoveltyReplacementCheckpoint =
   | "API_response_returned"
   | "response_returned"
   | "board_payload_observed_terminal_result";
+
+/** Canonical terminal statuses for replacement pollers (job + outcome + persist). */
+export const NOVELTY_REPLACEMENT_TERMINAL_STATUSES = [
+  "completed",
+  "failed",
+  "cancelled",
+  "partially_completed",
+  "novelty_failed",
+  "provider_failed",
+  "persist_failed",
+] as const;
+
+export type NoveltyReplacementTerminalStatus =
+  (typeof NOVELTY_REPLACEMENT_TERMINAL_STATUSES)[number];
+
+export function isTerminalNoveltyReplacementStatus(
+  status: string | null | undefined,
+): boolean {
+  if (!status) return false;
+  return (NOVELTY_REPLACEMENT_TERMINAL_STATUSES as readonly string[]).includes(
+    status,
+  );
+}
+
+export const REPLACEMENT_PERSIST_FAILED_USER_MESSAGE =
+  "Replacement failed after provider generation. The generated result could not be saved. No additional generation will start automatically." as const;
 
 export type NoveltyReplacementSuccessResponse = {
   ok: true;

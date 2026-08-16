@@ -137,6 +137,118 @@ export function canRequestNoveltyReplacement(attemptNumber: number): boolean {
   return attemptNumber < MAX_DISCOVERY_IDENTITY_ATTEMPTS;
 }
 
+/**
+ * Phase 2.5B.3 — board slots stay 1–4. Superseded parents move to a non-colliding
+ * number so UNIQUE(creation_project_id, candidate_number) allows the replacement insert.
+ * Formula: 1000 + boardSlot*100 + attemptNumber (e.g. D attempt 1 → 1401).
+ */
+export const SUPERSEDED_CANDIDATE_NUMBER_BASE = 1000;
+
+export function supersededCandidateNumber(input: {
+  boardSlotNumber: number;
+  attemptNumber: number;
+}): number {
+  const slot = input.boardSlotNumber;
+  const attempt = input.attemptNumber;
+  if (!Number.isInteger(slot) || slot < 1 || slot > 4) {
+    throw new Error(`Invalid board slot number for supersede: ${slot}`);
+  }
+  if (!Number.isInteger(attempt) || attempt < 1) {
+    throw new Error(`Invalid attempt number for supersede: ${attempt}`);
+  }
+  return SUPERSEDED_CANDIDATE_NUMBER_BASE + slot * 100 + attempt;
+}
+
+/** Active board slot (A=1…D=4), even after a parent was renumbered for supersede. */
+export function resolveBoardSlotNumber(candidate: {
+  candidate_number: number;
+  generation_settings?: Record<string, unknown> | null;
+}): number {
+  const settings = candidate.generation_settings ?? {};
+  for (const key of ["boardSlotNumber", "originalCandidateNumber"] as const) {
+    const v = settings[key];
+    if (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 4) {
+      return v;
+    }
+  }
+  if (
+    Number.isInteger(candidate.candidate_number) &&
+    candidate.candidate_number >= 1 &&
+    candidate.candidate_number <= 4
+  ) {
+    return candidate.candidate_number;
+  }
+  throw new Error(
+    `Cannot resolve board slot number from candidate_number=${candidate.candidate_number}`,
+  );
+}
+
+export function boardSlotLabel(boardSlotNumber: number): string {
+  return ["A", "B", "C", "D"][boardSlotNumber - 1] ?? String(boardSlotNumber);
+}
+
+/** PostgREST / Postgres unique violation on persona_candidates slot number. */
+export function isCandidateNumberUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const rec = err as {
+    code?: string;
+    message?: string;
+    details?: Record<string, unknown>;
+  };
+  const msg = [
+    typeof rec.message === "string" ? rec.message : "",
+    typeof rec.details?.message === "string" ? rec.details.message : "",
+    typeof rec.details?.code === "string" ? rec.details.code : "",
+    typeof rec.code === "string" ? rec.code : "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  return (
+    rec.code === "23505" ||
+    rec.details?.code === "23505" ||
+    /idx_persona_candidates|creation_project_id.*candidate_number|duplicate key|unique.*candidate_number/i.test(
+      msg,
+    )
+  );
+}
+
+export type NoveltyPersistStage =
+  | "asset_insert"
+  | "candidate_insert"
+  | "candidate_slot_renumber"
+  | "candidate_slot_renumber_rollback"
+  | "candidate_update"
+  | "novelty_result_persist"
+  | "provider_asset_stash"
+  | "replacement_attempt_update"
+  | "generation_run_update"
+  | "project_state_update";
+
+/** Structured persistence-boundary log — no secrets, prompts, or bytes. */
+export function logNoveltyPersistStage(input: {
+  stage: NoveltyPersistStage;
+  projectId: string;
+  candidateId?: string | null;
+  replacementJobId?: string | null;
+  attemptNumber?: number | null;
+  slot?: string | null;
+  httpOrPostgrestCode?: string | number | null;
+  safeMessage?: string | null;
+  ok?: boolean;
+}): void {
+  console.info("[persona-novelty-persist]", {
+    stage: input.stage,
+    projectId: input.projectId,
+    candidateId: input.candidateId ?? null,
+    replacementJobId: input.replacementJobId ?? null,
+    attemptNumber: input.attemptNumber ?? null,
+    slot: input.slot ?? null,
+    httpOrPostgrestCode: input.httpOrPostgrestCode ?? null,
+    safeMessage: input.safeMessage ?? null,
+    ok: input.ok ?? true,
+  });
+}
+
 export function buildNoveltyReplacementAttemptRecord(input: {
   attemptNumber: number;
   replacementOfCandidateId: string | null;

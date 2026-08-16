@@ -283,13 +283,22 @@ describe("Persona Studio Phase 1.1", () => {
     await seedReadyReferences(memory, scopeA, persona.id);
     await transitionPersona(scopeA, persona.id, "submit_review");
     await transitionPersona(scopeA, persona.id, "approve");
+    await updatePersona(scopeA, persona.id, {
+      identity_lock_status: "approved",
+      image_identity_ready: true,
+      image_use_approved: true,
+      brand_cast_approved: true,
+    });
 
     const imageReady = await listImageReadyPersonas(scopeA);
     const videoReady = await listVideoReadyPersonas(scopeA);
     assert.ok(imageReady.some((p) => p.id === persona.id));
     assert.equal(videoReady.some((p) => p.id === persona.id), false);
 
-    await updatePersona(scopeA, persona.id, { video_use_approved: true });
+    await updatePersona(scopeA, persona.id, {
+      video_use_approved: true,
+      video_identity_ready: true,
+    });
     const videoReady2 = await listVideoReadyPersonas(scopeA);
     assert.ok(videoReady2.some((p) => p.id === persona.id));
   });
@@ -392,6 +401,12 @@ describe("Persona Studio Phase 1.1", () => {
     await seedReadyReferences(memory, scopeA, ready.id);
     await transitionPersona(scopeA, ready.id, "submit_review");
     await transitionPersona(scopeA, ready.id, "approve");
+    await updatePersona(scopeA, ready.id, {
+      identity_lock_status: "approved",
+      image_identity_ready: true,
+      image_use_approved: true,
+      brand_cast_approved: true,
+    });
 
     await createPersona(scopeA, {
       name: "NotReady",
@@ -418,6 +433,13 @@ describe("Persona Studio Phase 1.1", () => {
     await seedReadyReferences(memory, scopeA, persona.id);
     await transitionPersona(scopeA, persona.id, "submit_review");
     await transitionPersona(scopeA, persona.id, "approve");
+    await updatePersona(scopeA, persona.id, {
+      identity_lock_status: "approved",
+      image_identity_ready: true,
+      image_use_approved: true,
+      video_identity_ready: true,
+      brand_cast_approved: true,
+    });
     const list = await listVideoReadyPersonas(scopeA);
     assert.ok(list.some((p) => p.id === persona.id));
   });

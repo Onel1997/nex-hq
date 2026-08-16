@@ -1,7 +1,7 @@
 /**
- * Phase 2.2A — resolve Brand Face Discovery provider.
- * Fail closed before paid confirmation when fal is selected but FAL_KEY is missing.
- * Never silently fall back to OpenAI to charge money.
+ * Phase 2.2A / 2.5A — resolve Brand Face Discovery provider.
+ * OpenAI Images is the default. fal_flux only when explicitly selected.
+ * Never silently fall back between OpenAI and FLUX for paid discovery.
  */
 
 import {

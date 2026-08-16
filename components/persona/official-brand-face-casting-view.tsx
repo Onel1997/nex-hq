@@ -498,6 +498,10 @@ export function OfficialBrandFaceCastingView({
               <dd>{brief.identityDnaSummary.presence}</dd>
             </div>
             <div>
+              <dt>Provider</dt>
+              <dd>OpenAI</dd>
+            </div>
+            <div>
               <dt>Expected cost</dt>
               <dd>
                 {brief.expectedCostEur
@@ -527,7 +531,7 @@ export function OfficialBrandFaceCastingView({
                 onChange={(e) => setConfirmCost(e.target.checked)}
               />
               <span>
-                Generate 4 discovery faces with FLUX. Automatically replace
+                Generate 4 discovery faces with OpenAI. Automatically replace
                 candidates rejected by biological face protection (up to 3
                 attempts per slot). I confirm the maximum authorized provider
                 spend and start A1 Discovery for {brief.archetypeName}.

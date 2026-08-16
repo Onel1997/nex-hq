@@ -352,27 +352,25 @@ export async function getPersonaReadiness(scope: WorkspaceScope, id: string) {
 export async function listImageReadyPersonas(
   scope: WorkspaceScope,
 ): Promise<Persona[]> {
+  const { listImageStudioEligibleBrandModels } = await import(
+    "@/lib/persona/creation/use-approvals"
+  );
+  const eligible = await listImageStudioEligibleBrandModels(scope);
+  const ids = new Set(eligible.map((e) => e.personaId));
   const personas = await repo().listPersonas(scope);
-  const ready: Persona[] = [];
-  for (const persona of personas) {
-    const assets = await repo().listReferenceAssets(scope, persona.id);
-    const report = computePersonaReadiness(persona, assets);
-    if (report.image_ready) ready.push(persona);
-  }
-  return ready;
+  return personas.filter((p) => ids.has(p.id));
 }
 
 export async function listVideoReadyPersonas(
   scope: WorkspaceScope,
 ): Promise<Persona[]> {
+  const { listVideoStudioEligibleBrandModels } = await import(
+    "@/lib/persona/creation/use-approvals"
+  );
+  const eligible = await listVideoStudioEligibleBrandModels(scope);
+  const ids = new Set(eligible.map((e) => e.personaId));
   const personas = await repo().listPersonas(scope);
-  const ready: Persona[] = [];
-  for (const persona of personas) {
-    const assets = await repo().listReferenceAssets(scope, persona.id);
-    const report = computePersonaReadiness(persona, assets);
-    if (report.video_ready) ready.push(persona);
-  }
-  return ready;
+  return personas.filter((p) => ids.has(p.id));
 }
 
 /** Production-eligible personas (image-ready baseline). */

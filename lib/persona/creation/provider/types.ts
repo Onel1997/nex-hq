@@ -97,6 +97,18 @@ export interface CreateCandidateBatchInput {
    */
   avoidSameRunSample?: Record<string, string> | null;
   /**
+   * Phase 2.5B.2 — accepted sibling candidate IDs considered for Urban separation.
+   */
+  urbanSiblingCandidateIds?: string[] | null;
+  /**
+   * Phase 2.5B.2 — accepted sibling anatomy samples (prompt-level DNA only).
+   */
+  urbanSiblingSamples?: Record<string, string>[] | null;
+  /**
+   * Phase 2.5B.2 — accepted sibling slots (A–D) for observability / prompt exclusions.
+   */
+  urbanSiblingSlots?: Array<"A" | "B" | "C" | "D"> | null;
+  /**
    * Phase 2.1E — candidate being replaced (audit / persistence).
    */
   replacementOfCandidateId?: string | null;

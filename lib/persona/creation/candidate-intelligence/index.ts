@@ -14,6 +14,73 @@ export {
 } from "./prompt-builder";
 
 export {
+  MAX_PROVIDER_PROMPT_LENGTH,
+  TARGET_PROVIDER_PROMPT_LENGTH,
+  OBF_DISCOVERY_NEGATIVE_COMPACT,
+  compactOfficialBrandFaceProviderPrompt,
+  enforceOpenAiDiscoveryPromptBudget,
+  logPromptBudgetReport,
+  type PromptBudgetReport,
+  type EnforcePromptBudgetInput,
+  type EnforcePromptBudgetResult,
+} from "./prompt-budget";
+
+export {
+  URBAN_CASTING_DIVERSITY_FACE_GEOMETRY,
+  URBAN_CASTING_DIVERSITY_HAIR_SILHOUETTES,
+  URBAN_CROSS_SLOT_EXCLUSIONS,
+  URBAN_MIN_SIBLING_DNA_DIFFS,
+  URBAN_SIBLING_DNA_AXES,
+  anatomySampleFromDiscoveryInstance,
+  buildUrbanSiblingDnaReport,
+  countUrbanSiblingDnaDiffs,
+  diversityEscalationLevelFromAttempt,
+  extractUrbanGeometryCue,
+  mergeSiblingAvoidSamples,
+  urbanSiblingDnaOverlapTooHigh,
+  urbanSiblingSeparationEscalationSuffix,
+  urbanSlotFaceDiversityBlock,
+  type UrbanAnatomySample,
+  type UrbanFaceDiversityDebug,
+  type UrbanSiblingDnaReport,
+} from "./urban-face-diversity";
+
+export {
+  URBAN_FRESH_RUN_RECIPE_VERSION,
+  URBAN_HAIR_LANE_POOL,
+  URBAN_SLOT_MOODS,
+  buildUrbanFreshRunRecipe,
+  formatUrbanFreshDiscoveryIdentityPrompt,
+  hashStringToUint32,
+  toUrbanFreshRunDebug,
+  urbanFreshRunHairComboKey,
+  type UrbanFreshRunDebug,
+  type UrbanFreshRunRecipe,
+  type UrbanHairLane,
+  type UrbanHairLaneId,
+  type UrbanSlotCastingCue,
+} from "./urban-fresh-run-casting";
+
+export {
+  URBAN_FACIAL_EMPHASIS_POOL,
+  URBAN_FACE_CLUSTER_DISTANCE,
+  URBAN_FRESH_FACE_DNA_VERSION,
+  URBAN_RECENT_PROJECTS_FOR_FACE_BIAS,
+  analyzeRecentUrbanFaceClusters,
+  buildUrbanFreshFaceDirection,
+  buildUrbanFreshFaceDna,
+  clusterUrbanFaceEmbeddings,
+  filterDiscoveryOnlyFaceSamples,
+  pickUrbanSlotFacialEmphases,
+  type UrbanFaceEmbeddingSample,
+  type UrbanFacialEmphasis,
+  type UrbanFreshFaceClusterAnalysis,
+  type UrbanFreshFaceDna,
+} from "./urban-fresh-face-dna";
+
+export { loadUrbanFreshFaceBiasSamples } from "./urban-fresh-face-bias-loader";
+
+export {
   assertObfCastAnatomyDiversity,
   assertObfPromptHasNoLegacyBiology,
   buildDiscoveryIdentityL3Debug,

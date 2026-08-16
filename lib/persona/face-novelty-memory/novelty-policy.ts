@@ -135,6 +135,17 @@ export async function evaluateDiscoveryNovelty(
         closestPriorCandidateId =
           (raw._closestMatchCandidateId as string | undefined) ??
           faceSimilarityResult.closestMatchAssetId;
+      } else if (
+        !hardReject &&
+        (raw._isWarning === true ||
+          (faceSimilarityResult as { isWarning?: boolean }).isWarning === true)
+      ) {
+        // Phase 2.5B.4 — borderline resemblance: warn only, never hard-block.
+        softWarning = true;
+        softWarningReason = "face_similarity_warning";
+        closestPriorCandidateId =
+          (raw._closestMatchCandidateId as string | undefined) ??
+          faceSimilarityResult.closestMatchAssetId;
       }
     } catch (err) {
       const raw = err instanceof Error ? err.message : String(err);

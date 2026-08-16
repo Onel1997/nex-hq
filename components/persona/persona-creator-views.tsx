@@ -7,7 +7,9 @@ import {
   NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS,
   formatNoveltyReplacementTimeoutMessage,
   REPLACEMENT_JOB_STALE_MESSAGE,
+  REPLACEMENT_PERSIST_FAILED_USER_MESSAGE,
   computeReplacementElapsed,
+  isTerminalNoveltyReplacementStatus,
   outcomeMessage,
   stageLabelForCheckpoint,
   type ActiveNoveltyReplacementDto,
@@ -299,6 +301,7 @@ function EmptyState({
 
 export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
   const p = studio.brandCastProgress;
+  const members = p?.members ?? [];
   return (
     <section className="ps-panel">
       <header className="ps-panel-header">
@@ -324,7 +327,55 @@ export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
             <span className="ps-milestone-label">{p.milestone_label}</span>
             <strong>{p.milestone_reached ? "Reached" : "In progress"}</strong>
           </div>
-          {!p.milestone_reached && p.male_approved === 0 && p.female_approved === 0 ? (
+
+          {members.length > 0 ? (
+            <ul className="ps-ref-pkg-slots" data-testid="brand-cast-members">
+              {members.map((m) => (
+                <li key={m.personaId} className="ps-ref-pkg-slot" data-testid={`brand-cast-member-${m.personaId}`}>
+                  {m.masterPortraitUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={m.masterPortraitUrl}
+                      alt={m.displayName}
+                      className="ps-ref-thumb"
+                    />
+                  ) : (
+                    <span className="ps-muted">Portrait pending</span>
+                  )}
+                  <strong>{m.displayName}</strong>
+                  <span className="ps-ref-pkg-meta">{m.role}</span>
+                  <div className="ps-btn-row">
+                    {m.identityLocked ? (
+                      <PersonaStatusChip label="IDENTITY LOCKED" tone="selected" />
+                    ) : null}
+                    {m.imageUseApproved ? (
+                      <PersonaStatusChip label="IMAGE APPROVED" tone="image" />
+                    ) : null}
+                    <PersonaStatusChip
+                      label={
+                        m.videoStatus === "approved"
+                          ? "VIDEO APPROVED"
+                          : m.videoStatus === "not_ready"
+                            ? "VIDEO NOT READY"
+                            : "VIDEO NOT APPROVED"
+                      }
+                      tone={m.videoStatus === "approved" ? "video" : "muted"}
+                    />
+                    {m.brandCastApproved ? (
+                      <PersonaStatusChip label="OFFICIAL BRAND CAST" tone="approved" />
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="ps-btn"
+                    onClick={() => studio.selectPersona(m.personaId)}
+                  >
+                    Open
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : !p.milestone_reached && p.male_approved === 0 && p.female_approved === 0 ? (
             <EmptyState
               title="No Brand Cast has been approved yet."
               body="Cast your first official faces in Brand Face Casting — then lock identity and approve."
@@ -1556,7 +1607,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
   const [replacementFlow, setReplacementFlow] = useState<{
     candidateId: string;
     slot: string;
-    phase: "idle" | "confirming" | "generating" | "polling";
+    phase: "idle" | "confirming" | "generating" | "polling" | "failed";
     attemptNumber: number;
     maxAttempts: number;
     /** Epoch ms of local monotonic start — never project/job created_at alone. */
@@ -2163,6 +2214,47 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                     }
                   : null
               }
+              onRetryFailedReplacement={
+                flowForSlot?.phase === "failed" &&
+                studio.selectedProjectId
+                  ? async () => {
+                      setError(null);
+                      setResultMessage(null);
+                      setReplacementFlow(null);
+                      setNoveltyConfirmCost(false);
+                      try {
+                        const prepared = await studio.prepareNoveltyReplacement(
+                          studio.selectedProjectId!,
+                          slot.candidateId,
+                        );
+                        setNoveltyPrepare({
+                          candidateId: slot.candidateId,
+                          slot: prepared.slot ?? slotLabel,
+                          previousAttemptNumber:
+                            prepared.previousAttemptNumber ??
+                            slot.attemptNumber ??
+                            1,
+                          nextAttemptNumber:
+                            prepared.nextAttemptNumber ??
+                            slot.nextAttemptNumber ??
+                            2,
+                          maxAttempts: prepared.maxAttempts ?? 4,
+                          reason:
+                            prepared.reason ?? "face_similarity_duplicate",
+                          jobId:
+                            (prepared as { job?: { id?: string } }).job?.id ??
+                            null,
+                        });
+                      } catch (e) {
+                        setError(
+                          e instanceof Error
+                            ? e.message
+                            : "Retry prepare failed",
+                        );
+                      }
+                    }
+                  : undefined
+              }
               onGenerateNewFace={
                 slot.requiresReplacementConfirmation && studio.selectedProjectId
                   ? async () => {
@@ -2313,6 +2405,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                   noveltyDecision?: string | null;
                   providerStarted?: boolean;
                   providerCompleted?: boolean;
+                  providerMayHaveCompleted?: boolean;
                   durationMs?: number;
                   slot?: string;
                   safeErrorMessage?: string;
@@ -2358,18 +2451,13 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                     jobId?: string | null;
                   };
                   if (data.jobId) jobId = data.jobId;
-                  const terminalStatuses = new Set([
-                    "completed",
-                    "failed",
-                    "cancelled",
-                    "partially_completed",
-                  ]);
                   const terminal =
                     Boolean(confirmResult?.status) ||
                     Boolean(confirmFailedMessage) ||
-                    (typeof data.status === "string" &&
-                      terminalStatuses.has(data.status)) ||
-                    Boolean(data.finalCandidateStatus) ||
+                    isTerminalNoveltyReplacementStatus(data.status) ||
+                    isTerminalNoveltyReplacementStatus(
+                      data.finalCandidateStatus,
+                    ) ||
                     Boolean(data.safeErrorCode);
                   if (
                     data.safeErrorCode === "provider_generation_timeout" ||
@@ -2380,7 +2468,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                       prev
                         ? {
                             ...prev,
-                            phase: "idle",
+                            phase: "failed",
                             stageLabel: "Image generation timed out",
                             safeError: "provider_generation_timeout",
                             providerMayHaveCompleted:
@@ -2393,24 +2481,69 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                       serverState: "provider_generation_timeout",
                     };
                   }
-                  setReplacementFlow((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          phase: "polling",
-                          jobId: jobId ?? prev.jobId,
-                          newCandidateId:
-                            data.candidateId ?? prev.newCandidateId,
-                          stageLabel:
-                            data.stageLabel ??
-                            stageLabelForCheckpoint(data.currentStage) ??
-                            prev.stageLabel,
-                          providerMayHaveCompleted:
-                            data.providerMayHaveCompleted === true ||
-                            Boolean(data.providerCompletedAt),
-                        }
-                      : prev,
-                  );
+                  if (
+                    terminal &&
+                    (data.status === "failed" ||
+                      data.finalCandidateStatus === "novelty_failed" ||
+                      data.safeErrorCode === "candidate_persist_exception" ||
+                      data.safeErrorCode === "candidate_number_conflict" ||
+                      data.safeErrorCode === "persist_failed" ||
+                      data.safeErrorCode === "provider_failed")
+                  ) {
+                    const failMsg =
+                      data.safeErrorCode === "candidate_persist_exception" ||
+                      data.safeErrorCode === "candidate_number_conflict" ||
+                      data.safeErrorCode === "persist_failed"
+                        ? (data.safeErrorMessage?.trim() ||
+                          REPLACEMENT_PERSIST_FAILED_USER_MESSAGE)
+                        : (data.safeErrorMessage ??
+                          "Generate New Face failed.");
+                    setError(failMsg);
+                    setReplacementFlow((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            phase: "failed",
+                            jobId: jobId ?? prev.jobId,
+                            newCandidateId:
+                              data.candidateId ?? prev.newCandidateId,
+                            stageLabel: "Replacement failed",
+                            safeError: failMsg,
+                            providerMayHaveCompleted:
+                              data.providerMayHaveCompleted === true ||
+                              Boolean(data.providerCompletedAt),
+                          }
+                        : prev,
+                    );
+                    return {
+                      terminal: true,
+                      serverState:
+                        data.status ??
+                        data.finalCandidateStatus ??
+                        data.safeErrorCode ??
+                        "failed",
+                    };
+                  }
+                  if (!terminal) {
+                    setReplacementFlow((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            phase: "polling",
+                            jobId: jobId ?? prev.jobId,
+                            newCandidateId:
+                              data.candidateId ?? prev.newCandidateId,
+                            stageLabel:
+                              data.stageLabel ??
+                              stageLabelForCheckpoint(data.currentStage) ??
+                              prev.stageLabel,
+                            providerMayHaveCompleted:
+                              data.providerMayHaveCompleted === true ||
+                              Boolean(data.providerCompletedAt),
+                          }
+                        : prev,
+                    );
+                  }
                   return {
                     terminal,
                     serverState:
@@ -2519,18 +2652,44 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                     }
 
                     if (confirmFailedMessage) {
+                      const failedText: string = confirmFailedMessage;
                       const timedOut =
                         /did not finish within the allowed time|provider_generation_timeout/i.test(
-                          confirmFailedMessage,
+                          failedText,
                         );
-                      setError(
-                        timedOut
-                          ? "Image generation timed out."
-                          : confirmFailedMessage,
+                      const persistFailed =
+                        /could not be saved|candidate_persist|candidate_number_conflict|persist_failed/i.test(
+                          failedText,
+                        );
+                      let failMsg: string = failedText;
+                      if (timedOut) {
+                        failMsg = "Image generation timed out.";
+                      } else if (
+                        persistFailed &&
+                        !failedText.includes("could not be saved")
+                      ) {
+                        failMsg = REPLACEMENT_PERSIST_FAILED_USER_MESSAGE;
+                      }
+                      setError(failMsg);
+                      setReplacementFlow((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              phase: "failed",
+                              stageLabel: timedOut
+                                ? "Image generation timed out"
+                                : "Replacement failed",
+                              safeError: failMsg,
+                              providerMayHaveCompleted:
+                                resolvedConfirm?.providerCompleted === true ||
+                                resolvedConfirm?.providerMayHaveCompleted ===
+                                  true,
+                            }
+                          : prev,
                       );
                       if (resolvedConfirm?.providerCompleted) {
                         setError(
-                          `${confirmFailedMessage} Provider may already have completed — do not retry without a fresh confirmation.`,
+                          `${failMsg} Provider may already have completed — do not retry without a fresh confirmation.`,
                         );
                       }
                     } else if (resolvedConfirm?.status === "allowed") {
@@ -2576,7 +2735,10 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                       pollControllerRef.current = null;
                     }
                     confirmInFlightRef.current = false;
-                    setReplacementFlow(null);
+                    // Keep failed state visible for Retry Candidate D — never leave a spinner up.
+                    setReplacementFlow((prev) =>
+                      prev?.phase === "failed" ? prev : null,
+                    );
                   }
                 })();
               }}

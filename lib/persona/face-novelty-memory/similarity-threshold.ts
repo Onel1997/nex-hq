@@ -38,6 +38,39 @@ export const FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD = 0.45;
 /** Euclidean distance threshold for soft warning (possible same identity). */
 export const FACE_SIMILARITY_EUCLIDEAN_WARNING_THRESHOLD = 0.55;
 
+/**
+ * Phase 2.5B.4 — Discovery-only hard duplicate threshold.
+ * Lower than identity-lock (0.45): only near-identical faces hard-block casting.
+ * Identity Lock / Reference Package continue using FACE_SIMILARITY_EUCLIDEAN_*.
+ */
+export const DISCOVERY_HARD_DUPLICATE_THRESHOLD = 0.30;
+
+/**
+ * Phase 2.5B.4 — Discovery soft-warning band (still PASS / ready / selectable).
+ * Distances in (HARD, WARNING] show "Similarity warning" without blocking.
+ */
+export const DISCOVERY_WARNING_THRESHOLD = 0.45;
+
+export const DISCOVERY_SIMILARITY_THRESHOLD_VERSION = "discovery-v2.5b4" as const;
+
+export type DiscoveryNoveltyClassification =
+  | "PASS"
+  | "WARNING"
+  | "HARD_DUPLICATE";
+
+/**
+ * Classify a discovery face distance using discovery-only thresholds.
+ * Identity-lock thresholds are intentionally not used here.
+ */
+export function classifyDiscoveryFaceDistance(
+  distance: number | null | undefined,
+): DiscoveryNoveltyClassification {
+  if (distance == null || !Number.isFinite(distance)) return "PASS";
+  if (distance <= DISCOVERY_HARD_DUPLICATE_THRESHOLD) return "HARD_DUPLICATE";
+  if (distance <= DISCOVERY_WARNING_THRESHOLD) return "WARNING";
+  return "PASS";
+}
+
 /** Converted to cosine similarity (1 - dist/2) for external reporting. */
 export const FACE_SIMILARITY_COSINE_DUPLICATE_THRESHOLD = 1 - FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD / 2;
 export const FACE_SIMILARITY_COSINE_WARNING_THRESHOLD = 1 - FACE_SIMILARITY_EUCLIDEAN_WARNING_THRESHOLD / 2;

@@ -111,11 +111,19 @@ export {
   FACE_SIMILARITY_EMBEDDING_DIMENSION,
   FACE_SIMILARITY_EVALUATOR_VERSION,
   FACE_DETECTION_MIN_CONFIDENCE,
+  DISCOVERY_HARD_DUPLICATE_THRESHOLD,
+  DISCOVERY_WARNING_THRESHOLD,
+  DISCOVERY_SIMILARITY_THRESHOLD_VERSION,
+  classifyDiscoveryFaceDistance,
   euclideanDistance,
   euclideanToCosineSimilarity,
   getThresholdConfig,
 } from "./similarity-threshold";
-export type { ThresholdConfig, FaceDetectionStatus } from "./similarity-threshold";
+export type {
+  ThresholdConfig,
+  FaceDetectionStatus,
+  DiscoveryNoveltyClassification,
+} from "./similarity-threshold";
 
 export type { FaceEmbeddingRecord, EmbeddingComparisonResult } from "./face-embedding-types";
 

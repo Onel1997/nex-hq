@@ -15,7 +15,8 @@ export type PersonaErrorCode =
   | "RELATIONSHIP_INTEGRITY"
   | "CONFIG"
   | "LIVE_PAID_TEST_NOT_AUTHORIZED"
-  | "PAID_GENERATION_DISABLED";
+  | "PAID_GENERATION_DISABLED"
+  | "PROMPT_TOO_LONG";
 
 export class PersonaDomainError extends Error {
   constructor(

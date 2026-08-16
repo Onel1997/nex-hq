@@ -241,19 +241,17 @@ describe("Phase 2.1B live L3 identity prompt integration", () => {
     assert.ok(built.discoveryIdentityMetadata?.samplingSeed);
   });
 
-  it("17. missing L3 blocks provider call (guard)", () => {
-    assert.throws(
-      () =>
-        resolveObfDiscoveryIdentity({
-          archetypeId: ARCH_URBAN,
-          candidateNumber: 1,
-          creationProjectId: "proj-missing",
-          generationRunId: "run-missing",
-        }),
-      (err: unknown) =>
-        err instanceof IdentityBlueprintError &&
-        /No L2 SlotBlueprints configured/i.test(err.message),
-    );
+  it("17. Urban L2 SlotBlueprints resolve for Official Brand Face A1", () => {
+    const identity = resolveObfDiscoveryIdentity({
+      archetypeId: ARCH_URBAN,
+      candidateNumber: 1,
+      creationProjectId: "proj-urban-l2",
+      generationRunId: "run-urban-l2",
+    });
+    assert.equal(identity.slotBlueprint.archetypeId, ARCH_URBAN);
+    assert.equal(identity.slotBlueprint.ageRange, "21-25");
+    assert.match(identity.slotBlueprint.hairTextureFamily, /run hair may rotate|short|curls|afro/i);
+    assert.doesNotMatch(identity.slotBlueprint.hairTextureFamily, /NEVER braids/i);
   });
 
   it("18. legacy biology in OBF throws when useBrandArchetypes=false", () => {

@@ -46,6 +46,7 @@ import type { ReferencePackageSlot } from "@/lib/persona/creation/reference-pack
 import { parseReferencePackageAssetNotes } from "@/lib/persona/creation/reference-package/types";
 import type { ReferencePackageStatusView } from "@/lib/persona/creation/reference-package/types";
 import type { IdentityLockEligibilityView } from "@/lib/persona/creation/identity-lock/types";
+import type { BrandModelApprovalsView } from "@/lib/persona/creation/use-approvals/types";
 import { canProposeMirrorSalvage } from "@/lib/persona/creation/reference-package/mirror-salvage";
 
 const NAV: Array<{
@@ -551,6 +552,19 @@ function PersonaDetail({
           .join("|")}
       />
 
+      {persona.identity_lock_status === "approved" ? (
+        <BrandModelApprovalsPanel
+          persona={persona}
+          busy={busy}
+          onBusy={setBusy}
+          onError={setError}
+          onApproved={() => {
+            studio.selectPersona(persona.id);
+            void studio.refreshCreation();
+          }}
+        />
+      ) : null}
+
       <section className="ps-section">
         <h3>Referenzbibliothek</h3>
         {readiness ? (
@@ -927,7 +941,6 @@ function PersonaDetail({
             onClick={() =>
               void run(() =>
                 studio.patchPersona(persona.id, {
-                  image_use_approved: true,
                   visual_identity_notes:
                     persona.visual_identity_notes || "Locked Brand Cast identity",
                   prohibited_changes:
@@ -1512,6 +1525,294 @@ function IdentityLockPanel({
               onClick={() => void confirmLock()}
             >
               Confirm Identity Lock
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function BrandModelApprovalsPanel({
+  persona,
+  busy,
+  onBusy,
+  onError,
+  onApproved,
+}: {
+  persona: Persona;
+  busy: boolean;
+  onBusy: (v: boolean) => void;
+  onError: (msg: string | null) => void;
+  onApproved: () => void;
+}) {
+  const [view, setView] = useState<BrandModelApprovalsView | null>(null);
+  const [confirmGate, setConfirmGate] = useState<
+    "image_use" | "video_use" | "brand_cast" | null
+  >(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/persona/${persona.id}/use-approvals`);
+        const data = (await res.json().catch(() => null)) as {
+          approvals?: BrandModelApprovalsView;
+          error?: string;
+        } | null;
+        if (!res.ok) {
+          throw new Error(data?.error ?? `Approvals status failed (${res.status})`);
+        }
+        if (!cancelled && data?.approvals) setView(data.approvals);
+      } catch (err) {
+        if (!cancelled) {
+          onError(
+            err instanceof Error ? err.message : "Approvals status failed",
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    persona.id,
+    persona.image_use_approved,
+    persona.video_use_approved,
+    persona.brand_cast_approved,
+    persona.approved,
+    persona.status,
+    onError,
+  ]);
+
+  async function confirmApproval() {
+    if (!confirmGate) return;
+    onBusy(true);
+    setActionError(null);
+    onError(null);
+    try {
+      const body =
+        confirmGate === "image_use"
+          ? { action: "approve_image_use", confirmImageUseApproval: true }
+          : confirmGate === "video_use"
+            ? { action: "approve_video_use", confirmVideoUseApproval: true }
+            : { action: "approve_brand_cast", confirmBrandCastApproval: true };
+      const res = await fetch(`/api/persona/${persona.id}/use-approvals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+        persona?: Persona;
+      } | null;
+      if (!res.ok) {
+        throw new Error(data?.error ?? res.statusText);
+      }
+      setConfirmGate(null);
+      onApproved();
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Approval failed",
+      );
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  const imageApproved =
+    view?.imageUse.alreadyApproved ?? persona.image_use_approved;
+  const videoApproved =
+    view?.videoUse.alreadyApproved ?? persona.video_use_approved;
+  const brandCastApproved =
+    view?.brandCast.alreadyApproved ??
+    persona.brand_cast_approved ??
+    (persona.approved && persona.status === "Approved");
+
+  return (
+    <section className="ps-section" data-testid="brand-model-approvals-panel">
+      <h3>BRAND MODEL APPROVALS</h3>
+      <ul className="ps-completeness" data-testid="brand-model-approvals-list">
+        <li className="is-ok">
+          Identity · Locked
+        </li>
+        <li className={imageApproved ? "is-ok" : ""}>
+          Image Studio · {imageApproved ? "Approved" : "Not approved"}
+          {!imageApproved && view?.imageUse.eligible ? (
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={busy}
+              data-testid="approve-image-use"
+              onClick={() => setConfirmGate("image_use")}
+            >
+              Approve for Image Studio
+            </button>
+          ) : null}
+          {!imageApproved && view && !view.imageUse.eligible
+            ? view.imageUse.blockingReasons.map((r) => (
+                <span key={r} className="ps-muted">
+                  {r}
+                </span>
+              ))
+            : null}
+        </li>
+        <li className={videoApproved ? "is-ok" : ""}>
+          Video Studio ·{" "}
+          {videoApproved
+            ? "Approved"
+            : view?.videoUse.statusLabel === "Not ready"
+              ? "Not ready"
+              : "Not approved"}
+          {!videoApproved && view?.videoUse.eligible ? (
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={busy}
+              data-testid="approve-video-use"
+              onClick={() => setConfirmGate("video_use")}
+            >
+              Approve for Video Studio
+            </button>
+          ) : null}
+          {!videoApproved && view && !view.videoUse.eligible
+            ? view.videoUse.blockingReasons.map((r) => (
+                <span key={r} className="ps-muted">
+                  {r}
+                </span>
+              ))
+            : null}
+        </li>
+        <li className={brandCastApproved ? "is-ok" : ""}>
+          Brand Cast · {brandCastApproved ? "Official Brand Cast" : "Not approved"}
+          {!brandCastApproved && view?.brandCast.eligible ? (
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={busy}
+              data-testid="approve-brand-cast"
+              onClick={() => setConfirmGate("brand_cast")}
+            >
+              Approve as Official Brand Cast
+            </button>
+          ) : null}
+          {!brandCastApproved && view && !view.brandCast.eligible
+            ? view.brandCast.blockingReasons.map((r) => (
+                <span key={r} className="ps-muted">
+                  {r}
+                </span>
+              ))
+            : null}
+        </li>
+      </ul>
+
+      {confirmGate === "image_use" ? (
+        <div className="ps-ref-pkg-confirm" data-testid="image-use-confirm">
+          <h4>Approve this Brand Model for Image Studio?</h4>
+          <p>
+            This identity may now be used by Image Studio for Milaene campaign
+            images, product imagery, social assets and future campaign workflows.
+          </p>
+          {actionError ? (
+            <div className="ps-inline-error">
+              <p>{actionError}</p>
+            </div>
+          ) : null}
+          <div className="ps-btn-row">
+            <button
+              type="button"
+              className="ps-btn"
+              disabled={busy}
+              onClick={() => {
+                setConfirmGate(null);
+                setActionError(null);
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={busy}
+              data-testid="confirm-image-use"
+              onClick={() => void confirmApproval()}
+            >
+              Approve Image Use
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmGate === "video_use" ? (
+        <div className="ps-ref-pkg-confirm" data-testid="video-use-confirm">
+          <h4>Approve this Brand Model for Video Studio?</h4>
+          <p>
+            This locked identity may now be used by Video Studio for Milaene
+            motion and campaign video workflows.
+          </p>
+          {actionError ? (
+            <div className="ps-inline-error">
+              <p>{actionError}</p>
+            </div>
+          ) : null}
+          <div className="ps-btn-row">
+            <button
+              type="button"
+              className="ps-btn"
+              disabled={busy}
+              onClick={() => {
+                setConfirmGate(null);
+                setActionError(null);
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={busy}
+              data-testid="confirm-video-use"
+              onClick={() => void confirmApproval()}
+            >
+              Approve Video Use
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmGate === "brand_cast" ? (
+        <div className="ps-ref-pkg-confirm" data-testid="brand-cast-confirm">
+          <h4>Approve as Official Brand Cast?</h4>
+          <p>
+            This Brand Model becomes an official permanent face of Milaene —
+            eligible for Image Studio once Brand Cast approval is complete.
+          </p>
+          {actionError ? (
+            <div className="ps-inline-error">
+              <p>{actionError}</p>
+            </div>
+          ) : null}
+          <div className="ps-btn-row">
+            <button
+              type="button"
+              className="ps-btn"
+              disabled={busy}
+              onClick={() => {
+                setConfirmGate(null);
+                setActionError(null);
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={busy}
+              data-testid="confirm-brand-cast"
+              onClick={() => void confirmApproval()}
+            >
+              Approve as Official Brand Cast
             </button>
           </div>
         </div>

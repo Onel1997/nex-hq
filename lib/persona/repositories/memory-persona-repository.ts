@@ -175,7 +175,14 @@ export class MemoryPersonaRepository implements PersonaRepository {
       identity_lock_version: input.identity_lock_version ?? 1,
       identity_locked_at: input.identity_locked_at ?? null,
       image_use_approved: input.image_use_approved ?? false,
+      image_use_approved_at: input.image_use_approved_at ?? null,
+      image_use_approved_by: input.image_use_approved_by ?? null,
       video_use_approved: input.video_use_approved ?? false,
+      video_use_approved_at: input.video_use_approved_at ?? null,
+      video_use_approved_by: input.video_use_approved_by ?? null,
+      brand_cast_approved: input.brand_cast_approved ?? false,
+      brand_cast_approved_at: input.brand_cast_approved_at ?? null,
+      brand_cast_approved_by: input.brand_cast_approved_by ?? null,
       primary_reference_asset_id: input.primary_reference_asset_id ?? null,
       visual_identity_notes: input.visual_identity_notes ?? "",
       distinguishing_features: input.distinguishing_features ?? "",
@@ -228,6 +235,13 @@ export class MemoryPersonaRepository implements PersonaRepository {
     const current = this.data.personas[index];
     const nextStatus = patch.status ?? current.status;
 
+    const brandCastApproved =
+      patch.brand_cast_approved !== undefined
+        ? Boolean(patch.brand_cast_approved)
+        : nextStatus === "Approved"
+          ? true
+          : current.brand_cast_approved;
+
     const next: Persona = {
       ...current,
       ...patch,
@@ -236,7 +250,9 @@ export class MemoryPersonaRepository implements PersonaRepository {
       created_at: current.created_at,
       updated_at: nowIso(),
       status: nextStatus,
-      approved: nextStatus === "Approved",
+      // Legacy approved stays synchronized with Brand Cast approval only.
+      approved: nextStatus === "Approved" || brandCastApproved,
+      brand_cast_approved: brandCastApproved,
       preferred_location_ids: patch.preferred_location_ids
         ? [...new Set(patch.preferred_location_ids)]
         : current.preferred_location_ids,

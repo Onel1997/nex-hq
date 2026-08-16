@@ -24,6 +24,10 @@ import {
   FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD,
   FACE_SIMILARITY_EUCLIDEAN_WARNING_THRESHOLD,
   FACE_SIMILARITY_MODEL,
+  DISCOVERY_HARD_DUPLICATE_THRESHOLD,
+  DISCOVERY_WARNING_THRESHOLD,
+  DISCOVERY_SIMILARITY_THRESHOLD_VERSION,
+  classifyDiscoveryFaceDistance,
 } from "./similarity-threshold";
 import { resolveEvaluatorFailureMode } from "./local-face-embedding-evaluator";
 import {
@@ -387,14 +391,21 @@ export async function checkAndRegisterCandidate(
   const effectiveHardRejectReason =
     statusResult.hardRejectReason ?? evaluation.hardRejectReason;
 
+  const discoveryClassification = isFaceSimilarityReject
+    ? ("HARD_DUPLICATE" as const)
+    : evaluation.softWarningReason === "face_similarity_warning"
+      ? ("WARNING" as const)
+      : classifyDiscoveryFaceDistance(euclideanDistance);
+
   const liveDebugBase = buildSafeFaceNoveltyLiveDebug({
     evaluatorStatus: evaluatorActive ? "active" : "failed",
     evaluatorModel: FACE_SIMILARITY_MODEL,
     evaluatorVersion: FACE_SIMILARITY_EVALUATOR_VERSION,
     failureMode: resolveEvaluatorFailureMode(),
-    thresholdVersion: thresholdVersion ?? FACE_SIMILARITY_THRESHOLD_VERSION,
-    duplicateThreshold: FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD,
-    warningThreshold: FACE_SIMILARITY_EUCLIDEAN_WARNING_THRESHOLD,
+    thresholdVersion:
+      thresholdVersion ?? DISCOVERY_SIMILARITY_THRESHOLD_VERSION,
+    duplicateThreshold: DISCOVERY_HARD_DUPLICATE_THRESHOLD,
+    warningThreshold: DISCOVERY_WARNING_THRESHOLD,
     priorEmbeddingsLoaded: priorCompared,
     comparisonExecuted,
     faceDetectionStatus:
@@ -411,6 +422,7 @@ export async function checkAndRegisterCandidate(
     similarity: evaluation.faceSimilarity?.similarity,
     finalDecision: statusResult.finalDecision,
     hardRejectReason: effectiveHardRejectReason,
+    softWarningReason: evaluation.softWarningReason,
     requiresReplacementConfirmation: statusResult.requiresReplacementConfirmation,
     evaluationDurationMs,
     evaluatedAt,
@@ -420,6 +432,9 @@ export async function checkAndRegisterCandidate(
     candidateProjectId: input.creationProjectId,
     evaluatorActive,
     duplicateDecision: isFaceSimilarityReject || evaluation.hardRejectReason === "exact_checksum",
+    discoveryClassification,
+    distance: euclideanDistance ?? null,
+    hardDuplicateThreshold: DISCOVERY_HARD_DUPLICATE_THRESHOLD,
     safeErrorCode,
     safeErrorMessage,
   });

@@ -30,6 +30,8 @@ export type PersonaAuditEventType =
   | "candidate.converted_to_persona"
   | "identity_review.completed"
   | "persona.identity_locked"
+  | "persona.image_use_approved"
+  | "persona.video_use_approved"
   | "persona.brand_cast_approved"
   | "face_novelty.historical_protection_promoted";
 

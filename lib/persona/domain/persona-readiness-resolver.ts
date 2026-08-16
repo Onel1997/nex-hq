@@ -124,7 +124,10 @@ export function resolvePersonaReadinessFromFacts(input: {
   const videoIdentityReady = Boolean(persona.video_identity_ready);
   const imageUseApproved = Boolean(persona.image_use_approved);
   const videoUseApproved = Boolean(persona.video_use_approved);
-  const brandCastApproved = Boolean(persona.approved && persona.status === "Approved");
+  const brandCastApproved = Boolean(
+    persona.brand_cast_approved ||
+      (persona.approved && persona.status === "Approved"),
+  );
 
   const identityReady = identityLocked && imageIdentityReady;
 

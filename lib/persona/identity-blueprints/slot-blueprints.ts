@@ -5,6 +5,10 @@
  */
 
 import type { ControlledPools, DiscoverySlot, SlotBlueprint } from "./types";
+import {
+  URBAN_ARCHETYPE_ID,
+  URBAN_SLOT_BLUEPRINTS,
+} from "./urban-slot-blueprints";
 
 export const MEDITERRANEAN_ARCHETYPE_ID =
   "arch-mediterranean-premium-hero" as const;
@@ -768,6 +772,9 @@ export function listSlotBlueprintsForArchetype(
 ): readonly SlotBlueprint[] {
   if (archetypeId === MEDITERRANEAN_ARCHETYPE_ID) {
     return MEDITERRANEAN_SLOT_BLUEPRINTS;
+  }
+  if (archetypeId === URBAN_ARCHETYPE_ID) {
+    return URBAN_SLOT_BLUEPRINTS;
   }
   return [];
 }

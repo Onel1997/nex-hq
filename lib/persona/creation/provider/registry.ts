@@ -1,7 +1,8 @@
 /**
- * PersonaCandidateGenerator registry — Phase 2.2A provider-agnostic selection.
- * fal_flux is preferred for Official Brand Face A1 when configured.
- * OpenAI remains available. Fake used in tests.
+ * PersonaCandidateGenerator registry — Phase 2.5A provider selection.
+ * OpenAI Images is the default for Official Brand Face A1 discovery.
+ * fal_flux is only used when PERSONA_DISCOVERY_PROVIDER explicitly selects it.
+ * Never silently fall back between OpenAI and FLUX.
  */
 
 import type { ProviderMode } from "../../domain/creation-types";
@@ -31,8 +32,13 @@ export function getPersonaCandidateGenerator(
   if (resolved.mode === "manual_upload") return manual;
   if (resolved.mode === "image_provider" || resolved.mode === "hybrid") {
     if (shouldUseFakePersonaProvider()) return fake;
-    if (resolved.providerId === "fal_flux" && fal.isConfigured()) return fal;
-    if (openai.isConfigured()) return openai;
+    if (resolved.providerId === "fal_flux") {
+      return fal.isConfigured() ? fal : disabled;
+    }
+    if (resolved.providerId === "openai") {
+      return openai.isConfigured() ? openai : disabled;
+    }
+    // Fail closed — never silently swap providers.
     return resolved.mode === "hybrid" ? manual : disabled;
   }
   return disabled;

@@ -356,6 +356,12 @@ describe("Persona Studio live Supabase verification", { skip: !enabled }, () => 
     const approved = await transitionPersona(scope, persona.id, "approve");
     assert.equal(approved.status, "Approved");
     assert.equal(approved.approved, true);
+    await updatePersona(scope, persona.id, {
+      identity_lock_status: "approved",
+      image_identity_ready: true,
+      image_use_approved: true,
+      brand_cast_approved: true,
+    });
 
     const imageReady = await listImageReadyPersonas(scope);
     assert.ok(imageReady.some((p) => p.id === persona.id));
@@ -372,7 +378,10 @@ describe("Persona Studio live Supabase verification", { skip: !enabled }, () => 
     assert.equal(pack.usage.image_eligible, true);
     assert.equal(pack.usage.video_eligible, false);
 
-    await updatePersona(scope, persona.id, { video_use_approved: true });
+    await updatePersona(scope, persona.id, {
+      video_use_approved: true,
+      video_identity_ready: true,
+    });
     const videoReady2 = await listVideoReadyPersonas(scope);
     assert.ok(videoReady2.some((p) => p.id === persona.id));
   });

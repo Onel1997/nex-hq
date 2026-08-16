@@ -93,8 +93,14 @@ export function resolveNoveltyCandidateStatus(
       };
     }
 
+    // Phase 2.5B.4 — face resemblance WARNING stays ready/selectable (user decides).
+    const isFaceSimilarityWarning =
+      input.softWarning === true &&
+      typeof input.softWarningReason === "string" &&
+      input.softWarningReason.startsWith("face_similarity_warning");
+
     // Soft warnings from not_available / evaluator error under fail_closed.
-    if (input.softWarning) {
+    if (input.softWarning && !isFaceSimilarityWarning) {
       const reason = input.softWarningReason ?? "face_similarity_evaluator_not_available";
       const isError =
         reason.includes("evaluator_error") || reason.includes("error");

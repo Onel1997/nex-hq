@@ -63,6 +63,14 @@ export {
 } from "./slot-blueprints";
 
 export {
+  URBAN_ARCHETYPE_ID,
+  URBAN_SLOT_BLUEPRINT_VERSION,
+  URBAN_SLOT_BLUEPRINTS,
+  listUrbanSlotBlueprints,
+  getUrbanSlotBlueprint,
+} from "./urban-slot-blueprints";
+
+export {
   buildSamplingSeed,
   createDeterministicRng,
   sampleDiscoveryIdentityInstance,

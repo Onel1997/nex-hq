@@ -165,6 +165,22 @@ export class MemoryCreationRepository implements PersonaCreationRepository {
     if (!project) {
       throw new PersonaDomainError("Project not found", "NOT_FOUND");
     }
+    const duplicate = this.candidates.find(
+      (c) =>
+        c.creation_project_id === input.creation_project_id &&
+        c.candidate_number === input.candidate_number,
+    );
+    if (duplicate) {
+      throw new PersonaDomainError(
+        `Kandidat anlegen fehlgeschlagen: duplicate key value violates unique constraint \"persona_candidates_creation_project_id_candidate_number_key\"`,
+        "VALIDATION",
+        {
+          message:
+            'duplicate key value violates unique constraint "persona_candidates_creation_project_id_candidate_number_key"',
+          code: "23505",
+        },
+      );
+    }
     const created_at = nowIso();
     const row: PersonaCandidate = {
       id: randomUUID(),
