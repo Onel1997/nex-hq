@@ -135,6 +135,7 @@ import { MemoryLiveDiagnosticStore } from "../face-novelty-memory/diagnostic-sto
 import { SupabaseLiveDiagnosticStore } from "../face-novelty-memory/supabase-diagnostic-store";
 import { assertCandidateMayBecomeReady } from "../face-novelty-memory/visibility-assertion";
 import { maybeAttachNoveltyDebugToSettings } from "../face-novelty-memory/live-debug";
+import { attachUrbanFaceFreshnessToSettings } from "./candidate-intelligence/attach-urban-face-freshness";
 import {
   partitionBoardCandidates,
   type NoveltyFailureSlotDto,
@@ -1609,9 +1610,19 @@ export async function confirmAndStartCandidateGeneration(
           },
         );
 
+        const { settings: settingsWithFreshness } =
+          await attachUrbanFaceFreshnessToSettings({
+            settings: settingsWithDebug,
+            workspaceId: scope.workspaceId,
+            creationProjectId: projectId,
+            candidateId: candidate.id,
+            archetypeId: archetypeIdForNovelty,
+            archetypeSlug: officialCast.archetype?.slug ?? null,
+          });
+
         await creationRepo().updateCandidate(scope, candidate.id, {
           status: nextStatus,
-          generation_settings: settingsWithDebug,
+          generation_settings: settingsWithFreshness,
           rejection_reason:
             nextStatus === "ready"
               ? ""
@@ -3904,9 +3915,19 @@ export async function confirmNoveltyReplacementGeneration(
               },
             );
 
+            const { settings: settingsWithFreshness } =
+              await attachUrbanFaceFreshnessToSettings({
+                settings: settingsWithDebug,
+                workspaceId: scope.workspaceId,
+                creationProjectId: projectId,
+                candidateId: replacement.id,
+                archetypeId,
+                archetypeSlug: officialCast.archetype?.slug ?? null,
+              });
+
             await creationRepo().updateCandidate(scope, replacement.id, {
               status: finalStatus,
-              generation_settings: settingsWithDebug,
+              generation_settings: settingsWithFreshness,
               rejection_reason:
                 finalStatus === "ready"
                   ? ""

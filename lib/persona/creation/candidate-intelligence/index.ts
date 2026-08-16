@@ -78,6 +78,47 @@ export {
   type UrbanFreshFaceDna,
 } from "./urban-fresh-face-dna";
 
+export {
+  URBAN_CHEEKBONE_POOL,
+  URBAN_EYE_POOL,
+  URBAN_FACE_IDENTITY_RECIPE_VERSION,
+  URBAN_FACE_SHAPE_POOL,
+  URBAN_FACIAL_HAIR_LANE_POOL,
+  URBAN_JAW_POOL,
+  URBAN_LIP_POOL,
+  URBAN_NOSE_POOL,
+  assertUrbanFaceIdentityWithinRunSeparation,
+  buildUrbanFaceIdentityRecipesBaseline,
+  formatUrbanFaceIdentityPromptLine,
+  pickUrbanFaceIdentityRecipes,
+  pickUrbanFacialHairLanes,
+  type UrbanCheekboneTrait,
+  type UrbanEyeTrait,
+  type UrbanFaceIdentityRecipe,
+  type UrbanFaceIdentityRecipeSet,
+  type UrbanFaceShape,
+  type UrbanFacialHairLane,
+  type UrbanJawTrait,
+  type UrbanLipTrait,
+  type UrbanNoseTrait,
+} from "./urban-face-identity-recipe";
+
+export {
+  URBAN_FACE_FRESHNESS_DISTANCE_SATURATION,
+  URBAN_FACE_FRESHNESS_VERSION,
+  classifyFaceFreshnessScore,
+  computeUrbanFaceFreshness,
+  faceFreshnessBlocksSelection,
+  faceFreshnessScoreFromDistance,
+  formatFaceFreshnessLabel,
+  type UrbanFaceFreshnessClassification,
+  type UrbanFaceFreshnessResult,
+} from "./urban-face-freshness";
+
+export { loadCandidateFaceEmbedding } from "./urban-face-freshness-loader";
+
+export { attachUrbanFaceFreshnessToSettings } from "./attach-urban-face-freshness";
+
 export { loadUrbanFreshFaceBiasSamples } from "./urban-fresh-face-bias-loader";
 
 export {

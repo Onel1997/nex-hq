@@ -249,7 +249,7 @@ describe("Phase 2.1B live L3 identity prompt integration", () => {
       generationRunId: "run-urban-l2",
     });
     assert.equal(identity.slotBlueprint.archetypeId, ARCH_URBAN);
-    assert.equal(identity.slotBlueprint.ageRange, "21-25");
+    assert.equal(identity.slotBlueprint.ageRange, "21-24");
     assert.match(identity.slotBlueprint.hairTextureFamily, /run hair may rotate|short|curls|afro/i);
     assert.doesNotMatch(identity.slotBlueprint.hairTextureFamily, /NEVER braids/i);
   });

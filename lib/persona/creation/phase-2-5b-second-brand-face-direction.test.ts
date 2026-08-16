@@ -51,15 +51,15 @@ describe("Phase 2.5B — Second Brand Face casting direction", () => {
     }
   });
 
-  it("2. age remains 21–25 apparent", () => {
+  it("2. age remains 21–24 apparent", () => {
     const catalog = loadBrandArchetypeCatalog("ws-milaene");
     const urban = catalog.archetypes.find((a) => a.id === ARCH_URBAN)!;
-    assert.equal(urban.ageRange, "21-25");
+    assert.equal(urban.ageRange, "21-24");
     for (const bp of URBAN_DISCOVERY_BLUEPRINTS) {
-      assert.equal(bp.ageRange, "21-25");
+      assert.equal(bp.ageRange, "21-24");
     }
     for (const lane of URBAN_SLOT_BLUEPRINTS) {
-      assert.equal(lane.ageRange, "21-25");
+      assert.equal(lane.ageRange, "21-24");
     }
   });
 
@@ -152,10 +152,11 @@ describe("Phase 2.5B — Second Brand Face casting direction", () => {
         D: "short locs",
       },
     });
-    assert.match(block, /21–25|21-25/);
+    assert.match(block, /21–24|21-24/);
     assert.match(block, /braids/);
     assert.match(block, /short locs/);
     assert.match(block, /Create new people not based on previous discovery faces/i);
+    assert.match(block, /Young fashion-model face with distinctive but believable features/i);
     const cam = slotCastingCameraBlock("B", "urban-community-hero", {
       urbanHairLabel: "medium twists",
       urbanFaceMood: "longer oval impression",

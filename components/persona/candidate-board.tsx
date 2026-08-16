@@ -272,6 +272,47 @@ export function CandidateBoardCard({
     (typeof candidate.generation_settings?.faceNoveltyLiveDebug === "object" &&
       (candidate.generation_settings.faceNoveltyLiveDebug as { discoveryClassification?: string })
         ?.discoveryClassification === "WARNING");
+  const faceFreshness = candidate.generation_settings?.faceFreshness as
+    | {
+        score?: number;
+        classification?: string;
+        label?: string;
+        closestRecentCandidateId?: string | null;
+        closestDistance?: number | null;
+        projectsCompared?: string[];
+      }
+    | undefined;
+  const showFaceFreshnessDebug =
+    process.env.NODE_ENV === "development" &&
+    typeof faceFreshness?.score === "number";
+  const faceFreshnessClass =
+    typeof faceFreshness?.classification === "string"
+      ? faceFreshness.classification.toUpperCase()
+      : "";
+  const faceFreshnessPretty =
+    faceFreshnessClass === "VERY_FRESH"
+      ? "Very Fresh"
+      : faceFreshnessClass === "VERY_FAMILIAR"
+        ? "Very Familiar"
+        : faceFreshnessClass === "FRESH"
+          ? "Fresh"
+          : faceFreshnessClass === "FAMILIAR"
+            ? "Familiar"
+            : faceFreshnessClass || "—";
+  const faceFreshnessTitle = [
+    faceFreshness?.label,
+    faceFreshness?.closestRecentCandidateId
+      ? `closest: ${faceFreshness.closestRecentCandidateId}`
+      : null,
+    faceFreshness?.closestDistance != null
+      ? `distance: ${Number(faceFreshness.closestDistance).toFixed(3)}`
+      : null,
+    faceFreshness?.projectsCompared?.length
+      ? `projects compared: ${faceFreshness.projectsCompared.length}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <button
@@ -334,6 +375,21 @@ export function CandidateBoardCard({
             <dt>Technical</dt>
             <dd>{casting.technicalCompleteness ?? "—"}</dd>
           </div>
+          {showFaceFreshnessDebug ? (
+            <div
+              className={`ps-ci-freshness-stat ps-ci-freshness-${faceFreshnessClass.toLowerCase().replace(/_/g, "-")}`}
+              data-face-freshness="metadata"
+              title={faceFreshnessTitle}
+            >
+              <dt>Face Freshness</dt>
+              <dd>
+                {faceFreshness!.score}
+                <span className="ps-ci-freshness-sep">/</span>
+                100
+                <span className="ps-ci-freshness-class"> · {faceFreshnessPretty}</span>
+              </dd>
+            </div>
+          ) : null}
           <div>
             <dt>Visual Casting</dt>
             <dd>{visualLabel}</dd>

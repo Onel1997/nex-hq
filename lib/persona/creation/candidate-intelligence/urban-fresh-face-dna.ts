@@ -1,8 +1,9 @@
 /**
- * Phase 2.5B.6 — Urban fresh-face DNA across discovery runs.
+ * Phase 2.5B.6 / 2.5B.7 — Urban fresh-face DNA across discovery runs.
  *
  * Prompt-bias only: cluster recent unprotected Urban discovery embeddings and
- * bias the next run away from dominant face-space. Does not hard-block normal
+ * bias the next run away from dominant face-space. Phase 2.5B.7 adds compact
+ * faceIdentityRecipes (separate RNG from hair). Does not hard-block normal
  * resemblance. Does not change hair rotation / novelty thresholds.
  * No provider calls.
  */
@@ -14,8 +15,14 @@ import {
   normalizeHistoricalProtectionStatus,
   type HistoricalFaceProtectionStatus,
 } from "@/lib/persona/face-novelty-memory/historical-protection";
+import {
+  pickUrbanFaceIdentityRecipes,
+  type UrbanFaceIdentityRecipe,
+  type UrbanFaceIdentityRecipeSet,
+  type UrbanFacialHairLane,
+} from "./urban-face-identity-recipe";
 
-export const URBAN_FRESH_FACE_DNA_VERSION = "2.5B.6" as const;
+export const URBAN_FRESH_FACE_DNA_VERSION = "2.5B.7" as const;
 
 /** Last N Urban discovery projects considered for anti-repeat bias. */
 export const URBAN_RECENT_PROJECTS_FOR_FACE_BIAS = 5;
@@ -77,6 +84,10 @@ export type UrbanFreshFaceDna = {
   version: typeof URBAN_FRESH_FACE_DNA_VERSION;
   freshFaceDirection: string;
   facialEmphasis: Record<DiscoverySlot, UrbanFacialEmphasis>;
+  /** Phase 2.5B.7 — compact per-slot face identity recipes. */
+  faceIdentityRecipes: Record<DiscoverySlot, UrbanFaceIdentityRecipe>;
+  facialHairLanes: Record<DiscoverySlot, UrbanFacialHairLane>;
+  faceIdentitySet: UrbanFaceIdentityRecipeSet;
   recentClustersConsidered: number;
   dominantClusterAvoided: string | null;
   avoidanceWeight: number;
@@ -284,14 +295,18 @@ export function pickUrbanSlotFacialEmphases(
 export function buildUrbanFreshFaceDirection(input: {
   analysis: UrbanFreshFaceClusterAnalysis;
   facialEmphasis: Record<DiscoverySlot, UrbanFacialEmphasis>;
+  faceIdentityRecipes: Record<DiscoverySlot, UrbanFaceIdentityRecipe>;
 }): string {
   const lines = [
+    "Create a genuinely different individual, not a variation of the previous candidates.",
     "Create a genuinely new person whose overall facial identity is clearly different from previous Urban discovery faces.",
+    "Young fashion-model face with distinctive but believable features.",
+    "Apparent age 21–24 with natural variation — early-20s young adult streetwear model, never underage, never teenage / baby-face, never mature late-20s.",
     "Avoid repeating the dominant facial proportions seen in earlier runs.",
   ];
   if (input.analysis.avoidanceWeight >= 1) {
     lines.push(
-      "Vary face width, lower-face length, cheekbone prominence, eye spacing, nose width/profile, lip fullness, and brow structure.",
+      "Vary face width, lower-face length, cheekbones, eye spacing, nose, lips, and brow structure.",
     );
   }
   if (input.analysis.avoidanceWeight >= 2) {
@@ -304,9 +319,8 @@ export function buildUrbanFreshFaceDirection(input: {
       "Do not recreate the recent dominant Urban face-space — push clearly into a different facial proportion family.",
     );
   }
-  // Compact slot cues (not an anatomy essay).
   lines.push(
-    `Slot face emphasis this run: A ${input.facialEmphasis.A} · B ${input.facialEmphasis.B} · C ${input.facialEmphasis.C} · D ${input.facialEmphasis.D}.`,
+    `Face recipes this run: A ${input.faceIdentityRecipes.A.faceShape}/${input.faceIdentityRecipes.A.jaw} · B ${input.faceIdentityRecipes.B.faceShape}/${input.faceIdentityRecipes.B.jaw} · C ${input.faceIdentityRecipes.C.faceShape}/${input.faceIdentityRecipes.C.jaw} · D ${input.faceIdentityRecipes.D.faceShape}/${input.faceIdentityRecipes.D.jaw}.`,
   );
   return lines.join(" ");
 }
@@ -324,13 +338,21 @@ export function buildUrbanFreshFaceDna(
   const analysis = analyzeRecentUrbanFaceClusters(recentFaceSamples ?? [], {
     currentCreationProjectId: id,
   });
+  const faceIdentitySet = pickUrbanFaceIdentityRecipes(id, {
+    recentProjectIds: analysis.recentProjectIds,
+    avoidanceWeight: analysis.avoidanceWeight,
+  });
   return {
     version: URBAN_FRESH_FACE_DNA_VERSION,
     freshFaceDirection: buildUrbanFreshFaceDirection({
       analysis,
       facialEmphasis,
+      faceIdentityRecipes: faceIdentitySet.recipes,
     }),
     facialEmphasis,
+    faceIdentityRecipes: faceIdentitySet.recipes,
+    facialHairLanes: faceIdentitySet.facialHairLanes,
+    faceIdentitySet,
     recentClustersConsidered: analysis.recentClustersConsidered,
     dominantClusterAvoided: analysis.dominantClusterAvoided,
     avoidanceWeight: analysis.avoidanceWeight,

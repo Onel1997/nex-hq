@@ -266,7 +266,7 @@ export function formatObfAgeBodyDirectionPrompt(
     "3. AGE AND BODY DIRECTION (lane constraints)",
     `Age band: ${slotBlueprint.ageRange} (this individual age feel: ${instance.exactAge}).`,
     `Body direction: ${slotBlueprint.bodyDirection}.`,
-    "Photoreal adult fashion-model proportions only — never childlike, never bodybuilder, never ordinary desk-job frame.",
+    "Photoreal adult fashion-model proportions only — never childlike, never bodybuilder, never bulky/stocky/heavy-set, never ordinary desk-job frame.",
   ].join("\n");
 }
 

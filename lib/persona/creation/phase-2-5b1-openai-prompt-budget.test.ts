@@ -114,7 +114,7 @@ describe("Phase 2.5B.1 — OpenAI discovery prompt length budget", () => {
     assert.ok(medFull.length <= MAX_PROVIDER_PROMPT_LENGTH);
   });
 
-  it("3–5. candidate-specific run hair, dark-skinned male / 21–25 survive", () => {
+  it("3–5. candidate-specific run hair, dark-skinned male / 21–24 survive", () => {
     const projectId = "proj-25b1-urban-shared";
     const recipe = buildUrbanFreshRunRecipe(projectId);
     for (const n of [1, 2, 3, 4] as const) {
@@ -132,7 +132,7 @@ describe("Phase 2.5B.1 — OpenAI discovery prompt length budget", () => {
         new RegExp(recipe.hairLanes[slot].slice(0, 10), "i"),
       );
       assert.match(full, /Black|Afro-European|dark-skinned|deep brown|ebony/i);
-      assert.match(full, /21–25|21-25/);
+      assert.match(full, /21–24|21-24/);
       assert.match(full, /\bmale\b/i);
       assert.match(full, /approachable lifestyle|clean street|creative fashion|confident campaign/i);
     }

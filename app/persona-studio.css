@@ -2711,7 +2711,7 @@
 
 .ps-ci-card-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.35rem 0.75rem;
   margin: 0;
 }
@@ -2726,6 +2726,47 @@
 .ps-ci-card-stats dd {
   margin: 0;
   font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.ps-ci-freshness-stat dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem;
+}
+
+.ps-ci-freshness-sep {
+  opacity: 0.55;
+  font-weight: 500;
+  margin: 0 0.05rem;
+}
+
+.ps-ci-freshness-class {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.ps-ci-freshness-very-fresh .ps-ci-freshness-class {
+  color: #9ddeb0;
+}
+
+.ps-ci-freshness-fresh .ps-ci-freshness-class {
+  color: #b8d4a8;
+}
+
+.ps-ci-freshness-familiar .ps-ci-freshness-class {
+  color: #e2c48a;
+}
+
+.ps-ci-freshness-very-familiar .ps-ci-freshness-class {
+  color: #d4a078;
+}
+
+@media (max-width: 420px) {
+  .ps-ci-card-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .ps-ci-detail-header {

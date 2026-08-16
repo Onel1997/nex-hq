@@ -414,16 +414,22 @@ export class OpenAiCandidateGenerator implements PersonaCandidateGenerator {
               maxOverlapDiffsObserved:
                 built.urbanFaceDiversityDebug.maxOverlapDiffsObserved,
               variationSeed: built.urbanFreshRunDebug?.variationSeed,
-              hairLane: built.urbanFreshRunDebug?.hairLanes?.[
-                built.urbanFaceDiversityDebug.slot
-              ],
+              hairLane: built.urbanFreshRunDebug?.hairLane ??
+                built.urbanFreshRunDebug?.hairLanes?.[
+                  built.urbanFaceDiversityDebug.slot
+                ],
+              facialHairLane: built.urbanFreshRunDebug?.facialHairLane,
+              faceIdentityRecipe: built.urbanFreshRunDebug?.faceIdentityRecipe,
               freshFaceDirection: built.urbanFreshRunDebug?.freshFaceDirection,
+              recentClustersConsidered:
+                built.urbanFreshRunDebug?.recentClustersConsidered,
               dominantClusterAvoided:
                 built.urbanFreshRunDebug?.dominantClusterAvoided,
               facialEmphasis:
                 built.urbanFreshRunDebug?.facialEmphasis?.[
                   built.urbanFaceDiversityDebug.slot
                 ],
+              promptLength: built.urbanFreshRunDebug?.promptLength,
             });
           }
         }

@@ -163,7 +163,7 @@ export function realHumanPhotographPriorityBlock(
     "Output must read as a real unretouched commercial streetwear casting photograph,",
     "shot on a real camera — not AI fashion, CGI, Midjourney, or Instagram AI face.",
     urban
-      ? "PRIMARY BRAND FACE: cool modern naturally stylish Black / Afro-European commercial streetwear model (apparent age ~21–25)."
+      ? "PRIMARY BRAND FACE: cool modern naturally stylish Black / Afro-European commercial streetwear model (apparent age ~21–24)."
       : "PRIMARY BRAND FACE: cleaner younger soft-masculine premium streetwear ambassador (apparent age ~22–25).",
     "Someone who looks excellent in oversized T-shirts and hoodies — commercial fashion model, not runway-extreme.",
     "Hair silhouette and face geometry MUST follow THIS slot’s casting lane — never one shared haircut across A/B/C/D.",
@@ -313,11 +313,14 @@ function urbanCommunityBlock(recipe?: {
   const hair = recipe?.hairLanes;
   return [
     "PREMIUM CASTING — Urban Community Hero",
-    "Adult male Black / Afro-European commercial streetwear model, apparent age 21–25.",
-    "Lean / athletic · modern streetwear · realistic commercial fashion casting · natural skin · clean portrait photography · Milaene-compatible look.",
+    "Adult male Black / Afro-European young streetwear model, apparent age 21–24.",
+    "Young fashion-model face with distinctive but believable features.",
+    "Lean, slim-athletic fashion-model build with a naturally slender frame; not bulky, stocky or heavy-set.",
+    "Modern streetwear · realistic commercial fashion casting · natural skin · clean portrait photography · Milaene-compatible look.",
     "Four genuinely new, clearly different people across A/B/C/D.",
     "Create new people not based on previous discovery faces.",
     "Do NOT force detailed fixed jaw / nose / lip / eye geometry.",
+    "Never underage / teenage / baby-face. Avoid late-20s mature adult look.",
     "Hair styles rotate per discovery run — short, medium, braids, locs, and afros are all allowed.",
     "",
     "This run hair lanes:",

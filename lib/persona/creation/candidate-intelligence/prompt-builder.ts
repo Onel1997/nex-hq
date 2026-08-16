@@ -637,11 +637,16 @@ export function buildCandidatePrompt(params: {
       obfIdentityConstraints = [
         `1. ARCHETYPE AND GENDER CONSTRAINTS — ${brandArchetype.name}`,
         "Official Brand Face casting lane — Urban Community Hero.",
-        "Adult male Black / Afro-European · apparent age 21–25 · lean / athletic.",
+        "Adult male Black / Afro-European · apparent age 21–24 · lean / slim-athletic.",
+        "Lean, slim-athletic fashion-model build with a naturally slender frame; not bulky, stocky or heavy-set.",
+        "Young fashion-model face with distinctive but believable features.",
         "Modern streetwear · realistic commercial fashion casting · natural skin · clean portrait.",
         "Milaene-compatible look.",
+        "Never underage / teenage / baby-face. Avoid mature late-20s appearance, heavy beard aging, pronounced age lines.",
         `This run hair for Slot ${resolved.slotBlueprint.slot}: ${cue.hairLabel}.`,
-        `Slot mood: ${cue.mood}. Face emphasis: ${cue.facialEmphasis}.`,
+        `Slot mood: ${cue.mood}.`,
+        cue.faceIdentityRecipe.promptLine,
+        "Create a genuinely different individual, not a variation of the previous candidates.",
         "Create a new person not based on previous discovery faces.",
         urbanFreshRunRecipe.freshFaceDirection,
         "Exact face is NOT a locked anatomy recipe — use light casting cues in the L3 block.",
@@ -880,7 +885,7 @@ export function buildCandidatePrompt(params: {
       ? [
           `CASTING LANE — Slot ${slotBlueprint!.slot} (${urbanCue.mood})`,
           `This run hair: ${urbanCue.hairLabel}.`,
-          `Face emphasis: ${urbanCue.facialEmphasis}.`,
+          urbanCue.faceIdentityRecipe.promptLine,
           "Fresh discovery person — light casting cues only.",
         ].join("\n")
       : [
@@ -973,7 +978,9 @@ export function buildCandidatePrompt(params: {
       : null;
 
   const urbanFreshRunDebug: UrbanFreshRunDebug | null = urbanFreshRunRecipe
-    ? toUrbanFreshRunDebug(urbanFreshRunRecipe)
+    ? toUrbanFreshRunDebug(urbanFreshRunRecipe, {
+        slot: slotBlueprint?.slot ?? null,
+      })
     : null;
 
   const blocks: PromptBlocks = {

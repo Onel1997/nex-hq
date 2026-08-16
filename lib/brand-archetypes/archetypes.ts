@@ -64,7 +64,7 @@ const DNA_URBAN = finalizeIdentityDna({
   appearance: {
     faceGeometryFamily:
       "youthful soft-masculine Black / Afro-European commercial casting — MANDATORY A/B/C/D face-geometry diversity (A softer rounded wider midface · B longer oval structured · C softer heart narrower chin · D broader balanced rectangular) — naturally handsome not striking — never harsh or cold",
-    proportions: "lean to athletic frame — never bodybuilder — wearable in oversized streetwear",
+    proportions: "lean slim-athletic fashion-model frame with naturally slender build — narrow-to-medium shoulders — not bulky, stocky or heavy-set — never bodybuilder — wearable in oversized streetwear",
     eyeFeeling: "calm open friendly gaze — eye shape varies by slot — approachable commercial warmth",
     noseFamily: "slot-specific natural Black / Afro-European nose families — broader soft / straighter medium-broad / softer shorter / wide strong — never one shared nose template",
     lips: "natural medium-to-full lips — lip proportions vary by slot — calm approachable mouth",
@@ -86,9 +86,9 @@ const DNA_URBAN = finalizeIdentityDna({
   },
   movement: {
     posture: "relaxed upright with soft natural stance",
-    shoulderPosition: "natural medium shoulders, relaxed not squared",
+    shoulderPosition: "narrow-to-medium natural shoulders, relaxed not squared",
     naturalAsymmetry: "natural friendly asymmetry welcome",
-    bodyEnergy: "casting-ready calm — wearable in oversized clothing — never aggressive",
+    bodyEnergy: "casting-ready calm lean frame — wearable in oversized clothing — never bulky or aggressive",
   },
   photography: {
     framingPreference: "head-and-shoulders / chest-up casting portraits",
@@ -265,15 +265,15 @@ const ARCH_URBAN: BrandArchetype = {
   workspaceId: WORKSPACE_ID,
   status: "active",
   genderPresentation: "Male",
-  ageRange: "21-25",
+  ageRange: "21-24",
   ethnicityDirection: "Black / Afro-European / dark-skinned community direction",
   bodyDirection:
-    "lean to athletic — not bodybuilder — normal healthy proportions wearable in oversized clothing",
+    "lean, slim-athletic fashion-model build with a naturally slender frame; narrow-to-medium shoulders; low visible body fat — not bulky, stocky, heavy-set or bodybuilder",
   faceDirection:
-    "youthful soft-masculine Black / Afro-European commercial casting (apparent age ~21–25) — STRONG A/B/C/D face-geometry diversity (A softer rounded wider midface · B longer oval structured · C softer heart narrower chin · D broader balanced rectangular) — approachable, confident, natural — commercial fashion model rather than catwalk-extreme — never hyper-masculine, never harsh or cold, never four brothers",
+    "youthful soft-masculine Black / Afro-European commercial casting (apparent age ~21–24) — STRONG A/B/C/D face-geometry diversity (A softer rounded wider midface · B longer oval structured · C softer heart narrower chin · D broader balanced rectangular) — young fashion-model face with distinctive but believable features — approachable, confident, natural — streetwear model rather than catwalk-extreme — never hyper-masculine, never harsh or cold, never four brothers, never underage, never teenage / baby-face",
   hairDirection:
     "Natural Black / Afro-European hair with silhouette diversity per discovery run — short, curls, afro, twists, braids, cornrows, locs all allowed — rotate A/B/C/D each fresh project",
-  groomingDirection: "clean shave or very light natural stubble — never heavy full beard",
+  groomingDirection: "clean shave, faint moustache, very light stubble, or light neat stubble — occasional short neat beard only — never heavy full beard",
   personality:
     "Cool, modern, naturally stylish, approachable, quietly confident, youthful — customers want to wear what he is wearing",
   socialEnergy:

@@ -22,6 +22,7 @@ import {
   resolveCandidateVariation,
 } from "../candidate-intelligence";
 import { assertObfCastAnatomyDiversity } from "../candidate-intelligence/obf-l3-integration";
+import { attachUrbanFaceFreshnessToSettings } from "../candidate-intelligence/attach-urban-face-freshness";
 import {
   checkAndRegisterCandidate,
   loadDiscoveryHistory,
@@ -413,6 +414,34 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
               check.finalDecision === "blocked"
             ? "blocked"
             : "failed";
+      const existingCand = await creationRepo.getCandidate(
+        input.scope,
+        candidateId,
+      );
+      const { settings: settingsWithFreshness } =
+        await attachUrbanFaceFreshnessToSettings({
+          settings: {
+            ...(existingCand?.generation_settings ?? {}),
+            discoveryNovelty: {
+              classification:
+                check.hardRejectReason === "face_similarity_duplicate"
+                  ? "HARD_DUPLICATE"
+                  : check.softWarningReason === "face_similarity_warning"
+                    ? "WARNING"
+                    : "PASS",
+              closestPriorCandidateId: check.closestPriorCandidateId ?? null,
+              distance: check.euclideanDistance ?? null,
+            },
+          },
+          workspaceId: input.scope.workspaceId,
+          creationProjectId: input.project.id,
+          candidateId,
+          archetypeId,
+          archetypeSlug:
+            archetypeId === "arch-urban-community-hero"
+              ? "urban-community-hero"
+              : null,
+        });
       await creationRepo.updateCandidate(input.scope, candidateId, {
         status:
           decision === "allowed"
@@ -424,6 +453,7 @@ export async function runOfficialBrandFaceA1DiscoveryCompletion(
           decision === "allowed"
             ? ""
             : check.hardRejectReason ?? String(check.finalDecision),
+        generation_settings: settingsWithFreshness,
       });
       if (decision === "allowed") {
         const record = await noveltyRepo.findByCandidateId(

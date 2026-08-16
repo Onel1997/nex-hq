@@ -113,11 +113,12 @@ export function urbanSlotFaceDiversityBlock(
     `URBAN SLOT ${slot} — ${mood}`,
     `Hair for this run: ${hair}`,
     cue
-      ? `Light cues: ${cue.facialEmphasis}; ${cue.faceShapeMood}; ${cue.skinUndertone}; ${cue.facialHair}; ${cue.expression}.`
+      ? `${cue.faceIdentityRecipe.promptLine} Facial hair: ${cue.facialHairLane}. ${cue.skinUndertone}; ${cue.expression}.`
       : "Natural commercial casting portrait.",
     recipe?.freshFaceDirection
       ? `Fresh face: ${recipe.freshFaceDirection}`
       : "Create a clearly different person from the other board slots.",
+    "Create a genuinely different individual, not a variation of the previous candidates.",
     "Do NOT force detailed jaw / nose / lip / eye micro-geometry.",
     "Creative freedom within Black / Afro-European male streetwear casting.",
   ];
@@ -246,7 +247,9 @@ export function buildUrbanSiblingDnaReport(input: {
   return {
     slot: input.slot,
     baseFaceGeometry:
-      cue?.faceShapeMood ?? URBAN_CASTING_DIVERSITY_FACE_GEOMETRY[input.slot],
+      cue?.faceIdentityRecipe.promptLine ??
+      cue?.faceShapeMood ??
+      URBAN_CASTING_DIVERSITY_FACE_GEOMETRY[input.slot],
     retryNumber: input.retryNumber,
     diversityEscalationLevel: diversityEscalationLevelFromAttempt(
       input.retryNumber,

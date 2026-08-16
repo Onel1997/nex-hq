@@ -1,9 +1,10 @@
 /**
- * Phase 2.5B.5 / 2.5B.6 — Urban Community Hero fresh-run casting variation.
+ * Phase 2.5B.5 / 2.5B.6 / 2.5B.7 — Urban Community Hero fresh-run casting variation.
  *
  * Every new Creation Project gets a deterministic variation seed and a unique
  * A/B/C/D hair + light casting recipe. Phase 2.5B.6 adds fresh-face DNA bias
- * via a SEPARATE seed stream so hair rotation stays unchanged.
+ * via a SEPARATE seed stream so hair rotation stays unchanged. Phase 2.5B.7
+ * adds compact faceIdentityRecipes (also separate from hair RNG).
  * No provider calls. No anatomy essays.
  */
 
@@ -15,6 +16,10 @@ import {
   type UrbanFacialEmphasis,
   type UrbanFreshFaceDna,
 } from "./urban-fresh-face-dna";
+import type {
+  UrbanFaceIdentityRecipe,
+  UrbanFacialHairLane,
+} from "./urban-face-identity-recipe";
 
 export const URBAN_FRESH_RUN_RECIPE_VERSION = "2.5B.5" as const;
 
@@ -59,13 +64,6 @@ const FACE_SHAPE_MOODS = [
   "more angular impression",
 ] as const;
 
-const FACIAL_HAIR_OPTIONS = [
-  "clean shave",
-  "very light natural stubble",
-  "neat short beard shadow",
-  "clean shave with soft jaw",
-] as const;
-
 const EXPRESSION_OPTIONS = [
   "soft friendly calm",
   "quiet confidence",
@@ -89,10 +87,13 @@ export type UrbanSlotCastingCue = {
   skinUndertone: string;
   faceShapeMood: string;
   facialHair: string;
+  facialHairLane: UrbanFacialHairLane;
   expression: string;
   wardrobeTone: string;
-  /** Phase 2.5B.6 — one light facial emphasis (not a permanent anatomy recipe). */
+  /** Phase 2.5B.6 — one light facial emphasis (kept for debug compat). */
   facialEmphasis: UrbanFacialEmphasis;
+  /** Phase 2.5B.7 — compact facial identity recipe. */
+  faceIdentityRecipe: UrbanFaceIdentityRecipe;
 };
 
 export type UrbanFreshRunRecipe = {
@@ -101,7 +102,9 @@ export type UrbanFreshRunRecipe = {
   variationSeed: string;
   slots: Record<DiscoverySlot, UrbanSlotCastingCue>;
   hairLanes: Record<DiscoverySlot, string>;
-  /** Phase 2.5B.6 — compact fresh-face bias + slot emphases. */
+  facialHairLanes: Record<DiscoverySlot, UrbanFacialHairLane>;
+  faceIdentityRecipes: Record<DiscoverySlot, UrbanFaceIdentityRecipe>;
+  /** Phase 2.5B.6 / 2.5B.7 — compact fresh-face bias + slot recipes. */
   faceDna: UrbanFreshFaceDna;
   freshFaceDirection: string;
 };
@@ -109,7 +112,13 @@ export type UrbanFreshRunRecipe = {
 export type UrbanFreshRunDebug = {
   creationProjectId: string;
   variationSeed: string;
+  slot: DiscoverySlot | null;
   hairLanes: Record<DiscoverySlot, string>;
+  hairLane: string | null;
+  facialHairLanes: Record<DiscoverySlot, string>;
+  facialHairLane: string | null;
+  faceIdentityRecipes: Record<DiscoverySlot, string>;
+  faceIdentityRecipe: string | null;
   freshFaceDirection: string;
   recentClustersConsidered: number;
   dominantClusterAvoided: string | null;
@@ -190,7 +199,8 @@ function pickRotated<T extends string>(
 
 /**
  * Build a fresh Urban casting recipe for one Creation Project.
- * Same project id → same hair recipe. Face DNA uses a separate seed stream.
+ * Same project id → same hair recipe. Face DNA / faceIdentityRecipes use
+ * separate seed streams so hair rotation stays identical to 2.5B.5.
  */
 export function buildUrbanFreshRunRecipe(
   creationProjectId: string,
@@ -211,7 +221,6 @@ export function buildUrbanFreshRunRecipe(
 
   const usedUndertone = new Set<string>();
   const usedFace = new Set<string>();
-  const usedBeard = new Set<string>();
   const usedExpr = new Set<string>();
   const usedWardrobe = new Set<string>();
 
@@ -223,6 +232,8 @@ export function buildUrbanFreshRunRecipe(
   for (let i = 0; i < slots.length; i += 1) {
     const slot = slots[i]!;
     const hair = hairs[i]!;
+    const faceRecipe = faceDna.faceIdentityRecipes[slot];
+    const facialHairLane = faceDna.facialHairLanes[slot];
     const cue: UrbanSlotCastingCue = {
       slot,
       mood: URBAN_SLOT_MOODS[slot],
@@ -231,10 +242,16 @@ export function buildUrbanFreshRunRecipe(
       hairLength: hair.length,
       skinUndertone: pickRotated(SKIN_UNDERTONES, rng, usedUndertone),
       faceShapeMood: pickRotated(FACE_SHAPE_MOODS, rng, usedFace),
-      facialHair: pickRotated(FACIAL_HAIR_OPTIONS, rng, usedBeard),
-      expression: pickRotated(EXPRESSION_OPTIONS, rng, usedExpr),
+      facialHair: facialHairLane,
+      facialHairLane,
+      expression: (() => {
+        // Preserve former facial-hair RNG draw so later hair-stream cues stay stable.
+        void rng();
+        return pickRotated(EXPRESSION_OPTIONS, rng, usedExpr);
+      })(),
       wardrobeTone: pickRotated(WARDROBE_TONES, rng, usedWardrobe),
       facialEmphasis: faceDna.facialEmphasis[slot],
+      faceIdentityRecipe: faceRecipe,
     };
     slotMap[slot] = cue;
     hairLanes[slot] = hair.label;
@@ -246,6 +263,8 @@ export function buildUrbanFreshRunRecipe(
     variationSeed,
     slots: slotMap,
     hairLanes,
+    facialHairLanes: { ...faceDna.facialHairLanes },
+    faceIdentityRecipes: { ...faceDna.faceIdentityRecipes },
     faceDna,
     freshFaceDirection: faceDna.freshFaceDirection,
   };
@@ -268,20 +287,21 @@ export function formatUrbanFreshDiscoveryIdentityPrompt(input: {
     "DISCOVERY IDENTITY INSTANCE (L3)",
     "Generate a new individual inside this casting lane.",
     "This is a fresh person for this discovery run — not a locked Brand Face.",
+    "Create a genuinely different individual, not a variation of the previous candidates.",
     "Create a new person not based on previous discovery faces.",
     "Cast a real commercial streetwear model — photorealistic, not CGI.",
     "",
     `Slot: ${input.slot} — mood: ${cue.mood}`,
     `Gender: adult male`,
-    `Apparent age feel: ${input.exactAge}`,
+    `Apparent age feel: ${input.exactAge} (natural variation within 21–24 — never underage / teenage / baby-face)`,
+    "Young fashion-model face with distinctive but believable features.",
     "Black / Afro-European commercial casting.",
     "",
     "LIGHT CASTING CUES (creative freedom — not a locked anatomy recipe)",
     `Hair: ${cue.hairLabel}.`,
-    `Face emphasis: ${cue.facialEmphasis}.`,
+    cue.faceIdentityRecipe.promptLine,
     `Skin undertone cue: ${cue.skinUndertone}.`,
-    `Face impression cue: ${cue.faceShapeMood}.`,
-    `Facial hair: ${cue.facialHair}.`,
+    `Facial hair: ${cue.facialHairLane} (keep youthful — do not age the face).`,
     `Expression: ${cue.expression}.`,
     `Wardrobe tone: ${cue.wardrobeTone}.`,
     "",
@@ -289,6 +309,7 @@ export function formatUrbanFreshDiscoveryIdentityPrompt(input: {
     "",
     "Look clearly different from the other three candidates in this same board.",
     "Do NOT copy previous Urban discovery faces or fixed slot anatomy essays.",
+    "Streetwear model — not ordinary catalog person, not luxury perfume model.",
     "Natural commercial fashion casting · realistic skin · clean portrait photography.",
   ].join("\n");
 }
@@ -296,13 +317,29 @@ export function formatUrbanFreshDiscoveryIdentityPrompt(input: {
 export function toUrbanFreshRunDebug(
   recipe: UrbanFreshRunRecipe,
   extras?: Partial<
-    Pick<UrbanFreshRunDebug, "provider" | "promptLength" | "noveltyClassification">
+    Pick<
+      UrbanFreshRunDebug,
+      "provider" | "promptLength" | "noveltyClassification" | "slot"
+    >
   >,
 ): UrbanFreshRunDebug {
+  const slot = extras?.slot ?? null;
+  const cue = slot ? recipe.slots[slot] : null;
   return {
     creationProjectId: recipe.creationProjectId,
     variationSeed: recipe.variationSeed,
+    slot,
     hairLanes: { ...recipe.hairLanes },
+    hairLane: cue?.hairLabel ?? null,
+    facialHairLanes: { ...recipe.facialHairLanes },
+    facialHairLane: cue?.facialHairLane ?? null,
+    faceIdentityRecipes: {
+      A: recipe.faceIdentityRecipes.A.promptLine,
+      B: recipe.faceIdentityRecipes.B.promptLine,
+      C: recipe.faceIdentityRecipes.C.promptLine,
+      D: recipe.faceIdentityRecipes.D.promptLine,
+    },
+    faceIdentityRecipe: cue?.faceIdentityRecipe.promptLine ?? null,
     freshFaceDirection: recipe.freshFaceDirection,
     recentClustersConsidered: recipe.faceDna.recentClustersConsidered,
     dominantClusterAvoided: recipe.faceDna.dominantClusterAvoided,
