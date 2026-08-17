@@ -1,6 +1,6 @@
 /**
- * Official Brand Face Registry — one active face per archetype.
- * Syncs BrandFaceMemory on the archetype catalog snapshot path.
+ * Legacy process-local Brand Face projection.
+ * @deprecated Non-authoritative; durable Persona state owns official membership.
  */
 
 import type { BrandFaceMemory } from "@/lib/brand-archetypes";

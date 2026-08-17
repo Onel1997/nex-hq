@@ -561,6 +561,39 @@
   font-size: 0.8rem;
 }
 
+.ps-reconciliation-warning {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin: 0.8rem 0;
+  padding: 0.9rem;
+  border: 1px solid rgb(212 154 140 / 0.55);
+  background: rgb(212 154 140 / 0.06);
+}
+
+.ps-reconciliation-warning > p,
+.ps-reconciliation-review > p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.ps-reconciliation-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.55rem 1rem;
+  margin: 0.8rem 0;
+}
+
+.ps-reconciliation-review textarea {
+  width: min(100%, 720px);
+  padding: 0.65rem;
+  border: 1px solid var(--ps-line);
+  background: var(--ps-surface);
+  color: inherit;
+  resize: vertical;
+}
+
 .ps-readiness {
   display: flex;
   flex-wrap: wrap;

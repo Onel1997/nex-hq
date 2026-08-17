@@ -7,11 +7,7 @@ import {
   loadBrandArchetypeCatalog,
   type BrandArchetype,
 } from "@/lib/brand-archetypes";
-import {
-  getActiveBrandFaceForArchetype,
-  getOfficialBrandFaceMilestone,
-  summarizeIdentityDna,
-} from "@/lib/brand-face-selection";
+import { summarizeIdentityDna } from "@/lib/brand-face-selection";
 import { loadProductCatalog } from "@/lib/product-intelligence";
 
 function stars(rating: number): string {
@@ -30,10 +26,6 @@ function ArchetypeCard({ archetype }: { archetype: BrandArchetype }) {
     [archetype, archetypeCatalog],
   );
   const dnaSummary = useMemo(() => summarizeIdentityDna(dna), [dna]);
-  const activeFace = useMemo(
-    () => getActiveBrandFaceForArchetype(archetype.workspaceId, archetype.id),
-    [archetype.id, archetype.workspaceId],
-  );
 
   return (
     <article className="ps-archetype-card">
@@ -52,10 +44,8 @@ function ArchetypeCard({ archetype }: { archetype: BrandArchetype }) {
         Identity DNA: {dnaSummary.skinToneFamily.split(",")[0]} ·{" "}
         {dnaSummary.hairFamily.split(",")[0]}
       </p>
-      <p className={`ps-archetype-face-status${activeFace ? " is-approved" : ""}`}>
-        {activeFace
-          ? `Brand Face approved · v${activeFace.version}`
-          : "0/1 Brand Face approved"}
+      <p className="ps-archetype-face-status">
+        Official membership is shown from durable Persona state in Brand Cast.
       </p>
       <ul className="ps-archetype-products">
         {affinity.slice(0, 3).map((a) => (
@@ -74,10 +64,6 @@ function ArchetypeCard({ archetype }: { archetype: BrandArchetype }) {
 export function BrandArchetypeCastPanel() {
   const catalog = useMemo(() => loadBrandArchetypeCatalog(), []);
   const archetypes = catalog.archetypes.filter((a) => a.status === "active");
-  const milestone = useMemo(
-    () => getOfficialBrandFaceMilestone(catalog.workspaceId),
-    [catalog.workspaceId],
-  );
 
   return (
     <div className="ps-archetype-cast">
@@ -88,8 +74,7 @@ export function BrandArchetypeCastPanel() {
       <p className="ps-muted ps-archetype-lead">
         Persona Studio casts official Brand Archetypes — not random attractive people.
         {" "}
-        Progress: {milestone.approvedCount}/{milestone.requiredCount} Official
-        Brand Faces.
+        Durable approval progress is shown in Brand Cast.
       </p>
       <div className="ps-archetype-grid">
         {archetypes.map((archetype) => (

@@ -1,6 +1,6 @@
 import type { ImageGenerationRequest, ImageGenerationResult } from "./image-provider";
 
-const FLUX_MODEL = "black-forest-labs/flux-schnell";
+export const FLUX_MODEL = "black-forest-labs/flux-schnell";
 
 function fluxAspectRatio(dimensions: string): string {
   const match = dimensions.match(/(\d+)x(\d+)/i);
@@ -35,6 +35,11 @@ async function extractImageUrl(output: unknown): Promise<string> {
 export async function generateFluxImage(
   request: ImageGenerationRequest,
 ): Promise<ImageGenerationResult & { imageBytes?: Buffer }> {
+  if (request.identity) {
+    throw new Error(
+      "Selected Brand Models are not supported by the current Flux adapter. No text-only fallback is allowed.",
+    );
+  }
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
     throw new Error("REPLICATE_API_TOKEN not configured");
@@ -66,6 +71,7 @@ export async function generateFluxImage(
   }
 
   const prediction = (await response.json()) as {
+    id?: string;
     status?: string;
     output?: unknown;
     error?: string;
@@ -89,6 +95,8 @@ export async function generateFluxImage(
     assetType: request.assetType,
     status: "completed",
     providerId: "flux",
+    modelId: FLUX_MODEL,
+    providerRequestId: prediction.id ?? null,
     url: imageUrl,
     imageBytes: Buffer.from(arrayBuffer),
   };

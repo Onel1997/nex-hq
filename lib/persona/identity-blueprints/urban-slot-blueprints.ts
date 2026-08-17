@@ -19,7 +19,7 @@ const SHARED_CAMERA_RULES = [
 ] as const;
 
 const SHARED_QUALITY_BAR =
-  "Second permanent male Brand Face — cool modern naturally stylish Black / Afro-European commercial casting (apparent age ~21–24) — lean slim-athletic fashion-model build — approachable confident natural — hair rotates per discovery run (short, curls, afro, twists, braids, locs all allowed) — clean shave or very light stubble — “I want to wear what he is wearing” — never hyper-masculine, never harsh or cold — QUALITY BAR only";
+  "Second permanent male Brand Face — cool modern naturally stylish Black / Afro-European commercial casting (apparent age ~21–24) — lean to athletic — approachable confident natural — hair rotates per discovery run (short, curls, afro, twists, braids, locs all allowed) — clean shave or very light stubble — “I want to wear what he is wearing” — never hyper-masculine, never harsh or cold — QUALITY BAR only";
 
 function pools(p: ControlledPools): ControlledPools {
   return p;
@@ -622,7 +622,7 @@ export const URBAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
     name: "Soft Community Anchor",
     regionalCluster: "Afro-European soft community West/Central diaspora",
     skinToneRange: "rich deep brown warm undertone band",
-    bodyDirection: "lean, slim-athletic fashion-model build with a naturally slender frame; narrow-to-medium shoulders; not bulky, stocky or heavy-set — never bodybuilder",
+    bodyDirection: "lean to athletic relaxed streetwear casting frame — never bodybuilder",
     facialProportionFamily: "softer oval / slightly rounded midface family — softer jaw — wider-set eyes",
     hairTextureFamily:
       "short textured curls + clean low taper family — run hair may rotate (short/curls/afro/twists/braids/locs)",
@@ -647,7 +647,7 @@ export const URBAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
     name: "Structured Street Presence",
     regionalCluster: "Afro-European structured street / West African diaspora street premium",
     skinToneRange: "medium-deep cooler brown band — distinct from warm Slot A",
-    bodyDirection: "lean, slim-athletic fashion-model build with a naturally slender frame; narrow-to-medium shoulders; not bulky, stocky or heavy-set — never bodybuilder",
+    bodyDirection: "lean-athletic streetwear build with slightly broader shoulders — never bodybuilder",
     facialProportionFamily: "longer narrow oval structured family — defined jaw — deeper-set eyes",
     hairTextureFamily:
       "very short crop / buzz-adjacent + clean fade family — run hair may rotate",
@@ -673,7 +673,7 @@ export const URBAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
     name: "Fuller-Top Short Curls",
     regionalCluster: "African-diaspora lifestyle / soft Caribbean–European creative mix",
     skinToneRange: "warm medium-brown golden undertone band",
-    bodyDirection: "lean, slim-athletic fashion-model build with a naturally slender frame; narrow-to-medium shoulders; not bulky, stocky or heavy-set — never bodybuilder",
+    bodyDirection: "tall lean soft-athletic lifestyle fashion frame — never bodybuilder",
     facialProportionFamily: "heart / tapered shorter-lower-face family — higher cheekbones — broader nose",
     hairTextureFamily:
       "short natural curls slightly fuller top family — run hair may rotate",
@@ -698,7 +698,7 @@ export const URBAN_SLOT_BLUEPRINTS: readonly SlotBlueprint[] = [
     name: "Short Textured Afro",
     regionalCluster: "Afro-European campaign / East–West African diaspora hero mix",
     skinToneRange: "deep dark brown / near-ebony rich undertone band",
-    bodyDirection: "lean, slim-athletic fashion-model build with a naturally slender frame; narrow-to-medium shoulders; not bulky, stocky or heavy-set — never bodybuilder",
+    bodyDirection: "tall lean-athletic broader shoulder campaign frame — never bodybuilder",
     facialProportionFamily: "broader rectangular family — wider jaw — stronger chin — deeper eye sockets",
     hairTextureFamily:
       "short textured afro / neat natural texture family — run hair may rotate",

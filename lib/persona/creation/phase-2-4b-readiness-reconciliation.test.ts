@@ -23,6 +23,7 @@ import {
   getIdentityLockEligibility,
   REFERENCE_PACKAGE_SLOTS,
   computePersonaReadiness,
+  IDENTITY_REVIEW_CHECK_KEYS,
 } from "@/lib/persona";
 import { getPersonaReadiness } from "@/lib/persona/services/persona-service";
 import {
@@ -370,6 +371,14 @@ describe("Phase 2.4B Persona readiness reconciliation", () => {
         angle_direction: "correct",
       });
     }
+    await creationRepo.createIdentityReview(scope, {
+      persona_id: persona.id,
+      checklist: Object.fromEntries(
+        IDENTITY_REVIEW_CHECK_KEYS.map((key) => [key, true]),
+      ) as Record<(typeof IDENTITY_REVIEW_CHECK_KEYS)[number], boolean>,
+      all_passed: true,
+      reviewer_notes: "Manual identity quality gate passed",
+    });
     return { persona, master, slotAssets };
   }
 
@@ -471,7 +480,7 @@ describe("Phase 2.4B Persona readiness reconciliation", () => {
     );
   });
 
-  it("6. header and Identity Lock eligibility cannot disagree", () => {
+  it("6. Reference Package readiness does not bypass identity review", () => {
     const { attempts, assets } = fullPackage();
     const reconciled = reconcileReferencePackageState({ attempts, assets });
     const readiness = resolvePersonaReadinessFromFacts({
@@ -480,7 +489,12 @@ describe("Phase 2.4B Persona readiness reconciliation", () => {
       reconciled,
     });
     assert.equal(readiness.referencesComplete, true);
-    assert.equal(readiness.eligibleForIdentityLock, true);
+    assert.equal(readiness.eligibleForIdentityLock, false);
+    assert.ok(
+      readiness.identityLockEligibility.blockingReasons.some((reason) =>
+        /identity review/i.test(reason),
+      ),
+    );
     assert.equal(
       readiness.eligibleForIdentityLock,
       readiness.identityLockEligibility.eligibleForIdentityLock,
@@ -512,7 +526,7 @@ describe("Phase 2.4B Persona readiness reconciliation", () => {
     assert.equal(readiness.legacyReport.image_ready, false);
   });
 
-  it("9. identity lock still remains explicit", () => {
+  it("9. identity lock requires a persisted quality review", () => {
     const { attempts, assets } = fullPackage();
     const reconciled = reconcileReferencePackageState({ attempts, assets });
     const readiness = resolvePersonaReadinessFromFacts({
@@ -521,7 +535,7 @@ describe("Phase 2.4B Persona readiness reconciliation", () => {
       reconciled,
     });
     assert.equal(readiness.identityLocked, false);
-    assert.equal(readiness.eligibleForIdentityLock, true);
+    assert.equal(readiness.eligibleForIdentityLock, false);
   });
 
   it("10. video use remains separate", () => {

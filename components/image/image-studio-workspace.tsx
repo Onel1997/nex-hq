@@ -7,6 +7,8 @@ import {
 } from "@/lib/image/image-generation-config";
 import type { ImageStudioAsset, ImageMoodboardSection, ImagePalette } from "@/agents/image/types";
 import { ProductionGallery } from "@/components/image/production-gallery";
+import { BrandModelSelector } from "@/components/image/brand-model-selector";
+import { ProductProductionSelector } from "@/components/image/product-production-selector";
 import {
   AssetPreviewPlaceholder,
   CanvasPlaceholder,
@@ -53,11 +55,13 @@ import {
   resolveImportedBlueprint,
   type ImportedCreativeBlueprint,
 } from "@/lib/image/image-studio-mission";
-import {
-  executeGeneration,
-  runProductionPipeline as runProductionPipelineEngine,
-  type ImageProductionProject,
-} from "@/lib/image/image-production-pipeline";
+import type {
+  ImageBrandModelProductionContext,
+  ImageBrandModelSelection,
+} from "@/lib/image/brand-model-production-context";
+import type { ImageGenerationJobView } from "@/lib/image/paid-generation/types";
+import type { ImageProductionAssetView } from "@/lib/image/production-project/types";
+import type { ProductProductionSelection } from "@/lib/image/product-production-context";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -90,18 +94,17 @@ interface ImageRunResult {
   lookbookShots: unknown[];
   confidence: number;
   sourceReportTitles?: string[];
+  brandModelContext?: ImageBrandModelProductionContext;
 }
 
-const INSPECTOR_SECTIONS = [
-  "queue",
-  "model",
-  "prompt",
-  "progress",
-  "review",
-  "history",
-] as const;
-
-type InspectorSection = (typeof INSPECTOR_SECTIONS)[number];
+type InspectorSection =
+  | "queue"
+  | "model"
+  | "product"
+  | "prompt"
+  | "progress"
+  | "review"
+  | "history";
 
 /** Survives React Strict Mode remounts so handoff apply/bootstrap runs once per navigation. */
 let handoffBootstrapLock = false;
@@ -183,6 +186,10 @@ function InspectorCard({
 export function ImageStudioWorkspace() {
   const t = useT();
   const [handoff, setHandoff] = useState<ImageStudioHandoff | null>(null);
+  const [brandModelSelection, setBrandModelSelection] =
+    useState<ImageBrandModelSelection | null>(null);
+  const [productSelection, setProductSelection] =
+    useState<ProductProductionSelection | null>(null);
   const [brief, setBrief] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -208,6 +215,7 @@ export function ImageStudioWorkspace() {
   const [openSections, setOpenSections] = useState<Record<InspectorSection, boolean>>({
     queue: false,
     model: true,
+    product: true,
     prompt: true,
     progress: false,
     review: false,
@@ -217,9 +225,12 @@ export function ImageStudioWorkspace() {
   const [approved, setApproved] = useState<Set<string>>(new Set());
   const [revisions, setRevisions] = useState<Set<string>>(new Set());
   const [compareMode, setCompareMode] = useState(false);
-  const [generatingAssetId, setGeneratingAssetId] = useState<string | null>(null);
-  const [preparingAssetId, setPreparingAssetId] = useState<string | null>(null);
-  const [pipelineActive, setPipelineActive] = useState(false);
+  const [generatingAssetId] = useState<string | null>(null);
+  const [preparingAssetId] = useState<string | null>(null);
+  const [pipelineActive] = useState(false);
+  const [paidJob, setPaidJob] = useState<ImageGenerationJobView | null>(null);
+  const [paidJobBusy, setPaidJobBusy] = useState(false);
+  const [durableAssets, setDurableAssets] = useState<ImageProductionAssetView[]>([]);
   const pipelineLockRef = useRef(false);
   const packageLockRef = useRef(false);
   const [handoffLoadDebug, setHandoffLoadDebug] = useState<HandoffLoadDebug | null>(null);
@@ -227,6 +238,119 @@ export function ImageStudioWorkspace() {
     typeof window === "undefined" ? null : loadHandoffSendDebug(),
   );
   const [handoffStateApplied, setHandoffStateApplied] = useState(false);
+
+  // Durable recovery is independent of localStorage/window.name. Once the
+  // production migration is applied, reopening Image Studio restores the most
+  // recent unfinished confirmed job for this workspace.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const projectsResponse = await fetch("/api/image/production-projects", {
+          cache: "no-store",
+        });
+        if (!projectsResponse.ok) return;
+        const projectsPayload = (await projectsResponse.json()) as {
+          projects?: Array<{ id: string }>;
+        };
+        const latest = projectsPayload.projects?.[0];
+        if (!latest) return;
+        const jobsResponse = await fetch(
+          `/api/image/generation-jobs?productionProjectId=${encodeURIComponent(latest.id)}`,
+          { cache: "no-store" },
+        );
+        if (!jobsResponse.ok) return;
+        const jobsPayload = (await jobsResponse.json()) as {
+          jobs?: ImageGenerationJobView[];
+        };
+        const unfinished = jobsPayload.jobs?.find((job) =>
+          [
+            "awaiting_confirmation",
+            "confirmed",
+            "running",
+            "failed",
+            "unknown_outcome",
+          ].includes(job.status),
+        );
+        if (!cancelled && unfinished) setPaidJob(unfinished);
+      } catch {
+        // Migration may be intentionally unapplied. Local planning UI remains
+        // available, but durable production is correctly unavailable.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!paidJob || paidJob.status !== "running") return;
+    const timer = window.setInterval(() => {
+      void fetch(`/api/image/generation-jobs/${paidJob.id}`, { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((payload: { job?: ImageGenerationJobView } | null) => {
+          if (payload?.job) setPaidJob(payload.job);
+        })
+        .catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [paidJob]);
+
+  useEffect(() => {
+    if (!paidJob || paidJob.status !== "succeeded") return;
+    void fetch(
+      `/api/image/production-projects/${paidJob.productionProjectId}/assets`,
+      { cache: "no-store" },
+    )
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { assets?: ImageProductionAssetView[] } | null) => {
+        if (payload?.assets) setDurableAssets(payload.assets);
+      })
+      .catch(() => undefined);
+  }, [paidJob]);
+
+  const reviewDurableAsset = useCallback(
+    async (assetId: string, reviewStatus: "APPROVED" | "REJECTED") => {
+      setPaidJobBusy(true);
+      try {
+        const response = await fetch(
+          `/api/image/production-assets/${assetId}/review`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reviewStatus, note: null }),
+          },
+        );
+        const payload = (await response.json()) as {
+          asset?: Omit<ImageProductionAssetView, "accessUrl" | "accessExpiresAt">;
+          error?: string;
+        };
+        if (!response.ok || !payload.asset) {
+          throw new Error(payload.error ?? "Asset review failed.");
+        }
+        setDurableAssets((current) =>
+          current.map((asset) =>
+            asset.id === assetId
+              ? { ...asset, ...payload.asset }
+              : asset,
+          ),
+        );
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Asset review failed.");
+      } finally {
+        setPaidJobBusy(false);
+      }
+    },
+    [],
+  );
+
+  const handleBrandModelSelection = useCallback(
+    (selection: ImageBrandModelSelection | null) => {
+      setBrandModelSelection(selection);
+      setError(null);
+    },
+    [],
+  );
 
   const selectedSlot = useMemo(
     () => MISSION_ASSET_SLOTS.find((s) => s.id === selectedSlotId) ?? MISSION_ASSET_SLOTS[0],
@@ -335,120 +459,38 @@ export function ImageStudioWorkspace() {
     [approved, revisions],
   );
 
-  const generateAssetInternal = useCallback(
-    async (
-      asset: ImageStudioAsset,
-      project: ImageRunResult,
-    ): Promise<ImageStudioAsset | null> => {
-      return executeGeneration(
-        asset,
-        {
-          reportId: project.reportId,
-          reportRecordId: project.reportRecordId,
-          projectName: project.projectName,
-          productionAssets: project.productionAssets,
-        },
-        {
-          onPreparingAsset: (assetId, slotId) => {
-            setPreparingAssetId(assetId);
-            setSelectedSlotId(slotId);
-            setSelectedAssetId(assetId);
-          },
-          onGeneratingAsset: (assetId) => {
-            setPreparingAssetId(null);
-            setGeneratingAssetId(assetId);
-          },
-          onAssetUpdated: (updated) => {
-            setProductionAssets((list) =>
-              list.map((item) => (item.id === updated.id ? updated : item)),
-            );
-          },
-          onPipelineActive: () => {},
-          onError: (message) => setError(message),
-        },
-      ).finally(() => {
-        setGeneratingAssetId(null);
-        setPreparingAssetId(null);
-      });
-    },
-    [],
-  );
-
-  const syncCachedProductionAssets = useCallback((nextAssets: ImageStudioAsset[]) => {
-    if (!cachedProductionProject) return;
-    cachedProductionProject = {
-      ...cachedProductionProject,
-      productionAssets: nextAssets,
-    };
-  }, []);
-
-  const runProductionPipeline = useCallback(
-    async (project: ImageRunResult, assets: ImageStudioAsset[]): Promise<boolean> => {
-      console.info("[Image Studio] runProductionPipeline wrapper invoked", {
-        pipelineLockRef: pipelineLockRef.current,
-        reportId: project.reportId,
-        assetCount: assets.length,
-        pendingCount: queuedAssetsForPipeline(assets).length,
-      });
-
-      if (pipelineLockRef.current) {
-        console.warn("[Image Studio] runProductionPipeline wrapper abort", {
-          abortReason: "pipelineLockRef.current is true",
-        });
-        setError(
-          "Production pipeline is already running. Wait for the current run to finish.",
-        );
-        return false;
-      }
-
-      pipelineLockRef.current = true;
-      setError(null);
-
-      const productionProject: ImageProductionProject = {
-        reportId: project.reportId,
-        reportRecordId: project.reportRecordId,
-        projectName: project.projectName,
-        productionAssets: assets,
-      };
-
-      try {
-        return await runProductionPipelineEngine(productionProject, assets, {
-          onPreparingAsset: (assetId, slotId) => {
-            setPreparingAssetId(assetId);
-            setSelectedSlotId(slotId);
-            setSelectedAssetId(assetId);
-          },
-          onGeneratingAsset: (assetId) => {
-            setPreparingAssetId(null);
-            setGeneratingAssetId(assetId);
-          },
-          onAssetUpdated: (updated) => {
-            setProductionAssets((list) => {
-              const next = list.map((item) => (item.id === updated.id ? updated : item));
-              syncCachedProductionAssets(next);
-              return next;
-            });
-          },
-          onPipelineActive: (active) => {
-            setPipelineActive(active);
-          },
-          onError: (message) => setError(message),
-        });
-      } finally {
-        pipelineLockRef.current = false;
-        setPreparingAssetId(null);
-        setGeneratingAssetId(null);
-      }
-    },
-    [syncCachedProductionAssets],
-  );
-
   const createProductionPackage = useCallback(
     async (briefText: string): Promise<ImageRunResult | null> => {
       const text = briefText.trim();
       if (!text) {
         console.warn("[Image Studio] createProductionPackage skipped — empty brief");
         return null;
+      }
+
+      if (cachedProductionProject) {
+        const cachedTrace = cachedProductionProject.brandModelContext?.trace;
+        const selectedTrace = brandModelSelection?.productionContext.trace;
+        const sameIdentityVersion =
+          (!cachedTrace && !selectedTrace) ||
+          (cachedTrace != null &&
+            selectedTrace != null &&
+            cachedTrace.contractVersion === selectedTrace.contractVersion &&
+            cachedTrace.brandModelId === selectedTrace.brandModelId &&
+            cachedTrace.personaId === selectedTrace.personaId &&
+            cachedTrace.identityLockSnapshotId ===
+              selectedTrace.identityLockSnapshotId &&
+            cachedTrace.identityLockVersion ===
+              selectedTrace.identityLockVersion &&
+            cachedTrace.identityFingerprint ===
+              selectedTrace.identityFingerprint &&
+            cachedTrace.referencePackageVersion ===
+              selectedTrace.referencePackageVersion &&
+            cachedTrace.referencePackageFingerprint ===
+              selectedTrace.referencePackageFingerprint);
+        if (!sameIdentityVersion) {
+          cachedProductionProject = null;
+          productionPackagePromise = null;
+        }
       }
 
       if (cachedProductionProject) {
@@ -476,7 +518,22 @@ export function ImageStudioWorkspace() {
           const res = await fetch("/api/image/run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ brief: text }),
+            body: JSON.stringify({
+              brief: text,
+              productName: handoff?.mission?.garment,
+              collectionName: handoff?.mission?.collection,
+              color: handoff?.mission?.colorway,
+              material:
+                productSelection?.authority !== "SHOPIFY_LIVE"
+                  ? productSelection?.material ?? undefined
+                  : undefined,
+              ...(brandModelSelection
+                ? {
+                    brandModelSelection:
+                      brandModelSelection.productionContext.trace,
+                  }
+                : {}),
+            }),
           });
           const data = await res.json();
           if (!res.ok) {
@@ -555,7 +612,7 @@ export function ImageStudioWorkspace() {
 
       return productionPackagePromise;
     },
-    [handoff, t],
+    [brandModelSelection, handoff, productSelection, t],
   );
 
   const releaseExecutionLocks = useCallback((reason: string) => {
@@ -696,21 +753,72 @@ export function ImageStudioWorkspace() {
       pipelineLockRef.current = false;
     }
 
-    console.info("[Image Studio] calling runProductionPipeline", {
-      reportId: project.reportId,
-      pendingCount: pendingAssets.length,
-    });
-
-    const started = await runProductionPipeline(project, assets);
-    if (!started) {
-      console.warn("[Image Studio] runImage early return: invalid project pipeline start", {
-        abortReason: "invalid project",
-        pipelineLockRef: pipelineLockRef.current,
-      });
-      setError((current) =>
-        current ?? "Production pipeline could not start. Try Generate Assets again.",
+    const assetToPrepare =
+      pendingAssets.find((asset) => asset.id === selectedAsset?.id) ?? pendingAssets[0];
+    if (!handoff?.masterArtworkApproved) {
+      setError("Approved Master Artwork is required before paid Image preparation.");
+      return project;
+    }
+    const designId = handoff.designId ?? handoff.reportId;
+    const trace = project.brandModelContext?.trace;
+    if (!designId || !trace) {
+      setError("Paid Image preparation requires an identifiable approved Design handoff and eligible Brand Model.");
+      return project;
+    }
+    const durableArtwork = handoff.durableMasterArtwork;
+    if (!durableArtwork) {
+      setError(
+        "This browser handoff has no durable Design-owned Master Artwork. Return to Design Studio and send the approved artwork again.",
       );
-      releaseExecutionLocks("pipeline-not-started");
+      return project;
+    }
+    setPaidJobBusy(true);
+    try {
+      const response = await fetch("/api/image/generation-jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reportRecordId: project.reportRecordId,
+          reportId: project.reportId,
+          assetId: assetToPrepare.id,
+          provider: "openai",
+          brandModelTrace: trace,
+          masterArtwork: {
+            reference: {
+              id: durableArtwork.id,
+              designId: durableArtwork.designId,
+              version: durableArtwork.version,
+              checksum: durableArtwork.checksum,
+            },
+          },
+          product: productSelection ?? {
+            authority: "DESIGN_HANDOFF_LOCAL",
+            productId: null,
+            variantId: null,
+            productName: assetToPrepare.productName,
+            productType: handoff.mission?.garment ?? assetToPrepare.productName,
+            color: assetToPrepare.color,
+            size: null,
+            material: assetToPrepare.material ?? null,
+            fit: null,
+            collection:
+              handoff.mission?.collection ?? assetToPrepare.collection ?? null,
+            availability: "UNKNOWN",
+            active: null,
+            provenance: `Design Studio browser handoff ${handoff.reportId ?? handoff.designId ?? "unversioned"}`,
+            sourceVersion: handoff.masterArtworkVersion ?? null,
+            capturedAt: handoff.handoffAt,
+          },
+        }),
+      });
+      const data = (await response.json()) as { job?: ImageGenerationJobView; error?: string };
+      if (!response.ok || !data.job) throw new Error(data.error ?? "Paid Image preparation failed.");
+      setPaidJob(data.job);
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Paid Image preparation failed.");
+    } finally {
+      setPaidJobBusy(false);
     }
 
     return project;
@@ -723,15 +831,35 @@ export function ImageStudioWorkspace() {
     isLoading,
     pipelineActive,
     releaseExecutionLocks,
-    runProductionPipeline,
+    selectedAsset,
+    productSelection,
     t,
   ]);
 
-  const generateAssetsButtonLabel = pipelineActive || generatingAssetId
+  const generateAssetsButtonLabel = paidJobBusy
+    ? "Preparing estimate…"
+    : pipelineActive || generatingAssetId
     ? "Generating…"
     : isLoading
       ? "Staging Assets…"
-      : "Generate Assets";
+      : "Prepare / Estimate";
+
+  const actOnPaidJob = useCallback(async (action: "confirm" | "execute" | "retry_known_failure" | "cancel") => {
+    if (!paidJob) return;
+    setPaidJobBusy(true);
+    try {
+      const response = await fetch(`/api/image/generation-jobs/${paidJob.id}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, inputFingerprint: paidJob.inputFingerprint }),
+      });
+      const data = (await response.json()) as { job?: ImageGenerationJobView; error?: string };
+      if (!response.ok || !data.job) throw new Error(data.error ?? "Paid generation action failed.");
+      setPaidJob(data.job);
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Paid generation action failed.");
+    } finally { setPaidJobBusy(false); }
+  }, [paidJob]);
 
   const handleGenerateAssetsClick = useCallback(() => {
     console.info("[Image Studio] Generate Assets clicked", {
@@ -882,9 +1010,10 @@ export function ImageStudioWorkspace() {
   const generateSingleAsset = useCallback(
     async (asset: ImageStudioAsset) => {
       if (!result || generatingAssetId || pipelineActive) return;
-      await generateAssetInternal(asset, result);
+      setSelectedAssetId(asset.id);
+      setError("Shot selected. Review it, then use Prepare / Estimate to freeze paid inputs.");
     },
-    [generateAssetInternal, generatingAssetId, pipelineActive, result],
+    [generatingAssetId, pipelineActive, result],
   );
 
   const updateAsset = useCallback((updated: ImageStudioAsset) => {
@@ -1029,6 +1158,53 @@ export function ImageStudioWorkspace() {
             </div>
           ) : null}
         </div>
+      ) : null}
+
+      {paidJob ? (
+        <section className="is-inspector-card is-inspector-card--open" aria-label="Paid generation review">
+          <div className="is-inspector-card-body">
+            <h3 className="is-panel-heading">Paid generation review</h3>
+            <p><strong>Brand Model:</strong> {paidJob.inputSnapshot.brandModel.displayName} · Lock v{paidJob.inputSnapshot.brandModel.identityLockVersion}</p>
+            <p><strong>Master Artwork:</strong> {paidJob.inputSnapshot.masterArtwork.designId} · {paidJob.inputSnapshot.masterArtwork.version}</p>
+            <p><strong>Product:</strong> {paidJob.inputSnapshot.product.productName} · {paidJob.inputSnapshot.product.color} ({paidJob.inputSnapshot.product.authority})</p>
+            <p><strong>Shot:</strong> {paidJob.inputSnapshot.production.shotTitle} · {paidJob.inputSnapshot.production.provider}/{paidJob.inputSnapshot.production.model}</p>
+            <p><strong>Estimated maximum:</strong> {paidJob.estimate.maximum.toFixed(4)} {paidJob.estimate.currency}</p>
+            <p><strong>Input fingerprint:</strong> <code>{paidJob.inputFingerprint}</code></p>
+            <p><strong>Status:</strong> {paidJob.status}</p>
+            <p><strong>Confirmation expires:</strong> {new Date(paidJob.confirmationExpiresAt).toLocaleString()}</p>
+            {paidJob.status === "awaiting_confirmation" ? <p>By confirming, you attest that this is the approved final Master Artwork, the selected Brand Model/product/shot are correct, and you authorize the displayed maximum paid attempt.</p> : null}
+            <div className="is-staging-actions">
+              {paidJob.status === "awaiting_confirmation" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("confirm")}>Confirm Paid Generation</button> : null}
+              {paidJob.status === "confirmed" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("execute")}>Execute confirmed job</button> : null}
+              {paidJob.status === "failed" && paidJob.safeRetryAllowed ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("retry_known_failure")}>Retry known safe failure</button> : null}
+              {["awaiting_confirmation", "confirmed", "failed"].includes(paidJob.status) ? <button type="button" className="is-btn" disabled={paidJobBusy} onClick={() => void actOnPaidJob("cancel")}>Cancel</button> : null}
+              {paidJob.status === "unknown_outcome" ? <p>Provider outcome is unknown. Do not retry until the provider request is reconciled.</p> : null}
+            </div>
+            {durableAssets.length ? (
+              <div>
+                <h4>Human asset review</h4>
+                {durableAssets.map((asset) => (
+                  <div key={asset.id}>
+                    <p>
+                      <strong>{asset.shotId}</strong> · {asset.reviewStatus}
+                    </p>
+                    {asset.accessUrl ? (
+                      <a href={asset.accessUrl} target="_blank" rel="noreferrer">
+                        Open temporary private preview
+                      </a>
+                    ) : (
+                      <p>Private preview unavailable or expired. Reload to request fresh access.</p>
+                    )}
+                    <div className="is-staging-actions">
+                      <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void reviewDurableAsset(asset.id, "APPROVED")}>Approve asset</button>
+                      <button type="button" className="is-btn" disabled={paidJobBusy} onClick={() => void reviewDurableAsset(asset.id, "REJECTED")}>Reject asset</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
       ) : null}
 
       <div className="is-body">
@@ -1232,10 +1408,30 @@ export function ImageStudioWorkspace() {
             </InspectorCard>
 
             <InspectorCard
+              title="Product Context"
+              open={openSections.product}
+              onToggle={() => toggleSection("product")}
+            >
+              <ProductProductionSelector
+                onSelectionChange={setProductSelection}
+              />
+            </InspectorCard>
+
+            <InspectorCard
               title="Current Model"
               open={openSections.model}
               onToggle={() => toggleSection("model")}
             >
+              <BrandModelSelector
+                onSelectionChange={handleBrandModelSelection}
+              />
+              {brandModelSelection ? (
+                <InspectorField
+                  label="Identity Lock"
+                  value={`v${brandModelSelection.productionContext.trace.identityLockVersion} · ${brandModelSelection.productionContext.trace.identityLockSnapshotId.slice(0, 8)}`}
+                  mono
+                />
+              ) : null}
               <div className="is-model-badge">
                 <span className="is-model-badge-provider">OpenAI Images</span>
                 <span className="is-model-badge-model">{getOpenAiImageModel()}</span>

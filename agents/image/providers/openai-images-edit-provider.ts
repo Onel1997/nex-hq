@@ -18,12 +18,18 @@ import {
 
 export const OPENAI_STAGE_B_IMAGE_EDIT_PATH =
   "openai.images.edit(gpt-image-1, image=master, input_fidelity=high)" as const;
+export const OPENAI_PAID_IDENTITY_ARTWORK_EDIT_PATH =
+  "openai.images.edit(gpt-image-1, image=[persona-master,master-artwork], input_fidelity=high)" as const;
 
 export type OpenAiIdentityEditRequest = {
   prompt: string;
   /** Required Master Identity image bytes — FAIL CLOSED if missing. */
   referenceImageBytes: Buffer;
   referenceMimeType?: string;
+  artworkReference?: {
+    bytes: Buffer;
+    mimeType: string;
+  };
   size?: OpenAiImageSize;
   quality?: "low" | "medium" | "high" | "auto";
   signal?: AbortSignal;
@@ -35,7 +41,7 @@ export type OpenAiIdentityEditResult = {
   providerId: "openai";
   imageBytes: Buffer;
   providerRequestId: string | null;
-  path: typeof OPENAI_STAGE_B_IMAGE_EDIT_PATH;
+  path: typeof OPENAI_STAGE_B_IMAGE_EDIT_PATH | typeof OPENAI_PAID_IDENTITY_ARTWORK_EDIT_PATH;
   inputFidelity: "high";
 };
 
@@ -78,9 +84,17 @@ export async function editOpenAiImageFromReference(
     type: mime,
   });
 
+  const artworkFile = request.artworkReference
+    ? await toFile(
+        request.artworkReference.bytes,
+        `master-artwork.${request.artworkReference.mimeType === "image/svg+xml" ? "svg" : request.artworkReference.mimeType.includes("jpeg") ? "jpg" : request.artworkReference.mimeType.split("/")[1] ?? "png"}`,
+        { type: request.artworkReference.mimeType },
+      )
+    : null;
+
   const payload = {
     model,
-    image: imageFile,
+    image: artworkFile ? [imageFile, artworkFile] : imageFile,
     prompt: request.prompt,
     n: 1,
     size: request.size ?? ("1024x1536" as OpenAiImageSize),
@@ -124,7 +138,9 @@ export async function editOpenAiImageFromReference(
       providerId: "openai",
       imageBytes,
       providerRequestId,
-      path: OPENAI_STAGE_B_IMAGE_EDIT_PATH,
+      path: artworkFile
+        ? OPENAI_PAID_IDENTITY_ARTWORK_EDIT_PATH
+        : OPENAI_STAGE_B_IMAGE_EDIT_PATH,
       inputFidelity: "high",
     };
   } catch (error) {

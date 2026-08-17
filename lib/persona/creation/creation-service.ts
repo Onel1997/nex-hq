@@ -6,10 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { logPersonaAuditEvent } from "../audit/persona-events";
 import { PersonaDomainError } from "../domain/errors";
-import {
-  computePersonaReadiness,
-  listApprovalPrerequisiteGaps,
-} from "../domain/readiness";
+import { listApprovalPrerequisiteGaps } from "../domain/readiness";
 import type {
   BrandCastMilestoneProgress,
   CandidateAssetType,
@@ -5162,10 +5159,17 @@ export async function submitIdentityReview(
     reviewer_notes: input.reviewer_notes ?? "",
   });
 
+  const { evaluateIdentityReviewQualityGate } = await import(
+    "@/lib/persona/creation/identity-lock/identity-review-quality-gate"
+  );
+  const qualityGate = evaluateIdentityReviewQualityGate(review);
+
   await personaRepo().updatePersona(scope, personaId, {
-    identity_lock_status: allPassed ? "review" : "needs_revision",
-    image_identity_ready: allPassed && input.checklist.suitable_for_image_generation,
-    video_identity_ready: allPassed && input.checklist.suitable_for_video_generation,
+    identity_lock_status: qualityGate.identityLockPassed
+      ? "review"
+      : "needs_revision",
+    image_identity_ready: qualityGate.imageIdentityReady,
+    video_identity_ready: qualityGate.videoIdentityReady,
   });
 
   await logPersonaAuditEvent({
@@ -5173,7 +5177,13 @@ export async function submitIdentityReview(
     eventType: "identity_review.completed",
     recordId: personaId,
     actorId: scope.actorId,
-    payload: { allPassed, checklist: input.checklist },
+    payload: {
+      allPassed,
+      identityLockQualityGatePassed: qualityGate.identityLockPassed,
+      imageIdentityReady: qualityGate.imageIdentityReady,
+      videoIdentityReady: qualityGate.videoIdentityReady,
+      checklist: input.checklist,
+    },
   });
 
   return review;
@@ -5225,16 +5235,22 @@ export async function getBrandCastMilestoneProgress(
   const personas = await personaRepo().listPersonas(scope);
   const refs = (await personaRepo().snapshot(scope)).reference_assets;
 
-  const { listOfficialBrandCastMembers } = await import(
+  const {
+    listImageStudioEligibleBrandModels,
+    listOfficialBrandCastMembers,
+    listVideoStudioEligibleBrandModels,
+  } = await import(
     "@/lib/persona/creation/use-approvals"
   );
-  const members = await listOfficialBrandCastMembers(scope);
+  const [members, imageEligible, videoEligible] = await Promise.all([
+    listOfficialBrandCastMembers(scope),
+    listImageStudioEligibleBrandModels(scope),
+    listVideoStudioEligibleBrandModels(scope),
+  ]);
+  const imageEligibleIds = new Set(imageEligible.map((entry) => entry.personaId));
+  const videoEligibleIds = new Set(videoEligible.map((entry) => entry.personaId));
 
-  const approved = personas.filter(
-    (p) =>
-      p.brand_cast_approved ||
-      (p.status === "Approved" && p.approved),
-  );
+  const approved = personas.filter((p) => p.brand_cast_approved);
 
   let male_approved = 0;
   let female_approved = 0;
@@ -5244,9 +5260,8 @@ export async function getBrandCastMilestoneProgress(
 
   for (const persona of approved) {
     const personaRefs = refs.filter((r) => r.persona_id === persona.id);
-    const readiness = computePersonaReadiness(persona, personaRefs);
-    if (readiness.image_ready) image_ready_count += 1;
-    if (readiness.video_ready) video_ready_count += 1;
+    if (imageEligibleIds.has(persona.id)) image_ready_count += 1;
+    if (videoEligibleIds.has(persona.id)) video_ready_count += 1;
 
     const gaps = listApprovalPrerequisiteGaps(persona, personaRefs);
     if (gaps.length) {
@@ -5256,7 +5271,7 @@ export async function getBrandCastMilestoneProgress(
     }
 
     // Milestone counts only fully approved personas that remain image-ready
-    if (!readiness.image_ready) {
+    if (!imageEligibleIds.has(persona.id)) {
       missing_reference_requirements.push(
         `${persona.name}: incomplete reference package (not image-ready)`,
       );

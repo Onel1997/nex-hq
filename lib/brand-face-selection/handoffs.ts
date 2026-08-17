@@ -1,5 +1,5 @@
 /**
- * Future studio handoffs — read-only interfaces.
+ * Legacy session-preview helpers — never production eligibility authority.
  * Do NOT implement Image Studio or Video Studio.
  * These helpers never invoke provider/OpenAI APIs.
  */

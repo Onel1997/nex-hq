@@ -15,6 +15,7 @@ const CATALOG_PAGE_QUERY = `
           handle
           status
           productType
+          updatedAt
           tags
           description
           totalInventory
@@ -27,9 +28,15 @@ const CATALOG_PAGE_QUERY = `
             name
             values
           }
-          variants(first: 20) {
+          variants(first: 100) {
             edges {
               node {
+                id
+                title
+                sku
+                availableForSale
+                inventoryQuantity
+                updatedAt
                 selectedOptions { name value }
               }
             }
@@ -88,6 +95,7 @@ interface RawProductNode {
   handle: string;
   status: string;
   productType: string;
+  updatedAt: string;
   tags: string[];
   description: string;
   totalInventory: number;
@@ -100,6 +108,12 @@ interface RawProductNode {
   variants: {
     edges: Array<{
       node: {
+        id: string;
+        title: string;
+        sku: string | null;
+        availableForSale: boolean;
+        inventoryQuantity: number | null;
+        updatedAt: string;
         selectedOptions: Array<{ name: string; value: string }>;
       };
     }>;
@@ -181,6 +195,19 @@ function mapProductNode(node: RawProductNode): ShopifyCatalogProduct {
     })),
     variantColors: extractVariantColors(node),
     variantSizes: extractVariantSizes(node),
+    updatedAt: node.updatedAt,
+    variants: (node.variants?.edges ?? []).map(({ node: variant }) => ({
+      id: variant.id,
+      title: variant.title,
+      sku: variant.sku?.trim() || null,
+      availableForSale: Boolean(variant.availableForSale),
+      inventoryQuantity:
+        typeof variant.inventoryQuantity === "number"
+          ? variant.inventoryQuantity
+          : null,
+      selectedOptions: variant.selectedOptions ?? [],
+      updatedAt: variant.updatedAt,
+    })),
   };
 }
 

@@ -10,6 +10,7 @@ import {
   canTransitionPersonaStatus,
 } from "../approval/workflow";
 import { PersonaDomainError } from "../domain/errors";
+import { assertNoGovernedPersonaFields } from "../domain/governed-fields";
 import {
   canApprovePersona,
   computePersonaReadiness,
@@ -135,6 +136,8 @@ export async function createPersona(
   scope: WorkspaceScope,
   input: CreatePersonaInput,
 ): Promise<Persona> {
+  assertNoGovernedPersonaFields(input, "create");
+
   if (input.status === "Approved") {
     throw new PersonaDomainError(
       "Personas cannot be created as Approved without reference prerequisites.",
@@ -168,6 +171,8 @@ export async function updatePersona(
   id: string,
   patch: UpdatePersonaInput,
 ): Promise<Persona> {
+  assertNoGovernedPersonaFields(patch, "update");
+
   const current = await requirePersona(scope, id);
 
   if (patch.status && patch.status !== current.status) {
@@ -387,6 +392,14 @@ export async function getPersonaProductionPackage(
   const persona = await requirePersona(scope, personaId);
   const assets = await repo().listReferenceAssets(scope, personaId);
   const readiness = computePersonaReadiness(persona, assets);
+  const { resolveLockedBrandIdentity } = await import(
+    "@/lib/persona/creation/identity-lock"
+  );
+  const { evaluateBrandModelEligibility } = await import(
+    "@/lib/persona/creation/use-approvals"
+  );
+  const lockedIdentity = await resolveLockedBrandIdentity(scope, personaId);
+  const eligibility = evaluateBrandModelEligibility({ persona, lockedIdentity });
   const preferred = await resolvePersonaRelations(scope, personaId);
   const approved = assets.filter(
     (a) => a.status === "approved" && a.rights_confirmed,
@@ -402,8 +415,8 @@ export async function getPersonaProductionPackage(
     preferred,
     prohibited_changes: persona.prohibited_changes,
     usage: {
-      image_eligible: readiness.image_ready,
-      video_eligible: readiness.video_ready,
+      image_eligible: eligibility.imageEligible,
+      video_eligible: eligibility.videoEligible,
     },
   };
 }

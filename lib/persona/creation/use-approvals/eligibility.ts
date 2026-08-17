@@ -1,6 +1,9 @@
 /**
- * Phase 2.4D — Pure eligibility rules for use / Brand Cast approvals.
- * No provider calls. Authorization metadata only.
+ * Canonical Persona / Brand Model eligibility rules.
+ *
+ * Pure domain logic only: no repositories, providers, browser state, or legacy
+ * Official Brand Face registry. Durable callers must resolve LockedBrandIdentity
+ * before evaluating downstream eligibility.
  */
 
 import type { Persona } from "@/lib/persona/domain/types";
@@ -9,6 +12,7 @@ import type { LockedBrandIdentity } from "../identity-lock/types";
 import {
   BRAND_CAST_REQUIRES_VIDEO_USE_APPROVED,
   VIDEO_IDENTITY_READINESS_POLICY,
+  type BrandModelEligibility,
   type UseApprovalEligibility,
 } from "./types";
 
@@ -16,40 +20,70 @@ function revisionPending(persona: Persona): boolean {
   return persona.identity_lock_status === "needs_revision";
 }
 
-function isArchivedOrDeleted(persona: Persona): boolean {
+function isArchived(persona: Persona): boolean {
   return persona.status === "Archived";
+}
+
+function identityAuthorityBlockingReasons(input: {
+  persona: Persona;
+  lockedIdentity: LockedBrandIdentity | null;
+}): string[] {
+  const reasons: string[] = [];
+  if (!isPersonaIdentityLocked(input.persona)) {
+    reasons.push("Identity is not locked");
+  }
+  if (!input.lockedIdentity) {
+    reasons.push(
+      "Valid identity lock snapshot and persisted identity review are missing or unresolved",
+    );
+  }
+  if (
+    input.lockedIdentity &&
+    input.lockedIdentity.personaId !== input.persona.id
+  ) {
+    reasons.push("Identity lock snapshot does not belong to this Persona");
+  }
+  if (input.lockedIdentity) {
+    const lockedReferences = [
+      input.lockedIdentity.masterReference,
+      ...input.lockedIdentity.canonicalReferences.map((entry) => entry.reference),
+    ];
+    if (
+      lockedReferences.length !== 6 ||
+      lockedReferences.some((reference) => !reference.rights_confirmed)
+    ) {
+      reasons.push("Locked Brand Model reference rights are not confirmed.");
+    }
+  }
+  if (!input.persona.image_identity_ready) {
+    reasons.push("Image identity validation is not complete");
+  }
+  if (revisionPending(input.persona)) {
+    reasons.push("Identity revision is pending");
+  }
+  if (isArchived(input.persona)) {
+    reasons.push("Persona is archived");
+  }
+  return reasons;
 }
 
 export function evaluateImageUseEligibility(input: {
   persona: Persona;
   lockedIdentity: LockedBrandIdentity | null;
 }): UseApprovalEligibility {
-  const { persona, lockedIdentity } = input;
-  const alreadyApproved = Boolean(persona.image_use_approved);
-  const blockingReasons: string[] = [];
-
-  if (!isPersonaIdentityLocked(persona)) {
-    blockingReasons.push("Identity is not locked");
-  }
-  if (!lockedIdentity) {
-    blockingReasons.push("Valid identity lock snapshot is missing or unresolved");
-  }
-  if (!(persona.image_identity_ready || isPersonaIdentityLocked(persona))) {
-    blockingReasons.push("Image identity is not ready");
-  }
-  if (revisionPending(persona)) {
-    blockingReasons.push("Identity revision is pending");
-  }
-  if (isArchivedOrDeleted(persona)) {
-    blockingReasons.push("Persona is archived");
-  }
+  const alreadyApproved = Boolean(input.persona.image_use_approved);
+  const blockingReasons = identityAuthorityBlockingReasons(input);
 
   return {
     gate: "image_use",
     eligible: blockingReasons.length === 0 && !alreadyApproved,
     alreadyApproved,
     blockingReasons,
-    statusLabel: alreadyApproved ? "Approved" : blockingReasons.length ? "Not ready" : "Not approved",
+    statusLabel: alreadyApproved
+      ? "Approved"
+      : blockingReasons.length
+        ? "Not ready"
+        : "Not approved",
   };
 }
 
@@ -57,27 +91,14 @@ export function evaluateVideoUseEligibility(input: {
   persona: Persona;
   lockedIdentity: LockedBrandIdentity | null;
 }): UseApprovalEligibility {
-  const { persona, lockedIdentity } = input;
-  const alreadyApproved = Boolean(persona.video_use_approved);
-  const blockingReasons: string[] = [];
+  const alreadyApproved = Boolean(input.persona.video_use_approved);
+  const blockingReasons = identityAuthorityBlockingReasons(input);
 
-  if (!isPersonaIdentityLocked(persona)) {
-    blockingReasons.push("Identity is not locked");
-  }
-  if (!lockedIdentity) {
-    blockingReasons.push("Valid identity lock snapshot is missing or unresolved");
-  }
-  // Actual product rule: requires persisted video_identity_ready (checklist flag).
-  // No automated video validation pipeline exists — do not fake readiness.
+  // No automated video validation exists. The independent persisted checklist
+  // result must remain false until a human explicitly validates video use.
   void VIDEO_IDENTITY_READINESS_POLICY;
-  if (!persona.video_identity_ready) {
+  if (!input.persona.video_identity_ready) {
     blockingReasons.push("Video identity validation not completed.");
-  }
-  if (revisionPending(persona)) {
-    blockingReasons.push("Identity revision is pending");
-  }
-  if (isArchivedOrDeleted(persona)) {
-    blockingReasons.push("Persona is archived");
   }
 
   return {
@@ -87,11 +108,9 @@ export function evaluateVideoUseEligibility(input: {
     blockingReasons,
     statusLabel: alreadyApproved
       ? "Approved"
-      : !persona.video_identity_ready
+      : blockingReasons.length
         ? "Not ready"
-        : blockingReasons.length
-          ? "Not ready"
-          : "Not approved",
+        : "Not approved",
   };
 }
 
@@ -99,29 +118,17 @@ export function evaluateBrandCastEligibility(input: {
   persona: Persona;
   lockedIdentity: LockedBrandIdentity | null;
 }): UseApprovalEligibility {
-  const { persona, lockedIdentity } = input;
-  const alreadyApproved = Boolean(
-    persona.brand_cast_approved || (persona.approved && persona.status === "Approved"),
-  );
-  const blockingReasons: string[] = [];
+  const alreadyApproved = Boolean(input.persona.brand_cast_approved);
+  const blockingReasons = identityAuthorityBlockingReasons(input);
 
-  if (!isPersonaIdentityLocked(persona)) {
-    blockingReasons.push("Identity is not locked");
-  }
-  if (!lockedIdentity) {
-    blockingReasons.push("Valid identity lock snapshot is missing or unresolved");
-  }
-  if (!persona.image_use_approved) {
+  if (!input.persona.image_use_approved) {
     blockingReasons.push("Image Studio use is not approved");
   }
-  if (BRAND_CAST_REQUIRES_VIDEO_USE_APPROVED && !persona.video_use_approved) {
+  if (
+    BRAND_CAST_REQUIRES_VIDEO_USE_APPROVED &&
+    !input.persona.video_use_approved
+  ) {
     blockingReasons.push("Video Studio use is not approved");
-  }
-  if (isArchivedOrDeleted(persona)) {
-    blockingReasons.push("Persona is archived");
-  }
-  if (revisionPending(persona)) {
-    blockingReasons.push("Identity revision is pending");
   }
 
   return {
@@ -133,41 +140,74 @@ export function evaluateBrandCastEligibility(input: {
   };
 }
 
-/** Image Studio query contract — all four gates required. */
-export function isImageStudioConsumerEligible(persona: Persona): boolean {
-  return (
-    isPersonaIdentityLocked(persona) &&
-    Boolean(persona.image_identity_ready || isPersonaIdentityLocked(persona)) &&
-    Boolean(persona.image_use_approved) &&
-    Boolean(
-      persona.brand_cast_approved ||
-        (persona.approved && persona.status === "Approved"),
-    )
+/** One canonical downstream derivation for Image and Video Studio consumers. */
+export function evaluateBrandModelEligibility(input: {
+  persona: Persona;
+  lockedIdentity: LockedBrandIdentity | null;
+}): BrandModelEligibility {
+  const { persona, lockedIdentity } = input;
+  const authorityReasons = identityAuthorityBlockingReasons(input);
+  const imageBlockingReasons = [...authorityReasons];
+  const videoBlockingReasons = [...authorityReasons];
+  const referenceRightsConfirmed = Boolean(
+    lockedIdentity &&
+      [
+        lockedIdentity.masterReference,
+        ...lockedIdentity.canonicalReferences.map((entry) => entry.reference),
+      ].length === 6 &&
+      [
+        lockedIdentity.masterReference,
+        ...lockedIdentity.canonicalReferences.map((entry) => entry.reference),
+      ].every((reference) => reference.rights_confirmed),
   );
-}
 
-/** Video Studio query contract — does not fake video readiness. */
-export function evaluateVideoStudioConsumerEligibility(persona: Persona): {
-  eligible: boolean;
-  blockingReasons: string[];
-} {
-  const blockingReasons: string[] = [];
-  if (!isPersonaIdentityLocked(persona)) {
-    blockingReasons.push("Identity is not locked");
+  if (!persona.brand_cast_approved) {
+    imageBlockingReasons.push("Official Brand Cast not approved");
+    videoBlockingReasons.push("Official Brand Cast not approved");
+  }
+  if (!persona.image_use_approved) {
+    imageBlockingReasons.push("Image Studio use is not approved");
   }
   if (!persona.video_identity_ready) {
-    blockingReasons.push("Video identity validation not completed.");
+    videoBlockingReasons.push("Video identity validation not completed.");
   }
   if (!persona.video_use_approved) {
-    blockingReasons.push("Video Studio use is not approved");
+    videoBlockingReasons.push("Video Studio use is not approved");
   }
-  if (
-    !(
-      persona.brand_cast_approved ||
-      (persona.approved && persona.status === "Approved")
-    )
-  ) {
-    blockingReasons.push("Official Brand Cast not approved");
-  }
-  return { eligible: blockingReasons.length === 0, blockingReasons };
+
+  return {
+    identityLocked: isPersonaIdentityLocked(persona),
+    validIdentityLock: lockedIdentity != null,
+    identityReviewPassed: lockedIdentity?.identityReview != null,
+    referenceRightsConfirmed,
+    brandCastApproved: Boolean(persona.brand_cast_approved),
+    imageUseApproved: Boolean(persona.image_use_approved),
+    videoUseApproved: Boolean(persona.video_use_approved),
+    imageIdentityReady: Boolean(persona.image_identity_ready),
+    videoIdentityReady: Boolean(persona.video_identity_ready),
+    imageEligible: imageBlockingReasons.length === 0,
+    videoEligible: videoBlockingReasons.length === 0,
+    imageBlockingReasons,
+    videoBlockingReasons,
+    lockVersion: lockedIdentity?.lockVersion ?? null,
+    identityFingerprint: lockedIdentity?.identityFingerprint ?? null,
+  };
+}
+
+export function isImageStudioConsumerEligible(input: {
+  persona: Persona;
+  lockedIdentity: LockedBrandIdentity | null;
+}): boolean {
+  return evaluateBrandModelEligibility(input).imageEligible;
+}
+
+export function evaluateVideoStudioConsumerEligibility(input: {
+  persona: Persona;
+  lockedIdentity: LockedBrandIdentity | null;
+}): { eligible: boolean; blockingReasons: string[] } {
+  const result = evaluateBrandModelEligibility(input);
+  return {
+    eligible: result.videoEligible,
+    blockingReasons: result.videoBlockingReasons,
+  };
 }

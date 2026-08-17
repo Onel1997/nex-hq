@@ -509,7 +509,7 @@ export const URBAN_DISCOVERY_BLUEPRINTS: readonly ArchetypeCandidateBlueprint[] 
     haircut:
       "short textured curls with clean low taper",
     facialHair: "clean-shaven or extremely light soft stubble only",
-    bodyStructure: "lean, slim-athletic fashion-model build with a naturally slender frame; not bulky, stocky or heavy-set — never bodybuilder",
+    bodyStructure: "lean to athletic relaxed adult male fashion proportions — never bodybuilder",
     expression: "approachable confident natural — cool modern community Brand Face",
     stylingDirection: "relaxed heavyweight hoodie / zip hoodie / oversized tee streetwear",
     backgroundDirection: "soft airy neutral casting wall",
@@ -534,9 +534,9 @@ export const URBAN_DISCOVERY_BLUEPRINTS: readonly ArchetypeCandidateBlueprint[] 
         "Slot A must be a soft community Black / Afro-European face with a distinct soft community look — not a copy of B/C/D.",
     },
     fashionCasting: {
-      modelBuild: "lean slim-athletic fashion-model community build — slender frame, not bulky",
+      modelBuild: "lean-to-athletic relaxed community fashion build",
       modelHeightDirection: "tall approachable community height impression",
-      shoulderLine: "narrow-to-medium soft relaxed shoulder line fully visible",
+      shoulderLine: "soft relaxed shoulder line fully visible",
       neckProportions: "natural proportional neck",
       facialCharacter: "soft rounded friendly community face",
       memorabilityCue: "warm community anchor face — cool modern stylish",
@@ -579,7 +579,7 @@ export const URBAN_DISCOVERY_BLUEPRINTS: readonly ArchetypeCandidateBlueprint[] 
     haircut:
       "very short crop / buzz-adjacent with clean fade",
     facialHair: "clean shave or very light natural stubble — never heavy full beard",
-    bodyStructure: "lean, slim-athletic fashion-model build with a naturally slender frame; not bulky, stocky or heavy-set — never bodybuilder",
+    bodyStructure: "lean-athletic adult male with slightly broader shoulders — never bodybuilder",
     expression: "relaxed modern street confidence — never aggressive / never intimidating",
     stylingDirection: "premium community streetwear — charcoal hoodie / oversized tee",
     backgroundDirection: "neutral cool-grey casting backdrop",
@@ -604,9 +604,9 @@ export const URBAN_DISCOVERY_BLUEPRINTS: readonly ArchetypeCandidateBlueprint[] 
         "Slot B must be a structured street Black / Afro-European face with VERY SHORT crop/fade — maximum distance from Soft Community A and fuller-top C.",
     },
     fashionCasting: {
-      modelBuild: "lean slim-athletic structured street fashion build — slender frame, not bulky",
+      modelBuild: "slim-athletic structured street fashion build",
       modelHeightDirection: "tall slim-athletic height impression",
-      shoulderLine: "narrow-to-medium clean shoulder line — never broad/stocky",
+      shoulderLine: "slightly broader clean shoulder line",
       neckProportions: "lean structured neck",
       facialCharacter: "longer oval with higher cheekbones — structured street presence",
       memorabilityCue: "structured street-premium commercial face",
@@ -650,7 +650,7 @@ export const URBAN_DISCOVERY_BLUEPRINTS: readonly ArchetypeCandidateBlueprint[] 
     haircut:
       "short natural curls with slightly fuller top",
     facialHair: "clean-shaven — no beard",
-    bodyStructure: "lean, slim-athletic fashion-model build with a naturally slender frame; not bulky, stocky or heavy-set — never bodybuilder",
+    bodyStructure: "tall lean soft-athletic lifestyle fashion frame",
     expression: "friendly social lifestyle energy — Instagram/TikTok natural",
     stylingDirection: "relaxed premium tee / light hoodie community look",
     backgroundDirection: "warm light community casting wall",
@@ -675,7 +675,7 @@ export const URBAN_DISCOVERY_BLUEPRINTS: readonly ArchetypeCandidateBlueprint[] 
         "Slot C must be a creative fashion Black / Afro-European face — different from A/B/D.",
     },
     fashionCasting: {
-      modelBuild: "lean slim-athletic lifestyle creative build — slender frame, not bulky",
+      modelBuild: "lean soft-athletic lifestyle creative build",
       modelHeightDirection: "tall lean lifestyle height impression",
       shoulderLine: "soft lean shoulder line fully visible",
       neckProportions: "natural lifestyle neck proportions",
@@ -721,7 +721,7 @@ export const URBAN_DISCOVERY_BLUEPRINTS: readonly ArchetypeCandidateBlueprint[] 
     haircut:
       "short textured afro / neat natural texture",
     facialHair: "clean shave or very light even stubble — never heavy full beard",
-    bodyStructure: "lean, slim-athletic fashion-model build with a naturally slender frame; not bulky, stocky or heavy-set — never bodybuilder",
+    bodyStructure: "tall lean-athletic broader shoulder line — campaign silhouette, never bodybuilder",
     expression:
       "premium friendly campaign calm — community hero authority without CEO or intimidating energy",
     stylingDirection: "premium campaign streetwear — black / deep charcoal hero basics",
@@ -747,9 +747,9 @@ export const URBAN_DISCOVERY_BLUEPRINTS: readonly ArchetypeCandidateBlueprint[] 
         "Slot D must be a confident campaign Black / Afro-European face — different from A/B/C.",
     },
     fashionCasting: {
-      modelBuild: "lean slim-athletic campaign fashion-model build — slender frame, not bulky",
+      modelBuild: "lean-athletic broader-shoulder campaign build",
       modelHeightDirection: "tall campaign hero height impression",
-      shoulderLine: "narrow-to-medium clean shoulder line — never broad/stocky",
+      shoulderLine: "broader athletic shoulder line — relaxed, not military",
       neckProportions: "strong proportional campaign neck",
       facialCharacter: "broader balanced rectangular face — premium community hero",
       memorabilityCue: "flagship community campaign face — not generic",

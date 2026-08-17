@@ -6,6 +6,7 @@
 
 import type { LockedBrandIdentity } from "../identity-lock/types";
 import type { Persona } from "@/lib/persona/domain/types";
+import { z } from "zod";
 
 export type UseApprovalGate =
   | "image_use"
@@ -49,8 +50,34 @@ export type BrandModelApprovalsView = {
   brandCast: UseApprovalEligibility;
   videoIdentityReadinessPolicy: VideoIdentityReadinessPolicy;
   lockedIdentity: LockedBrandIdentity | null;
+  eligibility: BrandModelEligibility;
   providerCalled: false;
 };
+
+/** Runtime schema shared by the Persona authority and downstream consumers. */
+export const brandModelEligibilitySchema = z
+  .object({
+    identityLocked: z.boolean(),
+    validIdentityLock: z.boolean(),
+    identityReviewPassed: z.boolean(),
+    referenceRightsConfirmed: z.boolean(),
+    brandCastApproved: z.boolean(),
+    imageUseApproved: z.boolean(),
+    videoUseApproved: z.boolean(),
+    imageIdentityReady: z.boolean(),
+    videoIdentityReady: z.boolean(),
+    imageEligible: z.boolean(),
+    videoEligible: z.boolean(),
+    imageBlockingReasons: z.array(z.string()),
+    videoBlockingReasons: z.array(z.string()),
+    lockVersion: z.number().int().positive().nullable(),
+    identityFingerprint: z.string().min(1).nullable(),
+  })
+  .strict();
+
+export type BrandModelEligibility = z.infer<
+  typeof brandModelEligibilitySchema
+>;
 
 export type UseApprovalResult = {
   persona: Persona;
@@ -72,7 +99,7 @@ export type BrandCastMemberCard = {
   brandCastApproved: boolean;
 };
 
-/** Future Image Studio consumer eligibility (no Image Studio build in this phase). */
+/** Canonical Image Studio consumer eligibility projection. */
 export type ImageStudioBrandModelEligibility = {
   personaId: string;
   eligible: boolean;
@@ -80,9 +107,12 @@ export type ImageStudioBrandModelEligibility = {
   imageIdentityReady: boolean;
   imageUseApproved: boolean;
   brandCastApproved: boolean;
+  blockingReasons: string[];
+  lockVersion: number;
+  identityFingerprint: string;
 };
 
-/** Future Video Studio consumer eligibility. */
+/** Canonical Video Studio consumer eligibility projection. */
 export type VideoStudioBrandModelEligibility = {
   personaId: string;
   eligible: boolean;
@@ -91,4 +121,6 @@ export type VideoStudioBrandModelEligibility = {
   videoUseApproved: boolean;
   brandCastApproved: boolean;
   blockingReasons: string[];
+  lockVersion: number;
+  identityFingerprint: string;
 };

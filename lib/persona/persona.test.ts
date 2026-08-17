@@ -31,6 +31,10 @@ import {
 import { getPersonaRepository as getRepo } from "@/lib/persona/repositories/factory";
 import type { WorkspaceScope } from "@/lib/persona/domain/types";
 import { PersonaDomainError } from "@/lib/persona/domain/errors";
+import {
+  createPersonaSchema,
+  updatePersonaSchema,
+} from "@/lib/persona/validation/schemas";
 
 const WS_A = PERSONA_TEST_WORKSPACE_ID;
 const WS_B = "22222222-2222-4222-8222-222222222222";
@@ -61,8 +65,6 @@ function profileFields() {
     default_expression: "Neutral calm",
     default_body_proportions: "Athletic lean",
     default_styling_notes: "Quiet luxury streetwear",
-    image_use_approved: true,
-    video_use_approved: false,
   };
 }
 
@@ -273,34 +275,52 @@ describe("Persona Studio Phase 1.1", () => {
     );
   });
 
-  it("7. image approval and video approval are separate", async () => {
+  it("7. generic CRUD cannot grant governed approvals or lock state", async () => {
+    assert.equal(
+      createPersonaSchema.safeParse({
+        name: "Bypass",
+        role: "Cast",
+        image_use_approved: true,
+      }).success,
+      false,
+    );
+    assert.equal(
+      updatePersonaSchema.safeParse({ brand_cast_approved: true }).success,
+      false,
+    );
+    await assert.rejects(
+      () =>
+        createPersona(scopeA, {
+          name: "Bypass",
+          role: "Cast",
+          image_use_approved: true,
+        } as Parameters<typeof createPersona>[1]),
+      (err: unknown) =>
+        err instanceof PersonaDomainError && err.code === "WORKFLOW",
+    );
+
     const persona = await createPersona(scopeA, {
       name: "Split",
       role: "Cast",
       ...profileFields(),
-      video_use_approved: false,
     });
-    await seedReadyReferences(memory, scopeA, persona.id);
-    await transitionPersona(scopeA, persona.id, "submit_review");
-    await transitionPersona(scopeA, persona.id, "approve");
-    await updatePersona(scopeA, persona.id, {
-      identity_lock_status: "approved",
-      image_identity_ready: true,
-      image_use_approved: true,
-      brand_cast_approved: true,
-    });
-
-    const imageReady = await listImageReadyPersonas(scopeA);
-    const videoReady = await listVideoReadyPersonas(scopeA);
-    assert.ok(imageReady.some((p) => p.id === persona.id));
-    assert.equal(videoReady.some((p) => p.id === persona.id), false);
-
-    await updatePersona(scopeA, persona.id, {
-      video_use_approved: true,
-      video_identity_ready: true,
-    });
-    const videoReady2 = await listVideoReadyPersonas(scopeA);
-    assert.ok(videoReady2.some((p) => p.id === persona.id));
+    await assert.rejects(
+      () =>
+        updatePersona(scopeA, persona.id, {
+          identity_lock_status: "approved",
+          image_identity_ready: true,
+          image_use_approved: true,
+          video_use_approved: true,
+          brand_cast_approved: true,
+        }),
+      (err: unknown) =>
+        err instanceof PersonaDomainError && err.code === "WORKFLOW",
+    );
+    const unchanged = await memory.getPersona(scopeA, persona.id);
+    assert.equal(unchanged?.identity_lock_status, "not_started");
+    assert.equal(unchanged?.image_use_approved, false);
+    assert.equal(unchanged?.video_use_approved, false);
+    assert.equal(unchanged?.brand_cast_approved, false);
   });
 
   it("8. rejected reference cannot be primary", async () => {
@@ -392,20 +412,20 @@ describe("Persona Studio Phase 1.1", () => {
     );
   });
 
-  it("10. listImageReadyPersonas returns only eligible personas", async () => {
+  it("10. legacy Approved state is not Image eligibility", async () => {
     const ready = await createPersona(scopeA, {
       name: "Ready",
       role: "Cast",
       ...profileFields(),
     });
     await seedReadyReferences(memory, scopeA, ready.id);
+    await memory.updatePersona(scopeA, ready.id, { image_use_approved: true });
     await transitionPersona(scopeA, ready.id, "submit_review");
     await transitionPersona(scopeA, ready.id, "approve");
-    await updatePersona(scopeA, ready.id, {
+    await memory.updatePersona(scopeA, ready.id, {
       identity_lock_status: "approved",
       image_identity_ready: true,
       image_use_approved: true,
-      brand_cast_approved: true,
     });
 
     await createPersona(scopeA, {
@@ -415,33 +435,30 @@ describe("Persona Studio Phase 1.1", () => {
     });
 
     const list = await listImageReadyPersonas(scopeA);
-    assert.equal(list.length, 1);
-    assert.equal(list[0]?.id, ready.id);
-    assert.deepEqual(
-      (await listProductionPersonas(scopeA)).map((p) => p.id),
-      list.map((p) => p.id),
-    );
+    assert.equal(list.some((p) => p.id === ready.id), false);
+    assert.deepEqual(await listProductionPersonas(scopeA), []);
   });
 
-  it("11. listVideoReadyPersonas returns only video-eligible personas", async () => {
+  it("11. legacy flags without a durable lock snapshot are not Video eligibility", async () => {
     const persona = await createPersona(scopeA, {
       name: "Video",
       role: "Cast",
       ...profileFields(),
-      video_use_approved: true,
     });
     await seedReadyReferences(memory, scopeA, persona.id);
+    await memory.updatePersona(scopeA, persona.id, { image_use_approved: true });
     await transitionPersona(scopeA, persona.id, "submit_review");
     await transitionPersona(scopeA, persona.id, "approve");
-    await updatePersona(scopeA, persona.id, {
+    await memory.updatePersona(scopeA, persona.id, {
       identity_lock_status: "approved",
       image_identity_ready: true,
       image_use_approved: true,
+      video_use_approved: true,
       video_identity_ready: true,
       brand_cast_approved: true,
     });
     const list = await listVideoReadyPersonas(scopeA);
-    assert.ok(list.some((p) => p.id === persona.id));
+    assert.equal(list.some((p) => p.id === persona.id), false);
   });
 
   it("12. production package contains approved assets and preferences", async () => {
@@ -460,6 +477,7 @@ describe("Persona Studio Phase 1.1", () => {
     });
     await setPersonaRelations(scopeA, persona.id, "locations", [location.id]);
     await seedReadyReferences(memory, scopeA, persona.id);
+    await memory.updatePersona(scopeA, persona.id, { image_use_approved: true });
     await transitionPersona(scopeA, persona.id, "submit_review");
     await transitionPersona(scopeA, persona.id, "approve");
 
@@ -468,7 +486,7 @@ describe("Persona Studio Phase 1.1", () => {
     assert.ok(pack.primary_reference);
     assert.ok(pack.approved_reference_assets.length >= 2);
     assert.equal(pack.preferred.locations[0]?.id, location.id);
-    assert.equal(pack.usage.image_eligible, true);
+    assert.equal(pack.usage.image_eligible, false);
     assert.ok(pack.prohibited_changes.length > 0);
   });
 

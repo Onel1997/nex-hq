@@ -46,7 +46,20 @@ import type { ReferencePackageSlot } from "@/lib/persona/creation/reference-pack
 import { parseReferencePackageAssetNotes } from "@/lib/persona/creation/reference-package/types";
 import type { ReferencePackageStatusView } from "@/lib/persona/creation/reference-package/types";
 import type { IdentityLockEligibilityView } from "@/lib/persona/creation/identity-lock/types";
+import type {
+  LegacyIdentityReconciliationView,
+  LegacyReconciliationConfirmations,
+} from "@/lib/persona/creation/identity-lock/legacy-reconciliation-service";
+import {
+  IDENTITY_REVIEW_CHECK_KEYS,
+  type IdentityReviewChecklist,
+  type IdentityReviewCheckKey,
+} from "@/lib/persona/domain/creation-types";
 import type { BrandModelApprovalsView } from "@/lib/persona/creation/use-approvals/types";
+import type {
+  ReferenceRightsConfirmations,
+  ReferenceRightsView,
+} from "@/lib/persona/creation/reference-rights/types";
 import { canProposeMirrorSalvage } from "@/lib/persona/creation/reference-package/mirror-salvage";
 
 const NAV: Array<{
@@ -66,6 +79,43 @@ const NAV: Array<{
   { id: "brand_looks", label: "Brand Looks", icon: Sparkles },
   { id: "outfits", label: "Outfits", icon: Shirt },
 ];
+
+const RECONCILIATION_REVIEW_LABELS: Record<IdentityReviewCheckKey, string> = {
+  same_person_across_references: "All references represent the same person",
+  stable_face_structure: "Face structure is stable",
+  stable_skin_tone: "Skin tone is stable",
+  stable_body_proportions: "Body proportions are stable",
+  no_ai_anatomy_defects: "No obvious AI anatomy defects",
+  no_inconsistent_age: "Age presentation is consistent",
+  no_changing_eye_color: "Eye color is consistent",
+  no_unapproved_hairline_change: "No unapproved hairline change",
+  no_text_watermark_artifacts: "No text or watermark artifacts",
+  realistic_hands_where_visible: "Hands are realistic where visible",
+  suitable_for_image_generation: "Current package is acceptable for Image use",
+  suitable_for_video_generation:
+    "Video identity is suitable (optional; does not grant Video approval)",
+};
+
+const EMPTY_RECONCILIATION_CHECKLIST = Object.fromEntries(
+  IDENTITY_REVIEW_CHECK_KEYS.map((key) => [key, false]),
+) as IdentityReviewChecklist;
+
+const EMPTY_RECONCILIATION_CONFIRMATIONS: LegacyReconciliationConfirmations = {
+  masterIdentityReferenceCorrect: false,
+  requiredReferenceCoverageReviewed: false,
+  samePersonAcrossReferences: false,
+  noObviousIdentityMismatch: false,
+  acceptableForImageUse: false,
+  remainOfficialBrandModelIdentity: false,
+};
+
+const EMPTY_REFERENCE_RIGHTS_CONFIRMATIONS: ReferenceRightsConfirmations = {
+  hasNecessaryRightsOrAuthorization: false,
+  masterIdentityReferenceAuthorized: false,
+  canonicalReferencesAuthorized: false,
+  aiAssistedImageProductionAuthorized: false,
+  workspaceBrandUseAuthorized: false,
+};
 
 export function PersonaStudio() {
   const studio = usePersonaStudio();
@@ -449,7 +499,7 @@ function PersonaDetail({
           </span>
           <span>
             Image identity:{" "}
-            {readiness.image_identity_ready || readiness.identity_locked
+            {readiness.image_identity_ready
               ? "READY"
               : "NOT READY YET"}
           </span>
@@ -467,7 +517,7 @@ function PersonaDetail({
           </span>
           <span>
             Brand Cast:{" "}
-            {readiness.brand_cast_approved ?? persona.approved
+            {readiness.brand_cast_approved ?? persona.brand_cast_approved
               ? "APPROVED"
               : "NOT APPROVED"}
           </span>
@@ -551,6 +601,16 @@ function PersonaDetail({
           .sort()
           .join("|")}
       />
+
+      {persona.identity_lock_status === "approved" ? (
+        <ReferenceRightsPanel
+          persona={persona}
+          busy={busy}
+          onBusy={setBusy}
+          onError={setError}
+          onUpdated={() => studio.selectPersona(persona.id)}
+        />
+      ) : null}
 
       {persona.identity_lock_status === "approved" ? (
         <BrandModelApprovalsPanel
@@ -1299,6 +1359,21 @@ function IdentityLockPanel({
   );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
+  const [reconciliation, setReconciliation] =
+    useState<LegacyIdentityReconciliationView | null>(null);
+  const [reconciliationOpen, setReconciliationOpen] = useState(false);
+  const [reconciliationError, setReconciliationError] = useState<string | null>(
+    null,
+  );
+  const [reconciliationChecklist, setReconciliationChecklist] =
+    useState<IdentityReviewChecklist>({ ...EMPTY_RECONCILIATION_CHECKLIST });
+  const [reconciliationConfirmations, setReconciliationConfirmations] =
+    useState<LegacyReconciliationConfirmations>({
+      ...EMPTY_RECONCILIATION_CONFIRMATIONS,
+    });
+  const [reconciliationAcknowledged, setReconciliationAcknowledged] =
+    useState(false);
+  const [reconciliationNotes, setReconciliationNotes] = useState("");
   const identityLocked = persona.identity_lock_status === "approved";
   const refById = new Map(references.map((r) => [r.id, r]));
   const master = references.find((r) => parseMasterIdentityNotes(r.notes)) ?? null;
@@ -1307,7 +1382,10 @@ function IdentityLockPanel({
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`/api/persona/${persona.id}/identity-lock`);
+        const [res, reconciliationRes] = await Promise.all([
+          fetch(`/api/persona/${persona.id}/identity-lock`),
+          fetch(`/api/persona/${persona.id}/identity-reconciliation`),
+        ]);
         const data = (await res.json().catch(() => null)) as {
           eligibility?: IdentityLockEligibilityView;
           error?: string;
@@ -1319,7 +1397,22 @@ function IdentityLockPanel({
               `Identity lock status failed (${res.status})`,
           );
         }
-        if (!cancelled && data?.eligibility) setEligibility(data.eligibility);
+        const reconciliationData = (await reconciliationRes
+          .json()
+          .catch(() => null)) as {
+          reconciliation?: LegacyIdentityReconciliationView;
+          error?: string;
+        } | null;
+        if (!reconciliationRes.ok) {
+          throw new Error(
+            reconciliationData?.error ??
+              `Identity reconciliation status failed (${reconciliationRes.status})`,
+          );
+        }
+        if (!cancelled) {
+          if (data?.eligibility) setEligibility(data.eligibility);
+          setReconciliation(reconciliationData?.reconciliation ?? null);
+        }
       } catch (err) {
         if (!cancelled) {
           onError(
@@ -1374,8 +1467,62 @@ function IdentityLockPanel({
     }
   }
 
+  async function submitReconciliation(decision: "approved" | "rejected") {
+    if (!reconciliation?.sourceSnapshot) return;
+    onBusy(true);
+    setReconciliationError(null);
+    onError(null);
+    try {
+      const res = await fetch(
+        `/api/persona/${persona.id}/identity-reconciliation`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operationId: crypto.randomUUID(),
+            expectedSnapshotId: reconciliation.sourceSnapshot.id,
+            expectedLockVersion: reconciliation.sourceSnapshot.lockVersion,
+            decision,
+            acknowledgeHistoricalProvenanceMissing: reconciliationAcknowledged,
+            checklist: reconciliationChecklist,
+            confirmations: reconciliationConfirmations,
+            reviewerNotes: reconciliationNotes,
+          }),
+        },
+      );
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      if (!res.ok) {
+        throw new Error(body?.error ?? `Reconciliation failed (${res.status})`);
+      }
+      setReconciliationOpen(false);
+      onLocked();
+    } catch (err) {
+      setReconciliationError(
+        err instanceof Error ? err.message : "Identity reconciliation failed",
+      );
+    } finally {
+      onBusy(false);
+    }
+  }
+
   const preview = eligibility?.preview;
-  const canonicalSlots = preview?.canonicalReferences ?? [];
+  const canonicalSlots =
+    reconciliation?.sourceSnapshot?.canonicalReferences ??
+    preview?.canonicalReferences ??
+    [];
+  const reconciliationVisualEvidenceAvailable = Boolean(
+    master?.signed_url &&
+      canonicalSlots.length === REFERENCE_PACKAGE_SLOTS.length &&
+      canonicalSlots.every((slot) => refById.get(slot.assetId)?.signed_url),
+  );
+  const requiredReviewPassed = IDENTITY_REVIEW_CHECK_KEYS.filter(
+    (key) => key !== "suitable_for_video_generation",
+  ).every((key) => reconciliationChecklist[key] === true);
+  const confirmationsPassed = Object.values(reconciliationConfirmations).every(
+    (value) => value === true,
+  );
 
   function provenanceBadge(provenance: string): string {
     switch (provenance) {
@@ -1406,6 +1553,12 @@ function IdentityLockPanel({
               ? ` · locked ${new Date(persona.identity_locked_at).toLocaleString()}`
               : ""}
           </p>
+          {!reconciliationVisualEvidenceAvailable ? (
+            <p className="ps-inline-error">
+              One or more private reference previews are unavailable. Reload or
+              repair signed reference access before making the human decision.
+            </p>
+          ) : null}
         </>
       ) : (
         <p className="ps-muted">
@@ -1413,6 +1566,49 @@ function IdentityLockPanel({
           Model identity. No generation — explicit approval only.
         </p>
       )}
+
+      {reconciliation?.requiresHumanReconciliation ? (
+        <div
+          className="ps-reconciliation-warning"
+          data-testid="legacy-identity-reconciliation-required"
+        >
+          <strong>Legacy identity requires reconciliation</strong>
+          <p>
+            Historical lock version {reconciliation.sourceSnapshot?.lockVersion ?? "—"}
+            {" "}does not contain exact persisted pre-lock review provenance. It
+            remains preserved, but downstream Brand Model use fails closed until
+            you perform a current human review.
+          </p>
+          <p className="ps-muted">
+            Current package: {reconciliation.currentPackage.coverage.accepted}/
+            {reconciliation.currentPackage.coverage.required} references · Master
+            {" "}
+            {reconciliation.currentPackage.masterReferenceAssetId
+              ? "present"
+              : "missing"}
+            {" · "}
+            {reconciliation.currentPackage.packageMatchesHistoricalSnapshot
+              ? "matches historical lock"
+              : "does not match historical lock"}
+          </p>
+          {reconciliation.blockingReasons.length > 0 ? (
+            <ul className="ps-inline-error">
+              {reconciliation.blockingReasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          ) : null}
+          <button
+            type="button"
+            className="ps-btn ps-btn-primary"
+            disabled={busy || !reconciliation.canReconcile}
+            data-testid="open-legacy-identity-reconciliation"
+            onClick={() => setReconciliationOpen(true)}
+          >
+            Review &amp; Reconcile Identity
+          </button>
+        </div>
+      ) : null}
 
       {eligibility ? (
         <div className="ps-muted">
@@ -1529,6 +1725,434 @@ function IdentityLockPanel({
           </div>
         </div>
       ) : null}
+
+      {reconciliationOpen && reconciliation?.sourceSnapshot ? (
+        <div
+          className="ps-ref-pkg-confirm ps-reconciliation-review"
+          data-testid="legacy-identity-reconciliation-review"
+        >
+          <h4>LEGACY RECONCILIATION REVIEW</h4>
+          <p>
+            Review the current immutable Master and all five reference images
+            shown above. This is a present-day owner decision—not evidence that a
+            historical review occurred.
+          </p>
+          <label className="ps-check">
+            <input
+              type="checkbox"
+              checked={reconciliationAcknowledged}
+              onChange={(event) =>
+                setReconciliationAcknowledged(event.target.checked)
+              }
+            />
+            I understand that historical review provenance is missing and this
+            records a new reconciliation review now.
+          </label>
+
+          <div className="ps-reconciliation-checks">
+            {IDENTITY_REVIEW_CHECK_KEYS.map((key) => (
+              <label className="ps-check" key={key}>
+                <input
+                  type="checkbox"
+                  checked={reconciliationChecklist[key]}
+                  onChange={(event) =>
+                    setReconciliationChecklist((current) => ({
+                      ...current,
+                      [key]: event.target.checked,
+                    }))
+                  }
+                />
+                {RECONCILIATION_REVIEW_LABELS[key]}
+              </label>
+            ))}
+          </div>
+
+          <div className="ps-reconciliation-checks">
+            <label className="ps-check">
+              <input
+                type="checkbox"
+                checked={reconciliationConfirmations.masterIdentityReferenceCorrect}
+                onChange={(event) =>
+                  setReconciliationConfirmations((current) => ({
+                    ...current,
+                    masterIdentityReferenceCorrect: event.target.checked,
+                  }))
+                }
+              />
+              Master Identity Reference is correct
+            </label>
+            <label className="ps-check">
+              <input
+                type="checkbox"
+                checked={
+                  reconciliationConfirmations.requiredReferenceCoverageReviewed
+                }
+                onChange={(event) =>
+                  setReconciliationConfirmations((current) => ({
+                    ...current,
+                    requiredReferenceCoverageReviewed: event.target.checked,
+                  }))
+                }
+              />
+              I reviewed all 5/5 required reference roles
+            </label>
+            <label className="ps-check">
+              <input
+                type="checkbox"
+                checked={reconciliationConfirmations.samePersonAcrossReferences}
+                onChange={(event) =>
+                  setReconciliationConfirmations((current) => ({
+                    ...current,
+                    samePersonAcrossReferences: event.target.checked,
+                  }))
+                }
+              />
+              The images represent the same person
+            </label>
+            <label className="ps-check">
+              <input
+                type="checkbox"
+                checked={reconciliationConfirmations.noObviousIdentityMismatch}
+                onChange={(event) =>
+                  setReconciliationConfirmations((current) => ({
+                    ...current,
+                    noObviousIdentityMismatch: event.target.checked,
+                  }))
+                }
+              />
+              No obvious identity mismatch is present
+            </label>
+            <label className="ps-check">
+              <input
+                type="checkbox"
+                checked={reconciliationConfirmations.acceptableForImageUse}
+                onChange={(event) =>
+                  setReconciliationConfirmations((current) => ({
+                    ...current,
+                    acceptableForImageUse: event.target.checked,
+                  }))
+                }
+              />
+              The package is acceptable for Image use
+            </label>
+            <label className="ps-check">
+              <input
+                type="checkbox"
+                checked={
+                  reconciliationConfirmations.remainOfficialBrandModelIdentity
+                }
+                onChange={(event) =>
+                  setReconciliationConfirmations((current) => ({
+                    ...current,
+                    remainOfficialBrandModelIdentity: event.target.checked,
+                  }))
+                }
+              />
+              This package may remain the official Brand Model identity
+            </label>
+          </div>
+
+          <label className="ps-upload">
+            Review notes (required for rejection)
+            <textarea
+              value={reconciliationNotes}
+              maxLength={2000}
+              rows={3}
+              onChange={(event) => setReconciliationNotes(event.target.value)}
+            />
+          </label>
+
+          <p className="ps-muted">
+            Approval creates lock version {reconciliation.sourceSnapshot.lockVersion + 1}
+            {" "}with this current review. Version {reconciliation.sourceSnapshot.lockVersion}
+            {" "}is not changed. Existing approval values are preserved because the
+            package must match exactly; Video approval is never granted here.
+          </p>
+          {reconciliationError ? (
+            <p className="ps-inline-error" data-testid="reconciliation-error">
+              {reconciliationError}
+            </p>
+          ) : null}
+          <div className="ps-btn-row">
+            <button
+              type="button"
+              className="ps-btn"
+              disabled={busy}
+              onClick={() => setReconciliationOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="ps-btn ps-btn-danger"
+              disabled={
+                busy ||
+                !reconciliationAcknowledged ||
+                !reconciliationNotes.trim()
+              }
+              data-testid="reject-legacy-identity-reconciliation"
+              onClick={() => void submitReconciliation("rejected")}
+            >
+              Reject current identity
+            </button>
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={
+                busy ||
+                !reconciliationAcknowledged ||
+                !requiredReviewPassed ||
+                !confirmationsPassed ||
+                !reconciliationVisualEvidenceAvailable
+              }
+              data-testid="approve-legacy-identity-reconciliation"
+              onClick={() => void submitReconciliation("approved")}
+            >
+              Approve &amp; Create New Lock Version
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ReferenceRightsPanel({
+  persona,
+  busy,
+  onBusy,
+  onError,
+  onUpdated,
+}: {
+  persona: Persona;
+  busy: boolean;
+  onBusy: (value: boolean) => void;
+  onError: (message: string | null) => void;
+  onUpdated: () => void;
+}) {
+  const [view, setView] = useState<ReferenceRightsView | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [confirmations, setConfirmations] =
+    useState<ReferenceRightsConfirmations>({
+      ...EMPTY_REFERENCE_RIGHTS_CONFIRMATIONS,
+    });
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/persona/${persona.id}/reference-rights`,
+          { cache: "no-store" },
+        );
+        const body = (await response.json().catch(() => null)) as {
+          rights?: ReferenceRightsView;
+          error?: string;
+        } | null;
+        if (!response.ok) {
+          throw new Error(
+            body?.error ?? `Reference rights status failed (${response.status})`,
+          );
+        }
+        if (!cancelled) setView(body?.rights ?? null);
+      } catch (error) {
+        if (!cancelled) {
+          onError(
+            error instanceof Error
+              ? error.message
+              : "Reference rights status failed",
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [persona.id, persona.updated_at, onError]);
+
+  async function submit(decision: "confirmed" | "rejected") {
+    if (!view) return;
+    onBusy(true);
+    onError(null);
+    setActionError(null);
+    try {
+      const response = await fetch(
+        `/api/persona/${persona.id}/reference-rights`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operationId: crypto.randomUUID(),
+            expectedIdentityLockSnapshotId: view.identityLockSnapshotId,
+            expectedIdentityLockVersion: view.identityLockVersion,
+            expectedIdentityFingerprint: view.identityFingerprint,
+            decision,
+            confirmations,
+            rejectionReason,
+          }),
+        },
+      );
+      const body = (await response.json().catch(() => null)) as {
+        result?: { rights?: ReferenceRightsView };
+        error?: string;
+      } | null;
+      if (!response.ok) {
+        throw new Error(
+          body?.error ?? `Reference rights decision failed (${response.status})`,
+        );
+      }
+      if (body?.result?.rights) setView(body.result.rights);
+      setReviewOpen(false);
+      onUpdated();
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Reference rights decision failed",
+      );
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  const allConfirmed = Object.values(confirmations).every(Boolean);
+
+  return (
+    <section className="ps-section" data-testid="reference-rights-panel">
+      <h3>REFERENCE RIGHTS</h3>
+      {!view ? (
+        <p className="ps-muted">Checking locked reference rights…</p>
+      ) : view.rightsConfirmed ? (
+        <>
+          <PersonaStatusChip label="REFERENCE RIGHTS CONFIRMED" tone="selected" />
+          <p className="ps-muted">
+            Master plus 5/5 canonical references are authorized at asset level
+            for the current locked Brand Model.
+            {view.exactAuditedConfirmation
+              ? " Audited confirmation is linked to this exact lock version."
+              : ""}
+          </p>
+        </>
+      ) : (
+        <div className="ps-reconciliation-warning">
+          <strong>Reference rights confirmation required</strong>
+          <p>
+            {view.missingRightsAssetIds.length} of 6 locked identity assets lack
+            persisted rights confirmation. Image Studio remains fail-closed.
+          </p>
+          <ul className="ps-completeness">
+            {view.assetRights.map((asset) => (
+              <li
+                key={asset.assetId}
+                className={asset.rightsConfirmed ? "is-ok" : ""}
+              >
+                {asset.role.replaceAll("_", " ")} · {asset.rightsConfirmed ? "confirmed" : "missing"}
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="ps-btn ps-btn-primary"
+            disabled={busy || !view.canConfirm}
+            data-testid="open-reference-rights-review"
+            onClick={() => setReviewOpen(true)}
+          >
+            Review &amp; Confirm Reference Rights
+          </button>
+        </div>
+      )}
+
+      {reviewOpen && view ? (
+        <div className="ps-ref-pkg-confirm ps-reconciliation-review">
+          <h4>Confirm locked reference rights</h4>
+          <p>
+            Confirm only if you have the necessary rights or authorization to use
+            the exact Master and five canonical references shown in Identity Lock
+            for Milaene AI-assisted Image Studio production.
+          </p>
+          {(
+            [
+              [
+                "hasNecessaryRightsOrAuthorization",
+                "I have the necessary rights or authorization for these identity assets.",
+              ],
+              [
+                "masterIdentityReferenceAuthorized",
+                "The Master Identity Reference is authorized for this use.",
+              ],
+              [
+                "canonicalReferencesAuthorized",
+                "All five canonical supporting references are authorized for this use.",
+              ],
+              [
+                "aiAssistedImageProductionAuthorized",
+                "These assets may be used for AI-assisted Image Studio production.",
+              ],
+              [
+                "workspaceBrandUseAuthorized",
+                "This authorization applies to Milaene brand production in the current workspace.",
+              ],
+            ] as const
+          ).map(([key, label]) => (
+            <label className="ps-check" key={key}>
+              <input
+                type="checkbox"
+                checked={confirmations[key]}
+                onChange={(event) =>
+                  setConfirmations((current) => ({
+                    ...current,
+                    [key]: event.target.checked,
+                  }))
+                }
+              />
+              {label}
+            </label>
+          ))}
+          <label className="ps-upload">
+            Rejection reason (required only when rejecting)
+            <textarea
+              rows={3}
+              maxLength={2000}
+              value={rejectionReason}
+              onChange={(event) => setRejectionReason(event.target.value)}
+            />
+          </label>
+          <p className="ps-muted">
+            Decision scope: current lock v{view.identityLockVersion} · snapshot {view.identityLockSnapshotId.slice(0, 8)}.
+            No image generation will start.
+          </p>
+          {actionError ? <p className="ps-inline-error">{actionError}</p> : null}
+          <div className="ps-btn-row">
+            <button
+              type="button"
+              className="ps-btn"
+              disabled={busy}
+              onClick={() => setReviewOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="ps-btn ps-btn-danger"
+              disabled={busy || !rejectionReason.trim()}
+              onClick={() => void submit("rejected")}
+            >
+              Reject rights confirmation
+            </button>
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={busy || !allConfirmed}
+              data-testid="confirm-reference-rights"
+              onClick={() => void submit("confirmed")}
+            >
+              Confirm Reference Rights
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -1627,8 +2251,7 @@ function BrandModelApprovalsPanel({
     view?.videoUse.alreadyApproved ?? persona.video_use_approved;
   const brandCastApproved =
     view?.brandCast.alreadyApproved ??
-    persona.brand_cast_approved ??
-    (persona.approved && persona.status === "Approved");
+    persona.brand_cast_approved;
 
   return (
     <section className="ps-section" data-testid="brand-model-approvals-panel">

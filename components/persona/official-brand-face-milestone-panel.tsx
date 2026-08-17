@@ -1,11 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
-import {
-  formatMilestoneLines,
-  getOfficialBrandFaceMilestone,
-  type OfficialBrandFaceMilestone,
-} from "@/lib/brand-face-selection";
+import type { BrandCastMilestoneProgress } from "@/lib/persona";
 
 function MilestoneRow({
   name,
@@ -20,66 +15,52 @@ function MilestoneRow({
   return (
     <li className={`ps-obf-row${done ? " is-done" : ""}`}>
       <strong>{name}</strong>
-      <span>
-        {approvedCount}/{requiredCount} approved
-      </span>
+      <span>{approvedCount}/{requiredCount} approved</span>
     </li>
   );
 }
 
-/**
- * Official Milaene Brand Face milestone — 3 archetypes, 0/3 until all approved.
- */
+/** Durable Persona-backed Brand Cast progress. Never reads the process-local registry. */
 export function OfficialBrandFaceMilestonePanel({
-  workspaceId = "ws-milaene",
-  milestone: milestoneProp,
+  progress,
 }: {
-  workspaceId?: string;
-  milestone?: OfficialBrandFaceMilestone;
+  progress: BrandCastMilestoneProgress | null;
 }) {
-  const milestone = useMemo(
-    () => milestoneProp ?? getOfficialBrandFaceMilestone(workspaceId),
-    [milestoneProp, workspaceId],
-  );
-
-  const lines = useMemo(() => formatMilestoneLines(milestone), [milestone]);
+  const approvedCount = progress
+    ? progress.male_approved + progress.female_approved
+    : 0;
+  const requiredCount = progress
+    ? progress.male_required + progress.female_required
+    : 0;
 
   return (
     <div className="ps-obf-milestone">
       <div className="ps-section-label">
         <span>Official Brand Faces</span>
-        <em>Phase 1.8 selection</em>
+        <em>Durable Persona authority</em>
       </div>
       <p className="ps-muted ps-obf-lead">
-        Select and approve exactly three long-term Milaene Brand Faces — one per
-        archetype. Persona Studio is complete only when all three are approved.
+        Only explicit durable Brand Cast approvals count toward this milestone.
       </p>
-      <ul className="ps-obf-list" aria-label="Brand Face milestone">
-        {milestone.archetypes.map((row) => (
-          <MilestoneRow
-            key={row.archetypeId}
-            name={row.archetypeName}
-            approvedCount={row.approvedCount}
-            requiredCount={row.requiredCount}
-          />
-        ))}
-      </ul>
-      <div
-        className={`ps-obf-overall${milestone.complete ? " is-done" : ""}`}
-        aria-label={lines[lines.length - 1]}
-      >
-        <em>Overall</em>
-        <strong>
-          {milestone.approvedCount}/{milestone.requiredCount} Official Milaene
-          Brand Faces
-        </strong>
-      </div>
-      {!milestone.complete ? (
-        <p className="ps-muted ps-obf-hint">
-          Image Studio and Video Studio stay dark until this cast is complete.
-        </p>
+      {!progress ? (
+        <p className="ps-muted">Loading durable Brand Cast progress…</p>
       ) : (
-        <p className="ps-obf-complete">All three Official Brand Faces are approved.</p>
+        <>
+          <ul className="ps-obf-list" aria-label="Brand Cast milestone">
+            <MilestoneRow name="Male Brand Models" approvedCount={progress.male_approved} requiredCount={progress.male_required} />
+            <MilestoneRow name="Female Brand Models" approvedCount={progress.female_approved} requiredCount={progress.female_required} />
+          </ul>
+          <div
+            className={`ps-obf-overall${progress.milestone_reached ? " is-done" : ""}`}
+            aria-label={`${approvedCount}/${requiredCount} durable Brand Cast approvals`}
+          >
+            <em>Overall</em>
+            <strong>{approvedCount}/{requiredCount} Official Milaene Brand Models</strong>
+          </div>
+          <p className="ps-muted ps-obf-hint">
+            Video approval is independent and is not required for Brand Cast membership.
+          </p>
+        </>
       )}
     </div>
   );

@@ -143,6 +143,7 @@ export {
 } from "./handoffs";
 
 export {
+  BRAND_FACE_SELECTION_STORE_AUTHORITY,
   resetBrandFaceSelectionStoreForTests,
   emptyOfficialBrandFaceRegistry,
   getOrCreateRegistry,

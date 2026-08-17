@@ -119,9 +119,7 @@ export class MemoryPersonaRepository implements PersonaRepository {
     }
 
     return {
-      approved_personas: snap.personas.filter(
-        (p) => p.status === "Approved" && p.approved,
-      ).length,
+      approved_personas: snap.personas.filter((p) => p.brand_cast_approved).length,
       locations: snap.locations.filter((l) => l.active).length,
       camera_presets: snap.camera_presets.length,
       pose_packs: snap.poses.filter((p) => p.active).length,
@@ -238,9 +236,7 @@ export class MemoryPersonaRepository implements PersonaRepository {
     const brandCastApproved =
       patch.brand_cast_approved !== undefined
         ? Boolean(patch.brand_cast_approved)
-        : nextStatus === "Approved"
-          ? true
-          : current.brand_cast_approved;
+        : current.brand_cast_approved;
 
     const next: Persona = {
       ...current,

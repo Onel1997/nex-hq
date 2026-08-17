@@ -1,6 +1,7 @@
 /**
- * Phase 2.5B.11 — Urban lean / slim-athletic body build only.
- * Body wording only — zero provider calls; face/hair/freshness/age untouched.
+ * Phase 2.5B.11R — rollback lean / slim-athletic body build only.
+ * Restores pre-2.5B.11 Urban body wording. Zero provider calls.
+ * Face / hair / freshness / age / novelty / Identity Lock untouched.
  */
 
 import assert from "node:assert/strict";
@@ -32,17 +33,21 @@ const ROOT = process.cwd();
 const ARCH_URBAN = "arch-urban-community-hero";
 const SAMPLED_AT = "2026-08-16T20:00:00.000Z";
 
+/** 2.5B.11-specific lean-body phrases that must not remain. */
+const LEAN_BODY_25B11 =
+  /slim-athletic fashion-model|naturally slender frame|narrow-to-medium shoulders|low visible body fat|not bulky, stocky|slender frame, not bulky|never broad\/stocky|lean \/ slim-athletic/i;
+
 function projectForUrban(projectId: string): PersonaCreationProject {
   const now = new Date().toISOString();
   return {
     id: projectId,
     workspace_id: "ws-milaene",
-    name: "OBF Urban 2.5B.11",
+    name: "OBF Urban 2.5B.11R",
     description: `Official Brand Face. ${ARCHETYPE_PROJECT_MARKER}${ARCH_URBAN}`,
     gender_presentation: "Male",
     age_range: "21-24",
     height_range: "180",
-    body_type: "Lean",
+    body_type: "athletic",
     skin_tone_direction: "",
     face_shape_direction: "",
     hair_direction: "",
@@ -76,39 +81,83 @@ function projectForUrban(projectId: string): PersonaCreationProject {
   };
 }
 
-describe("Phase 2.5B.11 — lean body build only", () => {
-  it("1–2. Urban body target is lean / slim-athletic; bulky/stocky/heavy-set excluded", () => {
+describe("Phase 2.5B.11R — lean body build rollback", () => {
+  it("1–2. 2.5B.11 lean-body wording removed; pre-2.5B.11 Urban body restored", () => {
     const catalog = loadBrandArchetypeCatalog("ws-milaene");
     const urban = catalog.archetypes.find((a) => a.id === ARCH_URBAN)!;
-    assert.match(urban.bodyDirection, /slim-athletic|lean/i);
-    assert.match(urban.bodyDirection, /not bulky|stocky|heavy-set/i);
+    const dna = catalog.identityDnaById[urban.identityDnaId]!;
+    assert.equal(
+      urban.bodyDirection,
+      "lean to athletic — not bodybuilder — normal healthy proportions wearable in oversized clothing",
+    );
+    assert.doesNotMatch(urban.bodyDirection, LEAN_BODY_25B11);
+    assert.equal(
+      dna.appearance.proportions,
+      "lean to athletic frame — never bodybuilder — wearable in oversized streetwear",
+    );
+    assert.equal(
+      dna.movement.shoulderPosition,
+      "natural medium shoulders, relaxed not squared",
+    );
+    assert.equal(
+      dna.movement.bodyEnergy,
+      "casting-ready calm — wearable in oversized clothing — never aggressive",
+    );
 
-    for (const lane of URBAN_SLOT_BLUEPRINTS) {
-      assert.match(lane.bodyDirection, /slim-athletic|lean/i);
-      assert.match(lane.bodyDirection, /not bulky|stocky|heavy-set/i);
-      assert.doesNotMatch(lane.bodyDirection, /broader shoulder/i);
+    const expectedSlotBodies = [
+      "lean to athletic relaxed streetwear casting frame — never bodybuilder",
+      "lean-athletic streetwear build with slightly broader shoulders — never bodybuilder",
+      "tall lean soft-athletic lifestyle fashion frame — never bodybuilder",
+      "tall lean-athletic broader shoulder campaign frame — never bodybuilder",
+    ] as const;
+    for (let i = 0; i < URBAN_SLOT_BLUEPRINTS.length; i++) {
+      const lane = URBAN_SLOT_BLUEPRINTS[i]!;
+      assert.equal(lane.bodyDirection, expectedSlotBodies[i]);
+      assert.doesNotMatch(lane.bodyDirection, LEAN_BODY_25B11);
     }
-    for (const bp of URBAN_DISCOVERY_BLUEPRINTS) {
-      assert.match(bp.bodyStructure, /slim-athletic|lean/i);
-      assert.match(bp.bodyStructure, /not bulky|stocky|heavy-set/i);
-      assert.doesNotMatch(bp.fashionCasting.shoulderLine ?? "", /broader athletic/i);
+
+    const expectedStructures = [
+      "lean to athletic relaxed adult male fashion proportions — never bodybuilder",
+      "lean-athletic adult male with slightly broader shoulders — never bodybuilder",
+      "tall lean soft-athletic lifestyle fashion frame",
+      "tall lean-athletic broader shoulder line — campaign silhouette, never bodybuilder",
+    ] as const;
+    const expectedBuilds = [
+      "lean-to-athletic relaxed community fashion build",
+      "slim-athletic structured street fashion build",
+      "lean soft-athletic lifestyle creative build",
+      "lean-athletic broader-shoulder campaign build",
+    ] as const;
+    const expectedShoulders = [
+      "soft relaxed shoulder line fully visible",
+      "slightly broader clean shoulder line",
+      "soft lean shoulder line fully visible",
+      "broader athletic shoulder line — relaxed, not military",
+    ] as const;
+    for (let i = 0; i < URBAN_DISCOVERY_BLUEPRINTS.length; i++) {
+      const bp = URBAN_DISCOVERY_BLUEPRINTS[i]!;
+      assert.equal(bp.bodyStructure, expectedStructures[i]);
+      assert.equal(bp.fashionCasting.modelBuild, expectedBuilds[i]);
+      assert.equal(bp.fashionCasting.shoulderLine, expectedShoulders[i]);
+      assert.doesNotMatch(bp.bodyStructure, LEAN_BODY_25B11);
+      assert.doesNotMatch(bp.fashionCasting.modelBuild ?? "", LEAN_BODY_25B11);
+      assert.doesNotMatch(bp.fashionCasting.shoulderLine ?? "", LEAN_BODY_25B11);
     }
 
     const full = composeProviderPrompt(
       buildCandidatePrompt({
-        project: projectForUrban("proj-lean-body"),
+        project: projectForUrban("proj-lean-body-rollback"),
         assetType: "portrait_front",
         candidateNumber: 2,
-        generationRunId: "run-25b11",
+        generationRunId: "run-25b11r",
         identitySampledAt: SAMPLED_AT,
       }),
       { logBudget: false },
     );
-    assert.match(
-      full,
-      /Lean, slim-athletic fashion-model build with a naturally slender frame/i,
-    );
-    assert.match(full, /not bulky, stocky or heavy-set/i);
+    assert.doesNotMatch(full, LEAN_BODY_25B11);
+    assert.match(full, /lean \/ athletic/i);
+    assert.doesNotMatch(full, /naturally slender frame/i);
+    assert.doesNotMatch(full, /not bulky, stocky or heavy-set/i);
   });
 
   it("3–5. face / hair / freshness / age unchanged", () => {
@@ -118,8 +167,8 @@ describe("Phase 2.5B.11 — lean body build only", () => {
     for (const lane of URBAN_SLOT_BLUEPRINTS) {
       assert.equal(lane.ageRange, "21-24");
     }
-    const a = buildUrbanFreshRunRecipe("proj-25b11-stable");
-    const b = buildUrbanFreshRunRecipe("proj-25b11-stable");
+    const a = buildUrbanFreshRunRecipe("proj-25b11r-stable");
+    const b = buildUrbanFreshRunRecipe("proj-25b11r-stable");
     assert.equal(urbanFreshRunHairComboKey(a), urbanFreshRunHairComboKey(b));
     assert.ok(a.faceIdentityRecipes.A.promptLine.startsWith("Distinct facial identity:"));
   });
@@ -133,6 +182,8 @@ describe("Phase 2.5B.11 — lean body build only", () => {
       "lib/persona/identity-blueprints/urban-slot-blueprints.ts",
       "lib/brand-archetypes/archetypes.ts",
       "lib/persona/creation/candidate-intelligence/premium-casting-direction.ts",
+      "lib/brand-archetypes/discovery-blueprints.ts",
+      "lib/persona/creation/candidate-intelligence/prompt-builder.ts",
     ]) {
       assert.doesNotMatch(
         readFileSync(join(ROOT, rel), "utf8"),

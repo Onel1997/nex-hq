@@ -1,24 +1,40 @@
-import type { Persona, PersonaRelations } from "../domain/types";
+/** Persona → Video Studio contract boundary. Video generation remains absent. */
 
-export interface VideoStudioPersonaHandoff {
-  personaId: string;
-  personaName: string;
-  relations: PersonaRelations;
+import type { WorkspaceScope } from "../domain/types";
+import type {
+  BrandModelHandoff,
+  BrandModelSummary,
+  ExpectedBrandModelIdentity,
+} from "../domain/brand-model-contract";
+import {
+  buildBrandModelHandoff,
+  listEligibleBrandModels,
+  type BrandModelAssetAccessResolver,
+} from "../integrations/brand-model-handoff";
+
+export type VideoStudioPersonaHandoff = BrandModelHandoff & {
+  consumer: "video";
+};
+
+export async function buildVideoStudioPersonaHandoff(
+  scope: WorkspaceScope,
+  personaId: string,
+  options: {
+    expectedIdentity?: ExpectedBrandModelIdentity;
+    resolveAssetAccess?: boolean;
+    assetAccessResolver?: BrandModelAssetAccessResolver;
+  } = {},
+): Promise<VideoStudioPersonaHandoff> {
+  return (await buildBrandModelHandoff(
+    scope,
+    personaId,
+    "video",
+    options,
+  )) as VideoStudioPersonaHandoff;
 }
 
-/**
- * Phase 1.1 placeholder — Video Studio not wired.
- * Returns null always (even for video-ready personas).
- */
-export function buildVideoStudioPersonaHandoff(
-  persona: Persona,
-  relations: PersonaRelations,
-): VideoStudioPersonaHandoff | null {
-  void persona;
-  void relations;
-  return null;
-}
-
-export function listVideoStudioIntegrationHooks(): string[] {
-  return [];
+export function listVideoStudioBrandModels(
+  scope: WorkspaceScope,
+): Promise<BrandModelSummary[]> {
+  return listEligibleBrandModels(scope, "video");
 }

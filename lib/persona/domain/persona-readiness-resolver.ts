@@ -32,6 +32,9 @@ import { validateIdentityLockEligibility } from "@/lib/persona/creation/identity
 import type { IdentityLockEligibilityView } from "@/lib/persona/creation/identity-lock/types";
 import { REFERENCE_PACKAGE_SLOTS } from "@/lib/persona/creation/reference-package/slots";
 import { PersonaDomainError } from "@/lib/persona/domain/errors";
+import type { PersonaIdentityReview } from "@/lib/persona/domain/creation-types";
+import { getCreationRepository } from "@/lib/persona/creation/creation-factory";
+import { selectLatestIdentityReview } from "@/lib/persona/creation/identity-lock/identity-review-quality-gate";
 
 export const PERSONA_VISUAL_STATUSES = [
   "references_incomplete",
@@ -106,6 +109,7 @@ export function resolvePersonaReadinessFromFacts(input: {
   persona: Persona;
   assets: readonly PersonaReferenceAsset[];
   reconciled: ReconciledReferencePackageState;
+  identityReview?: PersonaIdentityReview | null;
 }): PersonaCanonicalReadiness {
   const { persona, assets, reconciled } = input;
   const master = findMasterIdentityReference(assets);
@@ -120,14 +124,11 @@ export function resolvePersonaReadinessFromFacts(input: {
     reconciled.requiredCount === REFERENCE_PACKAGE_SLOTS.length;
 
   const identityLocked = isPersonaIdentityLocked(persona);
-  const imageIdentityReady = Boolean(persona.image_identity_ready) || identityLocked;
+  const imageIdentityReady = Boolean(persona.image_identity_ready);
   const videoIdentityReady = Boolean(persona.video_identity_ready);
   const imageUseApproved = Boolean(persona.image_use_approved);
   const videoUseApproved = Boolean(persona.video_use_approved);
-  const brandCastApproved = Boolean(
-    persona.brand_cast_approved ||
-      (persona.approved && persona.status === "Approved"),
-  );
+  const brandCastApproved = Boolean(persona.brand_cast_approved);
 
   const identityReady = identityLocked && imageIdentityReady;
 
@@ -137,6 +138,7 @@ export function resolvePersonaReadinessFromFacts(input: {
     reconciled,
     master,
     assets,
+    identityReview: input.identityReview ?? null,
     nextLockVersion,
   });
 
@@ -311,10 +313,16 @@ export async function resolvePersonaReadiness(
   if (!persona) {
     throw new PersonaDomainError("Persona not found", "NOT_FOUND", { personaId });
   }
-  const [assets, attempts] = await Promise.all([
+  const [assets, attempts, reviews] = await Promise.all([
     personaRepo.listReferenceAssets(scope, personaId),
     getReferencePackageRepository().listAttemptsForPersona(scope, personaId),
+    getCreationRepository().listIdentityReviews(scope, personaId),
   ]);
   const reconciled = reconcileReferencePackageState({ attempts, assets });
-  return resolvePersonaReadinessFromFacts({ persona, assets, reconciled });
+  return resolvePersonaReadinessFromFacts({
+    persona,
+    assets,
+    reconciled,
+    identityReview: selectLatestIdentityReview(reviews),
+  });
 }

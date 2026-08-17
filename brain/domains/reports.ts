@@ -448,6 +448,13 @@ export interface BrainImageStudioAsset {
   platform?: string;
   dimensions?: string;
   imageUrl?: string;
+  storagePath?: string;
+  createdAt?: string;
+  message?: string;
+  /** Persona-owned immutable identity trace; never an Image-owned approval. */
+  brandModelTrace?: import("@/lib/persona/domain/brand-model-contract").BrandModelTrace;
+  /** Provider and exact identity lineage; contains no signed/private access. */
+  generationProvenance?: import("@/lib/image/image-generation-identity-contract").ImageGenerationProvenance;
 }
 
 /** V3 lookbook shot plan. */
@@ -510,6 +517,8 @@ export interface BrainImageSections {
   advancedPackage?: BrainNormalizedImageAsset[];
   campaignShots?: BrainImageCampaignShot[];
   sourceReportTitles?: string[];
+  /** Snapshot of the Persona-issued production contract used by this project. */
+  brandModelContract?: import("@/lib/persona/domain/brand-model-contract").BrandModelContract;
   /** Legacy V1 — migrated on read */
   heroBanner?: BrainImageHeroBanner;
   productMockups?: BrainImageProductMockup[];

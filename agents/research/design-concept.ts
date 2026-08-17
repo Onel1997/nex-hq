@@ -1539,7 +1539,7 @@ function applyBrandDnaGate(
 ): DesignConcept[] {
   const analyzed = concepts.map(applyBrandDnaAnalysis);
 
-  let passed = analyzed.filter((c) => c.dnaScore >= DNA_MIN_SCORE);
+  const passed = analyzed.filter((c) => c.dnaScore >= DNA_MIN_SCORE);
   const rejected = analyzed.length - passed.length;
   if (rejected > 0) {
     adjustments.push(

@@ -143,7 +143,7 @@ function mapPersona(
     style: str(row.style),
     notes: str(row.notes),
     brand_fit_score: num(row.brand_fit_score, 0),
-    approved: bool(row.approved, status === "Approved"),
+    approved: bool(row.approved, false),
     identity_lock_version: num(row.identity_lock_version, 1) || 1,
     identity_locked_at:
       row.identity_locked_at == null ? null : String(row.identity_locked_at),
@@ -155,10 +155,7 @@ function mapPersona(
     video_use_approved_at:
       row.video_use_approved_at == null ? null : String(row.video_use_approved_at),
     video_use_approved_by: nullableStr(row.video_use_approved_by),
-    brand_cast_approved: bool(
-      row.brand_cast_approved,
-      bool(row.approved, status === "Approved"),
-    ),
+    brand_cast_approved: bool(row.brand_cast_approved, false),
     brand_cast_approved_at:
       row.brand_cast_approved_at == null
         ? null
@@ -485,9 +482,7 @@ export class SupabasePersonaRepository implements PersonaRepository {
     }
 
     return {
-      approved_personas: snap.personas.filter(
-        (p) => p.status === "Approved" && p.approved,
-      ).length,
+      approved_personas: snap.personas.filter((p) => p.brand_cast_approved).length,
       locations: snap.locations.filter((l) => l.active).length,
       camera_presets: snap.camera_presets.length,
       pose_packs: snap.poses.filter((p) => p.active).length,

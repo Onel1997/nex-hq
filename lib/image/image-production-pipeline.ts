@@ -9,12 +9,14 @@ import {
   MISSION_ASSET_SLOTS,
   resolveMissionSlotAssets,
 } from "@/lib/image/image-studio-assets";
+import type { ImageBrandModelProductionContext } from "@/lib/image/brand-model-production-context";
 
 export interface ImageProductionProject {
   reportId: string;
   reportRecordId: string;
   projectName: string;
   productionAssets: ImageStudioAsset[];
+  brandModelContext?: ImageBrandModelProductionContext;
 }
 
 export interface ProductionPipelineCallbacks {
@@ -191,6 +193,9 @@ export async function executeGeneration(
         assetId: generating.id,
         provider: "openai",
         promptVariant: variant,
+        ...(project.brandModelContext
+          ? { brandModelTrace: project.brandModelContext.trace }
+          : {}),
       }),
     });
 
@@ -251,6 +256,8 @@ export async function executeGeneration(
         status: (data.asset.status === "ready" ? "completed" : data.asset.status) as ImageStudioAsset["status"],
         imageUrl: data.asset.imageUrl,
         createdAt: data.asset.createdAt,
+        storagePath: data.asset.storagePath,
+        generationProvenance: data.asset.generationProvenance,
       },
       callbacks,
       durationMs,

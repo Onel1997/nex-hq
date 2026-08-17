@@ -13,7 +13,10 @@ export type {
 
 export { computeReferencePackageFingerprint } from "./fingerprint";
 export { countProvenance, resolveLockReferenceProvenance } from "./provenance";
-export { validateIdentityLockEligibility } from "./pre-lock-validation";
+export {
+  validateIdentityLockEligibility,
+  validateIdentityPackageEvidence,
+} from "./pre-lock-validation";
 
 export {
   getIdentityLockRepository,
@@ -37,3 +40,26 @@ export type {
   HistoricalProtectionPromotionStatus,
   IdentityLockStage,
 } from "./identity-lock-service";
+
+export { diagnoseLegacyIdentityLockReconciliation } from "./legacy-reconciliation";
+export type {
+  LegacyIdentityLockReconciliationDiagnostic,
+  LegacyIdentityLockReconciliationStatus,
+} from "./legacy-reconciliation";
+
+export {
+  createLegacyReconciliationOperationId,
+  getLegacyIdentityReconciliationView,
+  readLegacyReconciliationReviewContext,
+  submitLegacyIdentityReconciliation,
+  LEGACY_RECONCILIATION_CONTEXT_KEY,
+  LEGACY_RECONCILIATION_REASON,
+  LEGACY_RECONCILIATION_REVIEW_KIND,
+} from "./legacy-reconciliation-service";
+export type {
+  LegacyIdentityReconciliationView,
+  LegacyReconciliationConfirmations,
+  LegacyReconciliationDecision,
+  LegacyReconciliationReviewContext,
+  SubmitLegacyIdentityReconciliationInput,
+} from "./legacy-reconciliation-service";

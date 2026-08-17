@@ -322,7 +322,7 @@ export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
         />
       ) : (
         <div className="ps-brand-cast">
-          <OfficialBrandFaceMilestonePanel />
+          <OfficialBrandFaceMilestonePanel progress={studio.brandCastProgress} />
           <div className={`ps-milestone${p.milestone_reached ? " is-done" : ""}`}>
             <span className="ps-milestone-label">{p.milestone_label}</span>
             <strong>{p.milestone_reached ? "Reached" : "In progress"}</strong>
@@ -958,7 +958,7 @@ function LegacyPersonaCreatorWizard({
         </div>
 
         <aside className="ps-creator-aside" aria-label="Live Brand Cast summary">
-          <OfficialBrandFaceMilestonePanel />
+          <OfficialBrandFaceMilestonePanel progress={studio.brandCastProgress} />
           <BrandArchetypeCastPanel />
           <div className="ps-live-summary">
             <div className="ps-live-summary-head">

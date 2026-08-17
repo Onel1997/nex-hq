@@ -141,7 +141,7 @@ export async function retrieveResearchKnowledge(input: {
     (record, index, arr) => arr.findIndex((r) => r.id === record.id) === index,
   );
 
-  let slices = mergeRecordsIntoSlice(
+  const slices = mergeRecordsIntoSlice(
     baseContext.slices,
     "reports",
     reportRecords,

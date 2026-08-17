@@ -59,11 +59,11 @@ export function reopenPersonaAsDraft(persona: Persona): Persona {
   return applyPersonaStatus(persona, "Draft");
 }
 
-/** @deprecated Prefer readiness-based eligibility helpers. */
+/** @deprecated Prefer canonical Brand Model eligibility helpers. */
 export function isApprovedForProduction(
-  persona: Pick<Persona, "status" | "approved">,
+  persona: Pick<Persona, "brand_cast_approved">,
 ): boolean {
-  return persona.status === "Approved" && persona.approved === true;
+  return persona.brand_cast_approved === true;
 }
 
 export { PersonaWorkflowError };

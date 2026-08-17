@@ -11,6 +11,7 @@ import {
   slimConceptForStorage,
   slimRenderPlanForStorage,
 } from "@/lib/design/design-mission-storage";
+import type { ApprovedMasterArtworkView } from "@/lib/design/master-artwork-authority/types";
 
 export const IMAGE_STUDIO_HANDOFF_KEY = "nexhq-image-studio-handoff";
 export const IMAGE_STUDIO_HANDOFF_KEY_V2 = "nexhq-image-studio-handoff-v2";
@@ -63,6 +64,8 @@ export interface ImageStudioHandoff {
   masterArtworkPrintReady?: boolean;
   masterArtworkDesignDirection?: string;
   masterArtworkCommercialScore?: number;
+  /** Durable Design-owned authority. Browser URLs remain transport/preview only. */
+  durableMasterArtwork?: ApprovedMasterArtworkView;
 }
 
 export interface HandoffSaveResult {
@@ -283,6 +286,7 @@ export function normalizeImageStudioHandoff(
     masterArtworkPrintReady: raw.masterArtworkPrintReady,
     masterArtworkDesignDirection: raw.masterArtworkDesignDirection,
     masterArtworkCommercialScore: raw.masterArtworkCommercialScore,
+    durableMasterArtwork: raw.durableMasterArtwork,
   };
 }
 
@@ -353,6 +357,7 @@ function compactForWindowName(handoff: ImageStudioHandoff): ImageStudioHandoff {
     masterArtworkResolution: handoff.masterArtworkResolution,
     masterArtworkDpi: handoff.masterArtworkDpi,
     masterArtworkPrintReady: handoff.masterArtworkPrintReady,
+    durableMasterArtwork: handoff.durableMasterArtwork,
   };
 }
 
@@ -400,6 +405,7 @@ export interface DesignStudioHandoffInput {
   aiDesignerConcept?: DesignConcept;
   renderPlan?: RenderPlan;
   review?: DesignConceptReview;
+  durableMasterArtwork?: ApprovedMasterArtworkView;
 }
 
 function rebuildImageStudioHandoffFromMission(
@@ -446,6 +452,7 @@ function rebuildImageStudioHandoffFromMission(
     concept,
     review: assets.aiDesignerReview ?? input.review,
     ...buildMasterArtworkHandoffPayload(assets),
+    durableMasterArtwork: input.durableMasterArtwork,
   };
 }
 
@@ -476,6 +483,9 @@ export function sendDesignHandoffToImageStudio(input: DesignStudioHandoffInput):
 
   if (input.version && handoff.mission) {
     handoff = { ...handoff, mission: { ...handoff.mission, version: input.version } };
+  }
+  if (input.durableMasterArtwork) {
+    handoff = { ...handoff, durableMasterArtwork: input.durableMasterArtwork };
   }
 
   console.info("[Design Studio] handoff built", {

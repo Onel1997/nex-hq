@@ -10,14 +10,6 @@ import {
   loadBrandArchetypeCatalog,
 } from "@/lib/brand-archetypes";
 import {
-  listImageStudioIntegrationHooks,
-  buildImageStudioPersonaHandoff,
-} from "@/lib/persona/future/image-studio-hooks";
-import {
-  listVideoStudioIntegrationHooks,
-  buildVideoStudioPersonaHandoff,
-} from "@/lib/persona/future/video-studio-hooks";
-import {
   A1_DISCOVERY_CANDIDATE_COUNT,
   A2_MAX_SHORTLIST,
   OFFICIAL_MILAENE_ARCHETYPE_COUNT,
@@ -396,28 +388,12 @@ describe("Official Brand Face Selection (Phase 1.8)", () => {
 
   it("15. no Image Studio call", () => {
     assertNoImageStudioCall();
-    assert.deepEqual(listImageStudioIntegrationHooks(), []);
-    assert.equal(
-      buildImageStudioPersonaHandoff(
-        { id: "p1", name: "x" } as never,
-        {} as never,
-      ),
-      null,
-    );
     const pkg = getBrandFaceProductionPackage("missing", WS);
     assert.equal(pkg, null);
   });
 
   it("16. no Video Studio call", () => {
     assertNoVideoStudioCall();
-    assert.deepEqual(listVideoStudioIntegrationHooks(), []);
-    assert.equal(
-      buildVideoStudioPersonaHandoff(
-        { id: "p1", name: "x" } as never,
-        {} as never,
-      ),
-      null,
-    );
     const recs = recommendOfficialBrandFaceForVideo(
       { platform: "instagram" },
       WS,
@@ -671,13 +647,14 @@ describe("Phase 1.8B Brand Face Casting Start UX", () => {
     assert.ok(!/discovery review/i.test(status.label));
   });
 
-  it("14. approved archetype shows official brand face status", () => {
-    runToApproved(ARCH.mediterranean, "ux-approved");
+  it("14. official status requires an explicitly supplied authority projection", () => {
+    const { face } = runToApproved(ARCH.mediterranean, "ux-approved");
     const model = buildArchetypeCastingCardModel({
       workspaceId: WS,
       archetypeId: ARCH.mediterranean,
       archetypeActive: true,
       creationProjects: oldCreationRuns,
+      activeFace: face,
     });
     assert.equal(model.primaryAction, "view_brand_cast");
     assert.match(model.officialStatus.label, /official brand face/i);

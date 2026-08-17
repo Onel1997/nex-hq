@@ -16,7 +16,7 @@ export const IMAGE_VALIDATION_SCHEMAS = {
 
 const ROOT_VALIDATION_SCHEMA = IMAGE_VALIDATION_SCHEMAS.root;
 
-export interface ParseImageOutputOptions extends EnrichStudioOptions {}
+export type ParseImageOutputOptions = EnrichStudioOptions;
 
 export const EXPECTED_IMAGE_SCHEMA = {
   title: "string (required)",

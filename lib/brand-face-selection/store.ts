@@ -1,6 +1,9 @@
 /**
- * In-memory Official Brand Face Selection store.
- * Seed / test persistence — no OpenAI, no Image/Video Studio.
+ * NON-AUTHORITATIVE in-memory casting-session store.
+ *
+ * It may retain temporary UI/test workflow state only. Official identity,
+ * Brand Cast membership, Identity Lock, and downstream eligibility are owned by
+ * the durable Persona domain and must never be derived from this store.
  */
 
 import type {
@@ -19,6 +22,9 @@ const globalStore: StoreState = {
   projectsById: {},
   registriesByWorkspace: {},
 };
+
+export const BRAND_FACE_SELECTION_STORE_AUTHORITY =
+  "temporary_ui_session_only" as const;
 
 export function resetBrandFaceSelectionStoreForTests(): void {
   globalStore.projectsById = {};

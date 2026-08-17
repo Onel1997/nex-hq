@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const IMAGE_ASSETS_BUCKET = "image-assets";
+/** New controlled production outputs are private. Legacy `image-assets` remains untouched. */
+export const IMAGE_ASSETS_BUCKET = "image-production-assets";
 
 const IMAGE_ASSETS_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 const IMAGE_ASSETS_SIZE_LIMIT = 52_428_800; // 50 MB
@@ -11,7 +12,7 @@ export function buildImageStoragePath(params: {
   assetKey: string;
 }): string {
   const safeKey = params.assetKey.replace(/[^a-zA-Z0-9:_-]/g, "_");
-  return `${params.workspaceId}/${params.reportId}/${safeKey}.png`;
+  return `workspace/${params.workspaceId}/reports/${params.reportId}/${safeKey}.png`;
 }
 
 let bucketEnsured = false;
@@ -46,7 +47,7 @@ export async function ensureImageAssetsBucket(): Promise<void> {
   const { data: created, error: createError } = await supabase.storage.createBucket(
     IMAGE_ASSETS_BUCKET,
     {
-      public: true,
+      public: false,
       fileSizeLimit: IMAGE_ASSETS_SIZE_LIMIT,
       allowedMimeTypes: [...IMAGE_ASSETS_MIME_TYPES],
     },
@@ -73,7 +74,7 @@ export async function uploadImageAsset(params: {
   assetKey: string;
   imageBytes: Buffer;
   contentType?: string;
-}): Promise<{ storagePath: string; url: string }> {
+}): Promise<{ storagePath: string; url: string; accessExpiresAt?: string }> {
   await ensureImageAssetsBucket();
 
   const supabase = createAdminClient();
@@ -104,19 +105,25 @@ export async function uploadImageAsset(params: {
     throw new Error(`Image upload failed: ${uploadError.message}`);
   }
 
-  const { data: urlData } = supabase.storage
+  const { data: urlData, error: signedError } = await supabase.storage
     .from(IMAGE_ASSETS_BUCKET)
-    .getPublicUrl(storagePath);
+    .createSignedUrl(storagePath, 900);
+  if (signedError || !urlData?.signedUrl) {
+    throw new Error(
+      `Image upload succeeded but private access failed: ${signedError?.message ?? "unknown"}`,
+    );
+  }
 
   const result = {
     storagePath,
-    url: urlData.publicUrl,
+    url: urlData.signedUrl,
+    accessExpiresAt: new Date(Date.now() + 900_000).toISOString(),
   };
 
   console.info("[Image Storage] Upload succeeded", {
     bucket: IMAGE_ASSETS_BUCKET,
     storagePath,
-    imageUrl: result.url,
+    accessExpiresAt: result.accessExpiresAt,
     uploadId: uploadData?.id,
     uploadPath: uploadData?.path,
   });

@@ -29,8 +29,6 @@ export const createPersonaSchema = z.object({
   style: z.string().trim().max(500).default(""),
   notes: z.string().trim().max(2000).default(""),
   brand_fit_score: z.number().min(0).max(100).default(0),
-  image_use_approved: z.boolean().optional(),
-  video_use_approved: z.boolean().optional(),
   visual_identity_notes: z.string().trim().max(4000).default(""),
   distinguishing_features: z.string().trim().max(2000).default(""),
   prohibited_changes: z.string().trim().max(4000).default(""),
@@ -44,12 +42,11 @@ export const createPersonaSchema = z.object({
   preferred_pose_ids: idListSchema.optional(),
   preferred_brand_look_ids: idListSchema.optional(),
   preferred_outfit_ids: idListSchema.optional(),
-});
+}).strict();
 
 export const updatePersonaSchema = createPersonaSchema
   .extend({
     primary_reference_asset_id: z.string().uuid().nullable().optional(),
-    identity_lock_version: z.number().int().min(1).optional(),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {

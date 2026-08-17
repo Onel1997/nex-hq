@@ -10,6 +10,15 @@ import {
 import { saveImageToBrain } from "./save";
 import type { ImageRunInput, ImageRunResult } from "./types";
 import { STUDIO_SPECS_BY_CATEGORY } from "./studio-specs";
+import { bindImageAssetsToBrandModel } from "@/lib/image/brand-model-production-context";
+
+function formatBrandModelContext(
+  context: ImageRunInput["brandModelContext"],
+): string {
+  if (!context) return "";
+  const { contract, trace } = context;
+  return `\n\n## Persona Brand Model — CANONICAL LOCKED IDENTITY\n- Brand Model: ${contract.displayName} (${contract.brandModelId})\n- Identity Lock: snapshot ${trace.identityLockSnapshotId}, version ${trace.identityLockVersion}\n- Identity fingerprint: ${trace.identityFingerprint}\n- Immutable features: ${contract.identity.constraints.immutableFeatures || "Use locked references"}\n- Prohibited changes: ${contract.identity.constraints.prohibitedChanges || "Do not substitute identity"}\nUse only this Persona identity. Do not invent, substitute, or approve another model.`;
+}
 
 function buildImageSystemPrompt(
   workspaceName: string,
@@ -171,6 +180,7 @@ export async function runImage(
             : "") +
           "\n\n" +
           formatAgentBusinessRules("image", businessProfile) +
+          formatBrandModelContext(input.brandModelContext) +
           "\n\n## Wissensspeicher-Kontext\n\n" +
           knowledge.brainContext.promptContext,
       },
@@ -203,29 +213,44 @@ export async function runImage(
     throw error;
   }
 
+  const brandModelContext = input.brandModelContext;
+  const tracedOutput = brandModelContext
+    ? {
+        ...output,
+        productionAssets: bindImageAssetsToBrandModel(
+          output.productionAssets,
+          brandModelContext,
+        ),
+      }
+    : output;
+
   const saved = await saveImageToBrain({
     workspaceId: input.workspaceId,
     brief: input.brief,
-    output,
+    output: tracedOutput,
     originTaskId: input.originTaskId,
+    brandModelContext,
   });
 
   return {
     reportId: saved.reportId,
     reportRecordId: saved.reportRecordId,
-    title: output.title,
-    projectName: output.projectName,
-    collectionName: output.collectionName,
-    schemaVersion: output.schemaVersion,
-    visualDirection: output.visualDirection,
-    moodboard: output.moodboard,
-    palette: output.palette,
-    productionAssets: output.productionAssets,
-    lookbookShots: output.lookbookShots,
-    confidence: output.confidence,
-    sourceReportTitles: output.sourceReportTitles,
+    title: tracedOutput.title,
+    projectName: tracedOutput.projectName,
+    collectionName: tracedOutput.collectionName,
+    schemaVersion: tracedOutput.schemaVersion,
+    visualDirection: tracedOutput.visualDirection,
+    moodboard: tracedOutput.moodboard,
+    palette: tracedOutput.palette,
+    productionAssets: tracedOutput.productionAssets,
+    lookbookShots: tracedOutput.lookbookShots,
+    confidence: tracedOutput.confidence,
+    sourceReportTitles: tracedOutput.sourceReportTitles,
     contextRecordCount: knowledge.brainContext.sourceRecordIds.length,
     primaryReportCounts: knowledge.primaryReportCounts,
+    ...(brandModelContext
+      ? { brandModelContext }
+      : {}),
   };
 }
 

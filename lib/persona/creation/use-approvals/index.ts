@@ -11,12 +11,14 @@ export type {
   ImageStudioBrandModelEligibility,
   VideoStudioBrandModelEligibility,
   VideoIdentityReadinessPolicy,
+  BrandModelEligibility,
 } from "./types";
 
 export {
   evaluateImageUseEligibility,
   evaluateVideoUseEligibility,
   evaluateBrandCastEligibility,
+  evaluateBrandModelEligibility,
   isImageStudioConsumerEligible,
   evaluateVideoStudioConsumerEligibility,
 } from "./eligibility";

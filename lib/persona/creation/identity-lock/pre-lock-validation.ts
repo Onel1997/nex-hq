@@ -3,6 +3,7 @@
  */
 
 import type { Persona, PersonaReferenceAsset } from "@/lib/persona/domain/types";
+import type { PersonaIdentityReview } from "@/lib/persona/domain/creation-types";
 import {
   isMasterIdentityReference,
   parseMasterIdentityNotes,
@@ -16,11 +17,11 @@ import { REFERENCE_PACKAGE_SLOTS } from "../reference-package/slots";
 import type {
   IdentityLockEligibilityView,
   IdentityLockPreview,
-  IdentityLockReferenceProvenance,
   LockedCanonicalReferenceSnapshot,
 } from "./types";
 import { computeReferencePackageFingerprint } from "./fingerprint";
 import { countProvenance, resolveLockReferenceProvenance } from "./provenance";
+import { evaluateIdentityReviewQualityGate } from "./identity-review-quality-gate";
 
 function slotBlockingReason(row: ReconciledReferencePackageSlot): string | null {
   if (row.replacementState === "pending") {
@@ -68,34 +69,26 @@ function buildCanonicalSnapshot(
   };
 }
 
-export function slotAssetIdFor(
-  preview: Pick<
-    IdentityLockPreview,
-    | "canonicalReferences"
-    | "masterReferenceAssetId"
-  >,
-  slot: ReferencePackageSlot,
-): string | null {
-  if (slot === "front") {
-    return preview.canonicalReferences.find((r) => r.slot === "front")?.assetId ?? null;
-  }
-  const ref = preview.canonicalReferences.find((r) => r.slot === slot);
-  return ref?.assetId ?? null;
-}
-
-export function validateIdentityLockEligibility(input: {
-  persona: Persona;
+/**
+ * Canonical validation of the durable Master + Reference Package evidence.
+ *
+ * This intentionally does not evaluate a review or Persona lock status. It is
+ * reused by the legacy reconciliation flow so that recovery cannot invent a
+ * second, weaker Reference Package formula.
+ */
+export function validateIdentityPackageEvidence(input: {
   reconciled: ReconciledReferencePackageState;
   master: PersonaReferenceAsset | null;
   assets: readonly PersonaReferenceAsset[];
-  nextLockVersion: number;
-}): IdentityLockEligibilityView {
+}): {
+  blockingReasons: string[];
+  coverage: { accepted: number; required: number };
+  referencePackageReady: boolean;
+  masterReferenceId: string | null;
+  masterImmutable: boolean;
+  canonicalReferences: LockedCanonicalReferenceSnapshot[];
+} {
   const blockingReasons: string[] = [];
-  const alreadyLocked = input.persona.identity_lock_status === "approved";
-
-  if (alreadyLocked) {
-    blockingReasons.push("Identity already locked");
-  }
 
   if (!input.master) {
     blockingReasons.push("Master Identity Reference missing");
@@ -128,23 +121,72 @@ export function validateIdentityLockEligibility(input: {
   }
 
   const canonicalReferences = REFERENCE_PACKAGE_SLOTS.map((slot) => {
-    const row = input.reconciled.slots.find((s) => s.slot === slot)!;
-    return buildCanonicalSnapshot(row, input.assets);
+    const row = input.reconciled.slots.find((s) => s.slot === slot);
+    return row ? buildCanonicalSnapshot(row, input.assets) : null;
   }).filter((r): r is LockedCanonicalReferenceSnapshot => r != null);
 
   if (canonicalReferences.length !== REFERENCE_PACKAGE_SLOTS.length) {
     blockingReasons.push("Canonical reference snapshot incomplete");
   }
 
-  const masterReferenceId = input.master?.id ?? null;
-  const masterImmutable = Boolean(
-    input.master && parseMasterIdentityNotes(input.master.notes)?.immutable_source_reference,
-  );
+  return {
+    blockingReasons,
+    coverage: {
+      accepted: input.reconciled.acceptedCount,
+      required: input.reconciled.requiredCount,
+    },
+    referencePackageReady: input.reconciled.referencePackageReady,
+    masterReferenceId: input.master?.id ?? null,
+    masterImmutable: Boolean(
+      input.master &&
+        parseMasterIdentityNotes(input.master.notes)?.immutable_source_reference,
+    ),
+    canonicalReferences,
+  };
+}
+
+export function slotAssetIdFor(
+  preview: Pick<
+    IdentityLockPreview,
+    | "canonicalReferences"
+    | "masterReferenceAssetId"
+  >,
+  slot: ReferencePackageSlot,
+): string | null {
+  if (slot === "front") {
+    return preview.canonicalReferences.find((r) => r.slot === "front")?.assetId ?? null;
+  }
+  const ref = preview.canonicalReferences.find((r) => r.slot === slot);
+  return ref?.assetId ?? null;
+}
+
+export function validateIdentityLockEligibility(input: {
+  persona: Persona;
+  reconciled: ReconciledReferencePackageState;
+  master: PersonaReferenceAsset | null;
+  assets: readonly PersonaReferenceAsset[];
+  identityReview: PersonaIdentityReview | null;
+  nextLockVersion: number;
+}): IdentityLockEligibilityView {
+  const evidence = validateIdentityPackageEvidence(input);
+  const blockingReasons: string[] = [...evidence.blockingReasons];
+  const alreadyLocked = input.persona.identity_lock_status === "approved";
+  const reviewGate = evaluateIdentityReviewQualityGate(input.identityReview);
+
+  if (alreadyLocked) {
+    blockingReasons.push("Identity already locked");
+  }
+
+  blockingReasons.push(...reviewGate.blockingReasons);
+
+  const { canonicalReferences, masterReferenceId, masterImmutable } = evidence;
 
   let preview: IdentityLockPreview | null = null;
   if (
     masterReferenceId &&
     canonicalReferences.length === REFERENCE_PACKAGE_SLOTS.length &&
+    reviewGate.identityLockPassed &&
+    input.identityReview?.reviewed_at &&
     !alreadyLocked
   ) {
     const fingerprint = computeReferencePackageFingerprint({
@@ -160,6 +202,9 @@ export function validateIdentityLockEligibility(input: {
       referencePackageFingerprint: fingerprint,
       identityLockVersion: input.nextLockVersion,
       provenanceCounts: countProvenance(canonicalReferences),
+      identityReviewId: input.identityReview.id,
+      identityReviewedAt: input.identityReview.reviewed_at,
+      identityReviewedBy: input.identityReview.reviewed_by,
     };
   }
 
@@ -170,13 +215,12 @@ export function validateIdentityLockEligibility(input: {
     eligibleForIdentityLock,
     blockingReasons,
     alreadyLocked,
-    coverage: {
-      accepted: input.reconciled.acceptedCount,
-      required: input.reconciled.requiredCount,
-    },
-    referencePackageReady: input.reconciled.referencePackageReady,
+    coverage: evidence.coverage,
+    referencePackageReady: evidence.referencePackageReady,
     masterReferenceId,
     masterImmutable,
+    identityReview: input.identityReview,
+    identityReviewPassed: reviewGate.identityLockPassed,
     preview,
   };
 }

@@ -1,5 +1,32 @@
 export type * from "./domain/types";
 export {
+  BRAND_MODEL_CONTRACT_VERSION,
+  BRAND_MODEL_CONSUMERS,
+  brandModelContractSchema,
+  brandModelHandoffSchema,
+  brandModelSummarySchema,
+  brandModelTraceSchema,
+  expectedBrandModelIdentitySchema,
+  traceBrandModelContract,
+} from "./domain/brand-model-contract";
+export type {
+  BrandModelConsumer,
+  BrandModelContract,
+  BrandModelReferenceContract,
+  BrandModelCanonicalReferenceContract,
+  BrandModelHandoff,
+  BrandModelSummary,
+  BrandModelTrace,
+  BrandModelAssetAccess,
+  ExpectedBrandModelIdentity,
+} from "./domain/brand-model-contract";
+export {
+  resolveBrandModelContract,
+  buildBrandModelHandoff,
+  listEligibleBrandModels,
+} from "./integrations/brand-model-handoff";
+export type { BrandModelAssetAccessResolver } from "./integrations/brand-model-handoff";
+export {
   PERSONA_STATUSES,
   LOCATION_SETTINGS,
   REFERENCE_ASSET_TYPES,
@@ -354,6 +381,7 @@ export {
   IDENTITY_LOCK_POLICY_VERSION,
   computeReferencePackageFingerprint,
   validateIdentityLockEligibility,
+  validateIdentityPackageEvidence,
   getIdentityLockEligibility,
   lockBrandIdentity,
   resolveLockedBrandIdentity,
@@ -364,13 +392,41 @@ export {
   MemoryIdentityLockRepository,
   coerceUuidOrNull,
   IdentityLockError,
+  diagnoseLegacyIdentityLockReconciliation,
+  getLegacyIdentityReconciliationView,
+  readLegacyReconciliationReviewContext,
+  submitLegacyIdentityReconciliation,
+  LEGACY_RECONCILIATION_CONTEXT_KEY,
+  LEGACY_RECONCILIATION_REASON,
+  LEGACY_RECONCILIATION_REVIEW_KIND,
 } from "./creation/identity-lock";
+export {
+  getReferenceRightsView,
+  submitReferenceRightsDecision,
+  setReferenceRightsEvidenceRepositoryForTests,
+  MemoryReferenceRightsEvidenceRepository,
+  REFERENCE_RIGHTS_CONFIRMATION_SCOPE,
+  REFERENCE_RIGHTS_EVIDENCE_VERSION,
+} from "./creation/reference-rights";
+export type {
+  ReferenceRightsConfirmations,
+  ReferenceRightsEvidence,
+  ReferenceRightsView,
+  SubmitReferenceRightsDecisionInput,
+} from "./creation/reference-rights";
 export type {
   IdentityLockEligibilityView,
   LockedBrandIdentity,
   PersonaIdentityLockSnapshot,
   HistoricalProtectionPromotionStatus,
   IdentityLockStage,
+  LegacyIdentityLockReconciliationDiagnostic,
+  LegacyIdentityLockReconciliationStatus,
+  LegacyIdentityReconciliationView,
+  LegacyReconciliationConfirmations,
+  LegacyReconciliationDecision,
+  LegacyReconciliationReviewContext,
+  SubmitLegacyIdentityReconciliationInput,
 } from "./creation/identity-lock";
 export {
   VIDEO_IDENTITY_READINESS_POLICY,
@@ -378,6 +434,7 @@ export {
   evaluateImageUseEligibility,
   evaluateVideoUseEligibility,
   evaluateBrandCastEligibility,
+  evaluateBrandModelEligibility,
   isImageStudioConsumerEligible,
   evaluateVideoStudioConsumerEligibility,
   getBrandModelApprovalsView,
@@ -397,6 +454,7 @@ export type {
   BrandCastMemberCard,
   ImageStudioBrandModelEligibility,
   VideoStudioBrandModelEligibility,
+  BrandModelEligibility,
 } from "./creation/use-approvals";
 export { FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD } from "./face-novelty-memory/similarity-threshold";
 export {
@@ -433,6 +491,18 @@ export {
 export * from "./services/persona-service";
 export { resolvePersonaWorkspaceScope } from "./services/workspace-scope";
 export {
+  authorizePersonaActor,
+  parsePersonaAuthorizedUserIds,
+  resolvePersonaAuthorizationContext,
+  PERSONA_LOCAL_DEV_ACTOR_ID,
+} from "./security/authorization";
+export type {
+  PersonaActorAuthorization,
+  PersonaAuthorizationContext,
+  PersonaAuthorizationDependencies,
+  PersonaAuthorizationMode,
+} from "./security/authorization";
+export {
   checkPersonaStudioHealth,
   PERSONA_SCHEMA_VERSION,
   type PersonaHealthReport,
@@ -454,13 +524,13 @@ export {
 
 export {
   buildImageStudioPersonaHandoff,
-  listImageStudioIntegrationHooks,
+  listImageStudioBrandModels,
   type ImageStudioPersonaHandoff,
 } from "./future/image-studio-hooks";
 
 export {
   buildVideoStudioPersonaHandoff,
-  listVideoStudioIntegrationHooks,
+  listVideoStudioBrandModels,
   type VideoStudioPersonaHandoff,
 } from "./future/video-studio-hooks";
 

@@ -39,6 +39,12 @@ function mapSnapshot(row: Record<string, unknown>): PersonaIdentityLockSnapshot 
     identity_locked_at: String(row.identity_locked_at),
     identity_locked_by:
       row.identity_locked_by == null ? null : String(row.identity_locked_by),
+    identity_review_id:
+      row.identity_review_id == null ? null : String(row.identity_review_id),
+    identity_reviewed_at:
+      row.identity_reviewed_at == null ? null : String(row.identity_reviewed_at),
+    identity_reviewed_by:
+      row.identity_reviewed_by == null ? null : String(row.identity_reviewed_by),
     reference_package_version: String(row.reference_package_version),
     reference_package_fingerprint: String(row.reference_package_fingerprint),
     provenance_counts: (row.provenance_counts ??
@@ -95,6 +101,9 @@ export class SupabaseIdentityLockRepository implements IdentityLockRepository {
       identity_locked_at: input.identity_locked_at,
       // Column is uuid — never persist labels like "workspace-user".
       identity_locked_by: coerceUuidOrNull(input.identity_locked_by),
+      identity_review_id: input.identity_review_id,
+      identity_reviewed_at: input.identity_reviewed_at,
+      identity_reviewed_by: input.identity_reviewed_by,
       reference_package_version: input.reference_package_version,
       reference_package_fingerprint: input.reference_package_fingerprint,
       provenance_counts: input.provenance_counts,

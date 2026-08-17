@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { IMAGE_PROJECT_TYPE } from "@/brain/domains/reports";
+import { brandModelTraceSchema } from "@/lib/persona/domain/brand-model-contract";
+import type { ImageBrandModelProductionContext } from "@/lib/image/brand-model-production-context";
+import { imageGenerationProvenanceSchema } from "@/lib/image/image-generation-identity-contract";
 
 export const IMAGE_SCHEMA_VERSION = "3.0" as const;
 export const IMAGE_SCHEMA_VERSION_V2 = "2.0" as const;
@@ -99,6 +102,10 @@ export const imageStudioAssetSchema = z.object({
   storagePath: z.string().optional(),
   createdAt: z.string().optional(),
   message: z.string().optional(),
+  /** Immutable Persona identity version used for this planned/generated asset. */
+  brandModelTrace: brandModelTraceSchema.optional(),
+  /** Safe generation/provider/identity lineage. Never contains private URLs/bytes. */
+  generationProvenance: imageGenerationProvenanceSchema.optional(),
 });
 
 export const imageLookbookShotSchema = z.object({
@@ -138,6 +145,7 @@ export interface ImageRunInput {
   workspaceId: string;
   workspaceName: string;
   originTaskId?: string;
+  brandModelContext?: ImageBrandModelProductionContext;
 }
 
 export interface ImageRunResult {
@@ -159,6 +167,7 @@ export interface ImageRunResult {
     "ceo-report" | "design-report" | "content-report" | "marketing-report",
     number
   >;
+  brandModelContext?: ImageBrandModelProductionContext;
 }
 
 export function countProductionAssets(assets: ImageStudioAsset[]): number {

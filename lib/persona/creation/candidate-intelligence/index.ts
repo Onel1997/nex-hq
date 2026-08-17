@@ -119,6 +119,12 @@ export { loadCandidateFaceEmbedding } from "./urban-face-freshness-loader";
 
 export { attachUrbanFaceFreshnessToSettings } from "./attach-urban-face-freshness";
 
+/** Phase 2.5B.FREEZE — metadata only; does not change generation. */
+export {
+  URBAN_CASTING_VERSION,
+  type UrbanCastingVersion,
+} from "./urban-casting-freeze";
+
 export { loadUrbanFreshFaceBiasSamples } from "./urban-fresh-face-bias-loader";
 
 export {

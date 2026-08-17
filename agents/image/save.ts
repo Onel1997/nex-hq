@@ -7,12 +7,14 @@ import { slugify } from "@/brain/client/utils";
 import { resolveReportTaskIds } from "@/lib/reports/task-link";
 import { IMAGE_SCHEMA_VERSION } from "./studio-schema";
 import type { ImageOutput } from "./types";
+import type { ImageBrandModelProductionContext } from "@/lib/image/brand-model-production-context";
 
 export interface SaveImageInput {
   workspaceId: string;
   brief: string;
   output: ImageOutput;
   originTaskId?: string;
+  brandModelContext?: ImageBrandModelProductionContext;
 }
 
 export interface SaveImageResult {
@@ -20,7 +22,10 @@ export interface SaveImageResult {
   reportRecordId: string;
 }
 
-function buildImageSections(output: ImageOutput): BrainImageSections {
+function buildImageSections(
+  output: ImageOutput,
+  brandModelContext?: ImageBrandModelProductionContext,
+): BrainImageSections {
   return {
     schemaVersion: IMAGE_SCHEMA_VERSION,
     projectName: output.projectName,
@@ -31,6 +36,9 @@ function buildImageSections(output: ImageOutput): BrainImageSections {
     productionAssets: output.productionAssets,
     lookbookShots: output.lookbookShots,
     sourceReportTitles: output.sourceReportTitles,
+    ...(brandModelContext
+      ? { brandModelContract: brandModelContext.contract }
+      : {}),
   };
 }
 
@@ -46,7 +54,10 @@ export async function saveImageToBrain(
   );
   const baseSlug = slugify(input.output.projectName).slice(0, 48) || "image";
   const slugSuffix = reportId.slice(0, 8);
-  const imageSections = buildImageSections(input.output);
+  const imageSections = buildImageSections(
+    input.output,
+    input.brandModelContext,
+  );
 
   const reportContent: BrainReportContent = {
     kind: "reports",

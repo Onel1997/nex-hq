@@ -75,11 +75,12 @@ export function resolveBrandFaceUiLifecycle(input: {
   persona?: {
     status: string;
     approved?: boolean;
+    brand_cast_approved?: boolean;
     identity_lock_status?: string | null;
   } | null;
 }): BrandFaceUiLifecycle {
   const persona = input.persona;
-  if (persona?.status === "Approved" && persona.approved) {
+  if (persona?.brand_cast_approved === true) {
     return "approved";
   }
   if (
@@ -264,6 +265,7 @@ export function resolveCreationWorkflowStep(
     persona?: {
       status: string;
       approved?: boolean;
+      brand_cast_approved?: boolean;
       identity_lock_status?: string | null;
     } | null;
   },

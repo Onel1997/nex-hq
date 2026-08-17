@@ -637,8 +637,7 @@ export function buildCandidatePrompt(params: {
       obfIdentityConstraints = [
         `1. ARCHETYPE AND GENDER CONSTRAINTS — ${brandArchetype.name}`,
         "Official Brand Face casting lane — Urban Community Hero.",
-        "Adult male Black / Afro-European · apparent age 21–24 · lean / slim-athletic.",
-        "Lean, slim-athletic fashion-model build with a naturally slender frame; not bulky, stocky or heavy-set.",
+        "Adult male Black / Afro-European · apparent age 21–24 · lean / athletic.",
         "Young fashion-model face with distinctive but believable features.",
         "Modern streetwear · realistic commercial fashion casting · natural skin · clean portrait.",
         "Milaene-compatible look.",

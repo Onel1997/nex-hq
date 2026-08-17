@@ -27,6 +27,10 @@ import type {
 } from "./types";
 import { IDENTITY_LOCK_POLICY_VERSION } from "./types";
 import { coerceUuidOrNull } from "./uuid";
+import {
+  evaluateIdentityReviewQualityGate,
+  selectLatestIdentityReview,
+} from "./identity-review-quality-gate";
 
 export { coerceUuidOrNull } from "./uuid";
 
@@ -125,27 +129,39 @@ async function loadLockContext(scope: WorkspaceScope, personaId: string) {
   if (!persona) {
     throw new PersonaDomainError("Persona not found", "NOT_FOUND", { personaId });
   }
-  const [attempts, assets, masterBundle] = await Promise.all([
+  const [attempts, assets, masterBundle, reviews] = await Promise.all([
     pkgRepo().listAttemptsForPersona(scope, personaId),
     personaRepo().listReferenceAssets(scope, personaId),
     getMasterIdentityReferenceForPersona(scope, personaId),
+    creationRepo().listIdentityReviews(scope, personaId),
   ]);
   const reconciled = reconcileReferencePackageState({ attempts, assets });
   const master = masterBundle?.reference ?? findMasterIdentityReference(assets);
-  return { persona, attempts, assets, reconciled, master };
+  const identityReview = selectLatestIdentityReview(reviews);
+  return {
+    persona,
+    attempts,
+    assets,
+    reconciled,
+    master,
+    identityReview,
+    identityReviews: reviews,
+  };
 }
 
 export async function getIdentityLockEligibility(
   scope: WorkspaceScope,
   personaId: string,
 ): Promise<IdentityLockEligibilityView> {
-  const { persona, assets, reconciled, master } = await loadLockContext(scope, personaId);
+  const { persona, assets, reconciled, master, identityReview } =
+    await loadLockContext(scope, personaId);
   const nextLockVersion = (persona.identity_lock_version || 1) + 1;
   return validateIdentityLockEligibility({
     persona,
     reconciled,
     master,
     assets,
+    identityReview,
     nextLockVersion,
   });
 }
@@ -204,8 +220,16 @@ function wrapDbError(
   err: unknown,
   stage: IdentityLockStage,
   requestId: string,
-): IdentityLockError {
+): PersonaDomainError {
   if (err instanceof IdentityLockError) return err;
+  // Preserve authorization/object-scope semantics rather than turning a
+  // cross-workspace denial into a generic workflow conflict.
+  if (
+    err instanceof PersonaDomainError &&
+    (err.code === "UNAUTHORIZED_WORKSPACE" || err.code === "NOT_FOUND")
+  ) {
+    return err;
+  }
   const message =
     err instanceof Error
       ? err.message
@@ -266,6 +290,9 @@ async function writeLockAudit(input: {
       identityLockVersion: input.snapshot.identity_lock_version,
       lockedAt: input.snapshot.identity_locked_at,
       lockedBy: input.snapshot.identity_locked_by,
+      identityReviewId: input.snapshot.identity_review_id,
+      identityReviewedAt: input.snapshot.identity_reviewed_at,
+      identityReviewedBy: input.snapshot.identity_reviewed_by,
       machineMatchCount: input.snapshot.provenance_counts.machineMatchCount,
       warningApprovedCount: input.snapshot.provenance_counts.warningApprovedCount,
       mismatchOverrideCount: input.snapshot.provenance_counts.mismatchOverrideCount,
@@ -328,6 +355,39 @@ export async function lockBrandIdentity(
 
   // Partial write recovery: snapshot exists, persona not yet approved.
   if (existingSnapshot && !isPersonaIdentityLocked(ctx.persona)) {
+    const snapshotReview = existingSnapshot.identity_review_id
+      ? ctx.identityReviews.find(
+          (review) => review.id === existingSnapshot.identity_review_id,
+        ) ?? null
+      : null;
+    const recoveryReviewGate = evaluateIdentityReviewQualityGate(
+      snapshotReview,
+    );
+    if (
+      !existingSnapshot.identity_review_id ||
+      !recoveryReviewGate.identityLockPassed ||
+      !snapshotReview?.reviewed_at ||
+      snapshotReview.reviewed_at !== existingSnapshot.identity_reviewed_at
+    ) {
+      throw new IdentityLockError(
+        "Identity Lock recovery requires the exact review provenance recorded by the snapshot.",
+        "pre_lock_validation",
+        requestId,
+        {
+          blockingReasons: [
+            ...recoveryReviewGate.blockingReasons,
+            ...(!existingSnapshot.identity_review_id
+              ? ["Snapshot does not identify its qualifying review"]
+              : []),
+            ...(snapshotReview?.reviewed_at !==
+            existingSnapshot.identity_reviewed_at
+              ? ["Snapshot review timestamp does not match the linked review"]
+              : []),
+          ],
+        },
+      );
+    }
+
     let updated: Persona;
     try {
       updated = await finalizePersonaLockFields(scope, personaId, existingSnapshot);
@@ -378,6 +438,7 @@ export async function lockBrandIdentity(
     reconciled: ctx.reconciled,
     master: ctx.master,
     assets: ctx.assets,
+    identityReview: ctx.identityReview,
     nextLockVersion,
   });
 
@@ -408,6 +469,9 @@ export async function lockBrandIdentity(
       identity_lock_version: nextLockVersion,
       identity_locked_at: lockedAt,
       identity_locked_by: lockedBy,
+      identity_review_id: eligibility.preview.identityReviewId,
+      identity_reviewed_at: eligibility.preview.identityReviewedAt,
+      identity_reviewed_by: eligibility.preview.identityReviewedBy,
       reference_package_version: ctx.reconciled.reconcilerVersion,
       reference_package_fingerprint: eligibility.preview.referencePackageFingerprint,
       provenance_counts: eligibility.preview.provenanceCounts,
@@ -470,6 +534,24 @@ export async function resolveLockedBrandIdentity(
 
   const snapshot = await lockRepo().getLatestSnapshotForPersona(scope, personaId);
   if (!snapshot) return null;
+  if (snapshot.identity_lock_version !== persona.identity_lock_version) return null;
+
+  // Legacy snapshots without an exact review link fail closed. A read-only
+  // diagnostic may identify a candidate review, but must not fabricate that it
+  // was the evidence used by the historical lock.
+  if (!snapshot.identity_review_id || !snapshot.identity_reviewed_at) return null;
+
+  const reviews = await creationRepo().listIdentityReviews(scope, personaId);
+  const identityReview =
+    reviews.find((review) => review.id === snapshot.identity_review_id) ?? null;
+  const reviewGate = evaluateIdentityReviewQualityGate(identityReview);
+  if (
+    !reviewGate.identityLockPassed ||
+    !identityReview?.reviewed_at ||
+    identityReview.reviewed_at !== snapshot.identity_reviewed_at
+  ) {
+    return null;
+  }
 
   const assets = await personaRepo().listReferenceAssets(scope, personaId);
   const assetById = new Map(assets.map((a) => [a.id, a]));
@@ -492,21 +574,29 @@ export async function resolveLockedBrandIdentity(
   if (canonicalReferences.length !== snapshot.canonical_references.length) return null;
 
   return {
+    identityLockSnapshotId: snapshot.id,
     personaId,
     role: persona.role,
     masterReference: master,
     canonicalReferences,
     identityFingerprint: snapshot.reference_package_fingerprint,
+    referencePackageFingerprint: snapshot.reference_package_fingerprint,
     lockVersion: snapshot.identity_lock_version,
     lockedAt: snapshot.identity_locked_at,
+    policyVersion: snapshot.policy_version,
+    referencePackageVersion: snapshot.reference_package_version,
+    sourceCandidateId: snapshot.source_candidate_id,
+    sourceCreationProjectId: snapshot.source_creation_project_id,
     imageUseApproved: persona.image_use_approved,
     videoUseApproved: persona.video_use_approved,
-    brandCastApproved: Boolean(
-      persona.brand_cast_approved ||
-        (persona.approved && persona.status === "Approved"),
-    ),
+    brandCastApproved: Boolean(persona.brand_cast_approved),
     imageIdentityReady: persona.image_identity_ready,
     videoIdentityReady: persona.video_identity_ready,
+    identityReview: {
+      id: identityReview.id,
+      reviewedAt: identityReview.reviewed_at,
+      reviewedBy: identityReview.reviewed_by,
+    },
   };
 }
 

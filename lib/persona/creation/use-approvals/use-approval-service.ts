@@ -19,6 +19,7 @@ import {
 } from "../identity-lock/identity-lock-service";
 import {
   evaluateBrandCastEligibility,
+  evaluateBrandModelEligibility,
   evaluateImageUseEligibility,
   evaluateVideoStudioConsumerEligibility,
   evaluateVideoUseEligibility,
@@ -57,15 +58,14 @@ export async function getBrandModelApprovalsView(
   const lockedIdentity = await resolveLockedBrandIdentity(scope, personaId);
   return {
     identityLocked: isPersonaIdentityLocked(persona),
-    imageIdentityReady: Boolean(
-      persona.image_identity_ready || isPersonaIdentityLocked(persona),
-    ),
+    imageIdentityReady: Boolean(persona.image_identity_ready),
     videoIdentityReady: Boolean(persona.video_identity_ready),
     imageUse: evaluateImageUseEligibility({ persona, lockedIdentity }),
     videoUse: evaluateVideoUseEligibility({ persona, lockedIdentity }),
     brandCast: evaluateBrandCastEligibility({ persona, lockedIdentity }),
     videoIdentityReadinessPolicy: VIDEO_IDENTITY_READINESS_POLICY,
     lockedIdentity,
+    eligibility: evaluateBrandModelEligibility({ persona, lockedIdentity }),
     providerCalled: false,
   };
 }
@@ -218,7 +218,8 @@ export async function approveVideoUse(
 
 /**
  * Approve as Official Brand Cast after explicit confirmation.
- * Syncs legacy `approved` + status Approved. Does not mutate identity package.
+ * Keeps the legacy presentation status synchronized after explicit Brand Cast
+ * approval. Legacy status alone never grants membership.
  */
 export async function approveBrandCast(
   scope: WorkspaceScope,
@@ -238,23 +239,11 @@ export async function approveBrandCast(
   }
   const lockedIdentity = await resolveLockedBrandIdentity(scope, personaId);
 
-  const already =
-    persona.brand_cast_approved ||
-    (persona.approved && persona.status === "Approved");
+  const already = persona.brand_cast_approved;
 
   if (already) {
-    // Ensure brand_cast_approved stays synced if legacy approved was set first.
-    let synced = persona;
-    if (!persona.brand_cast_approved) {
-      synced = await personaRepo().updatePersona(scope, personaId, {
-        brand_cast_approved: true,
-        brand_cast_approved_at: persona.brand_cast_approved_at ?? new Date().toISOString(),
-        brand_cast_approved_by: persona.brand_cast_approved_by,
-        status: "Approved",
-      });
-    }
     return {
-      persona: synced,
+      persona,
       gate: "brand_cast",
       alreadyApproved: true,
       providerCalled: false,
@@ -334,18 +323,24 @@ export async function listImageStudioEligibleBrandModels(
   scope: WorkspaceScope,
 ): Promise<ImageStudioBrandModelEligibility[]> {
   const personas = await personaRepo().listPersonas(scope);
-  return personas
-    .filter((p) => isImageStudioConsumerEligible(p))
-    .map((p) => ({
-      personaId: p.id,
+  const out: ImageStudioBrandModelEligibility[] = [];
+  for (const persona of personas) {
+    const lockedIdentity = await resolveLockedBrandIdentity(scope, persona.id);
+    const eligibility = evaluateBrandModelEligibility({ persona, lockedIdentity });
+    if (!isImageStudioConsumerEligible({ persona, lockedIdentity })) continue;
+    out.push({
+      personaId: persona.id,
       eligible: true,
-      identityLocked: isPersonaIdentityLocked(p),
-      imageIdentityReady: Boolean(p.image_identity_ready || isPersonaIdentityLocked(p)),
-      imageUseApproved: Boolean(p.image_use_approved),
-      brandCastApproved: Boolean(
-        p.brand_cast_approved || (p.approved && p.status === "Approved"),
-      ),
-    }));
+      identityLocked: eligibility.identityLocked,
+      imageIdentityReady: eligibility.imageIdentityReady,
+      imageUseApproved: eligibility.imageUseApproved,
+      brandCastApproved: eligibility.brandCastApproved,
+      blockingReasons: [],
+      lockVersion: lockedIdentity!.lockVersion,
+      identityFingerprint: lockedIdentity!.identityFingerprint,
+    });
+  }
+  return out;
 }
 
 export async function listVideoStudioEligibleBrandModels(
@@ -354,7 +349,11 @@ export async function listVideoStudioEligibleBrandModels(
   const personas = await personaRepo().listPersonas(scope);
   const out: VideoStudioBrandModelEligibility[] = [];
   for (const p of personas) {
-    const evalResult = evaluateVideoStudioConsumerEligibility(p);
+    const lockedIdentity = await resolveLockedBrandIdentity(scope, p.id);
+    const evalResult = evaluateVideoStudioConsumerEligibility({
+      persona: p,
+      lockedIdentity,
+    });
     if (!evalResult.eligible) continue;
     out.push({
       personaId: p.id,
@@ -362,10 +361,10 @@ export async function listVideoStudioEligibleBrandModels(
       identityLocked: isPersonaIdentityLocked(p),
       videoIdentityReady: Boolean(p.video_identity_ready),
       videoUseApproved: Boolean(p.video_use_approved),
-      brandCastApproved: Boolean(
-        p.brand_cast_approved || (p.approved && p.status === "Approved"),
-      ),
+      brandCastApproved: Boolean(p.brand_cast_approved),
       blockingReasons: [],
+      lockVersion: lockedIdentity!.lockVersion,
+      identityFingerprint: lockedIdentity!.identityFingerprint,
     });
   }
   return out;
@@ -378,9 +377,7 @@ export async function listOfficialBrandCastMembers(
   const members: BrandCastMemberCard[] = [];
 
   for (const persona of personas) {
-    const isMember =
-      persona.brand_cast_approved ||
-      (persona.approved && persona.status === "Approved");
+    const isMember = persona.brand_cast_approved;
     if (!isMember || persona.status === "Archived") continue;
 
     const assets = await personaRepo().listReferenceAssets(scope, persona.id);

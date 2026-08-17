@@ -1,6 +1,7 @@
 /**
  * Private Persona Studio reference storage.
- * Signed URLs only — never permanent public URLs.
+ * Controlled signed display access and server-only byte resolution — never
+ * permanent public Persona reference URLs.
  */
 
 import { createHash } from "node:crypto";
@@ -34,6 +35,21 @@ export function buildPersonaReferenceStoragePath(params: {
 }): string {
   const safeName = params.filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
   return `workspace/${params.workspaceId}/personas/${params.personaId}/references/${params.assetId}-${safeName}`;
+}
+
+/** Private object paths are accepted only inside the authorized workspace. */
+export function assertPersonaReferenceStoragePathScope(
+  workspaceId: string,
+  storagePath: string,
+): void {
+  const expectedPrefix = `workspace/${workspaceId}/`;
+  if (!workspaceId || !storagePath.startsWith(expectedPrefix)) {
+    throw new PersonaDomainError(
+      "Unauthorized private Persona reference path.",
+      "UNAUTHORIZED_WORKSPACE",
+      { reason: "persona_reference_path_outside_workspace" },
+    );
+  }
 }
 
 export function assertAllowedPersonaReferenceUpload(params: {
@@ -178,12 +194,7 @@ export async function uploadPersonaReferenceBytes(params: {
 
   await ensurePersonaReferencesBucket();
   const storagePath = buildPersonaReferenceStoragePath(params);
-  if (!storagePath.startsWith(`workspace/${params.workspaceId}/`)) {
-    throw new PersonaDomainError(
-      "Unbefugter Speicherzugriff.",
-      "UNAUTHORIZED_WORKSPACE",
-    );
-  }
+  assertPersonaReferenceStoragePathScope(params.workspaceId, storagePath);
 
   const supabase = createAdminClient();
   const { error } = await supabase.storage
@@ -231,6 +242,55 @@ export async function createPersonaReferenceSignedUrl(
     signedUrl: data.signedUrl,
     expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
   };
+}
+
+/**
+ * Download one persisted Persona reference for server-side provider use.
+ * The caller supplies durable asset metadata loaded from Persona authority;
+ * browser paths/URLs are never accepted by this boundary.
+ */
+export async function downloadPersonaReferenceAssetBytes(params: {
+  workspaceId: string;
+  storagePath: string;
+  mimeType: string;
+  expectedChecksum: string;
+}): Promise<Buffer> {
+  assertPersonaReferenceStoragePathScope(
+    params.workspaceId,
+    params.storagePath,
+  );
+  if (!params.mimeType.startsWith("image/")) {
+    throw new PersonaDomainError(
+      "Image generation requires an image Persona reference.",
+      "INVALID_REFERENCE_ASSET",
+      { mimeType: params.mimeType },
+    );
+  }
+
+  await ensurePersonaReferencesBucket();
+  const { data, error } = await createAdminClient().storage
+    .from(PERSONA_REFERENCES_BUCKET)
+    .download(params.storagePath);
+  if (error || !data) {
+    throw new PersonaDomainError(
+      `Private Persona reference download failed: ${error?.message ?? "unknown"}`,
+      "STORAGE_UPLOAD_FAILED",
+    );
+  }
+
+  const bytes = Buffer.from(await data.arrayBuffer());
+  assertAllowedPersonaReferenceUpload({
+    mimeType: params.mimeType,
+    byteLength: bytes.length,
+  });
+  const checksum = checksumBytes(bytes);
+  if (!params.expectedChecksum || checksum !== params.expectedChecksum) {
+    throw new PersonaDomainError(
+      "Private Persona reference checksum does not match the locked identity.",
+      "INVALID_REFERENCE_ASSET",
+    );
+  }
+  return bytes;
 }
 
 export async function deletePersonaReferenceObject(

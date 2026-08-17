@@ -221,7 +221,7 @@ function ensureRegenerationTargets(
   peers: DesignConcept[],
 ): DesignConcept {
   const theme = resolveThemeProfile(collection);
-  let working = normalizeDesignPrintArea(
+  const working = normalizeDesignPrintArea(
     strengthenHeroCandidate(
       {
         ...design,

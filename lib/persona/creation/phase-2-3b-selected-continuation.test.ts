@@ -333,8 +333,9 @@ describe("Phase 2.3B selected Brand Face continuation", () => {
       join(ROOT, "lib/persona/creation/creation-service.ts"),
       "utf8",
     );
-    assert.match(brandCast, /status === "Approved" && p\.approved/);
-    assert.match(brandCast, /readiness\.image_ready/);
+    assert.match(brandCast, /personas\.filter\(\(p\) => p\.brand_cast_approved\)/);
+    assert.match(brandCast, /imageEligibleIds/);
+    assert.doesNotMatch(brandCast, /status === "Approved" && p\.approved/);
   });
 
   it("converted selected leaves the continuation board", () => {

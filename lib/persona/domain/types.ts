@@ -103,7 +103,7 @@ export interface Persona {
   video_use_approved: boolean;
   video_use_approved_at: string | null;
   video_use_approved_by: string | null;
-  /** Official Brand Cast membership (Phase 2.4D). Synced with legacy `approved` + status Approved. */
+  /** Explicit Official Brand Cast membership. Legacy status is not authority. */
   brand_cast_approved: boolean;
   brand_cast_approved_at: string | null;
   brand_cast_approved_by: string | null;

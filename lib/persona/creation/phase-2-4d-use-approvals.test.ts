@@ -33,16 +33,57 @@ import {
   UseApprovalError,
   VIDEO_IDENTITY_READINESS_POLICY,
   BRAND_CAST_REQUIRES_VIDEO_USE_APPROVED,
+  IDENTITY_REVIEW_CHECK_KEYS,
+  resolveBrandModelContract,
 } from "@/lib/persona";
 import { reconcileReferencePackageState } from "@/lib/persona/creation/reference-package/reconcile-reference-package-state";
 import { buildMasterIdentityNotes } from "@/lib/persona/creation/master-identity-reference";
 import { buildReferencePackageAssetNotes } from "@/lib/persona/creation/reference-package/types";
 import type { Persona, WorkspaceScope } from "@/lib/persona/domain/types";
 import { getReferencePackageRepository } from "@/lib/persona/creation/reference-package/repository";
+import {
+  resetBrandFaceSelectionStoreForTests,
+  saveOfficialBrandFace,
+} from "@/lib/brand-face-selection/store";
+import { PersonaDomainError } from "@/lib/persona/domain/errors";
+import {
+  buildImageStudioPersonaHandoff,
+  listImageStudioBrandModels,
+} from "@/lib/persona/future/image-studio-hooks";
+import {
+  buildVideoStudioPersonaHandoff,
+  listVideoStudioBrandModels,
+} from "@/lib/persona/future/video-studio-hooks";
+import {
+  bindImageAssetsToBrandModel,
+  createImageBrandModelProductionContext,
+} from "@/lib/image/brand-model-production-context";
+import { createVideoBrandModelProductionContext } from "@/lib/video/brand-model-production-context";
+import { personaIntegrationQuerySchema } from "@/lib/persona/integrations/api-schema";
 
 const ROOT = process.cwd();
 const WS = "ws-phase-24d";
 const scope: WorkspaceScope = { workspaceId: WS, actorId: "tester-24d" };
+
+function minimalPersonaInput(name: string, role: string) {
+  return {
+    name,
+    role,
+    gender: "",
+    age_range: "",
+    height: "",
+    body_type: "",
+    skin_tone: "",
+    hair: "",
+    beard: "",
+    eye_color: "",
+    expression: "",
+    personality: "",
+    style: "",
+    notes: "",
+    brand_fit_score: 0,
+  };
+}
 
 describe("Phase 2.4D — Use Approvals + Brand Cast", () => {
   let creationRepo: MemoryCreationRepository;
@@ -66,6 +107,7 @@ describe("Phase 2.4D — Use Approvals + Brand Cast", () => {
     setPersonaRepositoryForTests(null);
     setReferencePackageRepositoryForTests(null);
     setIdentityLockRepositoryForTests(null);
+    resetBrandFaceSelectionStoreForTests();
   });
 
   async function seedLockedPersona(opts?: {
@@ -182,6 +224,20 @@ describe("Phase 2.4D — Use Approvals + Brand Cast", () => {
         angle_direction: "correct",
       });
     }
+
+    await creationRepo.createIdentityReview(scope, {
+      persona_id: persona.id,
+      checklist: Object.fromEntries(
+        IDENTITY_REVIEW_CHECK_KEYS.map((key) => [
+          key,
+          key === "suitable_for_video_generation"
+            ? Boolean(opts?.videoIdentityReady)
+            : true,
+        ]),
+      ) as Record<(typeof IDENTITY_REVIEW_CHECK_KEYS)[number], boolean>,
+      all_passed: Boolean(opts?.videoIdentityReady),
+      reviewer_notes: "Manual identity quality gate passed",
+    });
 
     const locked = await lockBrandIdentity(scope, persona.id, {
       confirmIdentityLock: true,
@@ -506,5 +562,342 @@ describe("Phase 2.4D — Use Approvals + Brand Cast", () => {
     assert.match(serviceSrc, /persona\.image_use_approved/);
     assert.match(serviceSrc, /persona\.video_use_approved/);
     assert.match(serviceSrc, /persona\.brand_cast_approved/);
+  });
+
+  it("25. versioned Brand Model contract carries durable identity and eligibility", async () => {
+    const { persona, fingerprint } = await seedLockedPersona();
+    await approveImageUse(scope, persona.id, { confirmImageUseApproval: true });
+    await approveBrandCast(scope, persona.id, { confirmBrandCastApproval: true });
+
+    const contract = await resolveBrandModelContract(scope, persona.id);
+    assert.equal(contract.workspaceId, WS);
+    assert.equal(contract.personaId, persona.id);
+    assert.equal(contract.brandModelId, persona.id);
+    assert.equal(contract.identity.fingerprint, fingerprint);
+    assert.ok(contract.identity.lockVersion);
+    assert.ok(contract.identity.identityLockSnapshotId);
+    assert.ok(contract.identity.identityReview?.id);
+    assert.equal(contract.identity.approvedReferencePackage.length, 5);
+    assert.equal(contract.approvals.brandCastApproved, true);
+    assert.equal(contract.eligibility.imageEligible, true);
+    assert.equal(contract.eligibility.videoEligible, false);
+  });
+
+  it("26. legacy Approved status alone is not Brand Cast membership", async () => {
+    const legacy = await personaRepo.createPersona(scope, {
+      ...minimalPersonaInput("Legacy Approved", "legacy"),
+      status: "Approved",
+    });
+    assert.equal(legacy.approved, true);
+    assert.equal(legacy.brand_cast_approved, false);
+
+    const contract = await resolveBrandModelContract(scope, legacy.id);
+    assert.equal(contract.approvals.brandCastApproved, false);
+    assert.equal(contract.eligibility.imageEligible, false);
+    assert.ok(
+      contract.eligibility.imageBlockingReasons.some((reason) =>
+        /brand cast/i.test(reason),
+      ),
+    );
+  });
+
+  it("27. process-local Brand Face state cannot grant canonical eligibility", async () => {
+    const persona = await personaRepo.createPersona(scope, {
+      ...minimalPersonaInput("Session Face", "primary_male"),
+    });
+    saveOfficialBrandFace({
+      id: "legacy-session-face",
+      workspaceId: WS,
+      archetypeId: "legacy-archetype",
+      version: 1,
+      personaId: persona.id,
+      candidateId: "legacy-candidate",
+      selectionProjectId: "legacy-project",
+      identityDnaFingerprint: "legacy-process-local",
+      imageReady: true,
+      videoReady: true,
+      status: "active",
+      approvedAt: new Date().toISOString(),
+      retiredAt: null,
+    });
+
+    const contract = await resolveBrandModelContract(scope, persona.id);
+    assert.equal(contract.approvals.brandCastApproved, false);
+    assert.equal(contract.eligibility.imageEligible, false);
+    assert.equal(contract.eligibility.videoEligible, false);
+  });
+
+  it("28. Brand Model contract enforces workspace scope", async () => {
+    const persona = await personaRepo.createPersona(scope, {
+      ...minimalPersonaInput("Scoped Persona", "primary_male"),
+    });
+    await assert.rejects(
+      () =>
+        resolveBrandModelContract(
+          { workspaceId: "other-workspace", actorId: "other-actor" },
+          persona.id,
+        ),
+      (error: unknown) =>
+        error instanceof PersonaDomainError &&
+        error.code === "UNAUTHORIZED_WORKSPACE",
+    );
+  });
+
+  it("29. Image, Video, and Brand Cast approvals reject cross-workspace authority", async () => {
+    const { persona } = await seedLockedPersona({ videoIdentityReady: true });
+    const foreignScope: WorkspaceScope = {
+      workspaceId: "different-workspace",
+      actorId: "different-user",
+    };
+
+    for (const operation of [
+      () =>
+        approveImageUse(foreignScope, persona.id, {
+          confirmImageUseApproval: true,
+        }),
+      () =>
+        approveVideoUse(foreignScope, persona.id, {
+          confirmVideoUseApproval: true,
+        }),
+      () =>
+        approveBrandCast(foreignScope, persona.id, {
+          confirmBrandCastApproval: true,
+        }),
+    ]) {
+      await assert.rejects(
+        operation,
+        (error: unknown) =>
+          error instanceof PersonaDomainError &&
+          error.code === "UNAUTHORIZED_WORKSPACE",
+      );
+    }
+  });
+
+  it("30. Image handoff succeeds without Video approval and carries exact lock trace", async () => {
+    const { persona } = await seedLockedPersona({ videoIdentityReady: false });
+    await approveImageUse(scope, persona.id, { confirmImageUseApproval: true });
+    await approveBrandCast(scope, persona.id, {
+      confirmBrandCastApproval: true,
+    });
+    const snapshot = await getIdentityLockSnapshot(scope, persona.id);
+    const handoff = await buildImageStudioPersonaHandoff(scope, persona.id, {
+      resolveAssetAccess: false,
+    });
+    assert.equal(handoff.consumer, "image");
+    assert.equal(handoff.contract.eligibility.imageEligible, true);
+    assert.equal(handoff.contract.eligibility.videoEligible, false);
+    assert.equal(
+      handoff.contract.identity.identityLockSnapshotId,
+      snapshot?.id,
+    );
+    assert.equal(
+      handoff.contract.identity.lockVersion,
+      snapshot?.identity_lock_version,
+    );
+    const context = createImageBrandModelProductionContext(handoff);
+    assert.equal(context.trace.identityLockSnapshotId, snapshot?.id);
+    assert.equal(context.trace.identityLockVersion, snapshot?.identity_lock_version);
+    const [boundAsset] = bindImageAssetsToBrandModel(
+      [{ id: "planned-image-asset" }],
+      context,
+    );
+    assert.equal(boundAsset.brandModelTrace.personaId, persona.id);
+    assert.equal(
+      boundAsset.brandModelTrace.identityLockSnapshotId,
+      snapshot?.id,
+    );
+  });
+
+  it("31. Video handoff enforces independent canonical Video eligibility", async () => {
+    const { persona } = await seedLockedPersona({ videoIdentityReady: true });
+    await approveImageUse(scope, persona.id, { confirmImageUseApproval: true });
+    await approveBrandCast(scope, persona.id, {
+      confirmBrandCastApproval: true,
+    });
+    await assert.rejects(
+      () =>
+        buildVideoStudioPersonaHandoff(scope, persona.id, {
+          resolveAssetAccess: false,
+        }),
+      (error: unknown) =>
+        error instanceof PersonaDomainError &&
+        error.code === "BRAND_MODEL_INELIGIBLE" &&
+        Array.isArray(error.details?.blockingReasons) &&
+        error.details.blockingReasons.some((reason) =>
+          /Video Studio use is not approved/i.test(String(reason)),
+        ),
+    );
+    await approveVideoUse(scope, persona.id, {
+      confirmVideoUseApproval: true,
+    });
+    const handoff = await buildVideoStudioPersonaHandoff(scope, persona.id, {
+      resolveAssetAccess: false,
+    });
+    assert.equal(handoff.contract.eligibility.videoEligible, true);
+    assert.equal(
+      createVideoBrandModelProductionContext(handoff).trace.personaId,
+      persona.id,
+    );
+  });
+
+  it("32. private storage paths never enter the canonical contract", async () => {
+    const { persona } = await seedLockedPersona();
+    await approveImageUse(scope, persona.id, { confirmImageUseApproval: true });
+    await approveBrandCast(scope, persona.id, {
+      confirmBrandCastApproval: true,
+    });
+    const handoff = await buildImageStudioPersonaHandoff(scope, persona.id, {
+      resolveAssetAccess: true,
+      assetAccessResolver: async ({ workspaceId, asset }) => {
+        assert.equal(workspaceId, WS);
+        assert.match(asset.storage_path, new RegExp(`^workspace/${WS}/`));
+        return {
+          assetId: asset.id,
+          delivery: "short_lived_signed_url" as const,
+          url: `https://private-assets.test/signed/${asset.id}?token=ephemeral`,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        };
+      },
+    });
+    const contractJson = JSON.stringify(handoff.contract);
+    assert.doesNotMatch(contractJson, /storagePath|storage_path|\/workspace\//);
+    assert.equal(handoff.assetAccess.length, 6);
+    assert.ok(
+      handoff.assetAccess.every(
+        (access) => access.delivery === "short_lived_signed_url",
+      ),
+    );
+  });
+
+  it("33. stale Identity Lock selection fails closed", async () => {
+    const { persona } = await seedLockedPersona();
+    await approveImageUse(scope, persona.id, { confirmImageUseApproval: true });
+    await approveBrandCast(scope, persona.id, {
+      confirmBrandCastApproval: true,
+    });
+    const contract = await resolveBrandModelContract(scope, persona.id);
+    const lockVersion = contract.identity.lockVersion;
+    const identityFingerprint = contract.identity.fingerprint;
+    assert.ok(lockVersion);
+    assert.ok(identityFingerprint);
+    await assert.rejects(
+      () =>
+        buildImageStudioPersonaHandoff(scope, persona.id, {
+          expectedIdentity: {
+            identityLockSnapshotId: "stale-snapshot",
+            identityLockVersion: lockVersion,
+            identityFingerprint,
+          },
+          resolveAssetAccess: false,
+        }),
+      (error: unknown) =>
+        error instanceof PersonaDomainError &&
+        error.code === "BRAND_MODEL_VERSION_MISMATCH",
+    );
+  });
+
+  it("34. eligible discovery lists filter Draft, unlocked, non-Cast, and use-unapproved models", async () => {
+    const eligible = await seedLockedPersona({ videoIdentityReady: true });
+    await approveImageUse(scope, eligible.persona.id, {
+      confirmImageUseApproval: true,
+    });
+    await approveBrandCast(scope, eligible.persona.id, {
+      confirmBrandCastApproval: true,
+    });
+    const lockedButUnapproved = await seedLockedPersona({
+      videoIdentityReady: true,
+    });
+    const imageApprovedButNotCast = await seedLockedPersona({
+      videoIdentityReady: true,
+    });
+    await approveImageUse(scope, imageApprovedButNotCast.persona.id, {
+      confirmImageUseApproval: true,
+    });
+    const archived = await seedLockedPersona({ videoIdentityReady: true });
+    await approveImageUse(scope, archived.persona.id, {
+      confirmImageUseApproval: true,
+    });
+    await approveBrandCast(scope, archived.persona.id, {
+      confirmBrandCastApproval: true,
+    });
+    await personaRepo.updatePersona(scope, archived.persona.id, {
+      status: "Archived",
+    });
+    const draft = await personaRepo.createPersona(scope, {
+      ...minimalPersonaInput("Draft Model", "draft"),
+    });
+
+    const imageList = await listImageStudioBrandModels(scope);
+    assert.deepEqual(imageList.map((model) => model.personaId), [
+      eligible.persona.id,
+    ]);
+    assert.equal(
+      imageList.some((model) => model.personaId === lockedButUnapproved.persona.id),
+      false,
+    );
+    assert.equal(
+      imageList.some(
+        (model) => model.personaId === imageApprovedButNotCast.persona.id,
+      ),
+      false,
+    );
+    assert.equal(
+      imageList.some((model) => model.personaId === archived.persona.id),
+      false,
+    );
+    assert.equal(imageList.some((model) => model.personaId === draft.id), false);
+    assert.deepEqual(await listVideoStudioBrandModels(scope), []);
+
+    await approveVideoUse(scope, eligible.persona.id, {
+      confirmVideoUseApproval: true,
+    });
+    const videoList = await listVideoStudioBrandModels(scope);
+    assert.deepEqual(videoList.map((model) => model.personaId), [
+      eligible.persona.id,
+    ]);
+  });
+
+  it("35. an Image contract cannot be consumed as a Video contract", async () => {
+    const { persona } = await seedLockedPersona();
+    await approveImageUse(scope, persona.id, { confirmImageUseApproval: true });
+    await approveBrandCast(scope, persona.id, {
+      confirmBrandCastApproval: true,
+    });
+    const handoff = await buildImageStudioPersonaHandoff(scope, persona.id, {
+      resolveAssetAccess: false,
+    });
+    assert.throws(
+      () => createVideoBrandModelProductionContext(handoff),
+      /cannot be used for video production/i,
+    );
+  });
+
+  it("36. integration query validates intent and atomic stale-version checks", () => {
+    assert.equal(
+      personaIntegrationQuerySchema.safeParse({ consumer: "image" }).success,
+      true,
+    );
+    assert.equal(
+      personaIntegrationQuerySchema.safeParse({ consumer: "campaign" }).success,
+      false,
+    );
+    assert.equal(
+      personaIntegrationQuerySchema.safeParse({
+        consumer: "image",
+        personaId: "persona-1",
+        expectedIdentityLockVersion: "1",
+      }).success,
+      false,
+    );
+    assert.equal(
+      personaIntegrationQuerySchema.safeParse({
+        consumer: "video",
+        personaId: "persona-1",
+        expectedIdentityLockSnapshotId: "snapshot-1",
+        expectedIdentityLockVersion: "1",
+        expectedIdentityFingerprint: "fingerprint-1",
+      }).success,
+      true,
+    );
   });
 });

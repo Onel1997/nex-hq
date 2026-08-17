@@ -7,7 +7,6 @@
 
 import type { CreationProjectStatus } from "@/lib/persona/domain/creation-types";
 import { parseArchetypeIdFromProjectDescription } from "./creation-project-mapper";
-import { getActiveBrandFaceForArchetype } from "./registry";
 import { listSelectionProjectsForArchetype } from "./store";
 import type {
   BrandFaceSelectionProject,
@@ -97,9 +96,9 @@ export function resolveOfficialArchetypeStatus(input: {
   activeFace?: OfficialBrandFaceRecord | null;
   selectionProjects?: BrandFaceSelectionProject[];
 }): OfficialArchetypeStatus {
-  const activeFace =
-    input.activeFace ??
-    getActiveBrandFaceForArchetype(input.workspaceId, input.archetypeId);
+  // Official status must be supplied from a durable Persona projection. Never
+  // fall back to the process-local legacy registry.
+  const activeFace = input.activeFace ?? null;
   if (activeFace) {
     return {
       label: "1/1 approved — official brand face",

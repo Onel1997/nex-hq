@@ -17,7 +17,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { logoutOwner } from "@/app/auth-actions";
+import { ChevronDown, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, type CSSProperties, type ReactNode } from "react";
@@ -192,6 +193,22 @@ export function HqSidebar() {
             </section>
           );
         })}
+      </div>
+
+      <div className="hq-sidebar-auth">
+        <form action={logoutOwner}>
+          <CollapsedTooltip label="Sign out" collapsed={collapsed}>
+            <button
+              type="submit"
+              className="hq-sidebar-signout"
+              aria-label="Sign out"
+              title={collapsed ? "Sign out" : undefined}
+            >
+              <LogOut className="size-4" strokeWidth={1.75} aria-hidden />
+              <span className="hq-sidebar-signout-label">Sign out</span>
+            </button>
+          </CollapsedTooltip>
+        </form>
       </div>
     </nav>
   );

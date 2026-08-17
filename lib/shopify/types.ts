@@ -16,6 +16,19 @@ export interface ShopifyCatalogProduct {
   options: Array<{ name: string; values: string[] }>;
   variantColors: string[];
   variantSizes: string[];
+  updatedAt: string;
+  variants: ShopifyCatalogVariant[];
+}
+
+/** Exact read-only Shopify variant identity used by production consumers. */
+export interface ShopifyCatalogVariant {
+  id: string;
+  title: string;
+  sku: string | null;
+  availableForSale: boolean;
+  inventoryQuantity: number | null;
+  selectedOptions: Array<{ name: string; value: string }>;
+  updatedAt: string;
 }
 
 export interface ShopifyCatalogCollection {

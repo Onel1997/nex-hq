@@ -30,8 +30,7 @@ import {
   uploadManualCandidateAsset,
   createPersona,
   updatePersona,
-  listImageStudioIntegrationHooks,
-  listVideoStudioIntegrationHooks,
+  BRAND_MODEL_CONTRACT_VERSION,
   createProductionPersonaRepository,
   PERSONA_SCHEMA_VERSION,
 } from "@/lib/persona";
@@ -467,6 +466,7 @@ describe("Persona Studio Phase 1.2 creation workflow", () => {
     await personaRepo.updatePersona(scopeA, incomplete.id, {
       status: "Approved",
       image_use_approved: true,
+      brand_cast_approved: true,
     });
     // Memory repo syncs approved from status when patched via status field —
     // ensure approved boolean for milestone filter.
@@ -488,9 +488,8 @@ describe("Persona Studio Phase 1.2 creation workflow", () => {
     assert.equal(progress.milestone_reached, false);
   });
 
-  it("20-21. Image Studio and Video Studio hooks remain inactive", () => {
-    assert.deepEqual(listImageStudioIntegrationHooks(), []);
-    assert.deepEqual(listVideoStudioIntegrationHooks(), []);
+  it("20-21. downstream studios share the versioned Persona contract", () => {
+    assert.equal(BRAND_MODEL_CONTRACT_VERSION, "brand-model-v1");
   });
 
   it("22-23. storage paths are private; signed URL helper rejects public permanent URLs", () => {

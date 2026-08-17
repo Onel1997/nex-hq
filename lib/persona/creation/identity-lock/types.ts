@@ -6,6 +6,7 @@ import type { ReferencePackageSlot } from "../reference-package/slots";
 import type { ReferenceProvenance } from "../reference-package/reconcile-reference-package-state";
 import type { IdentitySourceConfidence } from "../reference-package/human-identity-override";
 import type { PersonaReferenceAsset } from "@/lib/persona/domain/types";
+import type { PersonaIdentityReview } from "@/lib/persona/domain/creation-types";
 
 export const IDENTITY_LOCK_POLICY_VERSION = "identity-lock-v1.0.0" as const;
 
@@ -54,6 +55,10 @@ export type PersonaIdentityLockSnapshot = {
   identity_lock_version: number;
   identity_locked_at: string;
   identity_locked_by: string | null;
+  /** Persisted human quality-gate evidence used for this immutable lock. */
+  identity_review_id: string | null;
+  identity_reviewed_at: string | null;
+  identity_reviewed_by: string | null;
   reference_package_version: string;
   reference_package_fingerprint: string;
   provenance_counts: IdentityLockProvenanceCounts;
@@ -69,6 +74,8 @@ export type IdentityLockEligibilityView = {
   referencePackageReady: boolean;
   masterReferenceId: string | null;
   masterImmutable: boolean;
+  identityReview: PersonaIdentityReview | null;
+  identityReviewPassed: boolean;
   preview: IdentityLockPreview | null;
 };
 
@@ -78,10 +85,14 @@ export type IdentityLockPreview = {
   referencePackageFingerprint: string;
   identityLockVersion: number;
   provenanceCounts: IdentityLockProvenanceCounts;
+  identityReviewId: string;
+  identityReviewedAt: string;
+  identityReviewedBy: string | null;
 };
 
-/** Future Image Studio / Video Studio consumer contract. */
+/** Resolved immutable Persona lock aggregate used to build downstream contracts. */
 export type LockedBrandIdentity = {
+  identityLockSnapshotId: string;
   personaId: string;
   role: string;
   masterReference: PersonaReferenceAsset;
@@ -92,13 +103,23 @@ export type LockedBrandIdentity = {
     identitySourceConfidence: IdentitySourceConfidence | null;
   }>;
   identityFingerprint: string;
+  referencePackageFingerprint: string;
   lockVersion: number;
   lockedAt: string;
+  policyVersion: typeof IDENTITY_LOCK_POLICY_VERSION;
+  referencePackageVersion: string;
+  sourceCandidateId: string | null;
+  sourceCreationProjectId: string | null;
   imageUseApproved: boolean;
   videoUseApproved: boolean;
   brandCastApproved: boolean;
   imageIdentityReady: boolean;
   videoIdentityReady: boolean;
+  identityReview: {
+    id: string;
+    reviewedAt: string;
+    reviewedBy: string | null;
+  };
 };
 
 export type CreateIdentityLockSnapshotInput = Omit<

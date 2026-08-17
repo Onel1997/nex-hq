@@ -1003,34 +1003,104 @@ export function CreativeWorkspace({
     router.push("/agents/marketing");
   }, [masterArtworkView.isApproved, router]);
 
-  const sendToImageStudio = useCallback(() => {
+  const sendToImageStudio = useCallback(async () => {
     if (!masterArtworkView.isApproved) {
       setError("Approve Master Artwork before production.");
       setToast(null);
       return;
     }
-    const saveResult = sendDesignHandoffToImageStudio({
-      title: brief.title,
-      collection: mission.collectionName ?? "",
-      garment: brief.product,
-      colorway: brief.color,
-      version: `V${iteration.version}`,
-      imagePrompt: prompts.imagePrompt,
-      mockupPrompt: prompts.mockupPrompt,
-      designId: brief.designId,
-      reportId: mission.reportId,
-      assets: canvasAssets,
-      aiDesignerConcept: canvasAssets.aiDesignerConcept,
-      renderPlan: canvasAssets.aiDesignerRenderPlan,
-      review: canvasAssets.aiDesignerReview,
-    });
-    setHandoffSendDebug(saveResult);
-    if (!saveResult.saved) {
-      setError(saveResult.error ?? "Failed to save Image Studio handoff");
+    const sourceUrl =
+      masterArtworkView.state.approvedProductionFileUrl ??
+      masterArtworkView.state.approvedArtworkUrl ??
+      masterArtworkView.previewImageUrl;
+    if (!sourceUrl) {
+      setError(
+        "Durable Image production requires an approved raster Master Artwork export.",
+      );
       return;
     }
-    console.info("[Design Studio] navigating to Image Studio");
-    router.push("/agents/image");
+    setActionLoading("Send to Image Studio");
+    setError(null);
+    try {
+      const artworkResponse = await fetch(sourceUrl);
+      if (!artworkResponse.ok) {
+        throw new Error(
+          `Approved Master Artwork could not be read (${artworkResponse.status}).`,
+        );
+      }
+      const bytes = new Uint8Array(await artworkResponse.arrayBuffer());
+      let binary = "";
+      for (let index = 0; index < bytes.length; index += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+      }
+      const receivedMime = artworkResponse.headers
+        .get("content-type")
+        ?.split(";")[0];
+      const mimeType =
+        receivedMime === "image/jpeg" || receivedMime === "image/webp"
+          ? receivedMime
+          : "image/png";
+      const durableResponse = await fetch("/api/design/master-artworks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          designId: brief.designId,
+          version: masterArtworkView.state.version || `V${iteration.version}`,
+          sourceType: masterArtworkView.state.sourceType ?? "uploaded",
+          sourceReportId: mission.reportId ?? null,
+          sourceHandoffAt:
+            masterArtworkView.state.approvedAt ?? new Date().toISOString(),
+          placement: masterArtworkView.state.placement ?? null,
+          printMethod: masterArtworkView.state.printMethod ?? null,
+          mimeType,
+          contentBase64: btoa(binary),
+          approvalAttestation: true,
+          provenance:
+            "Explicit Design Studio Master Artwork approval and Send to Image Studio action",
+        }),
+      });
+      const durablePayload = (await durableResponse.json()) as {
+        artwork?: import("@/lib/design/master-artwork-authority/types").ApprovedMasterArtworkView;
+        error?: string;
+      };
+      if (!durableResponse.ok || !durablePayload.artwork) {
+        throw new Error(
+          durablePayload.error ?? "Durable Master Artwork approval failed.",
+        );
+      }
+      const saveResult = sendDesignHandoffToImageStudio({
+        title: brief.title,
+        collection: mission.collectionName ?? "",
+        garment: brief.product,
+        colorway: brief.color,
+        version: `V${iteration.version}`,
+        imagePrompt: prompts.imagePrompt,
+        mockupPrompt: prompts.mockupPrompt,
+        designId: brief.designId,
+        reportId: mission.reportId,
+        assets: canvasAssets,
+        aiDesignerConcept: canvasAssets.aiDesignerConcept,
+        renderPlan: canvasAssets.aiDesignerRenderPlan,
+        review: canvasAssets.aiDesignerReview,
+        durableMasterArtwork: durablePayload.artwork,
+      });
+      setHandoffSendDebug(saveResult);
+      if (!saveResult.saved) {
+        throw new Error(
+          saveResult.error ?? "Failed to save Image Studio handoff",
+        );
+      }
+      console.info("[Design Studio] navigating to Image Studio");
+      router.push("/agents/image");
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Durable Design to Image handoff failed.",
+      );
+    } finally {
+      setActionLoading(null);
+    }
   }, [
     brief,
     mission.collectionName,
@@ -1040,7 +1110,7 @@ export function CreativeWorkspace({
     iteration.version,
     router,
     canvasAssets,
-    masterArtworkView.isApproved,
+    masterArtworkView,
   ]);
 
   const runGeneration = useCallback(

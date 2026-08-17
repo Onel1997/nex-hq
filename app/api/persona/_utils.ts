@@ -4,7 +4,7 @@ import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 import { isSupabaseConfigured } from "@/lib/supabase/admin";
 import { resolvePersonaWorkspaceScope } from "@/lib/persona/services/workspace-scope";
-import type { WorkspaceScope } from "@/lib/persona/domain/types";
+import type { PersonaAuthorizationContext } from "@/lib/persona/security/authorization";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 
@@ -23,10 +23,14 @@ export function jsonError(error: unknown, fallback = dict.persona.errors.unexpec
     const status =
       error.code === "NOT_FOUND"
         ? 404
+        : error.code === "AUTHENTICATION_REQUIRED"
+          ? 401
         : error.code === "UNAUTHORIZED_WORKSPACE"
           ? 403
           : error.code === "WORKFLOW" ||
-              error.code === "MISSING_APPROVAL_PREREQUISITES"
+              error.code === "MISSING_APPROVAL_PREREQUISITES" ||
+              error.code === "BRAND_MODEL_INELIGIBLE" ||
+              error.code === "BRAND_MODEL_VERSION_MISMATCH"
             ? 409
             : error.code === "CONFIG"
               ? 503
@@ -41,6 +45,8 @@ export function jsonError(error: unknown, fallback = dict.persona.errors.unexpec
     const localized =
       error.code === "CONFIG"
         ? dict.persona.errors.supabaseNotConfigured
+        : error.code === "AUTHENTICATION_REQUIRED"
+          ? error.message
         : error.code === "UNAUTHORIZED_WORKSPACE"
           ? dict.persona.errors.unauthorizedWorkspace
           : error.code === "MISSING_APPROVAL_PREREQUISITES"
@@ -105,7 +111,8 @@ export function jsonError(error: unknown, fallback = dict.persona.errors.unexpec
 }
 
 export async function requirePersonaScope(): Promise<
-  { ok: true; scope: WorkspaceScope } | { ok: false; response: NextResponse }
+  | { ok: true; scope: PersonaAuthorizationContext }
+  | { ok: false; response: NextResponse }
 > {
   if (!isSupabaseConfigured()) {
     return {

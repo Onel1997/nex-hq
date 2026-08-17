@@ -12,7 +12,6 @@ import {
   buildDiscoveryBrief,
   createBrandFaceSelectionProject,
   DiscoveryStartLock,
-  getOfficialBrandFaceMilestone,
   listSelectionProjectsForArchetype,
   prepareDiscoveryReady,
   beginDiscoveryGenerating,
@@ -224,10 +223,6 @@ export function OfficialBrandFaceCastingView({
 }) {
   const catalog = useMemo(() => loadBrandArchetypeCatalog(), []);
   const archetypes = catalog.archetypes.filter((a) => a.status === "active");
-  const milestone = useMemo(
-    () => getOfficialBrandFaceMilestone(catalog.workspaceId),
-    [catalog.workspaceId],
-  );
 
   const discoveryStartLock = useRef(new DiscoveryStartLock());
 
@@ -588,8 +583,7 @@ export function OfficialBrandFaceCastingView({
       {error ? <div className="ps-callout ps-callout-warn">{error}</div> : null}
 
       <OfficialBrandFaceMilestonePanel
-        workspaceId={catalog.workspaceId}
-        milestone={milestone}
+        progress={studio.brandCastProgress}
       />
 
       <div className="ps-obf-cast-grid">

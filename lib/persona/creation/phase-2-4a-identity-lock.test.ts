@@ -29,8 +29,11 @@ import {
   computeReferencePackageFingerprint,
   lockBrandIdentity,
   resolveLockedBrandIdentity,
+  diagnoseLegacyIdentityLockReconciliation,
   getIdentityLockEligibility,
+  IdentityLockError,
   REFERENCE_PACKAGE_SLOTS,
+  IDENTITY_REVIEW_CHECK_KEYS,
   reconcileReferencePackageState,
 } from "@/lib/persona";
 import {
@@ -42,6 +45,7 @@ import {
   type ReferencePackageAttempt,
 } from "@/lib/persona/creation/reference-package/types";
 import type { Persona, PersonaReferenceAsset, WorkspaceScope } from "@/lib/persona/domain/types";
+import type { PersonaIdentityReview } from "@/lib/persona/domain/creation-types";
 import type { ReferencePackageSlot } from "@/lib/persona/creation/reference-package/slots";
 import { PersonaDomainError } from "@/lib/persona/domain/errors";
 import {
@@ -256,6 +260,27 @@ function draftPersona(overrides: Partial<Persona> = {}): Persona {
   };
 }
 
+function passedIdentityReview(
+  overrides: Partial<PersonaIdentityReview> = {},
+): PersonaIdentityReview {
+  const now = new Date().toISOString();
+  return {
+    id: "review-24a",
+    workspace_id: WS,
+    persona_id: "persona-24a",
+    checklist: Object.fromEntries(
+      IDENTITY_REVIEW_CHECK_KEYS.map((key) => [key, true]),
+    ) as PersonaIdentityReview["checklist"],
+    all_passed: true,
+    reviewer_notes: "Manual identity quality gate passed",
+    reviewed_by: "tester-24a",
+    reviewed_at: now,
+    created_at: now,
+    updated_at: now,
+    ...overrides,
+  };
+}
+
 function fullPackageAttempts(overrides: Partial<Record<ReferencePackageSlot, Partial<ReferencePackageAttempt>>> = {}) {
   return REFERENCE_PACKAGE_SLOTS.map((slot) => {
     const assetId = `asset-${slot}`;
@@ -296,7 +321,7 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
     setIdentityLockRepositoryForTests(null);
   });
 
-  async function seedFullPackageInRepos() {
+  async function seedFullPackageInRepos(options?: { withReview?: boolean }) {
     const persona = await personaRepo.createPersona(scope, {
       ...draftPersona(),
       primary_reference_asset_id: null,
@@ -389,6 +414,14 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
         angle_direction: "correct",
       });
     }
+    if (options?.withReview !== false) {
+      await creationRepo.createIdentityReview(scope, {
+        persona_id: persona.id,
+        checklist: passedIdentityReview().checklist,
+        all_passed: true,
+        reviewer_notes: "Manual identity quality gate passed",
+      });
+    }
     return { persona, master, slotAssets };
   }
 
@@ -403,6 +436,21 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
     assert.equal(locked.persona.identity_lock_status, "approved");
   });
 
+  it("1b. 5/5 cannot lock without a persisted identity review", async () => {
+    const { persona } = await seedFullPackageInRepos({ withReview: false });
+    const eligibility = await getIdentityLockEligibility(scope, persona.id);
+    assert.equal(eligibility.eligibleForIdentityLock, false);
+    assert.ok(
+      eligibility.blockingReasons.some((reason) => /identity review/i.test(reason)),
+    );
+    await assert.rejects(
+      () => lockBrandIdentity(scope, persona.id, { confirmIdentityLock: true }),
+      (error: unknown) =>
+        error instanceof PersonaDomainError &&
+        /identity review/i.test(error.message),
+    );
+  });
+
   it("2. missing Master blocks", () => {
     const persona = draftPersona();
     const pkg = fullPackageAttempts();
@@ -414,6 +462,7 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
       reconciled,
       master: null,
       assets,
+      identityReview: passedIdentityReview(),
       nextLockVersion: 2,
     });
     assert.equal(eligibility.eligibleForIdentityLock, false);
@@ -432,6 +481,7 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
       reconciled,
       master,
       assets,
+      identityReview: passedIdentityReview(),
       nextLockVersion: 2,
     });
     assert.equal(eligibility.eligibleForIdentityLock, false);
@@ -456,6 +506,7 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
       reconciled,
       master,
       assets,
+      identityReview: passedIdentityReview(),
       nextLockVersion: 2,
     });
     assert.equal(eligibility.eligibleForIdentityLock, false);
@@ -484,6 +535,7 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
       reconciled,
       master,
       assets,
+      identityReview: passedIdentityReview(),
       nextLockVersion: 2,
     });
     assert.equal(eligibility.eligibleForIdentityLock, false);
@@ -517,6 +569,7 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
       reconciled,
       master,
       assets,
+      identityReview: passedIdentityReview(),
       nextLockVersion: 2,
     });
     assert.equal(eligibility.eligibleForIdentityLock, false);
@@ -541,6 +594,7 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
       reconciled,
       master,
       assets,
+      identityReview: passedIdentityReview(),
       nextLockVersion: 2,
     });
     assert.equal(eligibility.eligibleForIdentityLock, true);
@@ -565,6 +619,7 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
       reconciled,
       master,
       assets,
+      identityReview: passedIdentityReview(),
       nextLockVersion: 2,
     });
     assert.equal(eligibility.eligibleForIdentityLock, true);
@@ -588,6 +643,7 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
       reconciled,
       master,
       assets,
+      identityReview: passedIdentityReview(),
       nextLockVersion: 2,
     });
     assert.equal(eligibility.eligibleForIdentityLock, false);
@@ -613,6 +669,7 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
       reconciled,
       master,
       assets,
+      identityReview: passedIdentityReview(),
       nextLockVersion: 2,
     });
     assert.equal(eligibility.eligibleForIdentityLock, true);
@@ -894,6 +951,70 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
     assert.equal(dto!.identityFingerprint.length, 64);
   });
 
+  it("27b. Identity Lock operations reject a cross-workspace scope", async () => {
+    const { persona } = await seedFullPackageInRepos();
+    await assert.rejects(
+      () =>
+        getIdentityLockEligibility(
+          { workspaceId: "different-workspace", actorId: "different-user" },
+          persona.id,
+        ),
+      (error: unknown) =>
+        (error instanceof PersonaDomainError &&
+          error.code === "UNAUTHORIZED_WORKSPACE") ||
+        (error instanceof IdentityLockError && /workspace/i.test(error.message)),
+    );
+    await assert.rejects(
+      () =>
+        lockBrandIdentity(
+          { workspaceId: "different-workspace", actorId: "different-user" },
+          persona.id,
+          { confirmIdentityLock: true },
+        ),
+      (error: unknown) =>
+        (error instanceof PersonaDomainError &&
+          error.code === "UNAUTHORIZED_WORKSPACE") ||
+        (error instanceof IdentityLockError && /workspace/i.test(error.message)),
+    );
+  });
+
+  it("27c. legacy snapshots remain nullable but fail closed pending human reconciliation", async () => {
+    const { persona } = await seedFullPackageInRepos();
+    const locked = await lockBrandIdentity(scope, persona.id, {
+      confirmIdentityLock: true,
+    });
+    const {
+      id: _id,
+      created_at: _createdAt,
+      workspace_id: _workspaceId,
+      ...snapshotInput
+    } = locked.snapshot;
+    void _id;
+    void _createdAt;
+    void _workspaceId;
+    const legacyRepo = new MemoryIdentityLockRepository();
+    await legacyRepo.createSnapshot(scope, {
+      ...snapshotInput,
+      identity_review_id: null,
+      identity_reviewed_at: null,
+      identity_reviewed_by: null,
+    });
+    setIdentityLockRepositoryForTests(legacyRepo);
+
+    assert.equal(await resolveLockedBrandIdentity(scope, persona.id), null);
+    const diagnostic = await diagnoseLegacyIdentityLockReconciliation(
+      scope,
+      persona.id,
+    );
+    assert.equal(
+      diagnostic.status,
+      "legacy_review_candidate_requires_human_reconciliation",
+    );
+    assert.equal(diagnostic.downstreamEligibleFromSnapshot, false);
+    assert.equal(diagnostic.requiresHumanReconciliation, true);
+    assert.ok(diagnostic.candidateReviewId);
+  });
+
   it("28. discovery/FLUX/novelty threshold untouched", () => {
     const lockSrc = readFileSync(
       join(ROOT, "lib/persona/creation/identity-lock/identity-lock-service.ts"),
@@ -994,6 +1115,12 @@ describe("Phase 2.4A Official Brand Face Identity Lock", () => {
         angle_direction: "correct",
       });
     }
+    await creationRepo.createIdentityReview(scope, {
+      persona_id: persona.id,
+      checklist: passedIdentityReview({ persona_id: persona.id }).checklist,
+      all_passed: true,
+      reviewer_notes: "Manual identity quality gate passed",
+    });
     const eligibility = await getIdentityLockEligibility(scope, persona.id);
     assert.equal(eligibility.eligibleForIdentityLock, true);
     const locked = await lockPersonaIdentity(scope, persona.id, {

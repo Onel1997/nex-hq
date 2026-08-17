@@ -21,6 +21,7 @@ import {
   lockBrandIdentity,
   coerceUuidOrNull,
   IdentityLockError,
+  IDENTITY_REVIEW_CHECK_KEYS,
 } from "@/lib/persona";
 import { getIdentityLockRepository } from "@/lib/persona/creation/identity-lock/repository";
 import type { CreateIdentityLockSnapshotInput } from "@/lib/persona/creation/identity-lock/types";
@@ -186,7 +187,16 @@ describe("Phase 2.4C Identity Lock POST 500 fix", () => {
       });
     }
 
-    return { persona: fresh, master, slotAssets };
+    const review = await creationRepo.createIdentityReview(scope, {
+      persona_id: fresh.id,
+      checklist: Object.fromEntries(
+        IDENTITY_REVIEW_CHECK_KEYS.map((key) => [key, true]),
+      ) as Record<(typeof IDENTITY_REVIEW_CHECK_KEYS)[number], boolean>,
+      all_passed: true,
+      reviewer_notes: "Manual identity quality gate passed",
+    });
+
+    return { persona: fresh, master, slotAssets, review };
   }
 
   it("0. coerceUuidOrNull rejects workspace-user (root cause)", () => {
@@ -265,7 +275,7 @@ describe("Phase 2.4C Identity Lock POST 500 fix", () => {
   });
 
   it("9. partial snapshot recovers idempotently", async () => {
-    const { persona, master, slotAssets } = await seedEligiblePersona();
+    const { persona, master, slotAssets, review } = await seedEligiblePersona();
     // Simulate snapshot written but persona update never completed.
     await lockRepo.createSnapshot(scope, {
       persona_id: persona.id,
@@ -290,6 +300,9 @@ describe("Phase 2.4C Identity Lock POST 500 fix", () => {
       identity_lock_version: 2,
       identity_locked_at: new Date().toISOString(),
       identity_locked_by: null,
+      identity_review_id: review.id,
+      identity_reviewed_at: review.reviewed_at,
+      identity_reviewed_by: review.reviewed_by,
       reference_package_version: "reference-package-reconciler-v1.0.0",
       reference_package_fingerprint: "a".repeat(64),
       provenance_counts: {

@@ -25,8 +25,7 @@ import {
   lockPersonaIdentity,
   IDENTITY_REVIEW_CHECK_KEYS,
   OPENAI_PROVIDER_CAPABILITY,
-  listImageStudioIntegrationHooks,
-  listVideoStudioIntegrationHooks,
+  BRAND_MODEL_CONTRACT_VERSION,
   emptyIdentityChecklist,
   resetMemoryGenerationJobStoreForTests,
   MemoryGenerationJobRepository,
@@ -324,9 +323,7 @@ describe("Persona Studio Phase 1.5 generation jobs & confirmation", () => {
     assert.ok(candidates.length >= 1);
   });
 
-  it("26–28. Image/Video Studio remain unstarted hooks", () => {
-    assert.ok(Array.isArray(listImageStudioIntegrationHooks()));
-    assert.ok(Array.isArray(listVideoStudioIntegrationHooks()));
-    // Handoffs stay null until studios are built — covered in persona-creation tests
+  it("26–28. Image/Video share the Persona Brand Model contract version", () => {
+    assert.equal(BRAND_MODEL_CONTRACT_VERSION, "brand-model-v1");
   });
 });
