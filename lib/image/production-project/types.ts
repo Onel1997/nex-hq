@@ -3,6 +3,7 @@ import { brandModelTraceSchema } from "@/lib/persona/domain/brand-model-contract
 import { productProductionContextSchema } from "@/lib/image/product-production-context";
 import { approvedMasterArtworkSchema } from "@/lib/design/master-artwork-authority/types";
 import { imageGenerationProvenanceSchema } from "@/lib/image/image-generation-identity-contract";
+import { rfc3339DateTimeSchema } from "@/lib/datetime/rfc3339";
 
 export const IMAGE_PRODUCTION_PROJECT_VERSION =
   "image-production-project-v1" as const;
@@ -45,8 +46,8 @@ export const imageProductionProjectSchema = z
     status: z.enum(["READY", "IN_PRODUCTION", "REVIEW", "COMPLETE", "ARCHIVED"]),
     version: z.number().int().positive(),
     createdBy: z.string().min(1),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    createdAt: rfc3339DateTimeSchema,
+    updatedAt: rfc3339DateTimeSchema,
   })
   .strict();
 
@@ -87,11 +88,11 @@ export const imageProductionAssetSchema = z
     provenance: imageGenerationProvenanceSchema,
     reviewStatus: z.enum(IMAGE_ASSET_REVIEW_STATUSES),
     reviewedBy: z.string().nullable(),
-    reviewedAt: z.string().datetime().nullable(),
+    reviewedAt: rfc3339DateTimeSchema.nullable(),
     reviewNote: z.string().nullable(),
-    generatedAt: z.string().datetime(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    generatedAt: rfc3339DateTimeSchema,
+    createdAt: rfc3339DateTimeSchema,
+    updatedAt: rfc3339DateTimeSchema,
   })
   .strict();
 

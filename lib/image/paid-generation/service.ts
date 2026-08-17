@@ -142,6 +142,12 @@ export async function prepareImageGenerationJob(
     );
   }
   const product = await d.resolveProductContext(request.product);
+  if (!product.authoritative || product.authority !== "SHOPIFY_LIVE") {
+    throw new PersonaDomainError(
+      "Paid Image preparation requires an explicitly selected Shopify product.",
+      "WORKFLOW",
+    );
+  }
   if (
     product.authority !== "SHOPIFY_LIVE" &&
     (asset.productName !== product.productName ||

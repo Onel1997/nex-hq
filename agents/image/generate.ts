@@ -299,6 +299,10 @@ export async function generateImageAsset(
 
   if (input.paidExecution) {
     const frozen = input.paidExecution.snapshot;
+    const productMismatch =
+      frozen.product.authority !== "SHOPIFY_LIVE" &&
+      (frozen.product.productName !== asset.productName ||
+        (frozen.product.color != null && frozen.product.color !== asset.color));
     if (
       frozen.workspaceId !== scope.workspaceId ||
       frozen.production.reportRecordId !== request.reportRecordId ||
@@ -307,8 +311,7 @@ export async function generateImageAsset(
       frozen.production.provider !== request.provider ||
       frozen.production.prompt !== asset.prompt.openai ||
       frozen.production.dimensions !== (asset.dimensions ?? "2048x2048") ||
-      frozen.product.productName !== asset.productName ||
-      frozen.product.color !== asset.color
+      productMismatch
     ) {
       throw new Error(
         "Paid Image production truth changed after confirmation. Prepare and confirm a new job.",

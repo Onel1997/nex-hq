@@ -1,6 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PersonaDomainError, PersonaStoreError } from "@/lib/persona/domain/errors";
 import type { WorkspaceScope } from "@/lib/persona/domain/types";
+import {
+  normalizeOptionalRfc3339Timestamp,
+  normalizeRfc3339Timestamp,
+} from "@/lib/datetime/rfc3339";
 import type {
   GeneratedProductionAsset,
   ImageProductionProjectRepository,
@@ -29,8 +33,8 @@ function mapProject(row: Record<string, unknown>): ImageProductionProject {
     status: row.status,
     version: Number(row.version),
     createdBy: row.created_by,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: normalizeRfc3339Timestamp(row.created_at),
+    updatedAt: normalizeRfc3339Timestamp(row.updated_at),
   });
 }
 
@@ -52,11 +56,11 @@ function mapAsset(row: Record<string, unknown>): ImageProductionAsset {
     provenance: row.provenance,
     reviewStatus: row.review_status,
     reviewedBy: row.reviewed_by,
-    reviewedAt: row.reviewed_at,
+    reviewedAt: normalizeOptionalRfc3339Timestamp(row.reviewed_at),
     reviewNote: row.review_note,
-    generatedAt: row.generated_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    generatedAt: normalizeRfc3339Timestamp(row.generated_at),
+    createdAt: normalizeRfc3339Timestamp(row.created_at),
+    updatedAt: normalizeRfc3339Timestamp(row.updated_at),
   });
 }
 

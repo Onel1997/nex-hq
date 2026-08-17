@@ -592,6 +592,177 @@ describe("Image generation consumes canonical Persona identity", () => {
     );
   });
 
+  it("allows SHOPIFY_LIVE product truth to differ from mission plan labels during paid execution", async () => {
+    const fixture = await seedEligibleImageModel();
+    const identity = await resolveBrandModelGenerationIdentity(
+      scope,
+      fixture.context.trace,
+      { downloadMasterBytes: async () => Buffer.from("master-for-provider") },
+    );
+    const reportRecordId = randomUUID();
+    const reportId = randomUUID();
+    const artworkChecksum = "b".repeat(64);
+    const planAsset = makeAsset(fixture.context.trace);
+    planAsset.productName = "Faith Mission Tee";
+    planAsset.color = "Cream";
+    const sections: BrainImageSections = {
+      schemaVersion: "3.0",
+      projectName: "Identity Campaign",
+      collectionName: "Love Story",
+      moodboard: {
+        visualDirection: "Premium urban campaign",
+        aestheticKeywords: [],
+        colorSystem: [],
+        materialReferences: [],
+        photographyStyle: "Editorial",
+      },
+      productionAssets: [planAsset],
+      brandModelContract: fixture.context.contract,
+    };
+    let providerCalls = 0;
+    const snapshot: ImageGenerationInputSnapshot = {
+      version: "image-generation-input-v1",
+      workspaceId: WS,
+      brandModel: {
+        ...fixture.context.trace,
+        displayName: fixture.persona.name,
+        masterIdentityAssetId: fixture.master.id,
+      },
+      masterArtwork: {
+        artworkId: "11111111-1111-4111-8111-111111111111",
+        designId: "design-test",
+        version: "V1",
+        checksum: artworkChecksum,
+        mimeType: "image/png",
+        byteLength: 16,
+        sourceType: "uploaded",
+        approvalStatus: "APPROVED",
+        sourceReportId: "design-report",
+        sourceHandoffAt: "2026-08-17T00:00:00Z",
+        placement: "center chest",
+        printMethod: "screen print",
+        provenance: "DESIGN_STUDIO_DURABLE",
+      },
+      product: {
+        version: "product-production-context-v1",
+        productId: "gid://shopify/Product/1",
+        variantId: "gid://shopify/ProductVariant/2",
+        productName: "CRUISING - Heavy Oversized Tee",
+        productType: "tee",
+        color: "Black",
+        size: "L",
+        material: "Cotton",
+        fit: "oversized",
+        collection: "Core",
+        availability: "AVAILABLE",
+        active: true,
+        authority: "SHOPIFY_LIVE",
+        authoritative: true,
+        provenance: {
+          source: "Shopify Admin GraphQL live read",
+          sourceRecordId: "gid://shopify/ProductVariant/2",
+          capturedAt: "2026-08-17T00:00:00.000Z",
+          sourceVersion: "2026-08-17T00:00:00.000Z",
+        },
+      },
+      production: {
+        projectId: "33333333-3333-4333-8333-333333333333",
+        projectVersion: 1,
+        reportRecordId,
+        reportId,
+        projectName: "Identity Campaign",
+        assetId: "asset-hero",
+        assetType: "hero_image",
+        shotTitle: "Campaign Hero",
+        prompt: planAsset.prompt.openai,
+        scene: "Concrete rooftop at dusk",
+        lighting: "Soft key light with restrained rim",
+        poseDirection: "Premium editorial streetwear photography",
+        provider: "openai",
+        model: "gpt-image-1",
+        dimensions: "1024x1536",
+        quality: "high",
+        identityStrategy: "openai_master_identity_and_artwork_edit_high_fidelity",
+        artworkStrategy: "openai_secondary_master_artwork_reference",
+      },
+    };
+    const result = await generateImageAsset(
+      {
+        scope,
+        request: {
+          reportRecordId,
+          reportId,
+          assetId: "asset-hero",
+          provider: "openai",
+          promptVariant: "openai",
+          brandModelTrace: fixture.context.trace,
+        },
+        paidExecution: {
+          jobId: "22222222-2222-4222-8222-222222222222",
+          inputFingerprint: fingerprintImageGenerationInput(snapshot),
+          snapshot,
+          artwork: {
+            artworkId: "11111111-1111-4111-8111-111111111111",
+            designId: "design-test",
+            version: "V1",
+            checksum: artworkChecksum,
+            mimeType: "image/png",
+            bytes: Buffer.from("approved-artwork"),
+            placement: "center chest",
+          },
+        },
+      },
+      {
+        assertExecutionAllowed: () => {},
+        allowTestOnlyUnconfirmedExecution: true,
+        isProviderConfigured: () => true,
+        loadReport: async () => ({
+          id: reportRecordId,
+          workspaceId: WS,
+          content: {
+            kind: "reports",
+            reportId,
+            taskId: randomUUID(),
+            agentId: "image",
+            status: "submitted",
+            summary: "Identity campaign",
+            confidence: 1,
+            reportType: "image-project",
+            imageSections: sections,
+            notes: "test",
+            artifacts: [],
+          },
+        }),
+        updateSections: async () => {},
+        resolveIdentity: async () => identity,
+        getProviderModel: () => "gpt-image-1",
+        getIdentityStrategy: () => "openai_master_identity_and_artwork_edit_high_fidelity",
+        operationId: () => "11111111-1111-4111-8111-111111111111",
+        now: () => "2026-08-17T00:00:00.000Z",
+        generateProvider: async () => {
+          providerCalls += 1;
+          return {
+            prompt: "test",
+            dimensions: "1024x1536",
+            assetType: "hero_image",
+            status: "completed",
+            providerId: "openai",
+            modelId: "gpt-image-1",
+            providerRequestId: "provider-request-shopify",
+            identityStrategy: "openai_master_identity_and_artwork_edit_high_fidelity",
+            imageBytes: Buffer.from("fake-generated-image"),
+          };
+        },
+        upload: async () => ({
+          storagePath: `workspace/${WS}/reports/${reportId}/generated.png`,
+          url: "https://temporary-output.example/generated.png",
+        }),
+      },
+    );
+    assert.equal(providerCalls, 1);
+    assert.equal(result.asset.status, "completed");
+  });
+
   it("rejects a mismatched browser/project trace before identity/provider execution", async () => {
     const fixture = await seedEligibleImageModel();
     const reportRecordId = randomUUID();

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { brandModelTraceSchema } from "@/lib/persona/domain/brand-model-contract";
 import { IMAGE_GENERATION_PROVIDERS } from "@/agents/image/types-generation";
+import { rfc3339DateTimeSchema } from "@/lib/datetime/rfc3339";
 import {
   productProductionContextSchema,
   productProductionSelectionSchema,
@@ -91,7 +92,7 @@ export const imageGenerationJobSchema = z.object({
   status: z.enum(IMAGE_GENERATION_JOB_STATUSES),
   confirmationToken: z.string().min(1).nullable(),
   confirmationFingerprint: z.string().nullable(),
-  confirmationExpiresAt: z.string().datetime(),
+  confirmationExpiresAt: rfc3339DateTimeSchema,
   confirmedBy: z.string().nullable(),
   confirmedAt: z.string().nullable(),
   attemptCount: z.number().int().nonnegative(),

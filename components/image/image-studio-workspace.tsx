@@ -9,6 +9,7 @@ import type { ImageStudioAsset, ImageMoodboardSection, ImagePalette } from "@/ag
 import { ProductionGallery } from "@/components/image/production-gallery";
 import { BrandModelSelector } from "@/components/image/brand-model-selector";
 import { ProductProductionSelector } from "@/components/image/product-production-selector";
+import { DeterministicV2Panel } from "@/components/image/deterministic-v2-panel";
 import {
   AssetPreviewPlaceholder,
   CanvasPlaceholder,
@@ -61,7 +62,30 @@ import type {
 } from "@/lib/image/brand-model-production-context";
 import type { ImageGenerationJobView } from "@/lib/image/paid-generation/types";
 import type { ImageProductionAssetView } from "@/lib/image/production-project/types";
-import type { ProductProductionSelection } from "@/lib/image/product-production-context";
+import type {
+  ProductProductionContext,
+  ProductProductionSelection,
+} from "@/lib/image/product-production-context";
+import type { ImageProductSelection } from "@/lib/image/product-production-client";
+import {
+  formatPaidPrepareError,
+  logPaidPrepareValidationError,
+} from "@/lib/image/prepare-estimate-error";
+import {
+  enrichHandoffDesignAuthority,
+  productionProjectMatchesBrandModel,
+  resolveBrandModelTraceForPrepare,
+  resolveDurableMasterArtworkReference,
+  resolvePaidPrepareIdentityBlocker,
+  resolvePaidJobStaleReason,
+} from "@/lib/image/image-studio-prepare-identity";
+import {
+  canPreparePaidImageEstimate,
+  isImageStudioHandoffDebugEnabled,
+  resolveDesignMissionHints,
+  resolveImageStudioProductHeader,
+  resolvePrepareEstimateBlocker,
+} from "@/lib/image/image-studio-product-display";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -114,6 +138,13 @@ let productionPackagePromise: Promise<ImageRunResult | null> | null = null;
 
 let handoffStagingMissionKey: string | null = null;
 let handoffStagingInflight: Promise<ImageRunResult | null> | null = null;
+
+function clearCachedProductionProject() {
+  cachedProductionProject = null;
+  productionPackagePromise = null;
+  handoffStagingMissionKey = null;
+  handoffStagingInflight = null;
+}
 
 function buildHandoffMissionKey(handoff: ImageStudioHandoff): string {
   return handoff.designId ?? handoff.handoffAt ?? handoff.mission?.title ?? "mission";
@@ -190,6 +221,10 @@ export function ImageStudioWorkspace() {
     useState<ImageBrandModelSelection | null>(null);
   const [productSelection, setProductSelection] =
     useState<ProductProductionSelection | null>(null);
+  const [productProductionContext, setProductProductionContext] =
+    useState<ProductProductionContext | null>(null);
+  const [selectedProductLabel, setSelectedProductLabel] = useState<string | null>(null);
+  const [showHandoffDebug, setShowHandoffDebug] = useState(false);
   const [brief, setBrief] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +273,11 @@ export function ImageStudioWorkspace() {
     typeof window === "undefined" ? null : loadHandoffSendDebug(),
   );
   const [handoffStateApplied, setHandoffStateApplied] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setShowHandoffDebug(isImageStudioHandoffDebugEnabled(window.location.search));
+  }, []);
 
   // Durable recovery is independent of localStorage/window.name. Once the
   // production migration is applied, reopening Image Studio restores the most
@@ -346,11 +386,49 @@ export function ImageStudioWorkspace() {
 
   const handleBrandModelSelection = useCallback(
     (selection: ImageBrandModelSelection | null) => {
+      const previousTrace = brandModelSelection?.productionContext.trace;
+      const nextTrace = selection?.productionContext.trace;
+      const projectTrace = cachedProductionProject?.brandModelContext?.trace;
+      const selectionChanged =
+        Boolean(previousTrace || nextTrace) &&
+        !productionProjectMatchesBrandModel({
+          projectBrandModelTrace: previousTrace ?? null,
+          selectedTrace: nextTrace ?? null,
+        });
+      const projectStale =
+        Boolean(nextTrace) &&
+        Boolean(cachedProductionProject) &&
+        !productionProjectMatchesBrandModel({
+          projectBrandModelTrace: projectTrace,
+          selectedTrace: nextTrace,
+        });
+
       setBrandModelSelection(selection);
       setError(null);
+
+      if (selectionChanged || projectStale) {
+        clearCachedProductionProject();
+        setResult(null);
+        setProductionAssets([]);
+      }
     },
-    [],
+    [brandModelSelection],
   );
+
+  const handleProductSelectionChange = useCallback((selection: ImageProductSelection | null) => {
+    if (!selection) {
+      setProductSelection(null);
+      setProductProductionContext(null);
+      setSelectedProductLabel(null);
+      return;
+    }
+    setProductSelection(selection.selection);
+    setProductProductionContext(selection.productionContext);
+    const context = selection.productionContext;
+    setSelectedProductLabel(
+      `${context.productName} · ${context.color ?? "variant"} · ${context.size ?? "size"}`,
+    );
+  }, []);
 
   const selectedSlot = useMemo(
     () => MISSION_ASSET_SLOTS.find((s) => s.id === selectedSlotId) ?? MISSION_ASSET_SLOTS[0],
@@ -372,6 +450,27 @@ export function ImageStudioWorkspace() {
     return missionSlotAssets.get(selectedSlotId);
   }, [missionSlotAssets, productionAssets, selectedAssetId, selectedSlotId]);
 
+  useEffect(() => {
+    if (!paidJob) return;
+    const staleReason = resolvePaidJobStaleReason({
+      paidJob,
+      selectedAssetId: selectedAsset?.id ?? selectedAssetId,
+      handoff,
+      brandModelSelection,
+      productProductionContext,
+    });
+    if (!staleReason) return;
+    setPaidJob(null);
+    setError(staleReason);
+  }, [
+    paidJob,
+    selectedAsset?.id,
+    selectedAssetId,
+    handoff,
+    brandModelSelection,
+    productProductionContext,
+  ]);
+
   const blueprint = useMemo(
     () => resolveImportedBlueprint(handoff, result?.projectName),
     [handoff, result?.projectName],
@@ -383,6 +482,27 @@ export function ImageStudioWorkspace() {
   );
 
   const canStartGeneration = effectiveBrief.trim().length >= 3;
+  const canPrepareEstimate = canPreparePaidImageEstimate({
+    briefReady: canStartGeneration,
+    productContext: productProductionContext,
+    masterArtworkApproved: Boolean(
+      handoff?.masterArtworkApproved || handoff?.durableMasterArtwork,
+    ),
+    hasBrandModel: Boolean(brandModelSelection),
+  });
+  const prepareEstimateBlocker = resolvePrepareEstimateBlocker({
+    briefReady: canStartGeneration,
+    productContext: productProductionContext,
+    masterArtworkApproved: Boolean(
+      handoff?.masterArtworkApproved || handoff?.durableMasterArtwork,
+    ),
+    hasBrandModel: Boolean(brandModelSelection),
+  });
+  const productHeader = resolveImageStudioProductHeader({
+    productContext: productProductionContext,
+    selectedProductLabel,
+  });
+  const designMissionHints = resolveDesignMissionHints(blueprint);
 
   const hasBlueprint = Boolean(blueprint?.imported || brief.trim());
   const hasResults = productionAssets.length > 0;
@@ -417,9 +537,6 @@ export function ImageStudioWorkspace() {
   });
 
   const missionName = blueprint?.designName ?? (hasHandoff ? handoff?.sourceTitle : null) ?? "Waiting for Creative Blueprint";
-  const collection = blueprint?.collection ?? "—";
-  const garment = blueprint?.garment ?? selectedAsset?.productName ?? "—";
-  const colorway = blueprint?.colorway ?? selectedAsset?.color ?? "—";
   const version = blueprint?.version ?? (hasResults ? "V1" : "—");
   const commercialStatus = resolveCommercialStatus(blueprint);
   const generationModeLabel = getImageGenerationModeLabel();
@@ -510,7 +627,6 @@ export function ImageStudioWorkspace() {
 
       productionPackagePromise = (async () => {
         setIsLoading(true);
-        setError(null);
         setValidationDebug(null);
 
         try {
@@ -524,8 +640,8 @@ export function ImageStudioWorkspace() {
               collectionName: handoff?.mission?.collection,
               color: handoff?.mission?.colorway,
               material:
-                productSelection?.authority !== "SHOPIFY_LIVE"
-                  ? productSelection?.material ?? undefined
+                productProductionContext?.authoritative !== true
+                  ? productProductionContext?.material ?? undefined
                   : undefined,
               ...(brandModelSelection
                 ? {
@@ -612,7 +728,7 @@ export function ImageStudioWorkspace() {
 
       return productionPackagePromise;
     },
-    [brandModelSelection, handoff, productSelection, t],
+    [brandModelSelection, handoff, productProductionContext, t],
   );
 
   const releaseExecutionLocks = useCallback((reason: string) => {
@@ -755,23 +871,72 @@ export function ImageStudioWorkspace() {
 
     const assetToPrepare =
       pendingAssets.find((asset) => asset.id === selectedAsset?.id) ?? pendingAssets[0];
-    if (!handoff?.masterArtworkApproved) {
+
+    if (!handoff?.masterArtworkApproved && !handoff?.durableMasterArtwork) {
       setError("Approved Master Artwork is required before paid Image preparation.");
       return project;
     }
-    const designId = handoff.designId ?? handoff.reportId;
-    const trace = project.brandModelContext?.trace;
-    if (!designId || !trace) {
-      setError("Paid Image preparation requires an identifiable approved Design handoff and eligible Brand Model.");
+    const prepareBlocker = resolvePrepareEstimateBlocker({
+      briefReady: briefForRun.trim().length >= 3,
+      productContext: productProductionContext,
+      masterArtworkApproved: Boolean(
+        handoff?.masterArtworkApproved || handoff?.durableMasterArtwork,
+      ),
+      hasBrandModel: Boolean(brandModelSelection),
+    });
+    if (prepareBlocker) {
+      setError(prepareBlocker);
       return project;
     }
-    const durableArtwork = handoff.durableMasterArtwork;
-    if (!durableArtwork) {
+    if (!productSelection || !productProductionContext || productProductionContext.authority !== "SHOPIFY_LIVE") {
       setError(
-        "This browser handoff has no durable Design-owned Master Artwork. Return to Design Studio and send the approved artwork again.",
+        "Select a live Shopify product before Prepare / Estimate. Design mission garment hints are not production truth.",
       );
       return project;
     }
+
+    const selectedTrace = brandModelSelection?.productionContext.trace ?? null;
+    if (
+      selectedTrace &&
+      !productionProjectMatchesBrandModel({
+        projectBrandModelTrace: project.brandModelContext?.trace,
+        selectedTrace,
+      })
+    ) {
+      console.info("[Image Studio] re-staging production package for selected Brand Model", {
+        reportId: project.reportId,
+      });
+      clearCachedProductionProject();
+      const restaged = await createProductionPackage(briefForRun);
+      if (!restaged) {
+        setError("Production package could not be re-staged with the selected Brand Model.");
+        return null;
+      }
+      project = restaged;
+      setResult(restaged);
+      setProductionAssets(restaged.productionAssets ?? []);
+    }
+
+    const identityBlocker = resolvePaidPrepareIdentityBlocker({
+      handoff,
+      brandModelSelection,
+      projectBrandModelTrace: project.brandModelContext?.trace,
+    });
+    if (identityBlocker) {
+      setError(identityBlocker);
+      return project;
+    }
+
+    const trace = resolveBrandModelTraceForPrepare({
+      brandModelSelection,
+      projectBrandModelTrace: project.brandModelContext?.trace,
+    });
+    const durableReference = resolveDurableMasterArtworkReference(handoff);
+    if (!trace || !durableReference) {
+      setError("Paid Image preparation could not resolve Design authority or Brand Model trace.");
+      return project;
+    }
+
     setPaidJobBusy(true);
     try {
       const response = await fetch("/api/image/generation-jobs", {
@@ -784,39 +949,30 @@ export function ImageStudioWorkspace() {
           provider: "openai",
           brandModelTrace: trace,
           masterArtwork: {
-            reference: {
-              id: durableArtwork.id,
-              designId: durableArtwork.designId,
-              version: durableArtwork.version,
-              checksum: durableArtwork.checksum,
-            },
+            reference: durableReference,
           },
-          product: productSelection ?? {
-            authority: "DESIGN_HANDOFF_LOCAL",
-            productId: null,
-            variantId: null,
-            productName: assetToPrepare.productName,
-            productType: handoff.mission?.garment ?? assetToPrepare.productName,
-            color: assetToPrepare.color,
-            size: null,
-            material: assetToPrepare.material ?? null,
-            fit: null,
-            collection:
-              handoff.mission?.collection ?? assetToPrepare.collection ?? null,
-            availability: "UNKNOWN",
-            active: null,
-            provenance: `Design Studio browser handoff ${handoff.reportId ?? handoff.designId ?? "unversioned"}`,
-            sourceVersion: handoff.masterArtworkVersion ?? null,
-            capturedAt: handoff.handoffAt,
-          },
+          product: productSelection,
         }),
       });
-      const data = (await response.json()) as { job?: ImageGenerationJobView; error?: string };
-      if (!response.ok || !data.job) throw new Error(data.error ?? "Paid Image preparation failed.");
+      const data = (await response.json()) as {
+        job?: ImageGenerationJobView;
+        error?: string;
+        details?: unknown;
+      };
+      if (!response.ok || !data.job) {
+        const raw =
+          data.error ??
+          (data.details ? JSON.stringify(data.details) : "Paid Image preparation failed.");
+        logPaidPrepareValidationError(raw, { status: response.status });
+        throw new Error(formatPaidPrepareError(raw));
+      }
       setPaidJob(data.job);
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Paid Image preparation failed.");
+      const raw =
+        cause instanceof Error ? cause.message : "Paid Image preparation failed.";
+      logPaidPrepareValidationError(raw);
+      setError(formatPaidPrepareError(raw));
     } finally {
       setPaidJobBusy(false);
     }
@@ -832,6 +988,8 @@ export function ImageStudioWorkspace() {
     pipelineActive,
     releaseExecutionLocks,
     selectedAsset,
+    brandModelSelection,
+    productProductionContext,
     productSelection,
     t,
   ]);
@@ -842,7 +1000,7 @@ export function ImageStudioWorkspace() {
     ? "Generating…"
     : isLoading
       ? "Staging Assets…"
-      : "Prepare / Estimate";
+      : "Prepare Draft Generative Estimate";
 
   const actOnPaidJob = useCallback(async (action: "confirm" | "execute" | "retry_known_failure" | "cancel") => {
     if (!paidJob) return;
@@ -912,16 +1070,43 @@ export function ImageStudioWorkspace() {
     const tryApplyHandoff = (attemptLabel: string) => {
       if (cancelled) return;
 
-      if (handoffBootstrapLock) {
+      const { handoff: normalized, debug } = applyImageStudioHandoff();
+      setHandoffLoadDebug(debug);
+
+      if (handoffBootstrapLock && cachedAppliedHandoff) {
+        const cachedArtworkKey =
+          cachedAppliedHandoff.durableMasterArtwork?.checksum ??
+          cachedAppliedHandoff.handoffAt;
+        const freshArtworkKey =
+          normalized?.durableMasterArtwork?.checksum ?? normalized?.handoffAt;
+        if (
+          normalized &&
+          freshArtworkKey &&
+          cachedArtworkKey &&
+          freshArtworkKey !== cachedArtworkKey
+        ) {
+          console.info("[Image Studio] replacing cached handoff with newer Design authority", {
+            attempt: attemptLabel,
+          });
+          handoffBootstrapLock = false;
+          clearCachedProductionProject();
+          setResult(null);
+          setProductionAssets([]);
+          setPaidJob(null);
+        } else {
+          if (restoreCachedHandoff()) {
+            console.info("[Image Studio] handoff restored from cache", { attempt: attemptLabel });
+          }
+          hydrateCachedProductionPackage();
+          return;
+        }
+      } else if (handoffBootstrapLock) {
         if (restoreCachedHandoff()) {
           console.info("[Image Studio] handoff restored from cache", { attempt: attemptLabel });
         }
         hydrateCachedProductionPackage();
         return;
       }
-
-      const { handoff: normalized, debug } = applyImageStudioHandoff();
-      setHandoffLoadDebug(debug);
 
       console.info("[Image Studio] handoff raw loaded", {
         attempt: attemptLabel,
@@ -946,16 +1131,18 @@ export function ImageStudioWorkspace() {
 
       handoffBootstrapLock = true;
       cachedAppliedHandoff = normalized;
-      setHandoff(normalized);
-      setBrief(normalized.brief);
+      const enriched = enrichHandoffDesignAuthority(normalized);
+      setHandoff(enriched);
+      setBrief(enriched.brief);
       setHandoffStateApplied(true);
 
       console.info("[Image Studio] mission state populated", {
-        title: normalized.mission?.title,
-        collection: normalized.mission?.collection,
-        garment: normalized.mission?.garment,
-        colorway: normalized.mission?.colorway,
-        version: normalized.mission?.version,
+        title: enriched.mission?.title,
+        collection: enriched.mission?.collection,
+        garment: enriched.mission?.garment,
+        colorway: enriched.mission?.colorway,
+        designId: enriched.designId ?? enriched.durableMasterArtwork?.designId,
+        durableArtworkId: enriched.durableMasterArtwork?.id,
       });
     };
 
@@ -1062,10 +1249,13 @@ export function ImageStudioWorkspace() {
           <p className="is-hero-subtitle">Ready for Premium Asset Production</p>
         </div>
         <div className="is-hero-meta-row">
-          <HeroMeta label="Collection" value={collection} />
-          <HeroMeta label="Garment" value={garment} />
-          <HeroMeta label="Colorway" value={colorway} />
-          <HeroMeta label="Version" value={version} />
+          <HeroMeta
+            label="Product"
+            value={productHeader.value}
+            highlight={productHeader.authoritative ? "emerald" : undefined}
+          />
+          <HeroMeta label="Product Authority" value={productHeader.authorityLabel} />
+          <HeroMeta label="Design Version" value={version} />
           <HeroMeta label="Commercial Status" value={commercialStatus} highlight="gold" />
           <HeroMeta
             label="Generation Mode"
@@ -1074,6 +1264,12 @@ export function ImageStudioWorkspace() {
           />
           <HeroMeta label="Generation Status" value={generationStatus} highlight={pipelineActive || generatingAssetId ? "emerald" : hasResults ? "gold" : undefined} />
         </div>
+        {designMissionHints ? (
+          <p className="is-hero-design-hints">
+            Design hints only (non-authoritative): {designMissionHints.collection} ·{" "}
+            {designMissionHints.garment} · {designMissionHints.colorway}
+          </p>
+        ) : null}
       </header>
 
       <div className="is-toolbar">
@@ -1081,7 +1277,7 @@ export function ImageStudioWorkspace() {
           type="button"
           className="is-toolbar-primary"
           onClick={handleGenerateAssetsClick}
-          disabled={isLoading || pipelineActive || !canStartGeneration}
+          disabled={isLoading || pipelineActive || !canPrepareEstimate}
         >
           <Sparkles className="size-4" />
           {generateAssetsButtonLabel}
@@ -1105,6 +1301,12 @@ export function ImageStudioWorkspace() {
           <ToolbarGhost disabled={!hasResults}>Shopify</ToolbarGhost>
         </div>
       </div>
+
+      {prepareEstimateBlocker && hasHandoff ? (
+        <div className="is-error-banner is-error-banner--muted">
+          <p className="is-error-banner__summary">{prepareEstimateBlocker}</p>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="is-error-banner">
@@ -1160,10 +1362,21 @@ export function ImageStudioWorkspace() {
         </div>
       ) : null}
 
+      <DeterministicV2Panel
+        reportRecordId={result?.reportRecordId ?? null}
+        reportId={result?.reportId ?? null}
+        assetId={selectedAsset?.id ?? null}
+        brandModelTrace={brandModelSelection?.productionContext.trace ?? null}
+        masterArtwork={resolveDurableMasterArtworkReference(handoff)}
+        shopifyProductId={productSelection?.authority === "SHOPIFY_LIVE" ? productSelection.productId : null}
+        shopifyVariantId={productSelection?.authority === "SHOPIFY_LIVE" ? productSelection.variantId : null}
+      />
+
       {paidJob ? (
-        <section className="is-inspector-card is-inspector-card--open" aria-label="Paid generation review">
+        <section className="is-inspector-card is-inspector-card--open" aria-label="Draft generative Artwork review">
           <div className="is-inspector-card-body">
-            <h3 className="is-panel-heading">Paid generation review</h3>
+            <h3 className="is-panel-heading">Draft — Generative Artwork V1 (not production-exact)</h3>
+            <p>This historical dual-reference mode may generatively alter typography, logos, colors, or layout. Use only for creative exploration; use Deterministic Composite V2 for approved Artwork.</p>
             <p><strong>Brand Model:</strong> {paidJob.inputSnapshot.brandModel.displayName} · Lock v{paidJob.inputSnapshot.brandModel.identityLockVersion}</p>
             <p><strong>Master Artwork:</strong> {paidJob.inputSnapshot.masterArtwork.designId} · {paidJob.inputSnapshot.masterArtwork.version}</p>
             <p><strong>Product:</strong> {paidJob.inputSnapshot.product.productName} · {paidJob.inputSnapshot.product.color} ({paidJob.inputSnapshot.product.authority})</p>
@@ -1174,8 +1387,8 @@ export function ImageStudioWorkspace() {
             <p><strong>Confirmation expires:</strong> {new Date(paidJob.confirmationExpiresAt).toLocaleString()}</p>
             {paidJob.status === "awaiting_confirmation" ? <p>By confirming, you attest that this is the approved final Master Artwork, the selected Brand Model/product/shot are correct, and you authorize the displayed maximum paid attempt.</p> : null}
             <div className="is-staging-actions">
-              {paidJob.status === "awaiting_confirmation" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("confirm")}>Confirm Paid Generation</button> : null}
-              {paidJob.status === "confirmed" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("execute")}>Execute confirmed job</button> : null}
+              {paidJob.status === "awaiting_confirmation" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("confirm")}>Confirm Draft Generative Attempt</button> : null}
+              {paidJob.status === "confirmed" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("execute")}>Execute draft generative job</button> : null}
               {paidJob.status === "failed" && paidJob.safeRetryAllowed ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("retry_known_failure")}>Retry known safe failure</button> : null}
               {["awaiting_confirmation", "confirmed", "failed"].includes(paidJob.status) ? <button type="button" className="is-btn" disabled={paidJobBusy} onClick={() => void actOnPaidJob("cancel")}>Cancel</button> : null}
               {paidJob.status === "unknown_outcome" ? <p>Provider outcome is unknown. Do not retry until the provider request is reconciled.</p> : null}
@@ -1211,7 +1424,7 @@ export function ImageStudioWorkspace() {
         <aside className="is-sidebar">
           <div className="is-sidebar-header">
             <h2 className="is-sidebar-title">Production Queue</h2>
-            <p className="is-sidebar-sub">{MISSION_ASSET_SLOTS.length} assets · individual or batch</p>
+            <p className="is-sidebar-sub">{MISSION_ASSET_SLOTS.length} planned shots · one job per selected asset · production-exact uses V2</p>
           </div>
           <ul className="is-asset-list">
             {MISSION_ASSET_SLOTS.map((slot) => {
@@ -1305,7 +1518,7 @@ export function ImageStudioWorkspace() {
               <div className="is-staging-dashboard">
                 <CanvasPlaceholder
                   hasBlueprint={hasBlueprint}
-                  garmentLabel={garment !== "—" ? garment : "Garment"}
+                  garmentLabel={productHeader.authoritative ? productHeader.value : "Production product pending"}
                 />
 
                 <div className="is-staging-panel">
@@ -1331,7 +1544,7 @@ export function ImageStudioWorkspace() {
                           type="button"
                           className="is-btn is-btn--primary"
                           onClick={handleGenerateAssetsClick}
-                          disabled={isLoading || pipelineActive || !canStartGeneration}
+                          disabled={isLoading || pipelineActive || !canPrepareEstimate}
                         >
                           <Sparkles className="size-4" />
                           {generateAssetsButtonLabel}
@@ -1412,9 +1625,7 @@ export function ImageStudioWorkspace() {
               open={openSections.product}
               onToggle={() => toggleSection("product")}
             >
-              <ProductProductionSelector
-                onSelectionChange={setProductSelection}
-              />
+              <ProductProductionSelector onSelectionChange={handleProductSelectionChange} />
             </InspectorCard>
 
             <InspectorCard
@@ -1514,9 +1725,10 @@ export function ImageStudioWorkspace() {
         </aside>
       </div>
 
-      <HandoffDebugOverlay
-        title="Image Studio — Handoff Receive"
-        rows={[
+      {showHandoffDebug ? (
+        <HandoffDebugOverlay
+          title="Image Studio — Handoff Receive"
+          rows={[
           { label: "raw handoff found", value: handoffLoadDebug?.rawFound ? "yes" : "no" },
           { label: "storage key", value: handoffLoadDebug?.storageKey ?? "nexhq-image-studio-handoff" },
           { label: "source", value: handoffLoadDebug?.source ?? "pending" },
@@ -1543,7 +1755,8 @@ export function ImageStudioWorkspace() {
               ]
             : []),
         ]}
-      />
+        />
+      ) : null}
     </div>
   );
 }
@@ -1601,6 +1814,12 @@ function InspectorField({ label, value, mono }: { label: string; value: string; 
 function BlueprintSummary({ blueprint }: { blueprint: import("@/lib/image/image-studio-mission").ImportedCreativeBlueprint }) {
   return (
     <div className="is-blueprint-summary">
+      <div className="is-blueprint-summary-row">
+        <span className="is-blueprint-summary-label">Design Hints (non-authoritative)</span>
+        <p className="is-blueprint-summary-text">
+          {blueprint.collection} · {blueprint.garment} · {blueprint.colorway}
+        </p>
+      </div>
       <div className="is-blueprint-summary-row">
         <span className="is-blueprint-summary-label">Creative Direction</span>
         <p className="is-blueprint-summary-text">{blueprint.creativeDirection}</p>

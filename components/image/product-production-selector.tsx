@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ProductProductionSelection } from "@/lib/image/product-production-context";
+import {
+  fetchImageProductProductionContext,
+  toImageProductSelection,
+  type ImageProductSelection,
+} from "@/lib/image/product-production-client";
 
 type LiveVariant = {
   id: string;
@@ -25,12 +30,13 @@ type LiveProduct = {
 export function ProductProductionSelector({
   onSelectionChange,
 }: {
-  onSelectionChange: (selection: ProductProductionSelection | null) => void;
+  onSelectionChange: (selection: ImageProductSelection | null) => void;
 }) {
   const [products, setProducts] = useState<LiveProduct[]>([]);
   const [productId, setProductId] = useState("");
   const [variantId, setVariantId] = useState("");
   const [status, setStatus] = useState("Checking live Shopify catalog…");
+  const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,14 +54,14 @@ export function ProductProductionSelector({
         setProducts(active);
         setStatus(
           active.length
-            ? "SHOPIFY_LIVE available. Select an exact product/variant, or keep the labeled Design handoff fallback."
-            : "No active Shopify products returned; Design handoff remains non-authoritative.",
+            ? "Select a live Shopify product and exact variant before Prepare / Estimate."
+            : "No active Shopify products returned. Paid preparation stays blocked until a product is available.",
         );
       })
       .catch((error) => {
         if (!cancelled) {
           setStatus(
-            `${error instanceof Error ? error.message : "Shopify unavailable"}. Design handoff remains non-authoritative.`,
+            `${error instanceof Error ? error.message : "Shopify unavailable"}. Paid preparation stays blocked until a live product can be selected.`,
           );
         }
       });
@@ -69,17 +75,65 @@ export function ProductProductionSelector({
     [productId, products],
   );
 
-  function publish(nextProductId: string, nextVariantId: string) {
-    if (!nextProductId) {
-      onSelectionChange(null);
-      return;
-    }
-    onSelectionChange({
-      authority: "SHOPIFY_LIVE",
-      productId: nextProductId,
-      variantId: nextVariantId || null,
-    });
-  }
+  const resolveSelection = useCallback(
+    async (nextProductId: string, nextVariantId: string) => {
+      if (!nextProductId) {
+        onSelectionChange(null);
+        setStatus(
+          products.length
+            ? "Select a live Shopify product and exact variant before Prepare / Estimate."
+            : "No active Shopify products returned. Paid preparation stays blocked until a product is available.",
+        );
+        return;
+      }
+
+      const product = products.find((item) => item.id === nextProductId);
+      if (!product) {
+        onSelectionChange(null);
+        setStatus("Selected product is no longer in the live Shopify catalog.");
+        return;
+      }
+
+      if (!nextVariantId) {
+        onSelectionChange(null);
+        setStatus(`Select an exact variant for ${product.title} before Prepare / Estimate.`);
+        return;
+      }
+
+      const variant = product.variants.find((item) => item.id === nextVariantId);
+      if (!variant) {
+        onSelectionChange(null);
+        setStatus("Selected variant is no longer on the live Shopify product.");
+        return;
+      }
+
+      const selection: Extract<ProductProductionSelection, { authority: "SHOPIFY_LIVE" }> = {
+        authority: "SHOPIFY_LIVE",
+        productId: nextProductId,
+        variantId: nextVariantId,
+      };
+
+      setResolving(true);
+      setStatus("Verifying live Shopify product + variant…");
+      try {
+        const productionContext = await fetchImageProductProductionContext(selection);
+        onSelectionChange(toImageProductSelection(selection, productionContext));
+        setStatus(
+          `Verified ${productionContext.productName} · ${productionContext.color ?? variant.title} · ${productionContext.size ?? "variant"} (${productionContext.availability.toLowerCase()}).`,
+        );
+      } catch (error) {
+        onSelectionChange(null);
+        setStatus(
+          error instanceof Error
+            ? error.message
+            : "Live Shopify product context could not be verified.",
+        );
+      } finally {
+        setResolving(false);
+      }
+    },
+    [onSelectionChange, products],
+  );
 
   return (
     <div>
@@ -87,14 +141,15 @@ export function ProductProductionSelector({
       <select
         id="image-product-select"
         value={productId}
+        disabled={resolving}
         onChange={(event) => {
           const next = event.target.value;
           setProductId(next);
           setVariantId("");
-          publish(next, "");
+          void resolveSelection(next, "");
         }}
       >
-        <option value="">Design handoff (non-authoritative)</option>
+        <option value="">No product selected</option>
         {products.map((product) => (
           <option key={product.id} value={product.id}>
             {product.title} · {product.productType}
@@ -107,13 +162,14 @@ export function ProductProductionSelector({
           <select
             id="image-variant-select"
             value={variantId}
+            disabled={resolving}
             onChange={(event) => {
               const next = event.target.value;
               setVariantId(next);
-              publish(selectedProduct.id, next);
+              void resolveSelection(selectedProduct.id, next);
             }}
           >
-            <option value="">Product level only (no exact variant)</option>
+            <option value="">Select exact variant</option>
             {selectedProduct.variants.map((variant) => (
               <option key={variant.id} value={variant.id}>
                 {variant.title} · {variant.availableForSale ? "available" : "unavailable"}

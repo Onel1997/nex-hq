@@ -11,7 +11,7 @@ body:has(.image-studio-shell) {
   height: auto;
   min-height: 100dvh;
   overflow-x: hidden;
-  overflow-y: visible;
+  overflow-y: auto;
 }
 
 .facility-app-main:has(.image-studio-shell),
@@ -331,9 +331,8 @@ body:has(.image-studio-shell) {
 /* ── Three-column body ── */
 
 .is-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
@@ -345,8 +344,7 @@ body:has(.image-studio-shell) {
   border-right: none;
   border-bottom: 1px solid var(--is-border-soft);
   background: rgb(12 15 20 / 0.65);
-  max-height: 220px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .is-sidebar .is-asset-list {
@@ -362,8 +360,19 @@ body:has(.image-studio-shell) {
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--is-border-soft);
-  max-height: min(42vh, 420px);
-  overflow: auto;
+  overflow: visible;
+}
+
+.is-hero-design-hints {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: rgb(125 138 152 / 0.82);
+}
+
+.is-error-banner--muted {
+  border-color: rgb(201 165 92 / 0.22);
+  background: rgb(201 165 92 / 0.06);
 }
 
 @media (max-width: 1280px) {
@@ -373,8 +382,8 @@ body:has(.image-studio-shell) {
 }
 
 @media (max-width: 768px) {
-  .is-sidebar {
-    max-height: 180px;
+  .is-sidebar .is-asset-list {
+    padding-bottom: 0.75rem;
   }
 }
 
@@ -2121,4 +2130,32 @@ body:has(.image-studio-shell) {
 .is-field-value--mono {
   font-family: var(--font-geist-mono, monospace);
   font-size: 0.6875rem;
+}
+.is-v2-calibration-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.is-v2-calibration-grid > div,
+.is-v2-calibration-grid label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.is-v2-calibration-grid input {
+  min-width: 0;
+  width: 100%;
+}
+
+.is-v2-surface-preview {
+  display: block;
+  width: min(14rem, 100%);
+  margin: 0.75rem 0;
+  border-radius: 0.5rem;
+}
+
+@media (max-width: 720px) {
+  .is-v2-calibration-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

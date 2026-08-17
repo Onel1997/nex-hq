@@ -1,13 +1,18 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PersonaDomainError, PersonaStoreError } from "@/lib/persona/domain/errors";
 import type { WorkspaceScope } from "@/lib/persona/domain/types";
+import {
+  normalizeOptionalRfc3339Timestamp,
+  normalizeRfc3339Timestamp,
+} from "@/lib/datetime/rfc3339";
 import { imageGenerationJobSchema, type ImageGenerationJob } from "./types";
 import type { CreateImageGenerationJob, ImageGenerationJobRepository } from "./repository";
 
 function mapJob(row: Record<string, unknown>): ImageGenerationJob {
   return imageGenerationJobSchema.parse({
     id: row.id, workspaceId: row.workspace_id, createdBy: row.created_by,
-    createdAt: row.created_at, updatedAt: row.updated_at,
+    createdAt: normalizeRfc3339Timestamp(row.created_at),
+    updatedAt: normalizeRfc3339Timestamp(row.updated_at),
     inputSnapshot: row.input_snapshot, inputFingerprint: row.input_fingerprint,
     productionProjectId: row.production_project_id,
     productionProjectVersion: Number(row.production_project_version),
@@ -19,21 +24,24 @@ function mapJob(row: Record<string, unknown>): ImageGenerationJob {
     },
     status: row.status, confirmationToken: row.confirmation_token,
     confirmationFingerprint: row.confirmation_fingerprint,
-    confirmationExpiresAt: row.confirmation_expires_at,
-    confirmedBy: row.confirmed_by, confirmedAt: row.confirmed_at,
+    confirmationExpiresAt: normalizeRfc3339Timestamp(row.confirmation_expires_at),
+    confirmedBy: row.confirmed_by, confirmedAt: normalizeOptionalRfc3339Timestamp(row.confirmed_at),
     attemptCount: Number(row.attempt_count ?? 0), providerRequestId: row.provider_request_id,
     resultAssetIds: Array.isArray(row.result_asset_ids) ? row.result_asset_ids : [],
     failureCode: row.failure_code, failureMessage: row.failure_message,
     safeRetryAllowed: Boolean(row.safe_retry_allowed),
     unknownOutcomeReason: row.unknown_outcome_reason,
     reconciliationState: row.reconciliation_state,
-    startedAt: row.started_at, completedAt: row.completed_at, cancelledAt: row.cancelled_at,
+    startedAt: normalizeOptionalRfc3339Timestamp(row.started_at),
+    completedAt: normalizeOptionalRfc3339Timestamp(row.completed_at),
+    cancelledAt: normalizeOptionalRfc3339Timestamp(row.cancelled_at),
   });
 }
 
 async function one(scope: WorkspaceScope, id: string): Promise<ImageGenerationJob | null> {
   const { data, error } = await createAdminClient().from("image_generation_jobs")
-    .select("*").eq("workspace_id", scope.workspaceId).eq("id", id).maybeSingle();
+    .select("*").eq("workspace_id", scope.workspaceId).eq("id", id)
+    .is("input_contract_version", null).is("production_mode", null).maybeSingle();
   if (error) throw new PersonaStoreError(error.message);
   return data ? mapJob(data as Record<string, unknown>) : null;
 }
@@ -68,7 +76,8 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
     const snapshot = input.inputSnapshot;
     const db = createAdminClient();
     const existing = await db.from("image_generation_jobs").select("*")
-      .eq("workspace_id", scope.workspaceId).eq("input_fingerprint", input.inputFingerprint).maybeSingle();
+      .eq("workspace_id", scope.workspaceId).eq("input_fingerprint", input.inputFingerprint)
+      .is("input_contract_version", null).is("production_mode", null).maybeSingle();
     if (existing.error) throw new PersonaStoreError(existing.error.message);
     if (existing.data) {
       const job = mapJob(existing.data as Record<string, unknown>);
@@ -95,6 +104,8 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
         })
         .eq("workspace_id", scope.workspaceId)
         .eq("id", job.id)
+        .is("input_contract_version", null)
+        .is("production_mode", null)
         .in("status", ["awaiting_confirmation", "confirmed", "cancelled"])
         .select("*")
         .maybeSingle();
@@ -110,6 +121,7 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
       .eq("workspace_id", scope.workspaceId)
       .eq("report_record_id", snapshot.production.reportRecordId)
       .eq("asset_id", snapshot.production.assetId)
+      .is("input_contract_version", null)
       .in("status", ["running", "unknown_outcome"])
       .limit(1)
       .maybeSingle();
@@ -131,6 +143,8 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
     }).eq("workspace_id", scope.workspaceId)
       .eq("report_record_id", snapshot.production.reportRecordId)
       .eq("asset_id", snapshot.production.assetId)
+      .is("input_contract_version", null)
+      .is("production_mode", null)
       .in("status", ["awaiting_confirmation", "confirmed", "failed"])
       .neq("input_fingerprint", input.inputFingerprint);
     if (cancelled.error) throw new PersonaStoreError(cancelled.error.message);
@@ -159,7 +173,8 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
     if (error || !data) {
       // Concurrent prepare: unique fingerprint wins and is returned idempotently.
       const replay = await db.from("image_generation_jobs").select("*")
-        .eq("workspace_id", scope.workspaceId).eq("input_fingerprint", input.inputFingerprint).maybeSingle();
+        .eq("workspace_id", scope.workspaceId).eq("input_fingerprint", input.inputFingerprint)
+        .is("input_contract_version", null).is("production_mode", null).maybeSingle();
       if (replay.data) return mapJob(replay.data as Record<string, unknown>);
       throw new PersonaStoreError(error?.message ?? "Failed to create Image generation job");
     }
@@ -176,6 +191,8 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
       .from("image_generation_jobs")
       .select("*")
       .eq("workspace_id", scope.workspaceId)
+      .is("input_contract_version", null)
+      .is("production_mode", null)
       .order("updated_at", { ascending: false });
     if (filters.productionProjectId) {
       query = query.eq("production_project_id", filters.productionProjectId);
@@ -194,6 +211,7 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
       status: "confirmed", confirmation_token: token, confirmation_fingerprint: fingerprint,
       confirmed_by: scope.actorId, confirmed_at: now, updated_at: now,
     }).eq("workspace_id", scope.workspaceId).eq("id", id).eq("input_fingerprint", fingerprint)
+      .is("input_contract_version", null).is("production_mode", null)
       .eq("status", "awaiting_confirmation")
       .gte("confirmation_expires_at", now).select("*").maybeSingle();
     if (error) throw new PersonaStoreError(error.message);
@@ -206,6 +224,7 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
   async cancel(scope: WorkspaceScope, id: string, fingerprint: string, now: string) {
     const { data, error } = await createAdminClient().from("image_generation_jobs").update({ status: "cancelled", cancelled_at: now, updated_at: now })
       .eq("workspace_id", scope.workspaceId).eq("id", id).eq("input_fingerprint", fingerprint)
+      .is("input_contract_version", null).is("production_mode", null)
       .in("status", ["awaiting_confirmation", "confirmed", "failed"]).select("*").maybeSingle();
     if (error || !data) throw new PersonaDomainError(error?.message ?? "Job cannot be cancelled in its current state.", "WORKFLOW");
     return mapJob(data as Record<string, unknown>);
@@ -223,7 +242,8 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
 
   private async patch(scope: WorkspaceScope, id: string, patch: Record<string, unknown>) {
     const { data, error } = await createAdminClient().from("image_generation_jobs").update(patch)
-      .eq("workspace_id", scope.workspaceId).eq("id", id).eq("status", "running").select("*").maybeSingle();
+      .eq("workspace_id", scope.workspaceId).eq("id", id).eq("status", "running")
+      .is("input_contract_version", null).is("production_mode", null).select("*").maybeSingle();
     if (error || !data) throw new PersonaDomainError(error?.message ?? "Running Image generation job was not found.", "WORKFLOW");
     return mapJob(data as Record<string, unknown>);
   }

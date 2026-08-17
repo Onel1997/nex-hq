@@ -66,6 +66,107 @@ describe("ProductProductionContext authority", () => {
     assert.equal(context.provenance.sourceRecordId, context.variantId);
   });
 
+  it("reads German color and size options from exact Shopify variants", async () => {
+    const germanCatalog: ShopifyCatalog = {
+      collections: [],
+      products: [
+        {
+          ...liveCatalog.products[0],
+          id: "gid://shopify/Product/cruising",
+          title: "CRUISING - Heavy Oversized Tee",
+          productType: "T-Shirt",
+          variants: [
+            {
+              id: "gid://shopify/ProductVariant/cruising-black-l",
+              title: "L / Schwarz",
+              sku: "CRU-BLK-L",
+              availableForSale: true,
+              inventoryQuantity: 12,
+              selectedOptions: [
+                { name: "Größe", value: "L" },
+                { name: "Farbe", value: "Schwarz" },
+              ],
+              updatedAt: "2026-08-17T00:45:00.000Z",
+            },
+          ],
+        },
+      ],
+    };
+    const context = await resolveProductProductionContext(
+      {
+        authority: "SHOPIFY_LIVE",
+        productId: "gid://shopify/Product/cruising",
+        variantId: "gid://shopify/ProductVariant/cruising-black-l",
+      },
+      {
+        fetchCatalog: async () => germanCatalog,
+        now: () => "2026-08-17T01:00:00.000Z",
+      },
+    );
+    assert.equal(context.color, "Schwarz");
+    assert.equal(context.size, "L");
+    assert.equal(context.variantId, "gid://shopify/ProductVariant/cruising-black-l");
+  });
+
+  it("normalizes Shopify product and variant updatedAt offsets into valid context", async () => {
+    const offsetCatalog: ShopifyCatalog = {
+      collections: [],
+      products: [
+        {
+          ...liveCatalog.products[0],
+          updatedAt: "2026-08-17T00:00:00+00:00",
+          variants: [
+            {
+              ...liveCatalog.products[0].variants[0],
+              updatedAt: "2026-08-17T00:30:00+00:00",
+            },
+          ],
+        },
+      ],
+    };
+    const context = await resolveProductProductionContext(
+      {
+        authority: "SHOPIFY_LIVE",
+        productId: "gid://shopify/Product/zip",
+        variantId: "gid://shopify/ProductVariant/zip-grey-l",
+      },
+      {
+        fetchCatalog: async () => offsetCatalog,
+        now: () => "2026-08-17T01:00:00+00:00",
+      },
+    );
+    productProductionContextSchema.parse(context);
+    assert.equal(context.provenance.sourceVersion, "2026-08-17T00:30:00.000Z");
+    assert.equal(context.provenance.capturedAt, "2026-08-17T01:00:00.000Z");
+  });
+
+  it("rejects invalid provenance timestamps", () => {
+    assert.throws(() =>
+      productProductionContextSchema.parse({
+        version: "product-production-context-v1",
+        productId: "gid://shopify/Product/zip",
+        variantId: "gid://shopify/ProductVariant/zip-grey-l",
+        productName: "Zip Hoodie",
+        productType: "Zip Hoodie",
+        color: "Black",
+        size: "L",
+        material: null,
+        fit: null,
+        collection: null,
+        availability: "AVAILABLE",
+        active: true,
+        authority: "SHOPIFY_LIVE",
+        authoritative: true,
+        provenance: {
+          source: "Shopify Admin GraphQL live read",
+          sourceRecordId: "gid://shopify/ProductVariant/zip-grey-l",
+          capturedAt: "not-a-date",
+          sourceVersion: "2026-08-17T00:30:00.000Z",
+        },
+      }),
+    );
+  });
+
   it("fails closed for invented Shopify IDs and inactive products", async () => {
     await assert.rejects(
       () =>

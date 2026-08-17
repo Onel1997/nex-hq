@@ -2,6 +2,10 @@ import { z } from "zod";
 import type { ShopifyCatalog } from "@/lib/shopify/types";
 import { fetchShopifyCatalog } from "@/lib/shopify/fetch-catalog";
 import { PersonaDomainError } from "@/lib/persona/domain/errors";
+import {
+  normalizeRfc3339Timestamp,
+  rfc3339DateTimeSchema,
+} from "@/lib/datetime/rfc3339";
 
 export const PRODUCT_PRODUCTION_CONTEXT_VERSION =
   "product-production-context-v1" as const;
@@ -34,7 +38,7 @@ export const productProductionContextSchema = z
       .object({
         source: z.string().min(1),
         sourceRecordId: z.string().min(1).nullable(),
-        capturedAt: z.string().datetime(),
+        capturedAt: rfc3339DateTimeSchema,
         sourceVersion: z.string().min(1).nullable(),
       })
       .strict(),
@@ -83,7 +87,7 @@ const nonAuthoritativeProductSelectionSchema = z
     active: z.boolean().nullable().default(null),
     provenance: z.string().min(1),
     sourceVersion: z.string().min(1).nullable().default(null),
-    capturedAt: z.string().datetime(),
+    capturedAt: rfc3339DateTimeSchema,
   })
   .strict();
 
@@ -120,7 +124,9 @@ export async function resolveProductProductionContext(
   dependencies: { fetchCatalog?: () => Promise<ShopifyCatalog>; now?: () => string } = {},
 ): Promise<ProductProductionContext> {
   const parsed = productProductionSelectionSchema.parse(selection);
-  const now = dependencies.now?.() ?? new Date().toISOString();
+  const now = normalizeRfc3339Timestamp(
+    dependencies.now?.() ?? new Date().toISOString(),
+  );
 
   if (parsed.authority !== "SHOPIFY_LIVE") {
     return productProductionContextSchema.parse({
@@ -141,8 +147,10 @@ export async function resolveProductProductionContext(
       provenance: {
         source: parsed.provenance,
         sourceRecordId: parsed.productId,
-        capturedAt: parsed.capturedAt,
-        sourceVersion: parsed.sourceVersion,
+        capturedAt: normalizeRfc3339Timestamp(parsed.capturedAt),
+        sourceVersion: parsed.sourceVersion
+          ? normalizeRfc3339Timestamp(parsed.sourceVersion)
+          : parsed.sourceVersion,
       },
     });
   }
@@ -199,7 +207,9 @@ export async function resolveProductProductionContext(
       source: "Shopify Admin GraphQL live read",
       sourceRecordId: variant?.id ?? product.id,
       capturedAt: now,
-      sourceVersion: variant?.updatedAt ?? product.updatedAt,
+      sourceVersion: normalizeRfc3339Timestamp(
+        variant?.updatedAt ?? product.updatedAt,
+      ),
     },
   });
 }

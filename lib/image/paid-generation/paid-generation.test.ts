@@ -7,14 +7,18 @@ import { MemoryImageGenerationJobRepository } from "./memory-repository";
 import { prepareImageGenerationJob, confirmImageGenerationJob, executeImageGenerationJob } from "./service";
 import { checksumImageArtwork, fingerprintImageGenerationInput } from "./fingerprint";
 import type { ImageGenerationInputSnapshot, PrepareImageGenerationJobRequest } from "./types";
+import { imageGenerationInputSnapshotSchema } from "./types";
 import { ImagePaidGenerationSafetyError } from "@/lib/image/image-paid-generation-guard";
 import { decodeAndValidateMasterArtwork } from "./artwork-storage";
 import { generateOpenAiImage } from "@/agents/image/providers/openai-images-provider";
 import { ImageProviderNotConfiguredError } from "@/agents/image/generate";
 import { PersonaDomainError } from "@/lib/persona/domain/errors";
 import { MemoryImageProductionProjectRepository } from "@/lib/image/production-project/memory-repository";
-import { resolveProductProductionContext } from "@/lib/image/product-production-context";
+import type { ProductProductionSelection } from "@/lib/image/product-production-context";
+import { PRODUCT_PRODUCTION_CONTEXT_VERSION, resolveProductProductionContext } from "@/lib/image/product-production-context";
 import type { ApprovedMasterArtwork } from "@/lib/design/master-artwork-authority/types";
+import { estimateImageGenerationCost } from "./pricing";
+import { getActiveImageGenerationProfile, resolveOpenAiImageQuality, resolveOpenAiImageSize } from "@/lib/image/image-generation-config";
 
 const WS = randomUUID();
 const ACTOR = randomUUID();
@@ -74,7 +78,11 @@ function request(artwork = "approved-artwork-v1"): PrepareImageGenerationJobRequ
   return {
     reportRecordId: REPORT_RECORD, reportId: REPORT, assetId: "hero", provider: "openai", brandModelTrace: trace,
     masterArtwork: { reference: { id: ARTWORK_ID, designId: "design-1", version: "V1", checksum } },
-    product: { authority: "DESIGN_HANDOFF_LOCAL", productId: null, variantId: null, productName: "Zip Hoodie", productType: "zip_hoodie", color: "Black", size: null, material: "Cotton", fit: "oversized", collection: "Milaene", availability: "UNKNOWN", active: null, provenance: "design handoff", sourceVersion: "V1", capturedAt: "2026-08-17T00:00:00.000Z" },
+    product: {
+      authority: "SHOPIFY_LIVE",
+      productId: "gid://shopify/Product/zip",
+      variantId: "gid://shopify/ProductVariant/zip-black-l",
+    },
   };
 }
 
@@ -105,7 +113,33 @@ function baseDeps(repo: MemoryImageGenerationJobRepository) {
       const bytes = artworkBytesByChecksum.get(reference.checksum) ?? Buffer.from("approved-artwork-v1");
       return { artwork: approvedArtwork(bytes, reference.checksum), bytes };
     },
-    resolveProductContext: resolveProductProductionContext,
+    resolveProductContext: async (selection: ProductProductionSelection) => {
+      if (selection.authority === "SHOPIFY_LIVE") {
+        return {
+          version: PRODUCT_PRODUCTION_CONTEXT_VERSION,
+          productId: selection.productId,
+          variantId: selection.variantId,
+          productName: "Zip Hoodie",
+          productType: "zip_hoodie",
+          color: "Black",
+          size: "L",
+          material: "Cotton",
+          fit: "oversized",
+          collection: "Milaene",
+          availability: "AVAILABLE" as const,
+          active: true,
+          authority: "SHOPIFY_LIVE" as const,
+          authoritative: true,
+          provenance: {
+            source: "Shopify Admin GraphQL live read",
+            sourceRecordId: selection.variantId,
+            capturedAt: "2026-08-17T01:00:00.000Z",
+            sourceVersion: "2026-08-17T00:30:00.000Z",
+          },
+        };
+      }
+      return resolveProductProductionContext(selection);
+    },
     projectRepository,
     persistProductionAsset: async () => ({}) as never,
     freezeArtwork: async ({ checksum }: { checksum: string }) => `${WS}/master-artwork/${checksum}.png`,
@@ -122,9 +156,73 @@ describe("durable paid Image generation jobs", () => {
     assert.equal(one.inputFingerprint, fingerprintImageGenerationInput(one.inputSnapshot));
     assert.equal(one.inputSnapshot.brandModel.identityLockVersion, 3);
     assert.equal(one.inputSnapshot.masterArtwork.designId, "design-1");
-    assert.equal(one.inputSnapshot.product.authority, "DESIGN_HANDOFF_LOCAL");
+    assert.equal(one.inputSnapshot.product.authority, "SHOPIFY_LIVE");
+    assert.equal(one.inputSnapshot.product.authoritative, true);
     assert.equal(one.inputSnapshot.production.assetId, "hero");
     assert.doesNotMatch(JSON.stringify(one.inputSnapshot), /storagePath|contentBase64|https?:/i);
+  });
+
+  it("accepts Shopify-live product context with offset provenance timestamps in paid snapshot", async () => {
+    const repo = new MemoryImageGenerationJobRepository();
+    const deps = baseDeps(repo);
+    const originalResolve = deps.resolveProductContext;
+    deps.resolveProductContext = async (selection) => {
+      const context = await originalResolve(selection);
+      return {
+        ...context,
+        provenance: {
+          ...context.provenance,
+          capturedAt: "2026-08-17T01:00:00+00:00",
+          sourceVersion: "2026-08-17T00:30:00+00:00",
+        },
+      };
+    };
+    const job = await prepareImageGenerationJob(
+      { workspaceId: WS, actorId: ACTOR },
+      request(),
+      deps,
+    );
+    imageGenerationInputSnapshotSchema.parse(job.inputSnapshot);
+    assert.match(job.inputSnapshot.product.provenance.capturedAt, /2026-08-17T01:00:00/);
+    assert.match(job.inputSnapshot.product.provenance.sourceVersion ?? "", /2026-08-17T00:30:00/);
+    const replay = await prepareImageGenerationJob(
+      { workspaceId: WS, actorId: ACTOR },
+      request(),
+      deps,
+    );
+    assert.equal(replay.inputFingerprint, job.inputFingerprint);
+  });
+
+  it("rejects non-authoritative Design handoff product selections for paid preparation", async () => {
+    const repo = new MemoryImageGenerationJobRepository();
+    await assert.rejects(
+      () =>
+        prepareImageGenerationJob(
+          { workspaceId: WS, actorId: ACTOR },
+          {
+            ...request(),
+            product: {
+              authority: "DESIGN_HANDOFF_LOCAL",
+              productId: null,
+              variantId: null,
+              productName: "Faith Oversized Hoodie",
+              productType: "hoodie",
+              color: "Black",
+              size: null,
+              material: null,
+              fit: null,
+              collection: "Faith Collection",
+              availability: "UNKNOWN",
+              active: null,
+              provenance: "design handoff",
+              sourceVersion: "V2",
+              capturedAt: "2026-08-17T00:00:00.000Z",
+            },
+          },
+          baseDeps(repo),
+        ),
+      /explicitly selected Shopify product/i,
+    );
   });
 
   it("changes fingerprint for artwork, lock, product, shot/prompt, provider/model settings", async () => {
@@ -377,6 +475,125 @@ describe("durable paid Image generation jobs", () => {
     assert.equal(contract().approvals.videoUseApproved, false);
     assert.equal(job.status, "awaiting_confirmation");
     await assert.rejects(() => confirmImageGenerationJob({ workspaceId: randomUUID(), actorId: ACTOR }, job.id, job.inputFingerprint, baseDeps(repo)), /not found/i);
+  });
+
+  it("binds one confirmed job to exactly one shot asset and one provider attempt cost", async () => {
+    const repo = new MemoryImageGenerationJobRepository();
+    const job = await prepareImageGenerationJob({ workspaceId: WS, actorId: ACTOR }, request(), baseDeps(repo));
+    const profile = getActiveImageGenerationProfile();
+    const expected = estimateImageGenerationCost({
+      size: resolveOpenAiImageSize(job.inputSnapshot.production.dimensions),
+      quality: resolveOpenAiImageQuality(),
+      inputCostMaximumUsd: "0.20",
+    });
+    assert.equal(job.inputSnapshot.production.assetId, "hero");
+    assert.equal(job.estimate.maximum, expected.maximum);
+    assert.equal(job.estimate.basis, expected.basis);
+    assert.match(job.estimate.basis, /One image output/i);
+    assert.notEqual(job.estimate.maximum, Number((expected.maximum * 12).toFixed(4)));
+  });
+
+  it("requires a new fingerprint when preparing a different selected shot", async () => {
+    const repo = new MemoryImageGenerationJobRepository();
+    const multiReport = (): { id: string; workspaceId: string; content: BrainReportContent } => {
+      const heroAsset = report().content.imageSections?.productionAssets?.[0];
+      if (!heroAsset) throw new Error("missing hero asset fixture");
+      const lifestyleAsset = {
+        ...heroAsset,
+        id: "lifestyle-1",
+        assetType: "lifestyle" as const,
+        title: "Lifestyle",
+        prompt: { openai: `${prompt} lifestyle`, flux: prompt, midjourney: prompt },
+      };
+      return {
+        id: REPORT_RECORD,
+        workspaceId: WS,
+        content: {
+          ...(report().content as BrainReportContent),
+          imageSections: {
+            ...(report().content.imageSections as object),
+            productionAssets: [heroAsset, lifestyleAsset],
+          },
+        } as BrainReportContent,
+      };
+    };
+    const deps = {
+      ...baseDeps(repo),
+      loadReport: async () => multiReport(),
+    };
+    const heroJob = await prepareImageGenerationJob(
+      { workspaceId: WS, actorId: ACTOR },
+      request(),
+      deps,
+    );
+    const lifestyleJob = await prepareImageGenerationJob(
+      { workspaceId: WS, actorId: ACTOR },
+      { ...request(), assetId: "lifestyle-1" },
+      deps,
+    );
+    assert.notEqual(heroJob.inputFingerprint, lifestyleJob.inputFingerprint);
+    assert.equal(heroJob.inputSnapshot.production.assetId, "hero");
+    assert.equal(lifestyleJob.inputSnapshot.production.assetId, "lifestyle-1");
+  });
+
+  it("executes exactly one provider generation for one confirmed asset", async () => {
+    const repo = new MemoryImageGenerationJobRepository();
+    const job = await prepareImageGenerationJob({ workspaceId: WS, actorId: ACTOR }, request(), baseDeps(repo));
+    await confirmImageGenerationJob({ workspaceId: WS, actorId: ACTOR }, job.id, job.inputFingerprint, baseDeps(repo));
+    let generateCalls = 0;
+    let requestedAssetId: string | null = null;
+    const executionDeps = {
+      ...baseDeps(repo),
+      assertPaidEnabled: () => {},
+      resolveIdentity: async () =>
+        ({
+          trace: {
+            brandModel: trace,
+            referencePackageVersion: trace.referencePackageVersion,
+            masterIdentityAssetId: "master-asset",
+            masterIdentityChecksum: "master-checksum",
+            supportingReferences: [],
+          },
+          masterReference: {
+            assetId: "master-asset",
+            checksum: "master-checksum",
+            mimeType: "image/png",
+            bytes: Buffer.from("master"),
+          },
+          supportingReferences: [],
+          constraints: {},
+        }) as never,
+      resolveArtwork: async () => ({
+        bytes: Buffer.from("approved-artwork-v1"),
+        mimeType: "image/png",
+        checksum: job.inputSnapshot.masterArtwork.checksum,
+      }),
+      generate: async (input: { request: { assetId: string } }) => {
+        generateCalls += 1;
+        requestedAssetId = input.request.assetId;
+        return {
+          asset: {
+            id: "hero",
+            title: "Hero",
+            type: "hero_image",
+            dimensions: "1024x1536",
+            provider: "openai" as const,
+            status: "completed" as const,
+            generationProvenance: { providerRequestId: "provider-1" } as never,
+          },
+          providerConfigured: true,
+        };
+      },
+    };
+    await executeImageGenerationJob(
+      { workspaceId: WS, actorId: ACTOR },
+      job.id,
+      job.inputFingerprint,
+      false,
+      executionDeps as never,
+    );
+    assert.equal(generateCalls, 1);
+    assert.equal(requestedAssetId, "hero");
   });
 
   it("rejects browser paths/URLs and sends Persona Master first, artwork second", async () => {
