@@ -45,6 +45,10 @@ interface ArtworkInspectorProps {
   canApprove: boolean;
   isApproved: boolean;
   onApprove: () => void;
+  canContinueToImageStudio?: boolean;
+  handoffBusy?: boolean;
+  handoffError?: string | null;
+  onContinueToImageStudio?: () => void;
 }
 
 function PlaceholderValue({ children }: { children: React.ReactNode }) {
@@ -73,6 +77,10 @@ export function ArtworkInspector({
   canApprove,
   isApproved,
   onApprove,
+  canContinueToImageStudio = false,
+  handoffBusy = false,
+  handoffError = null,
+  onContinueToImageStudio,
 }: ArtworkInspectorProps) {
   const state = missionView?.state;
   const metadata = validation.metadata;
@@ -230,7 +238,26 @@ export function ArtworkInspector({
           >
             <div className="dsv2-approval-panel">
               {isApproved ? (
-                <p className="dsv2-validation-ok">Artwork approved — ready for Image Studio handoff.</p>
+                <>
+                  <p className="dsv2-validation-ok">
+                    Artwork approved — ready for Image Studio handoff.
+                  </p>
+                  {canContinueToImageStudio && onContinueToImageStudio ? (
+                    <button
+                      type="button"
+                      className="dsv2-approve-btn dsv2-continue-btn"
+                      onClick={onContinueToImageStudio}
+                      disabled={handoffBusy}
+                    >
+                      {handoffBusy ? "Continuing…" : "Continue to Image Studio"}
+                    </button>
+                  ) : null}
+                  {handoffError ? (
+                    <p className="dsv2-workflow-error" role="alert">
+                      {handoffError}
+                    </p>
+                  ) : null}
+                </>
               ) : (
                 <>
                   <p className="dsv2-inspector-placeholder">

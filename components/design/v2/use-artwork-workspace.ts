@@ -15,11 +15,26 @@ import {
   validateArtworkFile,
   type ArtworkValidationResult,
 } from "@/lib/design/artwork-validation";
+import { triggerArtworkFilePicker } from "@/lib/design/artwork-file-picker";
 import {
   getActiveWorkspace,
+  setPipelineStage,
   type DesignMissionState,
 } from "@/lib/design/design-mission-store";
+import {
+  assertCanContinueToImageStudio,
+  buildApproveMasterArtworkRequest,
+  buildDesignStudioHandoffInput,
+  DesignToImageHandoffError,
+  DESIGN_TO_IMAGE_HANDOFF_ROUTE,
+  parseDurableMasterArtworkResponse,
+  resolveHandoffVersion,
+  uint8ArrayToBase64,
+} from "@/lib/design/design-to-image-handoff";
+import { readArtworkBytesForHandoff } from "@/components/design/v2/artwork-handoff-bytes";
+import { sendDesignHandoffToImageStudio } from "@/lib/image/image-handoff-store";
 import { resolveMasterArtworkView } from "@/lib/design/master-artwork";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ArtworkPreviewSource,
@@ -74,14 +89,21 @@ function isAnalysisReady(analysis: ArtworkAnalysisResult): boolean {
 
 interface UseArtworkWorkspaceOptions {
   mission?: DesignMissionState;
+  onPatchMission?: (updater: (state: DesignMissionState) => DesignMissionState) => void;
 }
 
-export function useArtworkWorkspace({ mission }: UseArtworkWorkspaceOptions = {}) {
+export function useArtworkWorkspace({
+  mission,
+  onPatchMission,
+}: UseArtworkWorkspaceOptions = {}) {
+  const router = useRouter();
   const [localUpload, setLocalUpload] = useState<LocalArtworkUpload | null>(null);
   const [localPreviewSvg, setLocalPreviewSvg] = useState<string | undefined>();
   const [validation, setValidation] = useState<ArtworkValidationResult>(createNotUploadedValidation());
   const [analysis, setAnalysis] = useState<ArtworkAnalysisResult>(createIdleAnalysis());
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+  const [handoffBusy, setHandoffBusy] = useState(false);
   const [isApproved, setIsApproved] = useState(false);
   const [activeSidebarSection, setActiveSidebarSection] =
     useState<SidebarSectionId>("master-artwork");
@@ -213,6 +235,7 @@ export function useArtworkWorkspace({ mission }: UseArtworkWorkspaceOptions = {}
       setLocalPreviewSvg(undefined);
       setIsApproved(false);
       setUploadError(null);
+      setHandoffError(null);
       setAnalysis(createIdleAnalysis());
       setRecentUploads((prev) =>
         [upload, ...prev.filter((u) => u.fileName !== file.name)].slice(0, 8),
@@ -234,7 +257,7 @@ export function useArtworkWorkspace({ mission }: UseArtworkWorkspaceOptions = {}
   );
 
   const openFilePicker = useCallback(() => {
-    fileInputRef.current?.click();
+    triggerArtworkFilePicker(fileInputRef.current);
   }, []);
 
   const clearLocalUpload = useCallback(() => {
@@ -253,7 +276,94 @@ export function useArtworkWorkspace({ mission }: UseArtworkWorkspaceOptions = {}
   const approveArtwork = useCallback(() => {
     if (!validation.canApprove || !isAnalysisReady(analysis)) return;
     setIsApproved(true);
+    setHandoffError(null);
   }, [analysis, validation.canApprove]);
+
+  const canContinueToImageStudio =
+    isApproved &&
+    Boolean(localUpload) &&
+    Boolean(mission?.brief.designId) &&
+    validation.status !== "invalid" &&
+    validation.status !== "checking" &&
+    Boolean(validation.metadata);
+
+  const continueToImageStudio = useCallback(async () => {
+    setHandoffError(null);
+    setHandoffBusy(true);
+    try {
+      assertCanContinueToImageStudio({
+        isApproved,
+        hasLocalUpload: Boolean(localUpload),
+        validation,
+        mission,
+      });
+      if (!localUpload || !mission) {
+        throw new DesignToImageHandoffError(
+          "Upload and approve artwork before continuing to Image Studio.",
+        );
+      }
+
+      const { bytes, mimeType } = await readArtworkBytesForHandoff(localUpload);
+      const version = resolveHandoffVersion(mission);
+      const approvalRequest = buildApproveMasterArtworkRequest({
+        designId: mission.brief.designId,
+        version,
+        reportId: mission.reportId,
+        mimeType,
+        contentBase64: uint8ArrayToBase64(bytes),
+        placement: mission.brief.placement ?? validation.metadata?.fileName ?? null,
+        printMethod: mission.brief.productionMethod ?? null,
+      });
+
+      const durableResponse = await fetch("/api/design/master-artworks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(approvalRequest),
+      });
+      const durablePayload = (await durableResponse.json()) as {
+        artwork?: import("@/lib/design/master-artwork-authority/types").ApprovedMasterArtworkView;
+        error?: string;
+      };
+      if (!durableResponse.ok || !durablePayload.artwork) {
+        throw new DesignToImageHandoffError(
+          durablePayload.error ?? "Durable Master Artwork approval failed.",
+        );
+      }
+      const durableArtwork = parseDurableMasterArtworkResponse(durablePayload);
+
+      const saveResult = sendDesignHandoffToImageStudio(
+        buildDesignStudioHandoffInput({
+          mission,
+          durableArtwork,
+        }),
+      );
+      if (!saveResult.saved) {
+        throw new DesignToImageHandoffError(
+          saveResult.error ?? "Failed to save Image Studio handoff.",
+        );
+      }
+
+      onPatchMission?.((state) => setPipelineStage(state, "image"));
+      router.push(DESIGN_TO_IMAGE_HANDOFF_ROUTE);
+    } catch (error) {
+      const message =
+        error instanceof DesignToImageHandoffError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Design to Image Studio handoff failed.";
+      setHandoffError(message);
+    } finally {
+      setHandoffBusy(false);
+    }
+  }, [
+    isApproved,
+    localUpload,
+    mission,
+    onPatchMission,
+    router,
+    validation,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -280,8 +390,11 @@ export function useArtworkWorkspace({ mission }: UseArtworkWorkspaceOptions = {}
     validation,
     analysis,
     uploadError,
+    handoffError,
+    handoffBusy,
     isApproved,
     canApprove,
+    canContinueToImageStudio,
     recentUploads,
     activeSidebarSection,
     setActiveSidebarSection,
@@ -291,6 +404,7 @@ export function useArtworkWorkspace({ mission }: UseArtworkWorkspaceOptions = {}
     ingestFile,
     clearLocalUpload,
     approveArtwork,
+    continueToImageStudio,
     versionHistory: mission?.versionHistory ?? [],
   };
 }

@@ -1182,11 +1182,12 @@ body:has(.dsv2-root) {
 
 .dsv2-workflow {
   flex-shrink: 0;
-  height: var(--dsv2-workflow-height);
+  min-height: var(--dsv2-workflow-height);
+  height: auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 0 24px;
+  padding: 10px 24px 12px;
   border-top: 1px solid var(--dsv2-border);
   background: var(--dsv2-surface);
   position: relative;
@@ -1281,6 +1282,59 @@ body:has(.dsv2-root) {
   flex-shrink: 0;
   margin: 0 -4px;
   margin-bottom: 18px;
+}
+
+.dsv2-workflow-step-action {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dsv2-workflow-step-action:hover:not(:disabled) .dsv2-workflow-label,
+.dsv2-workflow-step-action:focus-visible .dsv2-workflow-label {
+  color: var(--dsv2-text);
+}
+
+.dsv2-workflow-step-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dsv2-workflow-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.dsv2-workflow-continue-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--dsv2-border-strong);
+  border-radius: var(--dsv2-radius);
+  background: var(--dsv2-text);
+  color: var(--dsv2-bg);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dsv2-workflow-continue-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dsv2-workflow-error {
+  margin: 0;
+  font-size: 12px;
+  color: #f87171;
+}
+
+.dsv2-continue-btn {
+  margin-top: 4px;
 }
 
 /* ── Studio shell overrides ── */

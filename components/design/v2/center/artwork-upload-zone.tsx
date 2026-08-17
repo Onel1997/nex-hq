@@ -8,7 +8,6 @@ import { useCallback, useState } from "react";
 interface ArtworkUploadZoneProps {
   onFileSelect: (files: FileList | null) => void;
   onOpenPicker: () => void;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
   error?: string | null;
   className?: string;
 }
@@ -16,7 +15,6 @@ interface ArtworkUploadZoneProps {
 export function ArtworkUploadZone({
   onFileSelect,
   onOpenPicker,
-  fileInputRef,
   error,
   className,
 }: ArtworkUploadZoneProps) {
@@ -68,17 +66,6 @@ export function ArtworkUploadZone({
             <span>{error}</span>
           </div>
         ) : null}
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="sr-only"
-          accept=".svg,.png,.pdf,.ai,.eps,image/svg+xml,image/png,application/pdf"
-          onChange={(e) => {
-            onFileSelect(e.target.files);
-            e.target.value = "";
-          }}
-        />
       </div>
     </div>
   );

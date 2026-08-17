@@ -1,5 +1,6 @@
 "use client";
 
+import { ArtworkFileInput } from "@/components/design/v2/center/artwork-file-input";
 import { ArtworkPreviewStage } from "@/components/design/v2/center/artwork-preview-stage";
 import { ArtworkUploadZone } from "@/components/design/v2/center/artwork-upload-zone";
 import { ArtworkInspector } from "@/components/design/v2/inspector/artwork-inspector";
@@ -41,9 +42,10 @@ interface MasterArtworkWorkspaceProps {
 
 export function MasterArtworkWorkspace({
   mission,
+  onPatchMission,
   className,
 }: MasterArtworkWorkspaceProps) {
-  const workspace = useArtworkWorkspace({ mission });
+  const workspace = useArtworkWorkspace({ mission, onPatchMission });
   const { collapsed: inspectorCollapsed, setCollapsed: setInspectorCollapsed } = usePersistedCollapse(
     "dsv2-inspector-collapsed",
     false,
@@ -53,6 +55,10 @@ export function MasterArtworkWorkspace({
 
   return (
     <div className={cn("dsv2-root", className)}>
+      <ArtworkFileInput
+        fileInputRef={workspace.fileInputRef}
+        onFileSelect={workspace.handleFileSelect}
+      />
       <div className="dsv2-workspace dsv2-workspace-single">
         <main className="dsv2-center" aria-label="Master artwork canvas">
           <div className="dsv2-section-tabs" role="tablist" aria-label="Workspace sections">
@@ -102,7 +108,6 @@ export function MasterArtworkWorkspace({
               <ArtworkUploadZone
                 onFileSelect={workspace.handleFileSelect}
                 onOpenPicker={workspace.openFilePicker}
-                fileInputRef={workspace.fileInputRef}
                 error={workspace.uploadError}
               />
             )
@@ -127,10 +132,20 @@ export function MasterArtworkWorkspace({
           canApprove={workspace.canApprove}
           isApproved={workspace.isApproved}
           onApprove={workspace.approveArtwork}
+          canContinueToImageStudio={workspace.canContinueToImageStudio}
+          handoffBusy={workspace.handoffBusy}
+          handoffError={workspace.handoffError}
+          onContinueToImageStudio={() => void workspace.continueToImageStudio()}
         />
       </div>
 
-      <ArtworkWorkflowRail activeStep={workspace.workflowStep} />
+      <ArtworkWorkflowRail
+        activeStep={workspace.workflowStep}
+        canContinueToImageStudio={workspace.canContinueToImageStudio}
+        handoffBusy={workspace.handoffBusy}
+        handoffError={workspace.handoffError}
+        onContinueToImageStudio={() => void workspace.continueToImageStudio()}
+      />
     </div>
   );
 }

@@ -485,7 +485,13 @@ export function sendDesignHandoffToImageStudio(input: DesignStudioHandoffInput):
     handoff = { ...handoff, mission: { ...handoff.mission, version: input.version } };
   }
   if (input.durableMasterArtwork) {
-    handoff = { ...handoff, durableMasterArtwork: input.durableMasterArtwork };
+    handoff = {
+      ...handoff,
+      durableMasterArtwork: input.durableMasterArtwork,
+      masterArtworkApproved: true,
+      masterArtworkVersion: input.durableMasterArtwork.version,
+      masterArtworkSourceType: input.durableMasterArtwork.sourceType,
+    };
   }
 
   console.info("[Design Studio] handoff built", {
