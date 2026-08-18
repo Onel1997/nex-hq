@@ -61,39 +61,41 @@ import type {
   ReferenceRightsView,
 } from "@/lib/persona/creation/reference-rights/types";
 import { canProposeMirrorSalvage } from "@/lib/persona/creation/reference-package/mirror-salvage";
+import { StudioStepper } from "@/components/studio/studio-ui";
+import { PERSONA_PROGRESS_STEPS, ownerStatusLabel } from "@/lib/ux/owner-terminology";
 
 const NAV: Array<{
   id: PersonaStudioSection;
   label: string;
   icon: typeof Users;
 }> = [
-  { id: "dashboard", label: "Dashboard", icon: Layers },
+  { id: "dashboard", label: "Überblick", icon: Layers },
   { id: "brand_cast", label: "Brand Cast", icon: CheckCircle2 },
-  { id: "creator", label: "Brand Face Casting", icon: UserPlus },
-  { id: "creation_projects", label: "Creation Projects", icon: Clapperboard },
-  { id: "candidates", label: "Candidates", icon: Users },
-  { id: "personas", label: "Reference Library", icon: UserRound },
-  { id: "locations", label: "Locations", icon: MapPin },
-  { id: "camera", label: "Camera", icon: Camera },
-  { id: "poses", label: "Poses", icon: Aperture },
-  { id: "brand_looks", label: "Brand Looks", icon: Sparkles },
+  { id: "creator", label: "Neues Model entdecken", icon: UserPlus },
+  { id: "creation_projects", label: "Entdeckungsprojekte", icon: Clapperboard },
+  { id: "candidates", label: "Kandidaten", icon: Users },
+  { id: "personas", label: "Markenmodelle", icon: UserRound },
+  { id: "locations", label: "Orte", icon: MapPin },
+  { id: "camera", label: "Kamera", icon: Camera },
+  { id: "poses", label: "Posen", icon: Aperture },
+  { id: "brand_looks", label: "Markenlooks", icon: Sparkles },
   { id: "outfits", label: "Outfits", icon: Shirt },
 ];
 
 const RECONCILIATION_REVIEW_LABELS: Record<IdentityReviewCheckKey, string> = {
-  same_person_across_references: "All references represent the same person",
-  stable_face_structure: "Face structure is stable",
-  stable_skin_tone: "Skin tone is stable",
-  stable_body_proportions: "Body proportions are stable",
-  no_ai_anatomy_defects: "No obvious AI anatomy defects",
-  no_inconsistent_age: "Age presentation is consistent",
-  no_changing_eye_color: "Eye color is consistent",
-  no_unapproved_hairline_change: "No unapproved hairline change",
-  no_text_watermark_artifacts: "No text or watermark artifacts",
-  realistic_hands_where_visible: "Hands are realistic where visible",
-  suitable_for_image_generation: "Current package is acceptable for Image use",
+  same_person_across_references: "Alle Referenzen zeigen dieselbe Person",
+  stable_face_structure: "Die Gesichtsstruktur ist stabil",
+  stable_skin_tone: "Der Hautton ist stabil",
+  stable_body_proportions: "Die Körperproportionen sind stabil",
+  no_ai_anatomy_defects: "Keine offensichtlichen Anatomiefehler",
+  no_inconsistent_age: "Die Altersdarstellung ist konsistent",
+  no_changing_eye_color: "Die Augenfarbe ist konsistent",
+  no_unapproved_hairline_change: "Keine unbestätigte Änderung des Haaransatzes",
+  no_text_watermark_artifacts: "Keine Text- oder Wasserzeichenartefakte",
+  realistic_hands_where_visible: "Sichtbare Hände wirken realistisch",
+  suitable_for_image_generation: "Das Paket ist für die Image-Nutzung geeignet",
   suitable_for_video_generation:
-    "Video identity is suitable (optional; does not grant Video approval)",
+    "Die Video-Identität ist geeignet (optional; erteilt keine Video-Freigabe)",
 };
 
 const EMPTY_RECONCILIATION_CHECKLIST = Object.fromEntries(
@@ -121,9 +123,9 @@ export function PersonaStudio() {
   const studio = usePersonaStudio();
 
   return (
-    <div className="ps-shell">
+    <div className="ps-shell nx-studio">
       <header className="ps-header">
-        <nav className="ps-breadcrumbs" aria-label="Breadcrumb">
+        <nav className="ps-breadcrumbs" aria-label="Brotkrümelnavigation">
           <Link href="/" className="ps-crumb">
             <Home className="size-3.5" />
             NexHQ
@@ -135,8 +137,8 @@ export function PersonaStudio() {
           </span>
         </nav>
         <div className="ps-header-meta">
-          <span className="ps-badge">Milaene Brand Cast</span>
-          <span className="ps-badge ps-badge-muted">Phase 1.8 · Brand Faces</span>
+          <span className="ps-badge">Milaene Markenmodels</span>
+          <span className="ps-badge ps-badge-muted">Identität · Rechte · Freigaben</span>
           {studio.health ? (
             <span
               className={`ps-badge ps-health-badge ps-health-${studio.health.status}`}
@@ -156,7 +158,7 @@ export function PersonaStudio() {
 
       <div className="ps-body">
         <aside className="ps-sidebar" aria-label="Persona Studio">
-          <p className="ps-sidebar-title">Libraries</p>
+          <p className="ps-sidebar-title">Markenmodels</p>
           {NAV.map((item) => {
             const Icon = item.icon;
             const active = studio.section === item.id;
@@ -174,14 +176,14 @@ export function PersonaStudio() {
           })}
 
           <div className="ps-sidebar-future">
-            <p className="ps-sidebar-title">Future</p>
+            <p className="ps-sidebar-title">Weitere Studios</p>
             <div className="ps-future-card">
               <span>Image Studio</span>
-              <em>Coming later</em>
+              <em>Freigegebene Models verwenden</em>
             </div>
             <div className="ps-future-card">
               <span>Video Studio</span>
-              <em>Coming later</em>
+              <em>Später verfügbar</em>
             </div>
           </div>
         </aside>
@@ -190,13 +192,13 @@ export function PersonaStudio() {
           {studio.loading && !studio.snapshot ? (
             <div className="ps-loading">
               <Loader2 className="size-7 animate-spin" />
-              <p>Preparing the Brand Cast…</p>
+              <p>Markenmodels werden geladen…</p>
             </div>
           ) : studio.error ? (
             <div className="ps-error">
               <p>{studio.error}</p>
               <button type="button" onClick={() => void studio.refresh()}>
-                Retry
+                Erneut versuchen
               </button>
             </div>
           ) : studio.section === "dashboard" ? (
@@ -231,39 +233,39 @@ export function PersonaStudio() {
 function DashboardView({ studio }: { studio: PersonaStudioController }) {
   const cards = [
     {
-      label: "Approved Personas",
+      label: "Freigegebene Modelle",
       value: studio.counts.approved_personas,
-      hint: `${studio.counts.review_personas} in review`,
+      hint: `${studio.counts.review_personas} in Prüfung`,
       section: "personas" as const,
     },
     {
-      label: "Locations",
+      label: "Orte",
       value: studio.counts.locations,
-      hint: "Active sets",
+      hint: "Aktive Sets",
       section: "locations" as const,
     },
     {
-      label: "Camera Presets",
+      label: "Kamera-Vorgaben",
       value: studio.counts.camera_presets,
-      hint: "Framing library",
+      hint: "Bildaufbau-Bibliothek",
       section: "camera" as const,
     },
     {
-      label: "Pose Packs",
+      label: "Posen-Sets",
       value: studio.counts.pose_packs,
-      hint: "Active poses",
+      hint: "Aktive Posen",
       section: "poses" as const,
     },
     {
-      label: "Brand Looks",
+      label: "Markenlooks",
       value: studio.counts.brand_looks,
-      hint: "Visual systems",
+      hint: "Visuelle Systeme",
       section: "brand_looks" as const,
     },
     {
       label: "Outfits",
       value: studio.counts.outfits,
-      hint: "Reusable sets",
+      hint: "Wiederverwendbare Sets",
       section: "outfits" as const,
     },
   ];
@@ -272,13 +274,20 @@ function DashboardView({ studio }: { studio: PersonaStudioController }) {
     <div className="ps-panel">
       <header className="ps-panel-header">
         <div>
-          <h1>Persona Studio</h1>
+          <p className="nx-page-header__eyebrow">Wer trägt Milaene?</p>
+          <h1>Markenmodelle</h1>
           <p>
-            Official Milaene Brand Cast — permanent approved personas for Image
-            Studio, Video Studio, Shopify assets, and campaigns.
+            Entdecke Models, festige ihre Identität, prüfe Referenzrechte und gib sie gezielt für Produktionen frei.
           </p>
         </div>
       </header>
+
+      <div className="ps-persona-home-actions">
+        <button type="button" className="nx-card nx-card-button ps-persona-home-action" onClick={() => studio.setSection("personas")}><UserRound className="size-5" /><strong>Markenmodelle</strong><span>Alle Identitäten und ihren Fortschritt ansehen</span></button>
+        <button type="button" className="nx-card nx-card-button ps-persona-home-action" onClick={() => studio.setSection("creator")}><UserPlus className="size-5" /><strong>Neues Model entdecken</strong><span>Vier Kandidaten vergleichen und bewusst auswählen</span></button>
+        <button type="button" className="nx-card nx-card-button ps-persona-home-action" onClick={() => studio.setSection("brand_cast")}><CheckCircle2 className="size-5" /><strong>Freigegebene Modelle</strong><span>Produktionsbereite Mitglieder des Brand Cast</span></button>
+        <button type="button" className="nx-card nx-card-button ps-persona-home-action" onClick={() => studio.setSection("creation_projects")}><Clapperboard className="size-5" /><strong>Modelle in Bearbeitung</strong><span>Offene Entdeckungen und Prüfungen fortsetzen</span></button>
+      </div>
 
       <div className="ps-dash-grid">
         {cards.map((card) => (
@@ -296,16 +305,10 @@ function DashboardView({ studio }: { studio: PersonaStudioController }) {
       </div>
 
       <section className="ps-section">
-        <h2>Approval workflow</h2>
-        <ol className="ps-workflow">
-          <li>Draft</li>
-          <li>Review</li>
-          <li className="is-emphasis">Approved</li>
-          <li>Archived</li>
-        </ol>
+        <h2>So wird ein Model produktionsbereit</h2>
+        <StudioStepper steps={PERSONA_PROGRESS_STEPS} current={0} />
         <p className="ps-muted">
-          Only Approved personas may later be used by Image Studio and Video
-          Studio. Consistency is the highest priority.
+          Nur ausdrücklich freigegebene Markenmodels dürfen im Image Studio verwendet werden. Identität und Rechte bleiben dabei geschützt.
         </p>
       </section>
     </div>
@@ -328,7 +331,7 @@ function PersonasView({ studio }: { studio: PersonaStudioController }) {
       setRole("");
       setCreating(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
+      setError(err instanceof Error ? err.message : "Entwurf konnte nicht angelegt werden.");
     } finally {
       setBusy(false);
     }
@@ -339,8 +342,8 @@ function PersonasView({ studio }: { studio: PersonaStudioController }) {
       <div className="ps-list-pane">
         <header className="ps-panel-header compact">
           <div>
-            <h1>Personas</h1>
-            <p>Brand Cast members and approval status.</p>
+            <h1>Markenmodelle</h1>
+            <p>Identität, Referenzen, Rechte und Produktionsfreigabe auf einen Blick.</p>
           </div>
           <button
             type="button"
@@ -348,7 +351,7 @@ function PersonasView({ studio }: { studio: PersonaStudioController }) {
             onClick={() => setCreating((v) => !v)}
           >
             <Plus className="size-3.5" />
-            New
+            Neu
           </button>
         </header>
 
@@ -358,13 +361,13 @@ function PersonasView({ studio }: { studio: PersonaStudioController }) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Name"
-              aria-label="Persona name"
+              aria-label="Name des Models"
             />
             <input
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              placeholder="Role"
-              aria-label="Persona role"
+              placeholder="Rolle"
+              aria-label="Rolle des Models"
             />
             {error ? <p className="ps-inline-error">{error}</p> : null}
             <button
@@ -373,7 +376,7 @@ function PersonasView({ studio }: { studio: PersonaStudioController }) {
               disabled={busy || !name.trim() || !role.trim()}
               onClick={() => void handleCreate()}
             >
-              Create draft
+              Entwurf anlegen
             </button>
           </div>
         ) : null}
@@ -382,8 +385,8 @@ function PersonasView({ studio }: { studio: PersonaStudioController }) {
           {studio.personas.length === 0 ? (
             <li className="ps-empty-state ps-empty-state--inline">
               <p className="ps-eyebrow">Cast</p>
-              <strong>No Brand Cast has been approved yet.</strong>
-              <p>Create a draft face or open Brand Face Casting to begin discovery.</p>
+              <strong>Noch kein Markenmodel vorhanden.</strong>
+              <p>Lege einen Entwurf an oder starte eine neue Model-Entdeckung.</p>
             </li>
           ) : (
             studio.personas.map((persona) => (
@@ -416,10 +419,9 @@ function PersonasView({ studio }: { studio: PersonaStudioController }) {
         ) : (
           <div className="ps-empty-state">
             <p className="ps-eyebrow">Brand Cast</p>
-            <strong>Select a Brand Face</strong>
+            <strong>Wähle ein Markenmodel aus.</strong>
             <p>
-              Choose a persona to review identity, references, and readiness for Image and
-              Video Studio.
+              Prüfe Identität, Referenzen, Rechte und Freigaben des ausgewählten Models.
             </p>
           </div>
         )}
@@ -483,78 +485,75 @@ function PersonaDetail({
             className={`ps-ready-chip ps-ready-${readiness.visual_status ?? readiness.state}`}
             data-testid="persona-visual-status"
           >
-            {(readiness.visual_status ?? readiness.state)
-              .replace(/_/g, " ")
-              .toUpperCase()}
+            {ownerStatusLabel(readiness.visual_status ?? readiness.state)}
           </span>
           {readiness.reference_coverage ? (
             <span data-testid="persona-reference-coverage">
-              Coverage {readiness.reference_coverage.accepted}/
+              Referenzen {readiness.reference_coverage.accepted}/
               {readiness.reference_coverage.required}
             </span>
           ) : null}
           <span>
-            Identity:{" "}
-            {readiness.identity_locked ? "LOCKED" : "NOT LOCKED"}
+            Identität: {readiness.identity_locked ? "festgeschrieben" : "noch offen"}
           </span>
           <span>
-            Image identity:{" "}
+            Für Bilder:{" "}
             {readiness.image_identity_ready
-              ? "READY"
-              : "NOT READY YET"}
+              ? "bereit"
+              : "noch nicht bereit"}
           </span>
           <span>
-            Image use:{" "}
+            Image-Freigabe:{" "}
             {readiness.image_use_approved ?? persona.image_use_approved
-              ? "APPROVED"
-              : "NOT APPROVED"}
+              ? "freigegeben"
+              : "nicht freigegeben"}
           </span>
           <span>
-            Video use:{" "}
+            Video-Freigabe:{" "}
             {readiness.video_use_approved ?? persona.video_use_approved
-              ? "APPROVED"
-              : "NOT APPROVED"}
+              ? "freigegeben"
+              : "nicht freigegeben"}
           </span>
           <span>
             Brand Cast:{" "}
             {readiness.brand_cast_approved ?? persona.brand_cast_approved
-              ? "APPROVED"
-              : "NOT APPROVED"}
+              ? "freigegeben"
+              : "nicht freigegeben"}
           </span>
           {readiness.references_complete ? (
             <span data-testid="persona-visual-complete">
-              Reference Package Ready
+              Referenzpaket vollständig
             </span>
           ) : (
             <span className="ps-inline-error" data-testid="persona-visual-incomplete">
-              References incomplete
+              Referenzen unvollständig
             </span>
           )}
         </div>
       ) : null}
 
       <dl className="ps-meta-grid">
-        <Meta label="Gender" value={persona.gender} />
-        <Meta label="Age range" value={persona.age_range} />
-        <Meta label="Height" value={persona.height} />
-        <Meta label="Body type" value={persona.body_type} />
-        <Meta label="Skin tone" value={persona.skin_tone} />
-        <Meta label="Hair" value={persona.hair} />
-        <Meta label="Beard" value={persona.beard || "—"} />
-        <Meta label="Eyes" value={persona.eye_color} />
-        <Meta label="Expression" value={persona.expression} />
-        <Meta label="Brand fit" value={`${persona.brand_fit_score}`} />
-        <Meta label="Personality" value={persona.personality} />
-        <Meta label="Style" value={persona.style} />
-        <Meta label="Visual identity notes" value={persona.visual_identity_notes} />
-        <Meta label="Prohibited changes" value={persona.prohibited_changes} />
+        <Meta label="Geschlecht" value={persona.gender} />
+        <Meta label="Altersspanne" value={persona.age_range} />
+        <Meta label="Größe" value={persona.height} />
+        <Meta label="Körperbau" value={persona.body_type} />
+        <Meta label="Hautton" value={persona.skin_tone} />
+        <Meta label="Haare" value={persona.hair} />
+        <Meta label="Bart" value={persona.beard || "—"} />
+        <Meta label="Augen" value={persona.eye_color} />
+        <Meta label="Ausdruck" value={persona.expression} />
+        <Meta label="Markenpassung" value={`${persona.brand_fit_score}`} />
+        <Meta label="Persönlichkeit" value={persona.personality} />
+        <Meta label="Stil" value={persona.style} />
+        <Meta label="Hinweise zur Identität" value={persona.visual_identity_notes} />
+        <Meta label="Unzulässige Änderungen" value={persona.prohibited_changes} />
         <Meta
-          label="Image use"
-          value={persona.image_use_approved ? "approved" : "not set"}
+          label="Image-Nutzung"
+          value={persona.image_use_approved ? "freigegeben" : "nicht festgelegt"}
         />
         <Meta
-          label="Video use"
-          value={persona.video_use_approved ? "approved" : "not set"}
+          label="Video-Nutzung"
+          value={persona.video_use_approved ? "freigegeben" : "nicht festgelegt"}
         />
       </dl>
 
@@ -562,7 +561,7 @@ function PersonaDetail({
 
       {error ? (
         <div className="ps-section ps-inline-error" data-testid="persona-section-error">
-          <strong>Section error</strong>
+          <strong>Bereich konnte nicht geladen werden</strong>
           <p>{error}</p>
           <button
             type="button"
@@ -572,7 +571,7 @@ function PersonaDetail({
               studio.selectPersona(persona.id);
             }}
           >
-            Retry
+            Erneut versuchen
           </button>
         </div>
       ) : null}
@@ -689,24 +688,24 @@ function PersonaDetail({
             onChange={(e) => setFilterType(e.target.value)}
             aria-label="Filter asset type"
           >
-            <option value="all">All types</option>
-            <option value="portrait">portrait</option>
-            <option value="profile">profile</option>
-            <option value="full_body">full_body</option>
-            <option value="three_quarter">three_quarter</option>
-            <option value="video_reference">video_reference</option>
+            <option value="all">Alle Typen</option>
+            <option value="portrait">Porträt</option>
+            <option value="profile">Profil</option>
+            <option value="full_body">Ganzkörper</option>
+            <option value="three_quarter">Dreiviertel</option>
+            <option value="video_reference">Videoreferenz</option>
           </select>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
             aria-label="Filter status"
           >
-            <option value="all">All statuses</option>
-            <option value="uploaded">uploaded</option>
-            <option value="review">review</option>
-            <option value="approved">approved</option>
-            <option value="rejected">rejected</option>
-            <option value="archived">archived</option>
+            <option value="all">Alle Status</option>
+            <option value="uploaded">Hochgeladen</option>
+            <option value="review">In Prüfung</option>
+            <option value="approved">Freigegeben</option>
+            <option value="rejected">Abgelehnt</option>
+            <option value="archived">Archiviert</option>
           </select>
         </div>
 
@@ -738,7 +737,7 @@ function PersonaDetail({
                       src={asset.signed_url}
                       alt={
                         masterMeta
-                          ? "MASTER IDENTITY REFERENCE — Original selected Brand Face"
+                          ? "MASTER-IDENTITÄTSREFERENZ — ursprünglich ausgewähltes Markenmodel"
                           : asset.notes || asset.asset_type
                       }
                       className="ps-ref-thumb"
@@ -756,7 +755,7 @@ function PersonaDetail({
                 {masterMeta ? (
                   <div className="ps-master-identity-banner">
                     <PersonaStatusChip
-                      label="MASTER IDENTITY REFERENCE"
+                      label="MASTER-IDENTITÄTSREFERENZ"
                       tone="selected"
                     />
                     <p className="ps-muted" style={{ margin: "0.35rem 0 0" }}>
@@ -769,7 +768,7 @@ function PersonaDetail({
                 ) : null}
                 <strong>
                   {masterMeta
-                    ? "Master portrait"
+                    ? "Master-Porträt"
                     : pkgMeta
                       ? slotLabel
                       : asset.asset_type}
@@ -810,7 +809,7 @@ function PersonaDetail({
                   </span>
                 ) : (
                   <span className="ps-muted" style={{ fontSize: "0.75rem" }}>
-                    Supporting reference — cannot become Master
+                    Unterstützende Referenz – kann nicht zum Master werden
                   </span>
                 )}
                 {!masterMeta ? (
@@ -935,9 +934,9 @@ function PersonaDetail({
       ) : null}
 
       <section className="ps-section">
-        <h3>Preferred libraries</h3>
+        <h3>Bevorzugte Produktionsbibliotheken</h3>
         <RelationBlock
-          title="Locations"
+          title="Orte"
           ids={persona.preferred_location_ids}
           options={studio.locations.map((l) => ({ id: l.id, label: l.name }))}
           onChange={(ids) =>
@@ -947,7 +946,7 @@ function PersonaDetail({
           }
         />
         <RelationBlock
-          title="Camera Presets"
+          title="Kamera-Vorgaben"
           ids={persona.preferred_camera_preset_ids}
           options={studio.cameraPresets.map((c) => ({ id: c.id, label: c.name }))}
           onChange={(ids) =>
@@ -960,7 +959,7 @@ function PersonaDetail({
           }
         />
         <RelationBlock
-          title="Poses"
+          title="Posen"
           ids={persona.preferred_pose_ids}
           options={studio.poses.map((p) => ({ id: p.id, label: p.name }))}
           onChange={(ids) =>
@@ -970,7 +969,7 @@ function PersonaDetail({
           }
         />
         <RelationBlock
-          title="Brand Looks"
+          title="Markenlooks"
           ids={persona.preferred_brand_look_ids}
           options={studio.brandLooks.map((b) => ({ id: b.id, label: b.name }))}
           onChange={(ids) =>
@@ -992,7 +991,7 @@ function PersonaDetail({
       </section>
 
       <section className="ps-section">
-        <h3>Workflow</h3>
+        <h3>Freigabeablauf</h3>
         <div className="ps-actions">
           <button
             type="button"
@@ -1002,7 +1001,7 @@ function PersonaDetail({
               void run(() =>
                 studio.patchPersona(persona.id, {
                   visual_identity_notes:
-                    persona.visual_identity_notes || "Locked Brand Cast identity",
+                    persona.visual_identity_notes || "Festgeschriebene Brand-Cast-Identität",
                   prohibited_changes:
                     persona.prohibited_changes || "No face morphing or age shift",
                   default_hair_style: persona.default_hair_style || persona.hair,
@@ -1039,7 +1038,7 @@ function PersonaDetail({
                 )
               }
             >
-              Submit for review
+              Zur Prüfung senden
             </button>
           ) : null}
           {persona.status === "Review" ? (
@@ -1054,7 +1053,7 @@ function PersonaDetail({
               }
             >
               <CheckCircle2 className="size-3.5" />
-              Approve
+              Freigeben
             </button>
           ) : null}
           {persona.status !== "Archived" ? (
@@ -1069,7 +1068,7 @@ function PersonaDetail({
               }
             >
               <Archive className="size-3.5" />
-              Archive
+              Archivieren
             </button>
           ) : (
             <button
@@ -1082,7 +1081,7 @@ function PersonaDetail({
                 )
               }
             >
-              Reopen as draft
+              Als Entwurf wieder öffnen
             </button>
           )}
           <button
@@ -1091,7 +1090,7 @@ function PersonaDetail({
             disabled={busy}
             onClick={() => void run(() => studio.removePersona(persona.id))}
           >
-            Delete
+            Löschen
           </button>
         </div>
         {error ? <p className="ps-inline-error">{error}</p> : null}
@@ -1141,7 +1140,7 @@ function LocationsView({ studio }: { studio: PersonaStudioController }) {
   return (
     <LibraryPanel
       title="Locations"
-      description="Sets and environments for consistent Brand Cast shoots."
+      description="Sets und Umgebungen für konsistente Brand-Cast-Aufnahmen."
       onCreate={() =>
         studio.createLibraryItem("/api/persona/locations", {
           name: "Architecture",
@@ -1219,7 +1218,7 @@ function BrandLooksView({ studio }: { studio: PersonaStudioController }) {
   return (
     <LibraryPanel
       title="Brand Looks"
-      description="Mood and color systems for the Brand Cast."
+      description="Stimmungs- und Farbsysteme für den Brand Cast."
       onCreate={() =>
         studio.createLibraryItem("/api/persona/brand-looks", {
           name: "Minimal",
@@ -1309,9 +1308,9 @@ function LibraryPanel({
       {error ? <p className="ps-inline-error">{error}</p> : null}
       {rows.length === 0 ? (
         <div className="ps-empty-state">
-          <p className="ps-eyebrow">Library</p>
-          <strong>Nothing cast for this shelf yet.</strong>
-          <p>Add your first entry to keep Brand Cast shoots consistent.</p>
+          <p className="ps-eyebrow">Bibliothek</p>
+          <strong>Noch kein Eintrag in diesem Bereich.</strong>
+          <p>Füge den ersten Eintrag hinzu, um Brand-Cast-Aufnahmen konsistent zu halten.</p>
         </div>
       ) : (
       <ul className="ps-card-list">
@@ -1418,7 +1417,7 @@ function IdentityLockPanel({
           onError(
             err instanceof Error
               ? err.message
-              : "Identity lock status failed",
+              : "Status der Identitätsfestschreibung konnte nicht geladen werden",
           );
         }
       }
@@ -1458,7 +1457,7 @@ function IdentityLockPanel({
       // Reload persona + readiness + identity-lock eligibility (no manual refresh).
       onLocked();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Identity lock failed";
+      const msg = err instanceof Error ? err.message : "Identität konnte nicht festgeschrieben werden";
       setLockError(msg);
       // Contained Identity Lock error — do not claim success / do not mutate refs.
       onError(null);
@@ -1500,7 +1499,7 @@ function IdentityLockPanel({
       onLocked();
     } catch (err) {
       setReconciliationError(
-        err instanceof Error ? err.message : "Identity reconciliation failed",
+        err instanceof Error ? err.message : "Identitätsabgleich fehlgeschlagen",
       );
     } finally {
       onBusy(false);
@@ -1527,43 +1526,43 @@ function IdentityLockPanel({
   function provenanceBadge(provenance: string): string {
     switch (provenance) {
       case "human_warning_approved":
-        return "Human warning approved";
+        return "Warnung menschlich bestätigt";
       case "human_mismatch_override":
-        return "Human override";
+        return "Menschliche Überschreibung";
       case "derived_mirror":
-        return "Derived mirror";
+        return "Abgeleitetes Spiegelbild";
       case "reassigned":
-        return "Reassigned";
+        return "Neu zugeordnet";
       case "replacement_approved":
-        return "Replacement approved";
+        return "Ersetzung freigegeben";
       default:
-        return "Machine match";
+        return "Maschinelle Übereinstimmung";
     }
   }
 
   return (
     <section className="ps-section" data-testid="identity-lock-panel">
-      <h3>IDENTITY LOCK</h3>
+      <h3>IDENTITÄTSFESTSCHREIBUNG</h3>
       {identityLocked ? (
         <>
-          <PersonaStatusChip label="IDENTITY LOCKED" tone="selected" />
+          <PersonaStatusChip label="Festgeschrieben" tone="selected" />
           <p className="ps-muted">
-            Official identity package · 1 Master + 5 supporting references
+            Offizielles Identitätspaket · 1 Master + 5 unterstützende Referenzen
             {persona.identity_locked_at
-              ? ` · locked ${new Date(persona.identity_locked_at).toLocaleString()}`
+              ? ` · festgeschrieben ${new Date(persona.identity_locked_at).toLocaleString("de-DE")}`
               : ""}
           </p>
           {!reconciliationVisualEvidenceAvailable ? (
             <p className="ps-inline-error">
-              One or more private reference previews are unavailable. Reload or
-              repair signed reference access before making the human decision.
+              Eine oder mehrere private Referenzvorschauen sind nicht verfügbar. Lade neu oder
+              stelle den signierten Zugriff wieder her, bevor du entscheidest.
             </p>
           ) : null}
         </>
       ) : (
         <p className="ps-muted">
-          Lock this exact Master + five canonical references as the permanent Brand
-          Model identity. No generation — explicit approval only.
+          Schreibe genau diesen Master und die fünf kanonischen Referenzen als dauerhafte
+          Markenmodel-Identität fest. Keine Generierung — nur ausdrückliche Freigabe.
         </p>
       )}
 
@@ -1572,24 +1571,23 @@ function IdentityLockPanel({
           className="ps-reconciliation-warning"
           data-testid="legacy-identity-reconciliation-required"
         >
-          <strong>Legacy identity requires reconciliation</strong>
+          <strong>Ältere Identität muss abgeglichen werden</strong>
           <p>
-            Historical lock version {reconciliation.sourceSnapshot?.lockVersion ?? "—"}
-            {" "}does not contain exact persisted pre-lock review provenance. It
-            remains preserved, but downstream Brand Model use fails closed until
-            you perform a current human review.
+            Die historische Festschreibung Version {reconciliation.sourceSnapshot?.lockVersion ?? "—"}
+            enthält keine exakt gespeicherte Vor-Lock-Prüfherkunft. Sie bleibt erhalten, aber die
+            nachgelagerte Markenmodel-Nutzung bleibt gesperrt, bis du eine aktuelle menschliche Prüfung vornimmst.
           </p>
           <p className="ps-muted">
-            Current package: {reconciliation.currentPackage.coverage.accepted}/
-            {reconciliation.currentPackage.coverage.required} references · Master
+            Aktuelles Paket: {reconciliation.currentPackage.coverage.accepted}/
+            {reconciliation.currentPackage.coverage.required} Referenzen · Master
             {" "}
             {reconciliation.currentPackage.masterReferenceAssetId
-              ? "present"
-              : "missing"}
+              ? "vorhanden"
+              : "fehlt"}
             {" · "}
             {reconciliation.currentPackage.packageMatchesHistoricalSnapshot
-              ? "matches historical lock"
-              : "does not match historical lock"}
+              ? "stimmt mit historischer Festschreibung überein"
+              : "stimmt nicht mit historischer Festschreibung überein"}
           </p>
           {reconciliation.blockingReasons.length > 0 ? (
             <ul className="ps-inline-error">
@@ -1605,16 +1603,16 @@ function IdentityLockPanel({
             data-testid="open-legacy-identity-reconciliation"
             onClick={() => setReconciliationOpen(true)}
           >
-            Review &amp; Reconcile Identity
+            Identität prüfen und abgleichen
           </button>
         </div>
       ) : null}
 
       {eligibility ? (
         <div className="ps-muted">
-          Coverage {eligibility.coverage.accepted}/{eligibility.coverage.required} ·
+          Abdeckung {eligibility.coverage.accepted}/{eligibility.coverage.required} ·
           Reference Package:{" "}
-          {eligibility.referencePackageReady ? "Ready" : "Incomplete"}
+          {eligibility.referencePackageReady ? "Bereit" : "Unvollständig"}
         </div>
       ) : null}
 
@@ -1629,20 +1627,20 @@ function IdentityLockPanel({
       <div className="ps-ref-pkg-slots">
         {master ? (
           <div className="ps-ref-pkg-slot" data-testid="identity-lock-master">
-            <strong>MASTER IDENTITY</strong>
+            <strong>MASTER-IDENTITÄT</strong>
             {master.signed_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={master.signed_url}
-                alt="Master Identity Reference"
+                alt="Master-Identitätsreferenz"
                 className="ps-ref-thumb"
               />
             ) : (
-              <span className="ps-muted">Master reference</span>
+              <span className="ps-muted">Master-Referenz</span>
             )}
           </div>
         ) : (
-          <p className="ps-inline-error">Master Identity Reference missing</p>
+          <p className="ps-inline-error">Master-Identitätsreferenz fehlt</p>
         )}
 
         <ul className="ps-ref-pkg-slots">
@@ -1687,17 +1685,17 @@ function IdentityLockPanel({
 
       {confirmOpen ? (
         <div className="ps-ref-pkg-confirm" data-testid="identity-lock-confirm">
-          <h4>Lock this Brand Identity?</h4>
+          <h4>Diese Markenidentität festschreiben?</h4>
           <p>
             This Master + these five references will become the official permanent
             identity package for this Brand Model. Future Image Studio and Video
             Studio outputs will use this identity. Normal reference editing will be
             disabled after locking.
           </p>
-          <p className="ps-muted">No provider cost.</p>
+          <p className="ps-muted">Keine Provider-Kosten.</p>
           {lockError ? (
             <div className="ps-inline-error" data-testid="identity-lock-error">
-              <strong>Identity Lock failed</strong>
+              <strong>Festschreiben der Identität fehlgeschlagen</strong>
               <p>{lockError}</p>
             </div>
           ) : null}
@@ -1731,7 +1729,7 @@ function IdentityLockPanel({
           className="ps-ref-pkg-confirm ps-reconciliation-review"
           data-testid="legacy-identity-reconciliation-review"
         >
-          <h4>LEGACY RECONCILIATION REVIEW</h4>
+          <h4>PRÜFUNG DES ÄLTEREN IDENTITÄTSABGLEICHS</h4>
           <p>
             Review the current immutable Master and all five reference images
             shown above. This is a present-day owner decision—not evidence that a
@@ -1745,7 +1743,7 @@ function IdentityLockPanel({
                 setReconciliationAcknowledged(event.target.checked)
               }
             />
-            I understand that historical review provenance is missing and this
+            I understand that historical review provenance is fehlt and this
             records a new reconciliation review now.
           </label>
 
@@ -1779,7 +1777,7 @@ function IdentityLockPanel({
                   }))
                 }
               />
-              Master Identity Reference is correct
+              Master-Identitätsreferenz is correct
             </label>
             <label className="ps-check">
               <input
@@ -1962,7 +1960,7 @@ function ReferenceRightsPanel({
           onError(
             error instanceof Error
               ? error.message
-              : "Reference rights status failed",
+              : "Status der Referenzrechte konnte nicht geladen werden",
           );
         }
       }
@@ -2010,7 +2008,7 @@ function ReferenceRightsPanel({
       setActionError(
         error instanceof Error
           ? error.message
-          : "Reference rights decision failed",
+          : "Entscheidung zu den Referenzrechten fehlgeschlagen",
       );
     } finally {
       onBusy(false);
@@ -2021,26 +2019,24 @@ function ReferenceRightsPanel({
 
   return (
     <section className="ps-section" data-testid="reference-rights-panel">
-      <h3>REFERENCE RIGHTS</h3>
+      <h3>REFERENZRECHTE</h3>
       {!view ? (
-        <p className="ps-muted">Checking locked reference rights…</p>
+        <p className="ps-muted">Referenzrechte werden geprüft…</p>
       ) : view.rightsConfirmed ? (
         <>
-          <PersonaStatusChip label="REFERENCE RIGHTS CONFIRMED" tone="selected" />
+          <PersonaStatusChip label="REFERENZRECHTE BESTÄTIGT" tone="selected" />
           <p className="ps-muted">
-            Master plus 5/5 canonical references are authorized at asset level
-            for the current locked Brand Model.
+            Master plus 5/5 kanonische Referenzen sind für das aktuell festgeschriebene Markenmodel auf Asset-Ebene autorisiert.
             {view.exactAuditedConfirmation
-              ? " Audited confirmation is linked to this exact lock version."
+              ? " Die geprüfte Bestätigung ist exakt mit dieser Lock-Version verknüpft."
               : ""}
           </p>
         </>
       ) : (
         <div className="ps-reconciliation-warning">
-          <strong>Reference rights confirmation required</strong>
+          <strong>Bestätigung der Referenzrechte erforderlich</strong>
           <p>
-            {view.missingRightsAssetIds.length} of 6 locked identity assets lack
-            persisted rights confirmation. Image Studio remains fail-closed.
+            {view.missingRightsAssetIds.length} von 6 festgeschriebenen Identitäts-Assets besitzen keine dauerhaft gespeicherte Rechtebestätigung. Das Image Studio bleibt gesperrt.
           </p>
           <ul className="ps-completeness">
             {view.assetRights.map((asset) => (
@@ -2048,7 +2044,7 @@ function ReferenceRightsPanel({
                 key={asset.assetId}
                 className={asset.rightsConfirmed ? "is-ok" : ""}
               >
-                {asset.role.replaceAll("_", " ")} · {asset.rightsConfirmed ? "confirmed" : "missing"}
+                {asset.role.replaceAll("_", " ")} · {asset.rightsConfirmed ? "bestätigt" : "fehlt"}
               </li>
             ))}
           </ul>
@@ -2059,40 +2055,38 @@ function ReferenceRightsPanel({
             data-testid="open-reference-rights-review"
             onClick={() => setReviewOpen(true)}
           >
-            Review &amp; Confirm Reference Rights
+            Referenzrechte prüfen &amp; bestätigen
           </button>
         </div>
       )}
 
       {reviewOpen && view ? (
         <div className="ps-ref-pkg-confirm ps-reconciliation-review">
-          <h4>Confirm locked reference rights</h4>
+          <h4>Referenzrechte bestätigen</h4>
           <p>
-            Confirm only if you have the necessary rights or authorization to use
-            the exact Master and five canonical references shown in Identity Lock
-            for Milaene AI-assisted Image Studio production.
+            Bestätige nur, wenn du die erforderlichen Rechte oder Autorisierungen für den exakten Master und die fünf kanonischen Referenzen der Identitätsfestschreibung besitzt.
           </p>
           {(
             [
               [
                 "hasNecessaryRightsOrAuthorization",
-                "I have the necessary rights or authorization for these identity assets.",
+                "Ich besitze die erforderlichen Rechte oder Autorisierungen für diese Identitäts-Assets.",
               ],
               [
                 "masterIdentityReferenceAuthorized",
-                "The Master Identity Reference is authorized for this use.",
+                "Die Master-Identitätsreferenz ist für diese Nutzung autorisiert.",
               ],
               [
                 "canonicalReferencesAuthorized",
-                "All five canonical supporting references are authorized for this use.",
+                "Alle fünf kanonischen Referenzen sind für diese Nutzung autorisiert.",
               ],
               [
                 "aiAssistedImageProductionAuthorized",
-                "These assets may be used for AI-assisted Image Studio production.",
+                "Diese Assets dürfen für KI-gestützte Produktionen im Image Studio verwendet werden.",
               ],
               [
                 "workspaceBrandUseAuthorized",
-                "This authorization applies to Milaene brand production in the current workspace.",
+                "Diese Autorisierung gilt für die Markenproduktion von Milaene im aktuellen Arbeitsbereich.",
               ],
             ] as const
           ).map(([key, label]) => (
@@ -2111,7 +2105,7 @@ function ReferenceRightsPanel({
             </label>
           ))}
           <label className="ps-upload">
-            Rejection reason (required only when rejecting)
+            Ablehnungsgrund (nur bei Ablehnung erforderlich)
             <textarea
               rows={3}
               maxLength={2000}
@@ -2120,8 +2114,7 @@ function ReferenceRightsPanel({
             />
           </label>
           <p className="ps-muted">
-            Decision scope: current lock v{view.identityLockVersion} · snapshot {view.identityLockSnapshotId.slice(0, 8)}.
-            No image generation will start.
+            Geltungsbereich: aktuelle Lock-Version {view.identityLockVersion}. Es wird keine Bildgenerierung gestartet.
           </p>
           {actionError ? <p className="ps-inline-error">{actionError}</p> : null}
           <div className="ps-btn-row">
@@ -2131,7 +2124,7 @@ function ReferenceRightsPanel({
               disabled={busy}
               onClick={() => setReviewOpen(false)}
             >
-              Cancel
+              Abbrechen
             </button>
             <button
               type="button"
@@ -2139,7 +2132,7 @@ function ReferenceRightsPanel({
               disabled={busy || !rejectionReason.trim()}
               onClick={() => void submit("rejected")}
             >
-              Reject rights confirmation
+              Rechtebestätigung ablehnen
             </button>
             <button
               type="button"
@@ -2148,7 +2141,7 @@ function ReferenceRightsPanel({
               data-testid="confirm-reference-rights"
               onClick={() => void submit("confirmed")}
             >
-              Confirm Reference Rights
+              Referenzrechte bestätigen
             </button>
           </div>
         </div>
@@ -2186,13 +2179,13 @@ function BrandModelApprovalsPanel({
           error?: string;
         } | null;
         if (!res.ok) {
-          throw new Error(data?.error ?? `Approvals status failed (${res.status})`);
+          throw new Error(data?.error ?? `Freigabestatus konnte nicht geladen werden (${res.status})`);
         }
         if (!cancelled && data?.approvals) setView(data.approvals);
       } catch (err) {
         if (!cancelled) {
           onError(
-            err instanceof Error ? err.message : "Approvals status failed",
+            err instanceof Error ? err.message : "Freigabestatus konnte nicht geladen werden.",
           );
         }
       }
@@ -2238,7 +2231,7 @@ function BrandModelApprovalsPanel({
       onApproved();
     } catch (err) {
       setActionError(
-        err instanceof Error ? err.message : "Approval failed",
+        err instanceof Error ? err.message : "Freigabe fehlgeschlagen.",
       );
     } finally {
       onBusy(false);
@@ -2255,13 +2248,13 @@ function BrandModelApprovalsPanel({
 
   return (
     <section className="ps-section" data-testid="brand-model-approvals-panel">
-      <h3>BRAND MODEL APPROVALS</h3>
+      <h3>FREIGABEN DES MARKENMODELS</h3>
       <ul className="ps-completeness" data-testid="brand-model-approvals-list">
         <li className="is-ok">
-          Identity · Locked
+          Identität · festgeschrieben
         </li>
         <li className={imageApproved ? "is-ok" : ""}>
-          Image Studio · {imageApproved ? "Approved" : "Not approved"}
+          Image Studio · {imageApproved ? "freigegeben" : "nicht freigegeben"}
           {!imageApproved && view?.imageUse.eligible ? (
             <button
               type="button"
@@ -2270,7 +2263,7 @@ function BrandModelApprovalsPanel({
               data-testid="approve-image-use"
               onClick={() => setConfirmGate("image_use")}
             >
-              Approve for Image Studio
+              Für Image Studio freigeben
             </button>
           ) : null}
           {!imageApproved && view && !view.imageUse.eligible
@@ -2284,10 +2277,10 @@ function BrandModelApprovalsPanel({
         <li className={videoApproved ? "is-ok" : ""}>
           Video Studio ·{" "}
           {videoApproved
-            ? "Approved"
+            ? "freigegeben"
             : view?.videoUse.statusLabel === "Not ready"
-              ? "Not ready"
-              : "Not approved"}
+              ? "noch nicht bereit"
+              : "nicht freigegeben"}
           {!videoApproved && view?.videoUse.eligible ? (
             <button
               type="button"
@@ -2296,7 +2289,7 @@ function BrandModelApprovalsPanel({
               data-testid="approve-video-use"
               onClick={() => setConfirmGate("video_use")}
             >
-              Approve for Video Studio
+              Für Video Studio freigeben
             </button>
           ) : null}
           {!videoApproved && view && !view.videoUse.eligible
@@ -2308,7 +2301,7 @@ function BrandModelApprovalsPanel({
             : null}
         </li>
         <li className={brandCastApproved ? "is-ok" : ""}>
-          Brand Cast · {brandCastApproved ? "Official Brand Cast" : "Not approved"}
+          Brand Cast · {brandCastApproved ? "offizielles Mitglied" : "nicht freigegeben"}
           {!brandCastApproved && view?.brandCast.eligible ? (
             <button
               type="button"
@@ -2317,7 +2310,7 @@ function BrandModelApprovalsPanel({
               data-testid="approve-brand-cast"
               onClick={() => setConfirmGate("brand_cast")}
             >
-              Approve as Official Brand Cast
+              In Brand Cast aufnehmen
             </button>
           ) : null}
           {!brandCastApproved && view && !view.brandCast.eligible
@@ -2332,10 +2325,9 @@ function BrandModelApprovalsPanel({
 
       {confirmGate === "image_use" ? (
         <div className="ps-ref-pkg-confirm" data-testid="image-use-confirm">
-          <h4>Approve this Brand Model for Image Studio?</h4>
+          <h4>Dieses Markenmodel für das Image Studio freigeben?</h4>
           <p>
-            This identity may now be used by Image Studio for Milaene campaign
-            images, product imagery, social assets and future campaign workflows.
+            Diese Identität darf danach für Milaene Kampagnenbilder, Produktbilder und Social Assets im Image Studio verwendet werden.
           </p>
           {actionError ? (
             <div className="ps-inline-error">
@@ -2352,7 +2344,7 @@ function BrandModelApprovalsPanel({
                 setActionError(null);
               }}
             >
-              Cancel
+              Abbrechen
             </button>
             <button
               type="button"
@@ -2361,7 +2353,7 @@ function BrandModelApprovalsPanel({
               data-testid="confirm-image-use"
               onClick={() => void confirmApproval()}
             >
-              Approve Image Use
+              Image-Nutzung freigeben
             </button>
           </div>
         </div>
@@ -2369,10 +2361,9 @@ function BrandModelApprovalsPanel({
 
       {confirmGate === "video_use" ? (
         <div className="ps-ref-pkg-confirm" data-testid="video-use-confirm">
-          <h4>Approve this Brand Model for Video Studio?</h4>
+          <h4>Dieses Markenmodel für das Video Studio freigeben?</h4>
           <p>
-            This locked identity may now be used by Video Studio for Milaene
-            motion and campaign video workflows.
+            Diese festgeschriebene Identität darf danach für Milaene Video- und Kampagnenabläufe verwendet werden.
           </p>
           {actionError ? (
             <div className="ps-inline-error">
@@ -2389,7 +2380,7 @@ function BrandModelApprovalsPanel({
                 setActionError(null);
               }}
             >
-              Cancel
+              Abbrechen
             </button>
             <button
               type="button"
@@ -2398,7 +2389,7 @@ function BrandModelApprovalsPanel({
               data-testid="confirm-video-use"
               onClick={() => void confirmApproval()}
             >
-              Approve Video Use
+              Video-Nutzung freigeben
             </button>
           </div>
         </div>
@@ -2406,10 +2397,9 @@ function BrandModelApprovalsPanel({
 
       {confirmGate === "brand_cast" ? (
         <div className="ps-ref-pkg-confirm" data-testid="brand-cast-confirm">
-          <h4>Approve as Official Brand Cast?</h4>
+          <h4>In den offiziellen Brand Cast aufnehmen?</h4>
           <p>
-            This Brand Model becomes an official permanent face of Milaene —
-            eligible for Image Studio once Brand Cast approval is complete.
+            Dieses Markenmodel wird ein offizielles, dauerhaftes Gesicht von Milaene. Die Freigabe erfolgt bewusst und getrennt von anderen Produktionsfreigaben.
           </p>
           {actionError ? (
             <div className="ps-inline-error">
@@ -2426,7 +2416,7 @@ function BrandModelApprovalsPanel({
                 setActionError(null);
               }}
             >
-              Cancel
+              Abbrechen
             </button>
             <button
               type="button"
@@ -2435,7 +2425,7 @@ function BrandModelApprovalsPanel({
               data-testid="confirm-brand-cast"
               onClick={() => void confirmApproval()}
             >
-              Approve as Official Brand Cast
+              In Brand Cast aufnehmen
             </button>
           </div>
         </div>
@@ -2495,13 +2485,13 @@ function ReferencePackagePanel({
       error?: string;
       status?: ReferencePackageStatusView;
     };
-    if (!res.ok) throw new Error(data.error ?? "Reference Package status failed");
+    if (!res.ok) throw new Error(data.error ?? "Status des Referenzpakets konnte nicht geladen werden");
     setStatus(data.status ?? null);
   }
 
   useEffect(() => {
     void loadStatus().catch((err) =>
-      onError(err instanceof Error ? err.message : "Status failed"),
+      onError(err instanceof Error ? err.message : "Status konnte nicht geladen werden"),
     );
     // Reload on persona open and whenever reference statuses change (approve/reject).
     // No provider call.
@@ -2674,18 +2664,18 @@ function ReferencePackagePanel({
   }
 
   const slotStatusLabel: Record<string, string> = {
-    missing: "Missing",
-    queued: "Queued",
-    generating: "Generating",
-    identity_check: "Identity Check",
-    review: "Review",
-    accepted: "Accepted",
-    identity_warning: "Identity warning",
-    identity_mismatch: "Mismatch",
-    wrong_camera_direction: "Wrong camera direction",
-    mismatch: "Mismatch",
-    failed: "Failed",
-    rejected: "Rejected",
+    missing: "Fehlt",
+    queued: "In Warteschlange",
+    generating: "Wird erstellt",
+    identity_check: "Identitätsprüfung",
+    review: "In Prüfung",
+    accepted: "Akzeptiert",
+    identity_warning: "Identitätswarnung",
+    identity_mismatch: "Identität weicht ab",
+    wrong_camera_direction: "Falsche Kamerarichtung",
+    mismatch: "Abweichung",
+    failed: "Fehlgeschlagen",
+    rejected: "Abgelehnt",
   };
 
   function slotPrimaryLabel(slot: {
@@ -2695,24 +2685,23 @@ function ReferencePackagePanel({
     wrongCameraDirection?: boolean;
   }): string {
     if (slot.coverageLabel) return slot.coverageLabel;
-    if (slot.wrongCameraDirection) return "Wrong camera direction";
+    if (slot.wrongCameraDirection) return "Falsche Kamerarichtung";
     const key = slot.state ?? slot.status;
     return slotStatusLabel[key] ?? key;
   }
 
   return (
     <section className="ps-section" data-testid="reference-package-panel">
-      <h3>REFERENCE PACKAGE</h3>
+      <h3>REFERENZPAKET</h3>
       <p className="ps-muted">
-        Same person, different camera angles · subject-perspective direction lock ·
-        OpenAI image edit · Master Identity as source
+        Dieselbe Person aus verschiedenen Kamerawinkeln · feste Subjektperspektive · Master-Identität als Quelle
       </p>
       {status?.referencePackageReady ? (
-        <PersonaStatusChip label="Reference Package Ready" tone="selected" />
+        <PersonaStatusChip label="Referenzpaket vollständig" tone="selected" />
       ) : (
         <span className="ps-muted">
-          Coverage {status?.acceptedCount ?? 0}/{status?.requiredCount ?? 5}{" "}
-          (approved only)
+          Abdeckung {status?.acceptedCount ?? 0}/{status?.requiredCount ?? 5}{" "}
+          (nur freigegebene Referenzen)
         </span>
       )}
 
@@ -2733,7 +2722,7 @@ function ReferencePackagePanel({
                   disabled={busy}
                   onClick={() => void prepare(slot.slot)}
                 >
-                  Regenerate this angle
+                  Diesen Winkel neu erstellen
                 </button>
               )}
               {(slot.state === "accepted" || slot.usable) &&
@@ -2749,21 +2738,18 @@ function ReferencePackagePanel({
                     void prepareAcceptedReplacement(slot.acceptedAssetId!)
                   }
                 >
-                  Regenerate accepted angle
+                  Freigegebenen Winkel neu erstellen
                 </button>
               )}
             </div>
             {slot.directionGenerationUnreliable ? (
               <p className="ps-ref-pkg-meta ps-inline-error">
-                OpenAI could not reliably produce this camera direction. Manual
-                upload, keep incomplete, or use another supported reference
-                workflow later.
+                Diese Kamerarichtung konnte nicht zuverlässig erstellt werden. Nutze einen manuellen Upload, lasse den Platz unvollständig oder verwende später einen anderen Referenzablauf.
               </p>
             ) : null}
             {slot.wrongCameraDirection && !slot.directionGenerationUnreliable ? (
               <p className="ps-ref-pkg-meta ps-inline-error">
-                Wrong camera direction · Suggest: Reassign angle (if target free)
-                or Reject
+                Falsche Kamerarichtung · Winkel neu zuordnen (wenn frei) oder ablehnen
               </p>
             ) : null}
             {(slot.identityDecision ||
@@ -2771,29 +2757,31 @@ function ReferencePackagePanel({
               slot.angleManuallyReassigned) && (
               <p className="ps-ref-pkg-meta ps-muted">
                 {slot.identityDecision
-                  ? `Identity: ${
+                  ? `Identität: ${
                       slot.identityDecision === "identity_warning"
-                        ? "warning"
+                        ? "Warnung"
                         : slot.identityDecision === "identity_match"
-                          ? "match"
+                          ? "Übereinstimmung"
                           : slot.identityDecision === "identity_mismatch"
-                            ? "mismatch"
+                            ? "Abweichung"
                             : slot.identityDecision
                     }`
                   : null}
                 {slot.humanReview
-                  ? `${slot.identityDecision ? " · " : ""}Human review: ${slot.humanReview}`
+                  ? `${slot.identityDecision ? " · " : ""}Menschliche Prüfung: ${slot.humanReview}`
                   : null}
                 {slot.angleManuallyReassigned
-                  ? `${slot.identityDecision || slot.humanReview ? " · " : ""}Angle: manually reassigned`
+                  ? `${slot.identityDecision || slot.humanReview ? " · " : ""}Winkel: manuell neu zugeordnet`
                   : null}
               </p>
             )}
             {slot.attemptHistory && slot.attemptHistory.length > 0 ? (
-              <ul className="ps-ref-pkg-history" aria-label={`${slot.label} attempt history`}>
+              <details className="nx-technical">
+              <summary>Technische Versuchshistorie</summary>
+              <ul className="ps-ref-pkg-history" aria-label={`${slot.label} Versuchshistorie`}>
                 {slot.attemptHistory.map((att, idx) => (
                   <li key={att.id}>
-                    Attempt {idx + 1} — Target:{" "}
+                    Versuch {idx + 1} — Ziel:{" "}
                     {REFERENCE_PACKAGE_SLOT_LABELS[att.reference_slot] ??
                       att.reference_slot}
                     {att.provider === "derived_local" ||
@@ -2803,10 +2791,10 @@ function ReferencePackagePanel({
                         ? " · Generated by OpenAI"
                         : ""}
                     {att.replacement_candidate
-                      ? " · Replacement candidate"
+                      ? " · Ersatzkandidat"
                       : ""}
                     {att.replacement_for_asset_id
-                      ? ` · Replaces asset: ${att.replacement_for_asset_id}`
+                      ? ` · Ersetzt Asset: ${att.replacement_for_asset_id}`
                       : ""}
                     {att.provider_direction_strategy
                       ? ` · Provider strategy: ${
@@ -2863,11 +2851,12 @@ function ReferencePackagePanel({
                     {att.effective_slot &&
                     slot.humanReview === "approved" &&
                     att.generated_asset_id === slot.acceptedAssetId
-                      ? " · Human review: approved"
+                      ? " · Menschliche Prüfung: approved"
                       : ""}
                   </li>
                 ))}
               </ul>
+              </details>
             ) : null}
           </li>
         ))}
@@ -2880,7 +2869,7 @@ function ReferencePackagePanel({
           disabled={busy || status?.referencePackageReady === true}
           onClick={() => void prepare()}
         >
-          Prepare missing Reference Package angles
+          Fehlende Referenzwinkel vorbereiten
         </button>
       ) : (
         <div className="ps-ref-pkg-confirm" data-testid="reference-package-confirm">
@@ -2890,13 +2879,13 @@ function ReferencePackagePanel({
               data-testid="reference-package-direction-plan"
             >
               <p>
-                Target slot:{" "}
+                Zielplatz:{" "}
                 <strong>
                   {pendingEstimate.directionPlan.disclosure.targetSlotLabel}
                 </strong>
               </p>
               <p>
-                Direction strategy:{" "}
+                Richtungsstrategie:{" "}
                 <strong>
                   {
                     pendingEstimate.directionPlan.disclosure
@@ -2906,14 +2895,14 @@ function ReferencePackagePanel({
               </p>
               {pendingEstimate.directionPlan.disclosure.reason ? (
                 <p>
-                  Reason:{" "}
+                  Grund:{" "}
                   <strong>
                     {pendingEstimate.directionPlan.disclosure.reason}
                   </strong>
                 </p>
               ) : null}
               <p>
-                Provider instruction:{" "}
+                Provider-Anweisung:{" "}
                 <strong>
                   {
                     pendingEstimate.directionPlan.disclosure
@@ -2922,7 +2911,7 @@ function ReferencePackagePanel({
                 </strong>
               </p>
               <p>
-                Final acceptance:{" "}
+                Abschließende Freigabe:{" "}
                 {
                   pendingEstimate.directionPlan.disclosure
                     .finalAcceptanceNote
@@ -2940,16 +2929,15 @@ function ReferencePackagePanel({
             </p>
           )}
           <p>
-            <strong>{pendingEstimate.imageCount}</strong> image
-            {pendingEstimate.imageCount === 1 ? "" : "s"} · Provider:{" "}
+            <strong>{pendingEstimate.imageCount}</strong> Bild{pendingEstimate.imageCount === 1 ? "" : "er"} · Anbieter:{" "}
             <strong>{pendingEstimate.provider}</strong>
           </p>
           <p>
-            Estimated €{pendingEstimate.estimatedMin.toFixed(2)} – €
+            Geschätzt €{pendingEstimate.estimatedMin.toFixed(2)} – €
             {pendingEstimate.estimatedMax.toFixed(2)}
           </p>
           <p>
-            Maximum authorized spend: €
+            Maximal autorisierte Kosten: €
             {pendingEstimate.maxAuthorizedSpend.toFixed(2)}
           </p>
           <button
@@ -2959,8 +2947,8 @@ function ReferencePackagePanel({
             onClick={() => void confirm()}
           >
             {pendingEstimate.imageCount === 1
-              ? "Confirm & regenerate"
-              : "Confirm & generate"}
+              ? "Bestätigen & neu generieren"
+              : "Bestätigen & generieren"}
           </button>
           <button
             type="button"
@@ -3051,7 +3039,7 @@ function ReferencePreviewLightbox({
     : null;
 
   const slotLabel = isMaster
-    ? "MASTER IDENTITY REFERENCE"
+    ? "MASTER-IDENTITÄTSREFERENZ"
     : effectiveSlot
       ? REFERENCE_PACKAGE_SLOT_LABELS[effectiveSlot] ?? effectiveSlot
       : `${asset.asset_type} · ${asset.view_angle}`;
@@ -3128,7 +3116,7 @@ function ReferencePreviewLightbox({
         newImageGenerated?: boolean;
       };
       if (!res.ok) {
-        throw new Error(data.error ?? "Identity override failed");
+        throw new Error(data.error ?? "Menschliche Identitätsfreigabe fehlgeschlagen");
       }
       if (data.providerCalled || data.newImageGenerated) {
         throw new Error(
@@ -3138,7 +3126,7 @@ function ReferencePreviewLightbox({
       setOverrideConfirmOpen(false);
       onReassigned();
     } catch (err) {
-      onError(err instanceof Error ? err.message : "Identity override failed");
+      onError(err instanceof Error ? err.message : "Menschliche Identitätsfreigabe fehlgeschlagen");
     } finally {
       setOverrideBusy(false);
     }
@@ -3164,7 +3152,7 @@ function ReferencePreviewLightbox({
       };
       if (!res.ok) {
         throw new Error(
-          data.error ?? "Target slot already has an accepted reference.",
+          data.error ?? "Der Zielplatz besitzt bereits eine freigegebene Referenz.",
         );
       }
       if (data.providerCalled) {
@@ -3221,13 +3209,13 @@ function ReferencePreviewLightbox({
         }),
       });
       const data = (await res.json()) as { error?: string; providerCalled?: boolean };
-      if (!res.ok) throw new Error(data.error ?? "Reject replacement failed");
+      if (!res.ok) throw new Error(data.error ?? "Der Ersatz konnte nicht abgelehnt werden");
       if (data.providerCalled) {
         throw new Error("FAIL CLOSED: reject replacement must not call a provider");
       }
       onReassigned();
     } catch (err) {
-      onError(err instanceof Error ? err.message : "Reject replacement failed");
+      onError(err instanceof Error ? err.message : "Der Ersatz konnte nicht abgelehnt werden");
     } finally {
       setReplacementBusy(false);
     }
@@ -3271,7 +3259,7 @@ function ReferencePreviewLightbox({
         throw new Error("FAIL CLOSED: mirrored version must cost €0.00");
       }
       if (!data.assetId) {
-        throw new Error("Mirrored asset id missing from response");
+        throw new Error("Mirrored asset id fehlt from response");
       }
       onMirroredCreated?.(data.assetId);
     } catch (err) {
@@ -3291,13 +3279,13 @@ function ReferencePreviewLightbox({
       className="ps-ref-lightbox"
       role="dialog"
       aria-modal="true"
-      aria-label="Reference large preview"
+      aria-label="Große Referenzvorschau"
       data-testid="reference-preview-lightbox"
     >
       <button
         type="button"
         className="ps-ref-lightbox-backdrop"
-        aria-label="Close preview"
+        aria-label="Vorschau schließen"
         onClick={onClose}
       />
       <div className="ps-ref-lightbox-panel">
@@ -3306,7 +3294,7 @@ function ReferencePreviewLightbox({
             <strong>{slotLabel}</strong>
             {isReassigned ? (
               <span className="ps-ref-reassigned-badge" data-testid="reassigned-badge">
-                REASSIGNED
+                NEU ZUGEORDNET
               </span>
             ) : null}
             {alreadyOverridden ? (
@@ -3314,7 +3302,7 @@ function ReferencePreviewLightbox({
                 className="ps-ref-override-badge"
                 data-testid="human-identity-override-badge"
               >
-                HUMAN IDENTITY OVERRIDE
+                MENSCHLICHE IDENTITÄTSFREIGABE
               </span>
             ) : null}
             {isDerivedMirror ? (
@@ -3322,7 +3310,7 @@ function ReferencePreviewLightbox({
                 className="ps-ref-derived-badge"
                 data-testid="derived-mirror-badge"
               >
-                DERIVED MIRROR
+                ABGELEITETE SPIEGELUNG
               </span>
             ) : null}
             {isReplacementCandidate ? (
@@ -3330,46 +3318,46 @@ function ReferencePreviewLightbox({
                 className="ps-ref-replacement-badge"
                 data-testid="replacement-candidate-badge"
               >
-                REPLACEMENT CANDIDATE
+                ERSATZKANDIDAT
               </span>
             ) : null}
             <p className="ps-muted" style={{ margin: "0.25rem 0 0" }}>
               {isMaster
                 ? "Master"
                 : isReplacementCandidate
-                  ? "Replacement candidate"
+                  ? "Ersatzkandidat"
                   : isDerivedMirror
-                    ? "Derived mirror salvage"
+                    ? "Abgeleitete Spiegelung"
                     : isGenerated
-                      ? "Generated reference"
-                      : "Reference"}{" "}
-              · status: {referencePreviewStatusLabel(asset)}
+                      ? "Erstellte Referenz"
+                      : "Referenz"}{" "}
+              · Status: {referencePreviewStatusLabel(asset)}
               {pkgMeta?.identity_decision
-                ? ` · machine identity: ${
+                ? ` · maschinelle Identitätsprüfung: ${
                     pkgMeta.identity_decision === "identity_mismatch"
-                      ? "mismatch"
+                      ? "Abweichung"
                       : pkgMeta.identity_decision === "identity_match"
-                        ? "match"
+                        ? "Übereinstimmung"
                         : pkgMeta.identity_decision === "identity_warning"
-                          ? "warning"
+                          ? "Warnung"
                           : pkgMeta.identity_decision
                   }`
                 : ""}
               {pkgMeta?.angle_direction
-                ? ` · camera: ${pkgMeta.angle_direction}`
+                ? ` · Kamera: ${pkgMeta.angle_direction}`
                 : ""}
-              {isDerivedMirror ? " · Cost: €0.00" : ""}
+              {isDerivedMirror ? " · Kosten: €0,00" : ""}
             </p>
             {isGenerated && requestedSlot && effectiveSlot ? (
               <dl className="ps-ref-angle-meta">
                 <div>
-                  <dt>Requested angle</dt>
+                  <dt>Angeforderter Winkel</dt>
                   <dd>
                     {REFERENCE_PACKAGE_SLOT_LABELS[requestedSlot] ?? requestedSlot}
                   </dd>
                 </div>
                 <div>
-                  <dt>Effective angle</dt>
+                  <dt>Wirksamer Winkel</dt>
                   <dd>
                     {REFERENCE_PACKAGE_SLOT_LABELS[effectiveSlot] ?? effectiveSlot}
                   </dd>
@@ -3377,46 +3365,45 @@ function ReferencePreviewLightbox({
               </dl>
             ) : null}
             {isGenerated && requestedSlot ? (
-              <ul className="ps-ref-angle-history" aria-label="Angle history">
+              <ul className="ps-ref-angle-history" aria-label="Winkelverlauf">
                 <li>
-                  Generated for{" "}
+                  Erstellt für{" "}
                   {REFERENCE_PACKAGE_SLOT_LABELS[requestedSlot] ?? requestedSlot}
                 </li>
                 {pkgMeta?.identity_decision ? (
                   <li>
-                    Machine identity:{" "}
+                    Maschinelle Identitätsprüfung:{" "}
                     {pkgMeta.identity_decision === "identity_warning"
-                      ? "warning"
+                      ? "Warnung"
                       : pkgMeta.identity_decision === "identity_match"
-                        ? "match"
+                        ? "Übereinstimmung"
                         : pkgMeta.identity_decision === "identity_mismatch"
-                          ? "mismatch"
+                          ? "Abweichung"
                           : pkgMeta.identity_decision}
                   </li>
                 ) : null}
                 {pkgMeta?.angle_direction ? (
-                  <li>Camera direction: {pkgMeta.angle_direction}</li>
+                  <li>Kamerarichtung: {pkgMeta.angle_direction}</li>
                 ) : null}
                 {pkgMeta?.human_identity_review === "approved_override" ? (
                   <li data-testid="human-override-review-line">
-                    Human review: approved override
+                    Menschliche Prüfung: ausdrücklich freigegeben
                   </li>
                 ) : null}
                 {pkgMeta?.identity_source_confidence ? (
                   <li>
-                    Identity source confidence:{" "}
+                    Konfidenz der Identitätsquelle:{" "}
                     {pkgMeta.identity_source_confidence.replace(/_/g, " ")}
                   </li>
                 ) : null}
                 {pkgMeta?.angle_direction === "incorrect" ? (
                   <li className="ps-inline-error">
-                    Wrong camera direction — Create mirrored version, Reassign
-                    angle, or Reject
+                    Falsche Kamerarichtung – gespiegelte Version erstellen, Winkel neu zuordnen oder ablehnen
                   </li>
                 ) : null}
                 {isDerivedMirror ? (
                   <li data-testid="derived-mirror-source-line">
-                    Source: Original generated{" "}
+                    Quelle: ursprünglich erstellte{" "}
                     {REFERENCE_PACKAGE_SLOT_LABELS[
                       pkgMeta?.original_requested_slot ??
                         pkgMeta?.requested_slot ??
@@ -3429,7 +3416,7 @@ function ReferencePreviewLightbox({
                 ) : null}
                 {isReplacementCandidate && incumbentAsset ? (
                   <li data-testid="replacement-incumbent-line">
-                    Current accepted reference:{" "}
+                    Aktuell freigegebene Referenz:{" "}
                     {REFERENCE_PACKAGE_SLOT_LABELS[
                       parseReferencePackageAssetNotes(incumbentAsset.notes)
                         ?.slot ?? "front"
@@ -3438,18 +3425,18 @@ function ReferencePreviewLightbox({
                   </li>
                 ) : null}
                 {isReplacementCandidate ? (
-                  <li>New candidate: {slotLabel}</li>
+                  <li>Neuer Kandidat: {slotLabel}</li>
                 ) : null}
                 {isReassigned && effectiveSlot ? (
                   <li>
-                    Reassigned →{" "}
+                    Neu zugeordnet →{" "}
                     {REFERENCE_PACKAGE_SLOT_LABELS[effectiveSlot] ?? effectiveSlot}
                   </li>
                 ) : null}
                 {asset.status === "approved" ? (
-                  <li>Human review: approved</li>
+                  <li>Menschliche Prüfung: freigegeben</li>
                 ) : asset.status === "rejected" ? (
-                  <li>Human review: rejected</li>
+                  <li>Menschliche Prüfung: abgelehnt</li>
                 ) : null}
               </ul>
             ) : null}
@@ -3467,7 +3454,7 @@ function ReferencePreviewLightbox({
                   });
                 }}
               >
-                {compare ? "Hide Master compare" : "Compare with Master"}
+                {compare ? "Master-Vergleich ausblenden" : "Mit Master vergleichen"}
               </button>
             ) : null}
             {canOfferMirrorSalvage ? (
@@ -3478,7 +3465,7 @@ function ReferencePreviewLightbox({
                 data-testid="create-mirrored-version"
                 onClick={() => void createMirroredVersion()}
               >
-                {mirrorBusy ? "Mirroring…" : "Create mirrored version"}
+                {mirrorBusy ? "Spiegelung wird erstellt…" : "Gespiegelte Version erstellen"}
               </button>
             ) : null}
             {isReplacementCandidate ? (
@@ -3495,7 +3482,7 @@ function ReferencePreviewLightbox({
                   data-testid="approve-and-replace"
                   onClick={() => void approveAndReplace()}
                 >
-                  Approve and replace
+                  Freigeben und ersetzen
                 </button>
                 <button
                   type="button"
@@ -3504,7 +3491,7 @@ function ReferencePreviewLightbox({
                   data-testid="keep-current-replacement"
                   onClick={() => void keepCurrentReplacement()}
                 >
-                  Keep current
+                  Aktuelle Referenz behalten
                 </button>
                 <button
                   type="button"
@@ -3513,7 +3500,7 @@ function ReferencePreviewLightbox({
                   data-testid="reject-replacement"
                   onClick={() => void rejectReplacement()}
                 >
-                  Reject replacement
+                  Ersatz ablehnen
                 </button>
               </>
             ) : !isMaster ? (
@@ -3527,11 +3514,11 @@ function ReferencePreviewLightbox({
                     title={
                       masterComparedInSession
                         ? undefined
-                        : "Compare with Master first"
+                        : "Zuerst mit dem Master vergleichen"
                     }
                     onClick={() => setOverrideConfirmOpen(true)}
                   >
-                    Approve with identity override
+                    Mit Identitätsfreigabe bestätigen
                   </button>
                 ) : (
                   <button
@@ -3545,13 +3532,13 @@ function ReferencePreviewLightbox({
                     onClick={onApprove}
                     title={
                       mismatchBlocksApprove
-                        ? "Identity mismatch cannot become Accepted without human override"
+                        ? "Eine abweichende Identität kann ohne menschliche Freigabe nicht akzeptiert werden"
                         : pkgMeta?.angle_direction === "incorrect"
-                          ? "Wrong camera direction cannot be approved — create a mirrored version first"
+                          ? "Die falsche Kamerarichtung kann nicht freigegeben werden – erst eine gespiegelte Version erstellen"
                           : undefined
                     }
                   >
-                    Approve
+                    Freigeben
                   </button>
                 )}
                 <button
@@ -3560,7 +3547,7 @@ function ReferencePreviewLightbox({
                   disabled={busy}
                   onClick={onReject}
                 >
-                  Reject
+                  Ablehnen
                 </button>
                 {canReassign ? (
                   <button
@@ -3569,17 +3556,17 @@ function ReferencePreviewLightbox({
                     disabled={busy || reassignBusy}
                     onClick={() => setReassignOpen((v) => !v)}
                   >
-                    Reassign angle
+                    Winkel neu zuordnen
                   </button>
                 ) : null}
               </>
             ) : (
               <span className="ps-muted" style={{ fontSize: "0.8rem" }}>
-                Immutable Master — cannot approve as replacement or delete
+                Unveränderlicher Master – kann weder als Ersatz freigegeben noch gelöscht werden
               </span>
             )}
             <button type="button" className="ps-btn" onClick={onClose}>
-              Close
+              Schließen
             </button>
           </div>
         </header>
@@ -3590,16 +3577,13 @@ function ReferencePreviewLightbox({
             data-testid="identity-override-confirm"
           >
             <p>
-              Machine identity check: <strong>MISMATCH</strong>
+              Maschinelle Identitätsprüfung: <strong>ABWEICHUNG</strong>
             </p>
             <p>
-              Camera direction: <strong>CORRECT</strong>
+              Kamerarichtung: <strong>KORREKT</strong>
             </p>
             <p className="ps-inline-error">
-              Warning: The automated identity system believes this image may not
-              depict the same person. Only continue if you manually compared it
-              with the Master Identity Reference and intentionally accept it as
-              the same Brand Identity.
+              Warnung: Die automatische Identitätsprüfung vermutet eine andere Person. Fahre nur fort, wenn du das Bild manuell mit der Master-Identitätsreferenz verglichen und bewusst als dieselbe Markenidentität bestätigt hast.
             </p>
             <button
               type="button"
@@ -3607,7 +3591,7 @@ function ReferencePreviewLightbox({
               disabled={overrideBusy || !masterComparedInSession}
               onClick={() => void confirmIdentityOverride()}
             >
-              Confirm human identity override
+              Menschliche Identitätsfreigabe bestätigen
             </button>
             <button
               type="button"
@@ -3615,7 +3599,7 @@ function ReferencePreviewLightbox({
               disabled={overrideBusy}
               onClick={() => setOverrideConfirmOpen(false)}
             >
-              Cancel
+              Abbrechen
             </button>
           </div>
         ) : null}
@@ -3623,19 +3607,18 @@ function ReferencePreviewLightbox({
         {reassignOpen && canReassign ? (
           <div className="ps-ref-reassign" data-testid="reassign-angle-panel">
             <p className="ps-muted">
-              Reassign this paid generation to the correct subject-perspective
-              slot. No new image will be generated.
+              Ordne diese bezahlte Generierung dem korrekten Platz der Subjektperspektive zu. Es wird kein neues Bild erstellt.
             </p>
             <label>
-              Target slot
+              Zielplatz
               <select
                 value={targetSlot}
                 onChange={(e) =>
                   setTargetSlot(e.target.value as ReferencePackageSlot | "")
                 }
-                aria-label="Target angle slot"
+                aria-label="Zielplatz für den Winkel"
               >
-                <option value="">Select slot…</option>
+                <option value="">Platz auswählen…</option>
                 {REFERENCE_PACKAGE_SLOTS.filter((s) => s !== effectiveSlot).map(
                   (slot) => (
                     <option key={slot} value={slot}>
@@ -3651,7 +3634,7 @@ function ReferencePreviewLightbox({
               disabled={!targetSlot || reassignBusy || busy}
               onClick={() => void confirmReassign()}
             >
-              Confirm reassignment
+              Neuzuordnung bestätigen
             </button>
           </div>
         ) : null}
@@ -3663,7 +3646,7 @@ function ReferencePreviewLightbox({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={master.signed_url!}
-                alt="MASTER IDENTITY REFERENCE"
+                alt="MASTER-IDENTITÄTSREFERENZ"
               />
             </figure>
             <figure>
@@ -3681,7 +3664,7 @@ function ReferencePreviewLightbox({
             />
           </div>
         ) : (
-          <p className="ps-muted">No signed URL available for this reference.</p>
+          <p className="ps-muted">Für diese Referenz ist kein privater Zugriff verfügbar.</p>
         )}
       </div>
     </div>
@@ -3690,7 +3673,7 @@ function ReferencePreviewLightbox({
 
 function StatusPill({ status }: { status: PersonaStatus }) {
   return (
-    <PersonaStatusChip label={status} tone={personaStatusTone(status)} />
+    <PersonaStatusChip label={ownerStatusLabel(status)} tone={personaStatusTone(status)} />
   );
 }
 

@@ -40,14 +40,14 @@ export function ReferenceBoardsPanel() {
   return (
     <div className="ps-ref-boards">
       <div className="ps-section-label">
-        <span>Reference Boards</span>
+        <span>Referenzboards</span>
         <em>
-          {totalApproved} approved · {totalDraft} draft
+          {totalApproved} freigegeben · {totalDraft} Entwurf
         </em>
       </div>
 
       <p className="ps-muted ps-ref-boards-lead">
-        Abstract visual direction only — never copy images, people, logos, or campaigns.
+        Nur abstrakte visuelle Richtung — niemals Bilder, Personen, Logos oder Kampagnen kopieren.
       </p>
 
       <ul className="ps-ref-board-list">
@@ -62,11 +62,11 @@ export function ReferenceBoardsPanel() {
               >
                 <strong>{board.name}</strong>
                 <span className="ps-ref-board-meta">
-                  {board.primaryUsage.replace(/_/g, " ")} · {counts.approved} approved ·{" "}
-                  {counts.draft} draft
+                  {board.primaryUsage.replace(/_/g, " ")} · {counts.approved} freigegeben ·{" "}
+                  {counts.draft} Entwurf
                 </span>
                 <span className="ps-ref-board-updated">
-                  Updated {board.updatedAt.slice(0, 10)}
+                  Aktualisiert {board.updatedAt.slice(0, 10)}
                 </span>
               </button>
             </li>
@@ -84,37 +84,37 @@ export function ReferenceBoardsPanel() {
 
           {selected.counts.approved + selected.counts.draft === 0 ? (
             <div className="ps-empty-state ps-empty-state--luxury ps-ref-board-empty">
-              <strong>No references yet</strong>
+              <strong>Noch keine Referenzen</strong>
               <p>
-                Register abstract casting descriptors manually. Automatic vision analysis is
-                disabled.
+                Abstrakte Casting-Beschreibungen manuell hinterlegen. Automatische Bildanalyse ist
+                deaktiviert.
               </p>
             </div>
           ) : null}
 
           <div className="ps-ref-board-actions">
-            <button type="button" className="ps-btn" disabled title="Coming soon">
-              Add Reference
+            <button type="button" className="ps-btn" disabled title="Demnächst">
+              Referenz hinzufügen
             </button>
-            <button type="button" className="ps-btn" disabled title="Coming soon">
-              Edit Descriptors
+            <button type="button" className="ps-btn" disabled title="Demnächst">
+              Beschreibungen bearbeiten
             </button>
-            <button type="button" className="ps-btn" disabled title="Coming soon">
-              Approve
+            <button type="button" className="ps-btn" disabled title="Demnächst">
+              Freigeben
             </button>
-            <button type="button" className="ps-btn" disabled title="Coming soon">
-              Reject
+            <button type="button" className="ps-btn" disabled title="Demnächst">
+              Ablehnen
             </button>
-            <button type="button" className="ps-btn" disabled title="Coming soon">
-              Archive
+            <button type="button" className="ps-btn" disabled title="Demnächst">
+              Archivieren
             </button>
           </div>
 
           <div className="ps-future-card ps-ref-vision-disabled">
             <span>
-              <Lock className="size-3 inline" strokeWidth={1.6} aria-hidden /> Automatic analysis
+              <Lock className="size-3 inline" strokeWidth={1.6} aria-hidden /> Automatische Analyse
             </span>
-            <em>Future · vision models disabled</em>
+            <em>Später · Bildmodelle deaktiviert</em>
           </div>
         </div>
       ) : null}

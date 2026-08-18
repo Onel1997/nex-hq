@@ -15,7 +15,7 @@ function MilestoneRow({
   return (
     <li className={`ps-obf-row${done ? " is-done" : ""}`}>
       <strong>{name}</strong>
-      <span>{approvedCount}/{requiredCount} approved</span>
+      <span>{approvedCount}/{requiredCount} freigegeben</span>
     </li>
   );
 }
@@ -36,29 +36,29 @@ export function OfficialBrandFaceMilestonePanel({
   return (
     <div className="ps-obf-milestone">
       <div className="ps-section-label">
-        <span>Official Brand Faces</span>
-        <em>Durable Persona authority</em>
+        <span>Offizielle Markengesichter</span>
+        <em>Dauerhafte Persona-Autorität</em>
       </div>
       <p className="ps-muted ps-obf-lead">
-        Only explicit durable Brand Cast approvals count toward this milestone.
+        Nur ausdrücklich dauerhafte Brand-Cast-Freigaben zählen für diesen Meilenstein.
       </p>
       {!progress ? (
-        <p className="ps-muted">Loading durable Brand Cast progress…</p>
+        <p className="ps-muted">Dauerhafter Brand-Cast-Stand wird geladen…</p>
       ) : (
         <>
-          <ul className="ps-obf-list" aria-label="Brand Cast milestone">
-            <MilestoneRow name="Male Brand Models" approvedCount={progress.male_approved} requiredCount={progress.male_required} />
-            <MilestoneRow name="Female Brand Models" approvedCount={progress.female_approved} requiredCount={progress.female_required} />
+          <ul className="ps-obf-list" aria-label="Brand-Cast-Meilenstein">
+            <MilestoneRow name="Männliche Markenmodels" approvedCount={progress.male_approved} requiredCount={progress.male_required} />
+            <MilestoneRow name="Weibliche Markenmodels" approvedCount={progress.female_approved} requiredCount={progress.female_required} />
           </ul>
           <div
             className={`ps-obf-overall${progress.milestone_reached ? " is-done" : ""}`}
-            aria-label={`${approvedCount}/${requiredCount} durable Brand Cast approvals`}
+            aria-label={`${approvedCount}/${requiredCount} dauerhafte Brand-Cast-Freigaben`}
           >
-            <em>Overall</em>
-            <strong>{approvedCount}/{requiredCount} Official Milaene Brand Models</strong>
+            <em>Gesamt</em>
+            <strong>{approvedCount}/{requiredCount} offizielle Milaene-Markenmodels</strong>
           </div>
           <p className="ps-muted ps-obf-hint">
-            Video approval is independent and is not required for Brand Cast membership.
+            Video-Freigabe ist unabhängig und für die Brand-Cast-Mitgliedschaft nicht erforderlich.
           </p>
         </>
       )}

@@ -41,7 +41,6 @@ import {
   canStartPaidCandidateGeneration,
   countUnattestedPaidJobs,
   isDebugRunCandidate,
-  isUnattestedPaidGenerationJob,
   type CreatorFormState,
   type CreatorCostPreview,
   type PresetCardMeta,
@@ -156,7 +155,7 @@ function GenerationEconomicsCheckout({
   return (
     <div className="ps-cost-checkout">
       <div className="ps-cost-checkout-head">
-        <span className="ps-cost-checkout-label">Generation Economics</span>
+        <span className="ps-cost-checkout-label">Generierungskosten</span>
         {paid ? (
           <span className="ps-provider-badge">{cost.provider}</span>
         ) : (
@@ -167,25 +166,25 @@ function GenerationEconomicsCheckout({
       {paid ? (
         <>
           <div className="ps-cost-checkout-hero">
-            <em>Estimated Generation Cost</em>
+            <em>Geschätzte Generierungskosten</em>
             <strong className="ps-cost-checkout-price">
               {cost.estimatedMin.toFixed(2)}–{cost.estimatedMax.toFixed(2)} {cost.currency}
             </strong>
             <div className="ps-cost-checkout-meta">
-              <span>per generation</span>
-              <span>OpenAI GPT Image</span>
-              <span>Premium Quality</span>
+              <span>pro Generierung</span>
+              <span>OpenAI Bildmodell</span>
+              <span>Premium-Qualität</span>
             </div>
           </div>
           <div className="ps-cost-checkout-secondary">
             <div>
-              <em>Expected time</em>
+              <em>Erwartete Dauer</em>
               <strong>
-                {cost.expectedMinutesMin}–{cost.expectedMinutesMax} min
+                {cost.expectedMinutesMin}–{cost.expectedMinutesMax} Min.
               </strong>
             </div>
             <div className="ps-cost-checkout-budget">
-              <em>Daily budget</em>
+              <em>Tagesbudget</em>
               <strong>
                 {cost.dailyBudget} {cost.currency}
               </strong>
@@ -194,15 +193,15 @@ function GenerationEconomicsCheckout({
         </>
       ) : (
         <div className="ps-cost-checkout-hero">
-          <em>Estimated Generation Cost</em>
+          <em>Geschätzte Generierungskosten</em>
           <strong className="ps-cost-checkout-price ps-cost-checkout-price--free">0.00 {cost.currency}</strong>
           <div className="ps-cost-checkout-meta">
-            <span>per generation</span>
-            <span>Manual Upload</span>
-            <span>No provider cost</span>
+            <span>pro Generierung</span>
+            <span>Manueller Upload</span>
+            <span>Keine Provider-Kosten</span>
           </div>
           <div className="ps-cost-checkout-budget ps-cost-checkout-budget--solo">
-            <em>Daily budget</em>
+            <em>Tagesbudget</em>
             <strong>
               {cost.dailyBudget} {cost.currency}
             </strong>
@@ -212,7 +211,7 @@ function GenerationEconomicsCheckout({
 
       {paid ? (
         <div className="ps-generation-includes">
-          <p>Generation includes:</p>
+          <p>Generierung umfasst:</p>
           <ul>
             {GENERATION_INCLUDES.map((item) => (
               <li key={item}>
@@ -241,8 +240,8 @@ function ProviderModePicker({
 
   return (
     <div className="ps-provider-picker">
-      <span className="ps-provider-picker-label">Generation Provider</span>
-      <div className="ps-provider-options" role="radiogroup" aria-label="Generation Provider">
+      <span className="ps-provider-picker-label">Generierungsanbieter</span>
+      <div className="ps-provider-options" role="radiogroup" aria-label="Generierungsanbieter">
         {VISIBLE_PROVIDER_MODES.map((mode) => (
           <button
             key={mode.value}
@@ -306,19 +305,18 @@ export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
     <section className="ps-panel">
       <header className="ps-panel-header">
         <div>
-          <p className="ps-eyebrow">Official Faces</p>
+          <p className="ps-eyebrow">Offizielle Markenmodels</p>
           <h1>Brand Cast</h1>
           <p className="ps-muted">
-            The approved faces of Milaene — Image and Video Studio stay dark until the cast
-            is complete.
+            Die freigegebenen Gesichter von Milaene — Image Studio und Video Studio bleiben dunkel, bis der Cast vollständig ist.
           </p>
         </div>
       </header>
 
       {!p ? (
         <EmptyState
-          title="Preparing Brand Cast progress"
-          body="Your casting milestone will appear here in a moment."
+          title="Fortschritt des Brand Cast wird vorbereitet"
+          body="Der Casting-Meilenstein erscheint in Kürze."
         />
       ) : (
         <div className="ps-brand-cast">
@@ -340,29 +338,29 @@ export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
                       className="ps-ref-thumb"
                     />
                   ) : (
-                    <span className="ps-muted">Portrait pending</span>
+                    <span className="ps-muted">Porträt ausstehend</span>
                   )}
                   <strong>{m.displayName}</strong>
                   <span className="ps-ref-pkg-meta">{m.role}</span>
                   <div className="ps-btn-row">
                     {m.identityLocked ? (
-                      <PersonaStatusChip label="IDENTITY LOCKED" tone="selected" />
+                      <PersonaStatusChip label="IDENTITÄT FESTGESCHRIEBEN" tone="selected" />
                     ) : null}
                     {m.imageUseApproved ? (
-                      <PersonaStatusChip label="IMAGE APPROVED" tone="image" />
+                      <PersonaStatusChip label="FÜR BILDER FREIGEGEBEN" tone="image" />
                     ) : null}
                     <PersonaStatusChip
                       label={
                         m.videoStatus === "approved"
-                          ? "VIDEO APPROVED"
+                          ? "FÜR VIDEO FREIGEGEBEN"
                           : m.videoStatus === "not_ready"
-                            ? "VIDEO NOT READY"
-                            : "VIDEO NOT APPROVED"
+                            ? "VIDEO NOCH NICHT BEREIT"
+                            : "NICHT FÜR VIDEO FREIGEGEBEN"
                       }
                       tone={m.videoStatus === "approved" ? "video" : "muted"}
                     />
                     {m.brandCastApproved ? (
-                      <PersonaStatusChip label="OFFICIAL BRAND CAST" tone="approved" />
+                      <PersonaStatusChip label="OFFIZIELLER BRAND CAST" tone="approved" />
                     ) : null}
                   </div>
                   <button
@@ -370,42 +368,42 @@ export function BrandCastView({ studio }: { studio: PersonaStudioController }) {
                     className="ps-btn"
                     onClick={() => studio.selectPersona(m.personaId)}
                   >
-                    Open
+                    Öffnen
                   </button>
                 </li>
               ))}
             </ul>
           ) : !p.milestone_reached && p.male_approved === 0 && p.female_approved === 0 ? (
             <EmptyState
-              title="No Brand Cast has been approved yet."
-              body="Cast your first official faces in Brand Face Casting — then lock identity and approve."
+              title="Noch kein Markenmodel wurde für den Brand Cast freigegeben."
+              body="Wähle zuerst offizielle Markenmodelle aus, schreibe anschließend ihre Identität fest und gib sie frei."
             />
           ) : null}
           <div className="ps-stat-grid">
             <div className="ps-stat">
-              <em>Male faces</em>
+              <em>Männliche Models</em>
               <strong>
                 {p.male_approved}/{p.male_required}
               </strong>
             </div>
             <div className="ps-stat">
-              <em>Female faces</em>
+              <em>Weibliche Models</em>
               <strong>
                 {p.female_approved}/{p.female_required}
               </strong>
             </div>
             <div className="ps-stat">
-              <em>Image ready</em>
+              <em>Für Bilder bereit</em>
               <strong>{p.image_ready_count}</strong>
             </div>
             <div className="ps-stat">
-              <em>Video ready</em>
+              <em>Für Video bereit</em>
               <strong>{p.video_ready_count}</strong>
             </div>
           </div>
           {p.missing_reference_requirements.length > 0 ? (
             <div className="ps-callout">
-              <p>Still needed for a complete cast</p>
+              <p>Für einen vollständigen Brand Cast fehlt noch</p>
               <ul>
                 {p.missing_reference_requirements.map((m) => (
                   <li key={m}>{m}</li>
@@ -547,7 +545,7 @@ function LegacyPersonaCreatorWizard({
 
   const submit = async () => {
     if (!confirmCast) {
-      setError("Please confirm the Brand Cast summary before continuing.");
+      setError("Bestätige vor dem Fortfahren die Zusammenfassung des Brand Cast.");
       return;
     }
     setBusy(true);
@@ -577,7 +575,7 @@ function LegacyPersonaCreatorWizard({
     { label: "Skin Tone", value: form.skin_tone_direction || "—" },
     { label: "Fashion Direction", value: form.fashion_style || "—" },
     { label: "Campaign Usage", value: usageDisplayLabel(form.intended_usage) },
-    { label: "Target Audience", value: form.preferred_brand_looks || "—" },
+    { label: "Zielgruppe", value: form.preferred_brand_looks || "—" },
   ];
 
   return (
@@ -585,7 +583,7 @@ function LegacyPersonaCreatorWizard({
       <header className="ps-panel-header">
         <div>
           <p className="ps-eyebrow">Debug / Custom</p>
-          <h1>Legacy Persona Wizard</h1>
+          <h1>Älterer Persona-Assistent</h1>
           <p className="ps-muted">
             Manual Brand Role → Body → Face wizard for debug or future custom personas.
             Official Milaene Brand Faces use Brand Face Casting instead.
@@ -602,7 +600,7 @@ function LegacyPersonaCreatorWizard({
         Intelligence.
       </div>
 
-      <nav className="ps-visual-flow" aria-label="Brand Cast journey">
+      <nav className="ps-visual-flow" aria-label="Ablauf des Brand Cast">
         {VISUAL_FLOW.map((node, i) => {
           const current = node.id === "creator";
           const done = i < 1;
@@ -625,8 +623,8 @@ function LegacyPersonaCreatorWizard({
 
       <div className="ps-preset-gallery">
         <div className="ps-section-label">
-          <span>Casting Directions</span>
-          <em>Starting points only — never auto-submit</em>
+          <span>Casting-Richtungen</span>
+          <em>Nur Ausgangspunkte – niemals automatisch übernehmen</em>
         </div>
         <div className="ps-preset-cards">
           {studio.presets.map((p) => {
@@ -650,7 +648,7 @@ function LegacyPersonaCreatorWizard({
                 <strong>{meta.title}</strong>
                 <p>{meta.description}</p>
                 <div className="ps-preset-card-footer">
-                  <span>Best for</span>
+                  <span>Besonders geeignet für</span>
                   <em>{meta.bestFor.join(" · ")}</em>
                 </div>
               </button>
@@ -669,7 +667,7 @@ function LegacyPersonaCreatorWizard({
               <strong>{s.meta.title}</strong>
               <p>{s.meta.description}</p>
               <div className="ps-preset-card-footer">
-                <span>Best for</span>
+                <span>Besonders geeignet für</span>
                 <em>{s.meta.bestFor.join(" · ")}</em>
               </div>
             </button>
@@ -855,16 +853,16 @@ function LegacyPersonaCreatorWizard({
                     value={form.intended_usage}
                     onChange={(e) => set("intended_usage", e.target.value as IntendedUsage)}
                   >
-                    <option value="image">Image only</option>
-                    <option value="video">Video only</option>
-                    <option value="image_and_video">Image and Video</option>
+                    <option value="image">Nur Bilder</option>
+                    <option value="video">Nur Video</option>
+                    <option value="image_and_video">Bilder und Video</option>
                   </select>
                 </label>
               ) : null}
               {step === 8 ? (
                 <>
                   <label>
-                    Candidate Count (max 8)
+                    Anzahl Kandidaten (max 8)
                     <input
                       type="number"
                       min={1}
@@ -892,8 +890,8 @@ function LegacyPersonaCreatorWizard({
               {step === 9 ? (
                 <div className="ps-confirm-screen">
                   <div className="ps-section-label">
-                    <span>Brand Cast Summary</span>
-                    <em>Review before saving this casting brief</em>
+                    <span>Brand-Cast-Zusammenfassung</span>
+                    <em>Vor dem Speichern des Casting-Briefings prüfen</em>
                   </div>
                   <dl className="ps-confirm-summary">
                     {summaryRows.map((row) => (
@@ -906,11 +904,11 @@ function LegacyPersonaCreatorWizard({
                   <GenerationEconomicsCheckout cost={cost} providerMode={form.provider_mode} />
                   <div className="ps-confirm-metrics">
                     <div>
-                      <em>Candidate Count</em>
+                      <em>Anzahl Kandidaten</em>
                       <strong className="ps-score-counter">{form.candidate_count}</strong>
                     </div>
                     <div>
-                      <em>Provider</em>
+                      <em>Anbieter</em>
                       <strong>{cost.generationMode}</strong>
                     </div>
                   </div>
@@ -925,7 +923,7 @@ function LegacyPersonaCreatorWizard({
                         I understand that generation will use paid OpenAI credits and the estimated
                         costs shown above.
                       </strong>
-                      <span>No generation starts until I confirm.</span>
+                      <span>Keine Generierung startet ohne meine Bestätigung.</span>
                     </div>
                   </label>
                 </div>
@@ -957,13 +955,13 @@ function LegacyPersonaCreatorWizard({
           </div>
         </div>
 
-        <aside className="ps-creator-aside" aria-label="Live Brand Cast summary">
+        <aside className="ps-creator-aside" aria-label="Aktuelle Brand-Cast-Zusammenfassung">
           <OfficialBrandFaceMilestonePanel progress={studio.brandCastProgress} />
           <BrandArchetypeCastPanel />
           <div className="ps-live-summary">
             <div className="ps-live-summary-head">
-              <span className="ps-eyebrow">Live Preview</span>
-              <h3>Brand Cast Summary</h3>
+              <span className="ps-eyebrow">Live-Vorschau</span>
+              <h3>Brand-Cast-Zusammenfassung</h3>
             </div>
 
             <div className="ps-live-portrait-wrap">
@@ -977,16 +975,16 @@ function LegacyPersonaCreatorWizard({
             <div className="ps-live-hero">
               <span className="ps-live-role">{brandRoleDisplayLabel(form.brand_role)}</span>
               <strong>{fashionLabel}</strong>
-              <p>Official Milaene Brand Face</p>
+              <p>Offizielles Milaene Markenmodel</p>
               <div className="ps-chip-row-premium">
                 <PersonaStatusChip label="Brand Face" tone="brand" />
                 <PersonaStatusChip label="Premium" tone="premium" />
                 <PersonaStatusChip
-                  label="Image Ready"
+                  label="Für Bilder bereit"
                   tone={scores.imageReadiness >= 60 ? "image" : "muted"}
                 />
                 <PersonaStatusChip
-                  label="Video Ready"
+                  label="Für Video bereit"
                   tone={scores.videoReadiness >= 60 ? "video" : "muted"}
                 />
               </div>
@@ -1012,7 +1010,7 @@ function LegacyPersonaCreatorWizard({
 
           <div className="ps-candidate-showcase">
             <div className="ps-section-label">
-              <span>Candidate Preview</span>
+              <span>Kandidatenvorschau</span>
               <button
                 type="button"
                 className="ps-link-quiet"
@@ -1035,9 +1033,9 @@ function LegacyPersonaCreatorWizard({
                   <div className="ps-candidate-empty-icon" aria-hidden>
                     <UserRound className="size-10" strokeWidth={1.15} />
                   </div>
-                  <p className="ps-eyebrow">Awaiting generation</p>
-                  <h4>Waiting for Generation</h4>
-                  <p>No candidates generated yet.</p>
+                  <p className="ps-eyebrow">Generierung ausstehend</p>
+                  <h4>Wartet auf Generierung</h4>
+                  <p>Noch keine Kandidaten erstellt.</p>
                   <p className="ps-candidate-empty-hint">
                     After generation you can compare, rate, shortlist, and approve your official
                     brand faces.
@@ -1051,7 +1049,7 @@ function LegacyPersonaCreatorWizard({
 
           <div className="ps-cast-progress">
             <div className="ps-section-label">
-              <span>Brand Cast Progress</span>
+              <span>Brand-Cast-Fortschritt</span>
             </div>
             <div className="ps-cast-progress-role">{brandRoleDisplayLabel(form.brand_role)}</div>
             <div
@@ -1064,15 +1062,15 @@ function LegacyPersonaCreatorWizard({
             </div>
             <div className="ps-cast-progress-meta">
               <div>
-                <em>Current milestone</em>
+                <em>Aktueller Meilenstein</em>
                 <strong>{progress.currentMilestone}</strong>
               </div>
               <div>
-                <em>Next milestone</em>
+                <em>Nächster Meilenstein</em>
                 <strong>{progress.nextMilestone}</strong>
               </div>
               <div>
-                <em>Estimated completion</em>
+                <em>Geschätzter Abschluss</em>
                 <strong>{progress.estimatedCompletion}</strong>
               </div>
             </div>
@@ -1255,8 +1253,8 @@ export function CreationProjectsView({
     <section className="ps-panel">
       <header className="ps-panel-header">
         <div>
-          <p className="ps-eyebrow">Sessions</p>
-          <h1>Creation Projects</h1>
+          <p className="ps-eyebrow">Sitzungen</p>
+          <h1>Model-Projekte</h1>
           <p className="ps-muted">
             Casting sessions with cost control — generation never starts without confirmation.
           </p>
@@ -1290,8 +1288,8 @@ export function CreationProjectsView({
         {studio.creationProjects.length === 0 ? (
           <EmptyState
             title="No casting sessions yet."
-            body="Open Brand Face Casting to start A1 Discovery for an official archetype."
-            actionLabel="Start casting"
+            body="Öffne das Markenmodel-Casting, um die Entdeckung für einen offiziellen Archetyp zu starten."
+            actionLabel="Casting starten"
             onAction={() => studio.startNewCastingSession()}
           />
         ) : (
@@ -1357,7 +1355,7 @@ export function CreationProjectsView({
                 })
               ]
             }{" "}
-            · Status {selected.status} · Provider {selected.provider_mode} · Ist-Kosten{" "}
+            · Status {selected.status} · Anbieter {selected.provider_mode} · Ist-Kosten{" "}
             {selected.actual_cost.toFixed(2)} €
           </p>
           {studio.discoveryLifecycle ? (
@@ -1411,7 +1409,7 @@ export function CreationProjectsView({
             <div className="ps-callout ps-callout-warn">
               <p>
                 <strong>Debug-Lauf erkannt:</strong>{" "}
-                {countUnattestedPaidJobs(studio.generationJobs)} Provider-Lauf/Läufe ohne
+                {countUnattestedPaidJobs(studio.generationJobs)} Anbieter-Lauf/Läufe ohne
                 UI-Bestätigung ({countUnattestedPaidJobs(studio.generationJobs)} × geschätzte
                 Kosten). Tatsächlicher OpenAI-Aufruf erfolgte — nicht über normale
                 Persona-Studio-Bestätigung freigegeben. Kandidaten aus diesen Läufen sind nicht
@@ -1421,7 +1419,7 @@ export function CreationProjectsView({
           ) : selected.actual_cost > 0 ? (
             <div className="ps-callout ps-callout-warn">
               <p>
-                <strong>Hinweis:</strong> Dieses Projekt enthält Provider-Läufe mit geschätzten
+                <strong>Hinweis:</strong> Dieses Projekt enthält Anbieter-Läufe mit geschätzten
                 Kosten ({selected.actual_cost.toFixed(2)} €). Prüfen Sie, ob alle Läufe über die
                 UI bestätigt wurden.
               </p>
@@ -1434,7 +1432,7 @@ export function CreationProjectsView({
               </p>
               <ul>
                 <li>
-                  Provider-Läufe (NexHQ): {studio.incidentSummary.completedProviderRuns}
+                  Anbieter-Läufe (NexHQ): {studio.incidentSummary.completedProviderRuns}
                 </li>
                 <li>Bereite Assets: {studio.incidentSummary.readyAssetCount}</li>
                 <li>
@@ -1474,7 +1472,7 @@ export function CreationProjectsView({
                     {prepareConfirmationGate.reasons.statusAllowed ? "true" : "false"}
                   </li>
                   <li>
-                    Provider erlaubt:{" "}
+                    Anbieter erlaubt:{" "}
                     {prepareConfirmationGate.reasons.providerAllowed ? "true" : "false"}
                   </li>
                   <li>
@@ -1489,7 +1487,7 @@ export function CreationProjectsView({
                     Health geladen:{" "}
                     {prepareConfirmationGate.reasons.healthLoaded ? "true" : "false"}
                   </li>
-                  <li>Busy: {prepareConfirmationGate.reasons.busy ? "true" : "false"}</li>
+                  <li>Beschäftigt: {prepareConfirmationGate.reasons.busy ? "true" : "false"}</li>
                   <li>
                     Workflow erlaubt:{" "}
                     {prepareConfirmationGate.reasons.workflowAllowed ? "true" : "false"}
@@ -1531,7 +1529,7 @@ export function CreationProjectsView({
               studio.paidConfirmationProjectId === selected.id &&
               studio.activeConfirmationStatus === "ready" ? (
                 <>
-                  <p className="ps-muted">Confirmation ready · explizite Bestätigung erforderlich</p>
+                  <p className="ps-muted">Vorbereitung abgeschlossen · ausdrückliche Bestätigung erforderlich</p>
                   <label className="ps-check">
                     <input
                       type="checkbox"
@@ -1551,7 +1549,7 @@ export function CreationProjectsView({
               ) : (
                 <>
                   <p className="ps-muted">
-                    Cost estimate available — new confirmation required.
+                    Kostenschätzung vorhanden — neue Bestätigung erforderlich.
                   </p>
                   <button
                     type="button"
@@ -1618,7 +1616,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     providerMayHaveCompleted?: boolean;
     safeError?: string | null;
   } | null>(null);
-  const [elapsedDisplay, setElapsedDisplay] = useState("Waiting to start");
+  const [elapsedDisplay, setElapsedDisplay] = useState("Wartet auf Start");
   const [staleRecoveryMessage, setStaleRecoveryMessage] = useState<string | null>(
     null,
   );
@@ -1638,7 +1636,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
 
   useEffect(() => {
     if (!replacementFlow) {
-      setElapsedDisplay("Waiting to start");
+      setElapsedDisplay("Wartet auf Start");
       return;
     }
     if (
@@ -1841,7 +1839,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     if (!selectedBrandFace) return;
     if (studio.selectedCandidateId === selectedBrandFace.id) return;
     void studio.loadCandidate(selectedBrandFace.id);
-  }, [selectedBrandFace?.id, studio.selectedCandidateId, studio.loadCandidate]);
+  }, [selectedBrandFace, studio]);
 
   useEffect(() => {
     if (!DEBUG_MODE || !studio.selectedProjectId) return;
@@ -1943,7 +1941,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     try {
       await navigator.clipboard.writeText(JSON.stringify(debugPayload, null, 2));
     } catch {
-      setError("Could not copy debug data");
+      setError("Technische Daten konnten nicht kopiert werden.");
     }
   };
 
@@ -1951,16 +1949,15 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
     <section className="ps-panel">
       <header className="ps-panel-header">
         <div>
-          <p className="ps-eyebrow">Casting</p>
-          <h1>Brand Face Casting</h1>
+          <p className="ps-eyebrow">Model-Entdeckung</p>
+          <h1>Markenmodel auswählen</h1>
           <p className="ps-muted">
-            Commercial casting analysis — ranked by Brand Face potential, not beauty alone.
-            Selection creates a draft persona only, never production approval.
+            Vergleiche vier eigenständige Kandidaten nach Markenpassung. Eine Auswahl legt nur einen Entwurf an und erteilt niemals automatisch eine Produktionsfreigabe.
           </p>
         </div>
       </header>
 
-      {process.env.NODE_ENV !== "production" || DEBUG_MODE ? (
+      {DEBUG_MODE ? (
         <div className="ps-callout ps-ci-integrity-debug" style={{ marginBottom: "1rem" }}>
           <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px", margin: 0 }}>
             {`ACTIVE PROJECT: ${debugPayload.ACTIVE_PROJECT ?? "—"}\n`}
@@ -1977,7 +1974,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             {`CANDIDATES CREATED AT: ${(debugPayload.CANDIDATES_CREATED_AT as string[]).join(", ") || "—"}`}
           </pre>
           <button type="button" className="ps-btn-secondary" onClick={() => void copyDebug()}>
-            Copy debug data
+            Technische Daten kopieren
           </button>
         </div>
       ) : null}
@@ -1985,7 +1982,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
       {studio.projectDetailLoading ? (
         <div className="ps-empty">
           <Loader2 className="size-6 animate-spin" />
-          <p>Loading candidates for this project…</p>
+          <p>Kandidaten werden geladen…</p>
         </div>
       ) : null}
 
@@ -1996,8 +1993,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
           role="alert"
         >
           <p>
-            <strong>Data integrity error</strong> — candidate board blocked. State does not
-            match the active creation project.
+            <strong>Datenintegritätsfehler</strong> — die Kandidatenansicht wurde gesperrt, weil der Stand nicht zum aktiven Projekt passt.
           </p>
           <pre style={{ fontSize: "12px" }}>{boardIntegrity.reasons.join("\n")}</pre>
         </div>
@@ -2005,7 +2001,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
 
       {DEBUG_MODE ? (
         <details className="ps-tech ps-ci-debug-panel">
-          <summary>Casting debug (development only)</summary>
+          <summary>Technische Details · Entwicklung</summary>
           <dl>
             <div>
               <dt>Active creation project</dt>
@@ -2031,11 +2027,11 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
               <dd>{generationSource}</dd>
             </div>
             <div>
-              <dt>Candidate IDs</dt>
+              <dt>Kandidaten-IDs</dt>
               <dd>{visibleCandidates.map((c) => c.id).join(", ") || "—"}</dd>
             </div>
             <div>
-              <dt>Provider run</dt>
+              <dt>Anbieter run</dt>
               <dd>{studio.activeGenerationRunId ?? "—"}</dd>
             </div>
             <div>
@@ -2051,8 +2047,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
       {diversityWarning && !integrityMismatch ? (
         <div className="ps-callout ps-callout-warn">
           <p>
-            <strong>{diversityWarning}</strong> Consider regenerating with stronger variation
-            slots.
+            <strong>{diversityWarning}</strong> Starte bei Bedarf eine neue Entdeckung mit stärker voneinander abgegrenzten Kandidaten.
           </p>
         </div>
       ) : null}
@@ -2071,36 +2066,36 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
             <EmptyState
               title={
                 !studio.selectedProjectId
-                  ? "No active casting session."
+                  ? "Noch keine aktive Model-Entdeckung."
                   : failed
-                    ? "Discovery generation failed."
+                    ? "Die Model-Entdeckung ist fehlgeschlagen."
                     : generating
-                      ? "Discovery generation is in progress."
+                      ? "Kandidaten werden erstellt…"
                       : notStarted
-                        ? "Discovery has not started yet."
-                        : "No candidates exist for this project."
+                        ? "Die Model-Entdeckung wurde noch nicht gestartet."
+                        : "Für dieses Projekt sind noch keine Kandidaten vorhanden."
               }
               body={
                 !studio.selectedProjectId
-                  ? "Click New casting session, then Start New Discovery and confirm paid generation — the board only shows faces from the current generation run."
+                  ? "Starte eine neue Entdeckung. Kandidaten erscheinen erst nach einer ausdrücklich bestätigten Generierung."
                   : failed
                     ? lifecycle?.failedErrorMessage ||
-                      "Prepare a new estimate and confirm again on this project. Do not create a new project."
+                      "Prüfe in diesem Projekt neue Kosten und bestätige erneut. Lege dafür kein zweites Projekt an."
                     : generating
-                      ? "Wait for the generation run to finish, then refresh. Provider calls only run after confirmation."
+                      ? "Warte auf den Abschluss und aktualisiere dann die Ansicht. Anbieter-Aufrufe erfolgen nur nach Bestätigung."
                       : notStarted
-                        ? "Prepare an estimate and confirm paid generation before candidates appear. The empty board does not mean casting completed."
+                        ? "Prüfe zuerst die Kosten und bestätige die Generierung. Eine leere Ansicht bedeutet nicht, dass die Entdeckung abgeschlossen ist."
                         : candidatesInSync
-                          ? "This creation project has no candidates for the current completed generation run. Continue from Creation Projects — never reuse another project's board."
-                          : "Select a creation project and wait for it to finish loading before viewing candidates."
+                          ? "Dieses Entdeckungsprojekt hat keine Kandidaten für den aktuellen abgeschlossenen Lauf. Fahre in den Entdeckungsprojekten fort — verwende niemals das Board eines anderen Projekts."
+                          : "Wähle ein Entdeckungsprojekt und warte, bis es geladen ist, bevor du Kandidaten siehst."
               }
               actionLabel={
                 !studio.selectedProjectId
-                  ? "Start casting"
+                  ? "Entdeckung starten"
                   : failed || notStarted
-                    ? "Continue Discovery"
+                    ? "Entdeckung fortsetzen"
                     : candidatesInSync
-                      ? "Open Creation Projects"
+                      ? "Entdeckungsprojekte öffnen"
                       : undefined
               }
               onAction={
@@ -2120,7 +2115,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
       {error ? (
         <div className="ps-callout ps-callout-warn" role="alert" style={{ marginBottom: "1rem" }}>
           <p>
-            <strong>Generate New Face error</strong>
+            <strong>Model konnte nicht erstellt werden</strong>
           </p>
           <p>{error}</p>
         </div>
@@ -2128,7 +2123,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
       {staleRecoveryMessage ? (
         <div className="ps-callout ps-callout-warn" role="status" style={{ marginBottom: "1rem" }}>
           <p>
-            <strong>Previous generation stopped unexpectedly.</strong>
+            <strong>Der vorherige Durchlauf wurde unerwartet beendet.</strong>
           </p>
           <p>{staleRecoveryMessage}</p>
           <p className="ps-muted" style={{ fontSize: "12px" }}>
@@ -2288,7 +2283,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                         setError(
                           e instanceof Error
                             ? e.message
-                            : "Generate New Face prepare failed",
+                            : "Das neue Gesicht konnte nicht vorbereitet werden",
                         );
                         setNoveltyPrepare(null);
                       }
@@ -2377,11 +2372,11 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
               }
               onClick={() => {
                 if (!studio.selectedProjectId || !studio.paidConfirmationToken) {
-                  setError("Confirmation token missing — prepare again.");
+                  setError("Bestätigung fehlt – bitte erneut vorbereiten.");
                   return;
                 }
                 if (!noveltyConfirmCost) {
-                  setError("Please confirm the cost checkbox.");
+                  setError("Bitte die Kostenbestätigung aktivieren.");
                   return;
                 }
                 if (confirmInFlightRef.current) return;
@@ -2463,13 +2458,13 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                     data.safeErrorCode === "provider_generation_timeout" ||
                     data.safeErrorMessage?.includes("did not finish within")
                   ) {
-                    setError("Image generation timed out.");
+                    setError("Die Bildgenerierung hat das Zeitlimit überschritten.");
                     setReplacementFlow((prev) =>
                       prev
                         ? {
                             ...prev,
                             phase: "failed",
-                            stageLabel: "Image generation timed out",
+                            stageLabel: "Zeitlimit der Bildgenerierung überschritten",
                             safeError: "provider_generation_timeout",
                             providerMayHaveCompleted:
                               data.providerMayHaveCompleted === true,
@@ -2497,7 +2492,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                         ? (data.safeErrorMessage?.trim() ||
                           REPLACEMENT_PERSIST_FAILED_USER_MESSAGE)
                         : (data.safeErrorMessage ??
-                          "Generate New Face failed.");
+                          "Das neue Gesicht konnte nicht erstellt werden.");
                     setError(failMsg);
                     setReplacementFlow((prev) =>
                       prev
@@ -2507,7 +2502,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                             jobId: jobId ?? prev.jobId,
                             newCandidateId:
                               data.candidateId ?? prev.newCandidateId,
-                            stageLabel: "Replacement failed",
+                            stageLabel: "Ersetzung fehlgeschlagen",
                             safeError: failMsg,
                             providerMayHaveCompleted:
                               data.providerMayHaveCompleted === true ||
@@ -2630,7 +2625,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                         confirmFailedMessage =
                           e instanceof Error
                             ? e.message
-                            : "Generate New Face failed";
+                            : "Das neue Gesicht konnte nicht erstellt werden";
                         setDebugReplacement((prev) => ({
                           ...(prev ?? {}),
                           state: "failed",
@@ -2663,7 +2658,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                         );
                       let failMsg: string = failedText;
                       if (timedOut) {
-                        failMsg = "Image generation timed out.";
+                        failMsg = "Die Bildgenerierung hat das Zeitlimit überschritten.";
                       } else if (
                         persistFailed &&
                         !failedText.includes("could not be saved")
@@ -2677,8 +2672,8 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                               ...prev,
                               phase: "failed",
                               stageLabel: timedOut
-                                ? "Image generation timed out"
-                                : "Replacement failed",
+                                ? "Zeitlimit der Bildgenerierung überschritten"
+                                : "Ersetzung fehlgeschlagen",
                               safeError: failMsg,
                               providerMayHaveCompleted:
                                 resolvedConfirm?.providerCompleted === true ||
@@ -2689,7 +2684,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                       );
                       if (resolvedConfirm?.providerCompleted) {
                         setError(
-                          `${failMsg} Provider may already have completed — do not retry without a fresh confirmation.`,
+                          `${failMsg} Der Anbieter könnte den Vorgang bereits abgeschlossen haben – ohne neue Bestätigung nicht erneut versuchen.`,
                         );
                       }
                     } else if (resolvedConfirm?.status === "allowed") {
@@ -2699,7 +2694,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                       });
                     } else if (resolvedConfirm?.status === "blocked") {
                       setResultMessage(
-                        `${outcomeMessage("blocked")} Attempt ${resolvedConfirm.attemptNumber} of ${resolvedConfirm.maxAttempts ?? 4}.`,
+                        `${outcomeMessage("blocked")} Versuch ${resolvedConfirm.attemptNumber} von ${resolvedConfirm.maxAttempts ?? 4}.`,
                       );
                       await studio.loadProject(projectId, {
                         openCandidates: true,
@@ -2720,7 +2715,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                     const message =
                       e instanceof Error
                         ? e.message
-                        : "Generate New Face failed";
+                        : "Das neue Gesicht konnte nicht erstellt werden";
                     setError(message);
                     try {
                       await studio.loadProject(projectId, {
@@ -2799,10 +2794,10 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                 alt={selectedBrandFace.candidate_name}
               />
             ) : (
-              <div className="ps-selected-brand-face-thumb-empty">No preview</div>
+              <div className="ps-selected-brand-face-thumb-empty">Keine Vorschau</div>
             )}
             <div>
-              <p className="ps-eyebrow">Selected Brand Face</p>
+              <p className="ps-eyebrow">Ausgewähltes Markenmodel</p>
               <h2 style={{ margin: "0.15rem 0" }}>
                 {discoverySlotLabel(selectedBrandFace.candidate_number)} ·{" "}
                 {selectedBrandFace.candidate_name}
@@ -2902,7 +2897,7 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
           {selectedIsDebugRun ? (
             <div className="ps-callout ps-callout-warn">
               <p>
-                Tatsächlicher Provider-Aufruf (OpenAI) — Kosten geschätzt, nicht über normale
+                Tatsächlicher Anbieter-Aufruf (OpenAI) — Kosten geschätzt, nicht über normale
                 UI-Bestätigung freigegeben. Shortlist, Auswahl und Konvertierung sind für diesen
                 Kandidaten gesperrt.
               </p>

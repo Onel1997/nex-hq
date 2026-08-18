@@ -34,11 +34,13 @@ import {
   Users,
 } from "lucide-react";
 import type { ArtworkPreviewSource } from "../types";
+import type { ArtworkDisplayName } from "@/lib/design/artwork-display-name";
 
 interface ArtworkInspectorProps {
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   preview: ArtworkPreviewSource | null;
+  artworkIdentity?: ArtworkDisplayName | null;
   validation: ArtworkValidationResult;
   analysis: ArtworkAnalysisResult;
   missionView?: MasterArtworkViewModel | null;
@@ -57,7 +59,7 @@ function PlaceholderValue({ children }: { children: React.ReactNode }) {
 
 function InfoRow({ label, value }: { label: string; value?: string | number | boolean | null }) {
   const display =
-    typeof value === "boolean" ? (value ? "Yes" : "No") : value != null ? String(value) : "—";
+    typeof value === "boolean" ? (value ? "Ja" : "Nein") : value != null ? String(value) : "—";
 
   return (
     <div className="dsv2-info-row">
@@ -71,6 +73,7 @@ export function ArtworkInspector({
   collapsed,
   onCollapsedChange,
   preview,
+  artworkIdentity,
   validation,
   analysis,
   missionView,
@@ -91,15 +94,15 @@ export function ArtworkInspector({
   return (
     <aside
       className={cn("dsv2-inspector", collapsed && "is-collapsed")}
-      aria-label="Artwork analysis"
+      aria-label="Artwork-Prüfung"
     >
       <div className="dsv2-inspector-head">
-        {!collapsed ? <span className="dsv2-inspector-label">Inspector</span> : null}
+        {!collapsed ? <span className="dsv2-inspector-label">Prüfung</span> : null}
         <button
           type="button"
           className="dsv2-inspector-collapse"
           onClick={() => onCollapsedChange(!collapsed)}
-          aria-label={collapsed ? "Expand inspector" : "Collapse inspector"}
+          aria-label={collapsed ? "Prüfung öffnen" : "Prüfung einklappen"}
         >
           <ChevronLeft className={cn("size-4", !collapsed && "is-flipped")} />
         </button>
@@ -113,126 +116,138 @@ export function ArtworkInspector({
 
           <CollapsibleInspectorSection
             id="dsv2-file-info"
-            title="File Information"
+            title="Dateiinformationen"
             icon={FileText}
             defaultOpen
           >
             {hasUpload && metadata ? (
               <dl className="dsv2-info-list">
-                <InfoRow label="File name" value={metadata.fileName} />
-                <InfoRow label="File type" value={formatFileKindLabel(metadata.fileKind)} />
-                <InfoRow label="File size" value={formatBytes(metadata.fileSize)} />
-                <InfoRow label="Dimensions" value={metadata.dimensionsLabel} />
+                <InfoRow label="Dateiname" value={metadata.fileName} />
+                <InfoRow label="Artwork" value={artworkIdentity?.displayName} />
+                {artworkIdentity?.provenanceLabel ? (
+                  <InfoRow label="Herkunft" value={artworkIdentity.provenanceLabel.replace(/^Herkunft:\s*/, "")} />
+                ) : null}
+                <InfoRow label="Dateityp" value={formatFileKindLabel(metadata.fileKind)} />
+                <InfoRow label="Dateigröße" value={formatBytes(metadata.fileSize)} />
+                <InfoRow label="Abmessungen" value={metadata.dimensionsLabel} />
                 <InfoRow
-                  label="Transparency"
+                  label="Transparenz"
                   value={
                     metadata.hasTransparency == null
                       ? "—"
                       : metadata.hasTransparency
-                        ? "Detected"
-                        : "Not detected"
+                        ? "Erkannt"
+                        : "Nicht erkannt"
                   }
                 />
                 <InfoRow
-                  label="Estimated DPI"
+                  label="Geschätzte DPI"
                   value={metadata.estimatedDpi ? `${metadata.estimatedDpi} DPI` : "—"}
                 />
-                <InfoRow label="Aspect ratio" value={metadata.aspectRatioLabel} />
+                <InfoRow label="Seitenverhältnis" value={metadata.aspectRatioLabel} />
                 <InfoRow
-                  label="Upload time"
-                  value={new Date(metadata.uploadedAt).toLocaleString()}
+                  label="Hochgeladen"
+                  value={new Date(metadata.uploadedAt).toLocaleString("de-DE")}
                 />
                 <InfoRow
-                  label="Preview support"
-                  value={metadata.previewSupported ? "Yes" : "No"}
+                  label="Vorschau"
+                  value={metadata.previewSupported ? "Verfügbar" : "Nicht verfügbar"}
                 />
                 {metadata.printSizeAt300Dpi ? (
-                  <InfoRow label="Print size" value={metadata.printSizeAt300Dpi} />
+                  <InfoRow label="Druckgröße" value={metadata.printSizeAt300Dpi} />
                 ) : null}
               </dl>
             ) : preview && !isLocalUpload ? (
               <dl className="dsv2-info-list">
-                <InfoRow label="File name" value={preview.fileName} />
-                <InfoRow label="File type" value={preview.mimeType} />
-                <InfoRow label="Source" value="Mission" />
+                <InfoRow label="Artwork" value={artworkIdentity?.displayName ?? preview.fileName} />
+                <InfoRow label="Dateityp" value={preview.mimeType} />
+                <InfoRow
+                  label="Herkunft"
+                  value={artworkIdentity?.provenanceLabel?.replace(/^Herkunft:\s*/, "") ?? "Design Studio"}
+                />
                 <InfoRow label="Version" value={state?.version} />
               </dl>
             ) : (
-              <PlaceholderValue>Upload artwork to view file details.</PlaceholderValue>
+              <PlaceholderValue>Lade ein Artwork hoch, um die Dateiinformationen zu sehen.</PlaceholderValue>
             )}
           </CollapsibleInspectorSection>
 
+          <details className="nx-technical dsv2-analysis-details">
+            <summary>Erweiterte Artwork-Analyse</summary>
+            <div className="nx-technical__body">
           <CollapsibleInspectorSection
             id="dsv2-artwork-analysis"
-            title="Artwork Analysis"
+            title="Artwork-Analyse"
             icon={Sparkles}
             defaultOpen
           >
             <ArtworkAnalysisOverview analysis={analysis} />
           </CollapsibleInspectorSection>
 
-          <CollapsibleInspectorSection id="dsv2-typography" title="Typography" icon={Type} defaultOpen>
+          <CollapsibleInspectorSection id="dsv2-typography" title="Typografie" icon={Type} defaultOpen>
             <TypographyAnalysisPanel analysis={analysis} />
           </CollapsibleInspectorSection>
 
-          <CollapsibleInspectorSection id="dsv2-color" title="Color Palette" icon={Palette} defaultOpen>
+          <CollapsibleInspectorSection id="dsv2-color" title="Farbpalette" icon={Palette} defaultOpen>
             <ColorPalettePanel analysis={analysis} />
           </CollapsibleInspectorSection>
 
-          <CollapsibleInspectorSection id="dsv2-composition" title="Composition" icon={Layers}>
+          <CollapsibleInspectorSection id="dsv2-composition" title="Komposition" icon={Layers}>
             <CompositionPanel analysis={analysis} />
           </CollapsibleInspectorSection>
 
-          <CollapsibleInspectorSection id="dsv2-print-area" title="Print Area" icon={Layers}>
+          <CollapsibleInspectorSection id="dsv2-print-area" title="Druckbereich" icon={Layers}>
             <PrintAnalysisPanel analysis={analysis} />
           </CollapsibleInspectorSection>
 
-          <CollapsibleInspectorSection id="dsv2-print-size" title="Print Size" icon={Printer}>
+          <CollapsibleInspectorSection id="dsv2-print-size" title="Druckgröße" icon={Printer}>
             <PrintAnalysisPanel analysis={analysis} />
           </CollapsibleInspectorSection>
 
-          <CollapsibleInspectorSection id="dsv2-production" title="Production" icon={Briefcase}>
+          <CollapsibleInspectorSection id="dsv2-production" title="Produktion" icon={Briefcase}>
             {analysisReady ? (
               <div className="dsv2-info-list dsv2-info-list--flat">
-                <InfoRow label="Complexity" value={analysis.creative.complexity} />
+                <InfoRow label="Komplexität" value={analysis.creative.complexity} />
                 <InfoRow
-                  label="Manufacturing"
+                  label="Fertigung"
                   value={`${analysis.creative.manufacturingComplexity}/100`}
                 />
                 <InfoRow
-                  label="Production risk"
+                  label="Produktionsrisiko"
                   value={`${analysis.commercial.productionRisk}/100`}
                 />
               </div>
             ) : (
-              <PlaceholderValue>Production analysis pending.</PlaceholderValue>
+              <PlaceholderValue>Produktionsanalyse steht noch aus.</PlaceholderValue>
             )}
           </CollapsibleInspectorSection>
 
           <CollapsibleInspectorSection
             id="dsv2-commercial"
-            title="Commercial Review"
+            title="Kommerzielle Prüfung"
             icon={Shield}
             defaultOpen
           >
             <CommercialAnalysisPanel analysis={analysis} />
           </CollapsibleInspectorSection>
 
-          <CollapsibleInspectorSection id="dsv2-brand-dna" title="Brand DNA" icon={Droplets} defaultOpen>
+          <CollapsibleInspectorSection id="dsv2-brand-dna" title="Marken-DNA" icon={Droplets} defaultOpen>
             <BrandDnaPanel analysis={analysis} />
           </CollapsibleInspectorSection>
 
-          <CollapsibleInspectorSection id="dsv2-audience" title="Audience & Story" icon={Users}>
+          <CollapsibleInspectorSection id="dsv2-audience" title="Zielgruppe & Story" icon={Users}>
             <CreativeInsightsPanel analysis={analysis} />
           </CollapsibleInspectorSection>
 
-          <CollapsibleInspectorSection id="dsv2-suggestions" title="Suggestions" icon={Lightbulb}>
+          <CollapsibleInspectorSection id="dsv2-suggestions" title="Vorschläge" icon={Lightbulb}>
             <SuggestionsPanel analysis={analysis} />
           </CollapsibleInspectorSection>
+            </div>
+          </details>
 
           <CollapsibleInspectorSection
             id="dsv2-approval"
-            title="Approval"
+            title="Freigabe"
             icon={CheckCircle2}
             defaultOpen
           >
@@ -240,7 +255,7 @@ export function ArtworkInspector({
               {isApproved ? (
                 <>
                   <p className="dsv2-validation-ok">
-                    Artwork approved — ready for Image Studio handoff.
+                    Artwork freigegeben — bereit für das Image Studio.
                   </p>
                   {canContinueToImageStudio && onContinueToImageStudio ? (
                     <button
@@ -249,7 +264,7 @@ export function ArtworkInspector({
                       onClick={onContinueToImageStudio}
                       disabled={handoffBusy}
                     >
-                      {handoffBusy ? "Continuing…" : "Continue to Image Studio"}
+                      {handoffBusy ? "Übergabe läuft…" : "Im Image Studio verwenden"}
                     </button>
                   ) : null}
                   {handoffError ? (
@@ -262,14 +277,14 @@ export function ArtworkInspector({
                 <>
                   <p className="dsv2-inspector-placeholder">
                     {validation.status === "invalid"
-                      ? "Fix validation errors before approving."
+                      ? "Behebe die Validierungsfehler vor der Freigabe."
                       : validation.status === "checking" || analysis.status === "analyzing"
-                        ? "Waiting for validation and analysis to complete."
+                        ? "Validierung und Analyse werden abgeschlossen."
                         : !hasUpload
-                          ? "Upload and validate artwork to enable approval."
+                          ? "Lade ein Artwork hoch und prüfe es vor der Freigabe."
                           : !analysisReady
-                            ? "Analysis must complete before approval."
-                            : "Approve when ready for production handoff."}
+                            ? "Die Analyse muss vor der Freigabe abgeschlossen sein."
+                            : "Gib das Artwork frei, wenn es produktionsbereit ist."}
                   </p>
                   <button
                     type="button"
@@ -277,7 +292,7 @@ export function ArtworkInspector({
                     disabled={!canApprove}
                     onClick={onApprove}
                   >
-                    Approve Artwork
+                    Artwork freigeben
                   </button>
                 </>
               )}

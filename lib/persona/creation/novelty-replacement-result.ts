@@ -220,7 +220,7 @@ export function computeReplacementElapsed(input: {
   }
   const startedMs = parseIsoMs(input.providerStartedAt ?? null);
   if (startedMs == null) {
-    return { waitingToStart: true, elapsedMs: 0, display: "Waiting to start" };
+    return { waitingToStart: true, elapsedMs: 0, display: "Wartet auf Start" };
   }
   const elapsedMs = Math.max(0, nowMs - startedMs);
   // Reject impossible values (> absolute stale ceiling * 2 → treat as corrupt)
@@ -228,7 +228,7 @@ export function computeReplacementElapsed(input: {
     return {
       waitingToStart: false,
       elapsedMs: 0,
-      display: "Waiting to start",
+      display: "Wartet auf Start",
     };
   }
   return {

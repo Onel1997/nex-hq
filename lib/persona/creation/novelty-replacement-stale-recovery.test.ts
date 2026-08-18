@@ -265,7 +265,7 @@ describe("Phase 2.1E.2 stale replacement job recovery", () => {
 
     const waiting = computeReplacementElapsed({ providerStartedAt: null });
     assert.equal(waiting.waitingToStart, true);
-    assert.equal(waiting.display, "Waiting to start");
+    assert.equal(waiting.display, "Wartet auf Start");
 
     const frozen = computeReplacementElapsed({
       providerStartedAt: started,
@@ -277,7 +277,7 @@ describe("Phase 2.1E.2 stale replacement job recovery", () => {
     // Impossible huge elapsed rejected
     const ancient = new Date(Date.now() - STALE_ABSOLUTE_ACTIVE_MS * 5).toISOString();
     const bad = computeReplacementElapsed({ providerStartedAt: ancient });
-    assert.equal(bad.display, "Waiting to start");
+    assert.equal(bad.display, "Wartet auf Start");
   });
 
   it("11–15. server clears stale active list; token cannot be reused after consume; no duplicate provider", async () => {

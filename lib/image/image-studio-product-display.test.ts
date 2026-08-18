@@ -64,7 +64,7 @@ describe("Image Studio product authority display", () => {
       productContext: null,
       selectedProductLabel: null,
     });
-    assert.equal(header.value, "No product selected");
+    assert.equal(header.value, "Kein Produkt ausgewählt");
     assert.equal(header.authoritative, false);
   });
 
@@ -107,7 +107,7 @@ describe("Image Studio product authority display", () => {
         masterArtworkApproved: true,
         hasBrandModel: true,
       }) ?? "",
-      /shopify product/i,
+      /Shopify/
     );
     assert.equal(
       canPreparePaidImageEstimate({
@@ -138,6 +138,18 @@ describe("Image Studio product authority display", () => {
         hasBrandModel: true,
       }),
       false,
+    );
+  });
+
+  it("blocks paid preparation until an image-eligible Brand Model is selected", () => {
+    assert.match(
+      resolvePrepareEstimateBlocker({
+        briefReady: true,
+        productContext: liveContext,
+        masterArtworkApproved: true,
+        hasBrandModel: false,
+      }) ?? "",
+      /für Bilder freigegebenes Markenmodel/i,
     );
   });
 

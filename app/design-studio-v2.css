@@ -448,14 +448,27 @@ body:has(.dsv2-root) {
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex: 1;
 }
 
 .dsv2-preview-filename {
   font-size: 13px;
   font-weight: 500;
-  white-space: nowrap;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsv2-preview-provenance {
+  min-width: 0;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--dsv2-text-muted);
+  flex-shrink: 1;
 }
 
 .dsv2-preview-type {
@@ -683,8 +696,10 @@ body:has(.dsv2-root) {
 
 .dsv2-info-row dd {
   margin: 0;
+  min-width: 0;
   color: var(--dsv2-text-secondary);
   text-align: right;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 

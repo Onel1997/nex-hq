@@ -203,7 +203,7 @@ describe("Image Studio paid prepare identity", () => {
         }),
         brandModelSelection: brandModelSelection(),
       }) ?? "",
-      /durable Master Artwork ID/i,
+      /dauerhafte Artwork-ID/i,
     );
   });
 
@@ -217,7 +217,7 @@ describe("Image Studio paid prepare identity", () => {
         }),
         brandModelSelection: brandModelSelection(),
       }) ?? "",
-      /design ID/i,
+      /Design-ID/i,
     );
   });
 
@@ -229,7 +229,7 @@ describe("Image Studio paid prepare identity", () => {
         }),
         brandModelSelection: brandModelSelection(),
       }) ?? "",
-      /checksum/i,
+      /Prüfsumme|checksum/i,
     );
   });
 
@@ -242,7 +242,7 @@ describe("Image Studio paid prepare identity", () => {
         }),
         brandModelSelection: brandModelSelection(),
       }) ?? "",
-      /Approved Master Artwork/i,
+      /freigegebenes Master Artwork/i,
     );
   });
 
@@ -252,7 +252,7 @@ describe("Image Studio paid prepare identity", () => {
         handoff: handoff(),
         brandModelSelection: null,
       }) ?? "",
-      /Brand Model/i,
+      /Markenmodel/i,
     );
   });
 
@@ -275,7 +275,7 @@ describe("Image Studio paid prepare identity", () => {
         brandModelSelection: selection,
         projectBrandModelTrace: staleTrace,
       }) ?? "",
-      /re-staged/i,
+      /neu vorbereitet/i,
     );
   });
 
@@ -373,7 +373,7 @@ describe("Image Studio paid prepare identity", () => {
         ...base,
         selectedAssetId: "lifestyle-1",
       }) ?? "",
-      /selected production shot changed/i,
+      /Aufnahme hat sich/i,
     );
     assert.match(
       resolvePaidJobStaleReason({
@@ -382,7 +382,7 @@ describe("Image Studio paid prepare identity", () => {
           durableMasterArtwork: durableArtwork({ checksum: "b".repeat(64) }),
         }),
       }) ?? "",
-      /Master Artwork changed/i,
+      /Artwork hat sich/i,
     );
     assert.equal(
       resolvePaidJobStaleReason({

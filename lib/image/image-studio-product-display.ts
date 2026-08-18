@@ -42,14 +42,14 @@ export function resolveImageStudioProductHeader(input: {
     return {
       value:
         input.selectedProductLabel ??
-        `${input.productContext.productName} · ${input.productContext.color ?? "variant"}`,
+        `${input.productContext.productName} · ${input.productContext.color ?? "Variante"}`,
       authoritative: true,
       authorityLabel: "SHOPIFY_LIVE",
     };
   }
 
   return {
-    value: "No product selected",
+    value: "Kein Produkt ausgewählt",
     authoritative: false,
     authorityLabel: "UNSET",
   };
@@ -98,16 +98,16 @@ export function resolvePrepareEstimateBlocker(input: {
   hasBrandModel: boolean;
 }): string | null {
   if (!input.briefReady) {
-    return "Import a creative brief before preparing paid production.";
+    return "Übernimm zuerst ein kreatives Briefing, bevor du die Generierung vorbereitest.";
   }
   if (!input.masterArtworkApproved) {
-    return "Approved Master Artwork is required before paid Image preparation.";
+    return "Ein freigegebenes Master Artwork ist erforderlich, bevor du die Generierung vorbereitest.";
   }
   if (!input.hasBrandModel) {
-    return "Select an eligible Brand Model before paid Image preparation.";
+    return "Wähle ein für Bilder freigegebenes Markenmodel aus, bevor du die Generierung vorbereitest.";
   }
   if (!isAuthoritativeProductContext(input.productContext)) {
-    return "Select a live Shopify product before Prepare / Estimate. Design mission garment hints are not production truth.";
+    return "Wähle ein Live-Shopify-Produkt aus, bevor du vorbereitest. Design-Hinweise sind keine Produktionswahrheit.";
   }
   return null;
 }

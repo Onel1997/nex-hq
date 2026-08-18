@@ -10,6 +10,7 @@ import {
   TypographyChipList,
 } from "@/components/design/v2/inspector/analysis-primitives";
 import type { ArtworkAnalysisResult } from "@/lib/design/artwork-analysis";
+import { ownerAnalysisLabel } from "@/lib/ux/owner-terminology";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
@@ -22,7 +23,7 @@ export function ArtworkAnalysisOverview({ analysis }: ArtworkAnalysisPanelProps)
     return (
       <div className="dsv2-analysis-loading">
         <Loader2 className="size-4 animate-spin" />
-        <span>Running creative director analysis…</span>
+        <span>Erweiterte Artwork-Analyse läuft…</span>
       </div>
     );
   }
@@ -34,16 +35,16 @@ export function ArtworkAnalysisOverview({ analysis }: ArtworkAnalysisPanelProps)
   return (
     <div className="dsv2-analysis-overview">
       <div className="dsv2-meter-grid">
-        <AnalysisScoreMeter label="Composition" value={analysis.composition.qualityScore} delay={0} compact />
-        <AnalysisScoreMeter label="Luxury" value={analysis.commercial.luxuryFeel} delay={40} compact />
-        <AnalysisScoreMeter label="Commercial" value={analysis.commercial.commercialPotential} delay={80} compact />
-        <AnalysisScoreMeter label="Brand DNA" value={analysis.brandDna.overallScore} delay={120} compact />
+        <AnalysisScoreMeter label="Komposition" value={analysis.composition.qualityScore} delay={0} compact />
+        <AnalysisScoreMeter label="Premiumwirkung" value={analysis.commercial.luxuryFeel} delay={40} compact />
+        <AnalysisScoreMeter label="Kommerziell" value={analysis.commercial.commercialPotential} delay={80} compact />
+        <AnalysisScoreMeter label="Marken-DNA" value={analysis.brandDna.overallScore} delay={120} compact />
       </div>
       <p className="dsv2-analysis-summary">{analysis.graphicStyle.summary}</p>
       <div className="dsv2-badge-row">
         {analysis.graphicStyle.badges.slice(0, 4).map((badge) => (
           <AnalysisBadge key={badge} tone={badge === "Luxury" || badge === "Editorial" ? "luxury" : "accent"}>
-            {badge}
+            {ownerAnalysisLabel(badge)}
           </AnalysisBadge>
         ))}
       </div>
@@ -59,12 +60,12 @@ export function TypographyAnalysisPanel({ analysis }: ArtworkAnalysisPanelProps)
   return (
     <div className="dsv2-analysis-section">
       <div className="dsv2-badge-row">
-        <AnalysisBadge tone="luxury">{analysis.typography.style}</AnalysisBadge>
-        <AnalysisBadge>{analysis.typography.alignment}</AnalysisBadge>
-        <AnalysisBadge>{analysis.typography.letterSpacing} spacing</AnalysisBadge>
+        <AnalysisBadge tone="luxury">{ownerAnalysisLabel(analysis.typography.style)}</AnalysisBadge>
+        <AnalysisBadge>{ownerAnalysisLabel(analysis.typography.alignment)}</AnalysisBadge>
+        <AnalysisBadge>{ownerAnalysisLabel(analysis.typography.letterSpacing)} Laufweite</AnalysisBadge>
       </div>
       <TypographyChipList blocks={analysis.typography.blocks} />
-      <AnalysisBarMeter label="Hierarchy" value={analysis.typography.hierarchyScore} />
+      <AnalysisBarMeter label="Hierarchie" value={analysis.typography.hierarchyScore} />
       <p className="dsv2-analysis-caption">{analysis.typography.summary}</p>
     </div>
   );
@@ -79,8 +80,8 @@ export function ColorPalettePanel({ analysis }: ArtworkAnalysisPanelProps) {
     <div className="dsv2-analysis-section">
       <ColorSwatchRow swatches={analysis.colorPalette.swatches} />
       <div className="dsv2-meter-grid dsv2-meter-grid--duo">
-        <AnalysisScoreMeter label="Contrast" value={analysis.colorPalette.contrastScore} compact />
-        <AnalysisScoreMeter label="Print" value={analysis.colorPalette.printFriendliness} delay={40} compact />
+        <AnalysisScoreMeter label="Kontrast" value={analysis.colorPalette.contrastScore} compact />
+        <AnalysisScoreMeter label="Druckeignung" value={analysis.colorPalette.printFriendliness} delay={40} compact />
       </div>
       <p className="dsv2-analysis-caption">{analysis.colorPalette.summary}</p>
     </div>
@@ -97,24 +98,24 @@ export function CompositionPanel({ analysis }: ArtworkAnalysisPanelProps) {
       <FocalPointMap
         x={analysis.composition.focalPoint.x}
         y={analysis.composition.focalPoint.y}
-        label={analysis.composition.focalPoint.label}
+        label={ownerAnalysisLabel(analysis.composition.focalPoint.label)}
       />
       <div className="dsv2-meter-grid dsv2-meter-grid--duo">
         <AnalysisScoreMeter label="Balance" value={analysis.composition.balanceScore} compact />
-        <AnalysisScoreMeter label="Symmetry" value={analysis.composition.symmetryScore} delay={40} compact />
+        <AnalysisScoreMeter label="Symmetrie" value={analysis.composition.symmetryScore} delay={40} compact />
       </div>
       <div className="dsv2-info-list dsv2-info-list--flat">
         <div className="dsv2-info-row">
-          <dt>Negative space</dt>
+          <dt>Negativraum</dt>
           <dd>{analysis.composition.negativeSpacePercent}%</dd>
         </div>
         <div className="dsv2-info-row">
-          <dt>Visual weight</dt>
-          <dd>{analysis.composition.visualWeight}</dd>
+          <dt>Visuelles Gewicht</dt>
+          <dd>{ownerAnalysisLabel(analysis.composition.visualWeight)}</dd>
         </div>
         <div className="dsv2-info-row">
-          <dt>Reading flow</dt>
-          <dd>{analysis.composition.readingDirection}</dd>
+          <dt>Lesefluss</dt>
+          <dd>{ownerAnalysisLabel(analysis.composition.readingDirection)}</dd>
         </div>
       </div>
       <p className="dsv2-analysis-caption">{analysis.composition.summary}</p>
@@ -131,19 +132,19 @@ export function PrintAnalysisPanel({ analysis }: ArtworkAnalysisPanelProps) {
     <div className="dsv2-analysis-section">
       <PrintCoveragePreview
         coveragePercent={analysis.print.coveragePercent}
-        placement={analysis.print.placement}
+        placement={ownerAnalysisLabel(analysis.print.placement)}
       />
       <div className="dsv2-info-list dsv2-info-list--flat">
         <div className="dsv2-info-row">
-          <dt>Placement</dt>
-          <dd>{analysis.print.placement}</dd>
+          <dt>Platzierung</dt>
+          <dd>{ownerAnalysisLabel(analysis.print.placement)}</dd>
         </div>
         <div className="dsv2-info-row">
-          <dt>Coverage</dt>
-          <dd>{analysis.print.coverageLabel}</dd>
+          <dt>Flächenabdeckung</dt>
+          <dd>{ownerAnalysisLabel(analysis.print.coverageLabel)}</dd>
         </div>
         <div className="dsv2-info-row">
-          <dt>Max print size</dt>
+          <dt>Maximale Druckgröße</dt>
           <dd>{analysis.print.maxPrintSize}</dd>
         </div>
       </div>
@@ -158,12 +159,12 @@ export function CommercialAnalysisPanel({ analysis }: ArtworkAnalysisPanelProps)
   }
 
   const meters = [
-    { label: "Luxury Feel", value: analysis.commercial.luxuryFeel },
-    { label: "Commercial Potential", value: analysis.commercial.commercialPotential },
-    { label: "Brand Consistency", value: analysis.commercial.brandConsistency },
-    { label: "Trend Potential", value: analysis.commercial.trendPotential },
-    { label: "Production Risk", value: 100 - analysis.commercial.productionRisk },
-    { label: "Manufacturing Ease", value: 100 - analysis.commercial.manufacturingDifficulty },
+    { label: "Premiumwirkung", value: analysis.commercial.luxuryFeel },
+    { label: "Kommerzielles Potenzial", value: analysis.commercial.commercialPotential },
+    { label: "Markenkonsistenz", value: analysis.commercial.brandConsistency },
+    { label: "Trendpotenzial", value: analysis.commercial.trendPotential },
+    { label: "Produktionssicherheit", value: 100 - analysis.commercial.productionRisk },
+    { label: "Einfache Fertigung", value: 100 - analysis.commercial.manufacturingDifficulty },
   ];
 
   return (
@@ -191,12 +192,12 @@ export function BrandDnaPanel({ analysis }: ArtworkAnalysisPanelProps) {
 
   return (
     <div className="dsv2-analysis-section">
-      <AnalysisBarMeter label="Milaene DNA Match" value={analysis.brandDna.overallScore} />
+      <AnalysisBarMeter label="Übereinstimmung mit Milaene-DNA" value={analysis.brandDna.overallScore} />
       <div className="dsv2-dna-traits">
         {analysis.brandDna.traits.map((trait) => (
           <div key={trait.label} className="dsv2-dna-trait">
             <div className="dsv2-dna-trait-head">
-              <span>{trait.label}</span>
+              <span>{ownerAnalysisLabel(trait.label)}</span>
               <span>{trait.score}</span>
             </div>
             <div className="dsv2-bar-meter-track">
@@ -222,7 +223,7 @@ export function CreativeInsightsPanel({ analysis }: ArtworkAnalysisPanelProps) {
     <div className="dsv2-analysis-section">
       <div className="dsv2-info-list dsv2-info-list--flat">
         <div className="dsv2-info-row">
-          <dt>Target audience</dt>
+          <dt>Zielgruppe</dt>
           <dd>{analysis.creative.targetAudience}</dd>
         </div>
         <div className="dsv2-info-row">
@@ -230,11 +231,11 @@ export function CreativeInsightsPanel({ analysis }: ArtworkAnalysisPanelProps) {
           <dd>{analysis.creative.emotion}</dd>
         </div>
         <div className="dsv2-info-row">
-          <dt>Complexity</dt>
+          <dt>Komplexität</dt>
           <dd>{analysis.creative.complexity}</dd>
         </div>
         <div className="dsv2-info-row">
-          <dt>Visual hierarchy</dt>
+          <dt>Visuelle Hierarchie</dt>
           <dd>{analysis.creative.visualHierarchy}</dd>
         </div>
       </div>
@@ -245,7 +246,7 @@ export function CreativeInsightsPanel({ analysis }: ArtworkAnalysisPanelProps) {
 
 export function SuggestionsPanel({ analysis }: ArtworkAnalysisPanelProps) {
   if (analysis.suggestions.length === 0) {
-    return <p className="dsv2-inspector-placeholder">No optional suggestions — artwork reads production-ready.</p>;
+    return <p className="dsv2-inspector-placeholder">Keine optionalen Hinweise – das Artwork wirkt produktionsbereit.</p>;
   }
 
   return (

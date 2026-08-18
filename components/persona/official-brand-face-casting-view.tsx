@@ -118,23 +118,23 @@ function ArchetypeCastCard({
 
       <dl className="ps-obf-cast-facts">
         <div>
-          <dt>Role</dt>
+          <dt>Rolle</dt>
           <dd>{archetype.campaignRole}</dd>
         </div>
         <div>
-          <dt>Best platforms</dt>
+          <dt>Beste Plattformen</dt>
           <dd>{archetype.bestPlatforms.join(", ")}</dd>
         </div>
         <div>
-          <dt>Identity DNA</dt>
+          <dt>Identitäts-DNA</dt>
           <dd>
             {dnaSummary.skinToneFamily.split(",")[0]} ·{" "}
             {dnaSummary.hairFamily.split(",")[0]}
           </dd>
         </div>
         <div>
-          <dt>A1 Discovery</dt>
-          <dd>4 candidates × 1 portrait</dd>
+          <dt>A1-Entdeckung</dt>
+          <dd>4 Kandidaten × 1 Portrait</dd>
         </div>
       </dl>
 
@@ -147,8 +147,7 @@ function ArchetypeCastCard({
       </ul>
 
       <p className="ps-obf-cast-lock">
-        Face, body, hair and fashion come from Brand Memory, Archetype Intelligence,
-        Product Intelligence and Reference Intelligence — not from a manual wizard.
+        Gesicht, Körper, Haare und Stil kommen aus Markengedächtnis, Archetyp-, Produkt- und Referenzintelligenz — nicht aus einem manuellen Assistenten.
       </p>
 
       <div className="ps-obf-cast-actions">
@@ -158,7 +157,7 @@ function ArchetypeCastCard({
             className="ps-btn-secondary ps-obf-start-discovery-btn"
             onClick={() => studio.setSection("brand_cast")}
           >
-            View Brand Cast
+            Brand Cast öffnen
           </button>
         ) : (
           <>
@@ -170,7 +169,7 @@ function ArchetypeCastCard({
               onClick={() => onStartDiscovery(archetype)}
             >
               <span>
-                {isCreating ? "Creating Discovery…" : "Start New Discovery"}
+                {isCreating ? "Entdeckung wird vorbereitet…" : "Neue Entdeckung starten"}
               </span>
               {!isCreating ? (
                 <span className="ps-obf-start-discovery-arrow" aria-hidden>
@@ -188,21 +187,21 @@ function ArchetypeCastCard({
 
         {cardModel.previousRunCount > 0 ? (
           <p className="ps-obf-previous-runs">
-            Previous casting runs: {cardModel.previousRunCount} —{" "}
+            Frühere Entdeckungen: {cardModel.previousRunCount} —{" "}
             <button
               type="button"
               className="ps-link-btn"
               onClick={onViewPreviousRuns}
             >
-              view in Creation Projects
+              in Entdeckungsprojekten ansehen
             </button>
           </p>
         ) : null}
 
         {cardModel.unfinishedRunCount > 0 ? (
           <p className="ps-obf-unfinished-runs">
-            {cardModel.unfinishedRunCount} unfinished run
-            {cardModel.unfinishedRunCount === 1 ? "" : "s"} in Creation Projects
+            {cardModel.unfinishedRunCount} unvollständige
+            {cardModel.unfinishedRunCount === 1 ? " Entdeckung" : " Entdeckungen"} in den Entdeckungsprojekten
           </p>
         ) : null}
       </div>
@@ -244,11 +243,11 @@ export function OfficialBrandFaceCastingView({
   const providerGateFailed = !paidGenerationEnabled || !openaiConfigured;
   const providerGateMessage =
     !paidGenerationEnabled && !openaiConfigured
-      ? "Paid generation and OpenAI are not configured in this environment."
+      ? "Bezahlte Generierung und OpenAI sind in dieser Umgebung nicht konfiguriert."
       : !paidGenerationEnabled
-        ? "Paid generation is not enabled in this environment."
+        ? "Bezahlte Generierung ist in dieser Umgebung nicht aktiviert."
         : !openaiConfigured
-          ? "OpenAI API key is not configured."
+          ? "Der OpenAI-API-Schlüssel ist nicht konfiguriert."
           : null;
 
   const busy = creatingArchetypeId !== null;
@@ -307,7 +306,7 @@ export function OfficialBrandFaceCastingView({
         { ...body, status: "draft" },
         { navigate: false },
       );
-      if (!project) throw new Error("Creation project could not be created");
+      if (!project) throw new Error("Das Entdeckungsprojekt konnte nicht angelegt werden.");
 
       const sessionProjectId = resolveDiscoverySessionProjectId(project.id);
       logDiscoveryCheckpoint("project_created", {
@@ -352,7 +351,7 @@ export function OfficialBrandFaceCastingView({
       // Keep confirmation panel visible — do not jump to Candidate Board.
       studio.setSection("creator");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Discovery konnte nicht gestartet werden");
+      setError(e instanceof Error ? e.message : "Die Entdeckung konnte nicht gestartet werden.");
     } finally {
       discoveryStartLock.current.release();
       setCreatingArchetypeId(null);
@@ -405,7 +404,7 @@ export function OfficialBrandFaceCastingView({
 
       if (projectFailed) {
         setError(
-          "Discovery generation failed. Open Creation Projects to prepare a new estimate and retry — keep this project.",
+          "Die Entdeckung ist fehlgeschlagen. Öffne die Entdeckungsprojekte, prüfe die Kosten erneut und versuche es im selben Projekt noch einmal.",
         );
         studio.setSection("creation_projects");
         await studio.loadProject(activeProjectId);
@@ -449,7 +448,7 @@ export function OfficialBrandFaceCastingView({
               setSelectionId(null);
             }}
           >
-            Back
+            Zurück
           </button>
         </header>
 
@@ -459,51 +458,50 @@ export function OfficialBrandFaceCastingView({
         ) : null}
         {providerGateFailed ? (
           <div className="ps-callout ps-callout-warn">
-            Paid generation is not enabled in this environment. Discovery still requires the
-            existing confirmation flow when enabled — no silent provider calls.
+            Bezahlte Generierung ist in dieser Umgebung nicht aktiviert. Die Entdeckung bleibt an den bestehenden Bestätigungsfluss gebunden — keine stillen Anbieter-Aufrufe.
           </div>
         ) : null}
 
         <div className="ps-obf-a1-brief">
           <dl>
             <div>
-              <dt>Archetype</dt>
+              <dt>Archetyp</dt>
               <dd>{brief.archetypeName}</dd>
             </div>
             <div>
-              <dt>Role</dt>
+              <dt>Rolle</dt>
               <dd>{brief.commercialRole}</dd>
             </div>
             <div>
-              <dt>Candidates</dt>
+              <dt>Kandidaten</dt>
               <dd>
-                {brief.candidateCount} × {brief.portraitsPerCandidate} portrait
+                {brief.candidateCount} × {brief.portraitsPerCandidate} Portrait
               </dd>
             </div>
             <div>
-              <dt>Total images</dt>
+              <dt>Bilder gesamt</dt>
               <dd>{brief.totalImages}</dd>
             </div>
             <div>
-              <dt>Best platforms</dt>
+              <dt>Beste Plattformen</dt>
               <dd>{brief.bestPlatforms.join(", ")}</dd>
             </div>
             <div>
-              <dt>Identity DNA</dt>
+              <dt>Identitäts-DNA</dt>
               <dd>{brief.identityDnaSummary.presence}</dd>
             </div>
             <div>
-              <dt>Provider</dt>
+              <dt>Anbieter</dt>
               <dd>OpenAI</dd>
             </div>
             <div>
-              <dt>Expected cost</dt>
+              <dt>Erwartete Kosten</dt>
               <dd>
                 {brief.expectedCostEur
                   ? `€${brief.expectedCostEur.min.toFixed(2)} – €${brief.expectedCostEur.max.toFixed(2)}`
                   : studio.costEstimate
                     ? `€${studio.costEstimate.estimatedMin.toFixed(2)} – €${studio.costEstimate.estimatedMax.toFixed(2)}`
-                    : "Prepare confirmation to load estimate"}
+                    : "Bereite die Bestätigung vor, um die Kostenschätzung zu laden"}
               </dd>
             </div>
           </dl>
@@ -526,17 +524,14 @@ export function OfficialBrandFaceCastingView({
                 onChange={(e) => setConfirmCost(e.target.checked)}
               />
               <span>
-                Generate 4 discovery faces with OpenAI. Automatically replace
-                candidates rejected by biological face protection (up to 3
-                attempts per slot). I confirm the maximum authorized provider
-                spend and start A1 Discovery for {brief.archetypeName}.
+                4 Entdeckungsgesichter mit OpenAI erstellen. Von der biologischen Gesichtsprüfung abgelehnte Kandidaten werden automatisch ersetzt (bis zu 3 Versuche pro Platz). Ich bestätige das maximale Anbieter-Kostenlimit und starte die A1-Entdeckung für {brief.archetypeName}.
               </span>
             </label>
           ) : (
             <>
               {studio.costEstimate ? (
                 <p className="ps-muted">
-                  Cost estimate available — new confirmation required.
+                  Kostenschätzung vorhanden — neue Bestätigung erforderlich.
                 </p>
               ) : null}
               <button
@@ -548,7 +543,7 @@ export function OfficialBrandFaceCastingView({
                     : undefined
                 }
               >
-                Prepare confirmation
+                Bestätigung vorbereiten
               </button>
             </>
           )}
@@ -559,7 +554,7 @@ export function OfficialBrandFaceCastingView({
               disabled={busy || !canGenerate}
               onClick={() => void confirmAndGenerate()}
             >
-              {busy ? "Starting…" : "Generate Discovery Portraits"}
+              {busy ? "Wird gestartet…" : "Entdeckungsportraits erstellen"}
             </button>
           </div>
         </div>
@@ -571,11 +566,11 @@ export function OfficialBrandFaceCastingView({
     <section className="ps-panel ps-creator ps-obf-casting">
       <header className="ps-panel-header">
         <div>
-          <p className="ps-eyebrow">Official Brand Faces</p>
-          <h1>Brand Face Casting</h1>
+          <p className="ps-eyebrow">Offizielle Markengesichter</p>
+          <h1>Markenmodel-Casting</h1>
           <p className="ps-muted">
-            Select and cast the three permanent Milaene Brand Faces. Appearance and fashion
-            are defined by intelligence layers — not a manual wizard.
+            Wähle und bestätige die drei dauerhaften Milaene-Markengesichter. Erscheinung und Stil
+            kommen aus den Intelligenzschichten — nicht aus einem manuellen Assistenten.
           </p>
         </div>
       </header>

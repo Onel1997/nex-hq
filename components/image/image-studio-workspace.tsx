@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  getImageGenerationModeLabel,
-  getOpenAiImageModel,
-  IMAGE_GENERATION,
-} from "@/lib/image/image-generation-config";
+import { IMAGE_GENERATION } from "@/lib/image/image-generation-config";
 import type { ImageStudioAsset, ImageMoodboardSection, ImagePalette } from "@/agents/image/types";
 import { ProductionGallery } from "@/components/image/production-gallery";
 import { BrandModelSelector } from "@/components/image/brand-model-selector";
@@ -86,7 +82,13 @@ import {
   resolveImageStudioProductHeader,
   resolvePrepareEstimateBlocker,
 } from "@/lib/image/image-studio-product-display";
+import { resolveArtworkDisplayName } from "@/lib/design/artwork-display-name";
 import { useT } from "@/lib/i18n";
+import {
+  ownerAuthorityLabel,
+  ownerShotLabel,
+  ownerStatusLabel,
+} from "@/lib/ux/owner-terminology";
 import { cn } from "@/lib/utils";
 import {
   Check,
@@ -221,6 +223,8 @@ export function ImageStudioWorkspace() {
     useState<ImageBrandModelSelection | null>(null);
   const [productSelection, setProductSelection] =
     useState<ProductProductionSelection | null>(null);
+  const [imageProductSelection, setImageProductSelection] =
+    useState<ImageProductSelection | null>(null);
   const [productProductionContext, setProductProductionContext] =
     useState<ProductProductionContext | null>(null);
   const [selectedProductLabel, setSelectedProductLabel] = useState<string | null>(null);
@@ -366,7 +370,7 @@ export function ImageStudioWorkspace() {
           error?: string;
         };
         if (!response.ok || !payload.asset) {
-          throw new Error(payload.error ?? "Asset review failed.");
+          throw new Error(payload.error ?? "Die Ergebnisprüfung ist fehlgeschlagen.");
         }
         setDurableAssets((current) =>
           current.map((asset) =>
@@ -376,7 +380,7 @@ export function ImageStudioWorkspace() {
           ),
         );
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Asset review failed.");
+        setError(cause instanceof Error ? cause.message : "Die Ergebnisprüfung ist fehlgeschlagen.");
       } finally {
         setPaidJobBusy(false);
       }
@@ -417,16 +421,18 @@ export function ImageStudioWorkspace() {
 
   const handleProductSelectionChange = useCallback((selection: ImageProductSelection | null) => {
     if (!selection) {
+      setImageProductSelection(null);
       setProductSelection(null);
       setProductProductionContext(null);
       setSelectedProductLabel(null);
       return;
     }
+    setImageProductSelection(selection);
     setProductSelection(selection.selection);
     setProductProductionContext(selection.productionContext);
     const context = selection.productionContext;
     setSelectedProductLabel(
-      `${context.productName} · ${context.color ?? "variant"} · ${context.size ?? "size"}`,
+      `${context.productName} · ${context.color ?? "Variante"} · ${context.size ?? "Größe"}`,
     );
   }, []);
 
@@ -502,6 +508,15 @@ export function ImageStudioWorkspace() {
     productContext: productProductionContext,
     selectedProductLabel,
   });
+  const artworkIdentity = useMemo(
+    () =>
+      resolveArtworkDisplayName({
+        fileName: handoff?.artworkFileName,
+        designId: handoff?.designId ?? handoff?.durableMasterArtwork?.designId,
+        researchTitle: handoff?.sourceTitle,
+      }),
+    [handoff?.artworkFileName, handoff?.designId, handoff?.durableMasterArtwork?.designId, handoff?.sourceTitle],
+  );
   const designMissionHints = resolveDesignMissionHints(blueprint);
 
   const hasBlueprint = Boolean(blueprint?.imported || brief.trim());
@@ -536,11 +551,13 @@ export function ImageStudioWorkspace() {
     masterArtworkApproved: handoff?.masterArtworkApproved,
   });
 
-  const missionName = blueprint?.designName ?? (hasHandoff ? handoff?.sourceTitle : null) ?? "Waiting for Creative Blueprint";
+  const projectContextTitle = blueprint?.designName ?? (hasHandoff ? handoff?.sourceTitle : null) ?? "Kein Projektkontext vorhanden";
   const version = blueprint?.version ?? (hasResults ? "V1" : "—");
   const commercialStatus = resolveCommercialStatus(blueprint);
-  const generationModeLabel = getImageGenerationModeLabel();
   const isDraftGenerationMode = IMAGE_GENERATION.mode === "draft";
+  const ownerGenerationModeLabel = isDraftGenerationMode
+    ? "Generative Vorschau — Artwork kann verändert werden"
+    : "Deterministisches Mockup";
   const generationStatus = resolveGenerationStatus({
     hasResults,
     hasBlueprint,
@@ -762,7 +779,7 @@ export function ImageStudioWorkspace() {
         abortReason: "missing brief",
       });
       setError(
-        "Cannot start production: no brief, prompt, or handoff content is available.",
+        "Produktion kann nicht starten: Es fehlt ein Briefing, Prompt oder eine Design-Übergabe.",
       );
       return null;
     }
@@ -771,7 +788,7 @@ export function ImageStudioWorkspace() {
       console.warn("[Image Studio] runImage early return: missing handoff", {
         abortReason: "missing handoff",
       });
-      setError("Cannot start production: creative handoff was not imported.");
+      setError("Produktion kann nicht starten: Die Design-Übergabe wurde nicht übernommen.");
       return null;
     }
 
@@ -834,7 +851,7 @@ export function ImageStudioWorkspace() {
       });
       setError((current) =>
         current ??
-        "Production package could not be created. Check the error details above.",
+          "Das Produktionspaket konnte nicht erstellt werden. Prüfe die Fehlermeldung oben.",
       );
       releaseExecutionLocks("missing-production-package");
       return null;
@@ -846,7 +863,7 @@ export function ImageStudioWorkspace() {
         abortReason: "empty assets",
         reportId: project.reportId,
       });
-      setError("Production package has no assets to generate.");
+      setError("Das Produktionspaket enthält keine Aufnahme für die Generierung.");
       return project;
     }
 
@@ -857,7 +874,7 @@ export function ImageStudioWorkspace() {
         assetCount: assets.length,
       });
       setError(
-        "All mission assets are already generated or completed. Select an asset to regenerate.",
+        "Alle Aufnahmen sind bereits erstellt. Wähle eine Aufnahme, um sie erneut zu erzeugen.",
       );
       return project;
     }
@@ -873,7 +890,7 @@ export function ImageStudioWorkspace() {
       pendingAssets.find((asset) => asset.id === selectedAsset?.id) ?? pendingAssets[0];
 
     if (!handoff?.masterArtworkApproved && !handoff?.durableMasterArtwork) {
-      setError("Approved Master Artwork is required before paid Image preparation.");
+      setError("Vor der Vorbereitung ist ein freigegebenes Master Artwork erforderlich.");
       return project;
     }
     const prepareBlocker = resolvePrepareEstimateBlocker({
@@ -890,7 +907,7 @@ export function ImageStudioWorkspace() {
     }
     if (!productSelection || !productProductionContext || productProductionContext.authority !== "SHOPIFY_LIVE") {
       setError(
-        "Select a live Shopify product before Prepare / Estimate. Design mission garment hints are not production truth.",
+        "Wähle vor der Kostenprüfung ein verifiziertes Shopify-Produkt. Design-Hinweise sind keine verbindliche Produktquelle.",
       );
       return project;
     }
@@ -909,7 +926,7 @@ export function ImageStudioWorkspace() {
       clearCachedProductionProject();
       const restaged = await createProductionPackage(briefForRun);
       if (!restaged) {
-        setError("Production package could not be re-staged with the selected Brand Model.");
+        setError("Das Produktionspaket konnte mit dem gewählten Markenmodel nicht neu vorbereitet werden.");
         return null;
       }
       project = restaged;
@@ -933,7 +950,7 @@ export function ImageStudioWorkspace() {
     });
     const durableReference = resolveDurableMasterArtworkReference(handoff);
     if (!trace || !durableReference) {
-      setError("Paid Image preparation could not resolve Design authority or Brand Model trace.");
+      setError("Artwork-Freigabe oder Markenmodel-Herkunft konnten nicht eindeutig bestätigt werden.");
       return project;
     }
 
@@ -962,7 +979,7 @@ export function ImageStudioWorkspace() {
       if (!response.ok || !data.job) {
         const raw =
           data.error ??
-          (data.details ? JSON.stringify(data.details) : "Paid Image preparation failed.");
+          (data.details ? JSON.stringify(data.details) : "Die Vorbereitung der Bildgenerierung ist fehlgeschlagen.");
         logPaidPrepareValidationError(raw, { status: response.status });
         throw new Error(formatPaidPrepareError(raw));
       }
@@ -970,7 +987,7 @@ export function ImageStudioWorkspace() {
       setError(null);
     } catch (cause) {
       const raw =
-        cause instanceof Error ? cause.message : "Paid Image preparation failed.";
+        cause instanceof Error ? cause.message : "Die Vorbereitung der Bildgenerierung ist fehlgeschlagen.";
       logPaidPrepareValidationError(raw);
       setError(formatPaidPrepareError(raw));
     } finally {
@@ -995,12 +1012,12 @@ export function ImageStudioWorkspace() {
   ]);
 
   const generateAssetsButtonLabel = paidJobBusy
-    ? "Preparing estimate…"
+    ? "Kosten werden geprüft…"
     : pipelineActive || generatingAssetId
-    ? "Generating…"
+    ? "Bild wird erstellt…"
     : isLoading
-      ? "Staging Assets…"
-      : "Prepare Draft Generative Estimate";
+      ? "Referenzen werden vorbereitet…"
+      : "Generative Vorschau · Kosten prüfen";
 
   const actOnPaidJob = useCallback(async (action: "confirm" | "execute" | "retry_known_failure" | "cancel") => {
     if (!paidJob) return;
@@ -1011,11 +1028,11 @@ export function ImageStudioWorkspace() {
         body: JSON.stringify({ action, inputFingerprint: paidJob.inputFingerprint }),
       });
       const data = (await response.json()) as { job?: ImageGenerationJobView; error?: string };
-      if (!response.ok || !data.job) throw new Error(data.error ?? "Paid generation action failed.");
+      if (!response.ok || !data.job) throw new Error(data.error ?? "Die Bildaktion ist fehlgeschlagen.");
       setPaidJob(data.job);
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Paid generation action failed.");
+      setError(cause instanceof Error ? cause.message : "Die Bildaktion ist fehlgeschlagen.");
     } finally { setPaidJobBusy(false); }
   }, [paidJob]);
 
@@ -1198,7 +1215,7 @@ export function ImageStudioWorkspace() {
     async (asset: ImageStudioAsset) => {
       if (!result || generatingAssetId || pipelineActive) return;
       setSelectedAssetId(asset.id);
-      setError("Shot selected. Review it, then use Prepare / Estimate to freeze paid inputs.");
+      setError("Aufnahme ausgewählt. Prüfe sie und wähle anschließend „Vorbereiten & Kosten prüfen“.");
     },
     [generatingAssetId, pipelineActive, result],
   );
@@ -1216,20 +1233,20 @@ export function ImageStudioWorkspace() {
   const activePrompt =
     selectedAsset?.prompt.openai ?? blueprint?.imagePrompt ?? handoff?.imagePromptPrimary ?? brief;
 
-  const printReadiness = handoff?.concept?.productionNotes?.printReadiness?.join(", ") ?? "Awaiting asset generation";
+  const printReadiness = handoff?.concept?.productionNotes?.printReadiness?.join(", ") ?? "Noch nicht geprüft";
 
   const versionTimeline = [
-    { version: blueprint?.version ?? "V1", label: "Blueprint imported", time: handoff?.handoffAt ? new Date(handoff.handoffAt).toLocaleString() : "—" },
-    ...(hasResults ? [{ version: "V1.0", label: "Production package created", time: "Mission staged" }] : []),
+    { version: blueprint?.version ?? "V1", label: "Design-Hinweise übernommen", time: handoff?.handoffAt ? new Date(handoff.handoffAt).toLocaleString("de-DE") : "—" },
+    ...(hasResults ? [{ version: "V1.0", label: "Produktionspaket erstellt", time: "Projekt vorbereitet" }] : []),
     ...(selectedAsset?.createdAt
-      ? [{ version: assetVersionLabel(selectedAsset), label: selectedAsset.title ?? "Asset render", time: new Date(selectedAsset.createdAt).toLocaleString() }]
+      ? [{ version: assetVersionLabel(selectedAsset), label: ownerShotLabel(selectedAsset.title ?? "Ergebnis"), time: new Date(selectedAsset.createdAt).toLocaleString("de-DE") }]
       : []),
   ];
 
   return (
-    <div className="is-root">
+    <div className="is-root nx-studio">
       <header className="is-topbar">
-        <nav className="is-breadcrumbs" aria-label="Breadcrumb">
+        <nav className="is-breadcrumbs" aria-label="Brotkrümelnavigation">
           <Link href="/" className="is-crumb">
             <Home className="size-3.5" />
             NexHQ
@@ -1242,37 +1259,49 @@ export function ImageStudioWorkspace() {
         </nav>
       </header>
 
-      {/* Mission header */}
       <header className="is-hero-mission">
         <div className="is-hero-mission-primary">
-          <h1 className="is-hero-title">{missionName}</h1>
-          <p className="is-hero-subtitle">Ready for Premium Asset Production</p>
+          <p className="nx-page-header__eyebrow">Bildproduktion</p>
+          <h1 className="is-hero-title">Image Studio</h1>
+          <p className="is-hero-subtitle">Mockups und Kampagnenbilder aus Artwork, Produkt und Markenmodel erstellen.</p>
         </div>
-        <div className="is-hero-meta-row">
+        <span className="nx-status nx-status--success">Deterministisches Mockup · Produktion</span>
+      </header>
+
+      <details className="is-project-context">
+        <summary>Projektkontext und Design-Hinweise</summary>
+        <div className="is-project-context__body">
+          <p><strong>Herkunft:</strong> {projectContextTitle}</p>
+          <div className="is-hero-meta-row">
           <HeroMeta
-            label="Product"
+            label="Produkt"
             value={productHeader.value}
             highlight={productHeader.authoritative ? "emerald" : undefined}
           />
-          <HeroMeta label="Product Authority" value={productHeader.authorityLabel} />
-          <HeroMeta label="Design Version" value={version} />
-          <HeroMeta label="Commercial Status" value={commercialStatus} highlight="gold" />
+          <HeroMeta label="Produktquelle" value={ownerAuthorityLabel(productHeader.authorityLabel)} />
+          <HeroMeta label="Artwork-Version" value={version} />
+          <HeroMeta label="Kommerzieller Status" value={commercialStatus} highlight="gold" />
           <HeroMeta
-            label="Generation Mode"
-            value={generationModeLabel}
+            label="Produktionsmodus"
+            value={ownerGenerationModeLabel}
             highlight={isDraftGenerationMode ? "gold" : "emerald"}
           />
-          <HeroMeta label="Generation Status" value={generationStatus} highlight={pipelineActive || generatingAssetId ? "emerald" : hasResults ? "gold" : undefined} />
+          <HeroMeta label="Produktionsstatus" value={generationStatus} highlight={pipelineActive || generatingAssetId ? "emerald" : hasResults ? "gold" : undefined} />
+          </div>
+          {designMissionHints ? (
+            <p className="is-hero-design-hints">
+              Nicht verbindliche Design-Hinweise: {designMissionHints.collection} ·{" "}
+              {designMissionHints.garment} · {designMissionHints.colorway}. Die echte Produktauswahl erfolgt unten.
+            </p>
+          ) : null}
         </div>
-        {designMissionHints ? (
-          <p className="is-hero-design-hints">
-            Design hints only (non-authoritative): {designMissionHints.collection} ·{" "}
-            {designMissionHints.garment} · {designMissionHints.colorway}
-          </p>
-        ) : null}
-      </header>
+      </details>
 
-      <div className="is-toolbar">
+      <details className="is-v1-preview">
+        <summary>Generative Vorschau · Artwork kann verändert werden</summary>
+        <div className="is-v1-preview__body">
+          <p className="is-v1-preview__warning">Nur für kreative Entwürfe. Für artworkgetreue Produktion das deterministische Mockup verwenden.</p>
+        <div className="is-toolbar">
         <button
           type="button"
           className="is-toolbar-primary"
@@ -1284,11 +1313,11 @@ export function ImageStudioWorkspace() {
         </button>
         <div className="is-toolbar-divider" aria-hidden />
         <div className="is-toolbar-secondary">
-          <ToolbarGhost disabled={!hasResults}>Variations</ToolbarGhost>
+          <ToolbarGhost disabled={!hasResults}>Varianten</ToolbarGhost>
           <ToolbarGhost disabled={!hasResults}>Hero</ToolbarGhost>
-          <ToolbarGhost disabled={!hasResults}>Campaign</ToolbarGhost>
-          <ToolbarGhost disabled={!selectedAsset?.imageUrl}>Upscale</ToolbarGhost>
-          <ToolbarGhost disabled={!hasResults}>Export</ToolbarGhost>
+          <ToolbarGhost disabled={!hasResults}>Kampagne</ToolbarGhost>
+          <ToolbarGhost disabled={!selectedAsset?.imageUrl}>Vergrößern</ToolbarGhost>
+          <ToolbarGhost disabled={!hasResults}>Exportieren</ToolbarGhost>
           <ToolbarGhost disabled={!hasResults}>
             <Download className="size-3.5" />
             ZIP
@@ -1296,11 +1325,13 @@ export function ImageStudioWorkspace() {
         </div>
         <div className="is-toolbar-divider" aria-hidden />
         <div className="is-toolbar-secondary is-toolbar-secondary--muted">
-          <ToolbarGhost disabled={!hasResults}>Commercial</ToolbarGhost>
+          <ToolbarGhost disabled={!hasResults}>Kommerziell</ToolbarGhost>
           <ToolbarGhost disabled={!hasResults}>Marketing</ToolbarGhost>
           <ToolbarGhost disabled={!hasResults}>Shopify</ToolbarGhost>
         </div>
       </div>
+        </div>
+      </details>
 
       {prepareEstimateBlocker && hasHandoff ? (
         <div className="is-error-banner is-error-banner--muted">
@@ -1312,7 +1343,7 @@ export function ImageStudioWorkspace() {
         <div className="is-error-banner">
           <p className="is-error-banner__summary">{error.split("\n\n")[0]}</p>
           {validationDebug ? (
-            <div className="is-error-banner__debug">
+            <details className="nx-technical"><summary>Technische Details</summary><div className="is-error-banner__debug nx-technical__body">
               {validationDebug.schemaName ? (
                 <p className="is-error-banner__schema">
                   Schema: <code>{validationDebug.schemaName}</code>
@@ -1320,7 +1351,7 @@ export function ImageStudioWorkspace() {
               ) : null}
               {validationDebug.missingFields?.length ? (
                 <p className="is-error-banner__missing">
-                  Missing fields: {validationDebug.missingFields.join(", ")}
+                  Fehlende Felder: {validationDebug.missingFields.join(", ")}
                 </p>
               ) : null}
               {validationDebug.validationIssues?.length ? (
@@ -1330,15 +1361,15 @@ export function ImageStudioWorkspace() {
                       <span className="is-error-banner__issue-path">❌ {issue.path}</span>
                       <dl className="is-error-banner__issue-detail">
                         <div>
-                          <dt>Field</dt>
+                          <dt>Feld</dt>
                           <dd>{issue.field}</dd>
                         </div>
                         <div>
-                          <dt>Expected</dt>
+                          <dt>Erwartet</dt>
                           <dd>{issue.expected}</dd>
                         </div>
                         <div>
-                          <dt>Received</dt>
+                          <dt>Erhalten</dt>
                           <dd>
                             {issue.receivedLabel ??
                               (issue.received === undefined
@@ -1349,7 +1380,7 @@ export function ImageStudioWorkspace() {
                           </dd>
                         </div>
                         <div>
-                          <dt>Path</dt>
+                          <dt>Pfad</dt>
                           <dd>{issue.path}</dd>
                         </div>
                       </dl>
@@ -1357,10 +1388,20 @@ export function ImageStudioWorkspace() {
                   ))}
                 </ul>
               ) : null}
-            </div>
+            </div></details>
           ) : null}
         </div>
       ) : null}
+
+      <section className="is-v2-inputs" aria-label="Produktionsauswahl">
+        <div className="is-v2-input-card">
+          <span className="is-v2-input-number">01</span><div><p>Artwork</p><strong>{handoff ? artworkIdentity.displayName : "Noch kein Artwork ausgewählt"}</strong><span>{resolveDurableMasterArtworkReference(handoff) ? "Freigegeben und dauerhaft versioniert" : "Wähle ein freigegebenes Artwork aus der Bibliothek"}{artworkIdentity.provenanceLabel ? ` · ${artworkIdentity.provenanceLabel}` : ""}</span></div>
+          {!resolveDurableMasterArtworkReference(handoff) ? <Link href="/agents/design" className="nx-button">Artwork wählen</Link> : null}
+        </div>
+        <div className="is-v2-input-card is-v2-input-card--form"><span className="is-v2-input-number">02–03</span><ProductProductionSelector onSelectionChange={handleProductSelectionChange} /></div>
+        <div className="is-v2-input-card is-v2-input-card--form"><span className="is-v2-input-number">04</span><BrandModelSelector onSelectionChange={handleBrandModelSelection} /></div>
+        <div className="is-v2-input-card"><span className="is-v2-input-number">06</span><div><p>Aufnahme</p><strong>{ownerShotLabel(selectedAsset?.title ?? selectedSlot.label)}</strong><span>Genau eine Aufnahme ist für den nächsten Auftrag ausgewählt.</span></div></div>
+      </section>
 
       <DeterministicV2Panel
         reportRecordId={result?.reportRecordId ?? null}
@@ -1370,61 +1411,74 @@ export function ImageStudioWorkspace() {
         masterArtwork={resolveDurableMasterArtworkReference(handoff)}
         shopifyProductId={productSelection?.authority === "SHOPIFY_LIVE" ? productSelection.productId : null}
         shopifyVariantId={productSelection?.authority === "SHOPIFY_LIVE" ? productSelection.variantId : null}
+        productProfile={imageProductSelection?.productProfile ?? null}
       />
 
       {paidJob ? (
-        <section className="is-inspector-card is-inspector-card--open" aria-label="Draft generative Artwork review">
-          <div className="is-inspector-card-body">
-            <h3 className="is-panel-heading">Draft — Generative Artwork V1 (not production-exact)</h3>
-            <p>This historical dual-reference mode may generatively alter typography, logos, colors, or layout. Use only for creative exploration; use Deterministic Composite V2 for approved Artwork.</p>
-            <p><strong>Brand Model:</strong> {paidJob.inputSnapshot.brandModel.displayName} · Lock v{paidJob.inputSnapshot.brandModel.identityLockVersion}</p>
-            <p><strong>Master Artwork:</strong> {paidJob.inputSnapshot.masterArtwork.designId} · {paidJob.inputSnapshot.masterArtwork.version}</p>
-            <p><strong>Product:</strong> {paidJob.inputSnapshot.product.productName} · {paidJob.inputSnapshot.product.color} ({paidJob.inputSnapshot.product.authority})</p>
-            <p><strong>Shot:</strong> {paidJob.inputSnapshot.production.shotTitle} · {paidJob.inputSnapshot.production.provider}/{paidJob.inputSnapshot.production.model}</p>
-            <p><strong>Estimated maximum:</strong> {paidJob.estimate.maximum.toFixed(4)} {paidJob.estimate.currency}</p>
-            <p><strong>Input fingerprint:</strong> <code>{paidJob.inputFingerprint}</code></p>
-            <p><strong>Status:</strong> {paidJob.status}</p>
-            <p><strong>Confirmation expires:</strong> {new Date(paidJob.confirmationExpiresAt).toLocaleString()}</p>
-            {paidJob.status === "awaiting_confirmation" ? <p>By confirming, you attest that this is the approved final Master Artwork, the selected Brand Model/product/shot are correct, and you authorize the displayed maximum paid attempt.</p> : null}
+        <details className="is-v1-preview" aria-label="Generative Vorschau">
+          <summary>Gespeicherter generativer Entwurf · {ownerStatusLabel(paidJob.status)}</summary>
+          <div className="is-v1-preview__body">
+            <h3 className="is-panel-heading">Generative Vorschau — Artwork kann verändert werden</h3>
+            <p>Dieser historische Modus kann Typografie, Logos, Farben oder Layout generativ verändern. Für freigegebene Artworks ausschließlich das deterministische Mockup verwenden.</p>
+            <p><strong>Markenmodel:</strong> {paidJob.inputSnapshot.brandModel.displayName}</p>
+            <p><strong>Artwork:</strong> Version {paidJob.inputSnapshot.masterArtwork.version}</p>
+            <p><strong>Produkt:</strong> {paidJob.inputSnapshot.product.productName} · {paidJob.inputSnapshot.product.color} · {ownerAuthorityLabel(paidJob.inputSnapshot.product.authority)}</p>
+            <p><strong>Aufnahme:</strong> {ownerShotLabel(paidJob.inputSnapshot.production.shotTitle)}</p>
+            <p><strong>Geschätztes Maximum:</strong> {paidJob.estimate.maximum.toFixed(4)} {paidJob.estimate.currency}</p>
+            <p><strong>Status:</strong> {ownerStatusLabel(paidJob.status)}</p>
+            <p><strong>Bestätigung gültig bis:</strong> {new Date(paidJob.confirmationExpiresAt).toLocaleString("de-DE")}</p>
+            {paidJob.status === "awaiting_confirmation" ? <p>Mit der Bestätigung autorisierst du genau diesen generativen Entwurfsversuch zum angezeigten Kostenmaximum.</p> : null}
             <div className="is-staging-actions">
-              {paidJob.status === "awaiting_confirmation" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("confirm")}>Confirm Draft Generative Attempt</button> : null}
-              {paidJob.status === "confirmed" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("execute")}>Execute draft generative job</button> : null}
-              {paidJob.status === "failed" && paidJob.safeRetryAllowed ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("retry_known_failure")}>Retry known safe failure</button> : null}
-              {["awaiting_confirmation", "confirmed", "failed"].includes(paidJob.status) ? <button type="button" className="is-btn" disabled={paidJobBusy} onClick={() => void actOnPaidJob("cancel")}>Cancel</button> : null}
-              {paidJob.status === "unknown_outcome" ? <p>Provider outcome is unknown. Do not retry until the provider request is reconciled.</p> : null}
+              {paidJob.status === "awaiting_confirmation" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("confirm")}>Generativen Entwurf bestätigen</button> : null}
+              {paidJob.status === "confirmed" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("execute")}>Entwurf generieren</button> : null}
+              {paidJob.status === "failed" && paidJob.safeRetryAllowed ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("retry_known_failure")}>Sicheren Versuch wiederholen</button> : null}
+              {["awaiting_confirmation", "confirmed", "failed"].includes(paidJob.status) ? <button type="button" className="is-btn" disabled={paidJobBusy} onClick={() => void actOnPaidJob("cancel")}>Abbrechen</button> : null}
+              {paidJob.status === "unknown_outcome" ? <p>Das Provider-Ergebnis ist unbekannt. Nicht erneut versuchen, bevor der Auftrag abgeglichen wurde.</p> : null}
             </div>
             {durableAssets.length ? (
               <div>
-                <h4>Human asset review</h4>
+                <h4>Ergebnis prüfen</h4>
                 {durableAssets.map((asset) => (
                   <div key={asset.id}>
                     <p>
-                      <strong>{asset.shotId}</strong> · {asset.reviewStatus}
+                      <strong>{ownerShotLabel(asset.shotId)}</strong> · {ownerStatusLabel(asset.reviewStatus)}
                     </p>
                     {asset.accessUrl ? (
                       <a href={asset.accessUrl} target="_blank" rel="noreferrer">
-                        Open temporary private preview
+                        Private Vorschau öffnen
                       </a>
                     ) : (
-                      <p>Private preview unavailable or expired. Reload to request fresh access.</p>
+                      <p>Private Vorschau nicht verfügbar oder abgelaufen. Lade die Seite neu.</p>
                     )}
                     <div className="is-staging-actions">
-                      <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void reviewDurableAsset(asset.id, "APPROVED")}>Approve asset</button>
-                      <button type="button" className="is-btn" disabled={paidJobBusy} onClick={() => void reviewDurableAsset(asset.id, "REJECTED")}>Reject asset</button>
+                      <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void reviewDurableAsset(asset.id, "APPROVED")}>Asset freigeben</button>
+                      <button type="button" className="is-btn" disabled={paidJobBusy} onClick={() => void reviewDurableAsset(asset.id, "REJECTED")}>Asset ablehnen</button>
                     </div>
                   </div>
                 ))}
               </div>
             ) : null}
+            <details className="nx-technical">
+              <summary>Technische Details</summary>
+              <div className="nx-technical__body">
+                <p>Identity Lock: v{paidJob.inputSnapshot.brandModel.identityLockVersion}</p>
+                <p>Design-ID: <code>{paidJob.inputSnapshot.masterArtwork.designId}</code></p>
+                <p>Provider/Modell: <code>{paidJob.inputSnapshot.production.provider}/{paidJob.inputSnapshot.production.model}</code></p>
+                <p>Fingerprint: <code>{paidJob.inputFingerprint}</code></p>
+                <p>Interner Status: <code>{paidJob.status}</code></p>
+              </div>
+            </details>
           </div>
-        </section>
+        </details>
       ) : null}
 
+      <details className="is-legacy-workspace">
+        <summary>Weitere Aufnahmen und ältere Werkzeuge</summary>
       <div className="is-body">
         <aside className="is-sidebar">
           <div className="is-sidebar-header">
-            <h2 className="is-sidebar-title">Production Queue</h2>
-            <p className="is-sidebar-sub">{MISSION_ASSET_SLOTS.length} planned shots · one job per selected asset · production-exact uses V2</p>
+            <h2 className="is-sidebar-title">Aufnahmen</h2>
+            <p className="is-sidebar-sub">Eine Aufnahme wählen · ein Auftrag erzeugt genau ein Ergebnis</p>
           </div>
           <ul className="is-asset-list">
             {MISSION_ASSET_SLOTS.map((slot) => {
@@ -1518,14 +1572,14 @@ export function ImageStudioWorkspace() {
               <div className="is-staging-dashboard">
                 <CanvasPlaceholder
                   hasBlueprint={hasBlueprint}
-                  garmentLabel={productHeader.authoritative ? productHeader.value : "Production product pending"}
+                  garmentLabel={productHeader.authoritative ? productHeader.value : "Produkt noch nicht ausgewählt"}
                 />
 
                 <div className="is-staging-panel">
                   {hasHandoff && blueprint ? (
                     <>
                       <div className="is-handoff-checklist">
-                        <h3 className="is-panel-heading">Creative Blueprint</h3>
+                        <h3 className="is-panel-heading">Produktionsgrundlage</h3>
                         <ul className="is-checklist">
                           {HANDOFF_CHECKLIST.map((item) => {
                             const done = item.check(handoffChecks);
@@ -1557,12 +1611,12 @@ export function ImageStudioWorkspace() {
                         <div className="is-empty-illustration-mark" aria-hidden>
                           <Palette className="size-14" />
                         </div>
-                        <h2 className="is-empty-headline">Waiting for Creative Blueprint</h2>
+                        <h2 className="is-empty-headline">Produktionsgrundlage fehlt</h2>
                         <p className="is-handoff-empty-text">
-                          Import a finished design from Design Studio to begin premium asset production.
+                          Wähle ein freigegebenes Artwork aus der Artwork-Bibliothek, um die Bildproduktion zu beginnen.
                         </p>
                         <Link href="/agents/design" className="is-btn is-btn--primary is-btn--cta">
-                          Import from Design Studio
+                          Artwork im Design Studio wählen
                         </Link>
                       </div>
                     </div>
@@ -1577,25 +1631,25 @@ export function ImageStudioWorkspace() {
 
         <aside className="is-inspector">
           <div className="is-inspector-header">
-            <h2 className="is-inspector-title">Production Inspector</h2>
-            <p className="is-inspector-asset">{selectedAsset?.title ?? selectedSlot.label}</p>
+            <h2 className="is-inspector-title">Produktion</h2>
+            <p className="is-inspector-asset">{ownerShotLabel(selectedAsset?.title ?? selectedSlot.label)}</p>
           </div>
 
           <div className="is-inspector-actions">
             <button type="button" className="is-inspector-action is-inspector-action--primary" disabled={!selectedAsset?.imageUrl} onClick={() => selectedAsset && setApproved((p) => new Set(p).add(selectedAsset.id))}>
-              Approve
+              Freigeben
             </button>
             <button type="button" className="is-inspector-action" disabled={!selectedAsset} onClick={() => selectedAsset && void generateSingleAsset(selectedAsset)}>
-              Regenerate
+              Neu versuchen
             </button>
-            <button type="button" className="is-inspector-action" disabled={!selectedAsset?.imageUrl}>Upscale</button>
-            <button type="button" className="is-inspector-action" disabled={!selectedAsset?.imageUrl}>Remove BG</button>
-            <button type="button" className="is-inspector-action" disabled={!selectedAsset}>Variations</button>
+            <button type="button" className="is-inspector-action" disabled={!selectedAsset?.imageUrl}>Vergrößern</button>
+            <button type="button" className="is-inspector-action" disabled={!selectedAsset?.imageUrl}>Hintergrund entfernen</button>
+            <button type="button" className="is-inspector-action" disabled={!selectedAsset}>Varianten</button>
           </div>
 
           <div className="is-inspector-cards">
             <InspectorCard
-              title="Live Queue"
+              title="Aktive Aufnahme"
               open={openSections.queue}
               onToggle={() => toggleSection("queue")}
             >
@@ -1613,7 +1667,7 @@ export function ImageStudioWorkspace() {
                     className={cn("is-queue-row", selectedSlotId === slot.id && "active")}
                   >
                     <span className={cn("is-queue-status-dot", `is-queue-status-dot--${PRODUCTION_QUEUE_DOT[status]}`)} />
-                    <span className="is-queue-name">{slot.label}</span>
+                    <span className="is-queue-name">{ownerShotLabel(slot.label)}</span>
                     <span className="is-queue-status">{MISSION_STATUS_LABELS[status]}</span>
                   </div>
                 );
@@ -1621,37 +1675,35 @@ export function ImageStudioWorkspace() {
             </InspectorCard>
 
             <InspectorCard
-              title="Product Context"
+              title="Produkt & Variante"
               open={openSections.product}
               onToggle={() => toggleSection("product")}
             >
-              <ProductProductionSelector onSelectionChange={handleProductSelectionChange} />
+              <p>{productSelection ? `${selectedProductLabel ?? "Produkt"} · genaue Variante gewählt` : "Noch kein Produkt ausgewählt."}</p>
             </InspectorCard>
 
             <InspectorCard
-              title="Current Model"
+              title="Markenmodel"
               open={openSections.model}
               onToggle={() => toggleSection("model")}
             >
-              <BrandModelSelector
-                onSelectionChange={handleBrandModelSelection}
-              />
+              <p>{brandModelSelection ? `${brandModelSelection.productionContext.contract.displayName} · für Bilder freigegeben` : "Noch kein Markenmodel ausgewählt."}</p>
               {brandModelSelection ? (
                 <InspectorField
-                  label="Identity Lock"
+                  label="Identität"
                   value={`v${brandModelSelection.productionContext.trace.identityLockVersion} · ${brandModelSelection.productionContext.trace.identityLockSnapshotId.slice(0, 8)}`}
                   mono
                 />
               ) : null}
               <div className="is-model-badge">
-                <span className="is-model-badge-provider">OpenAI Images</span>
-                <span className="is-model-badge-model">{getOpenAiImageModel()}</span>
+                <span className="is-model-badge-provider">OpenAI Bildmodell</span>
+                <span className="is-model-badge-model">Details unter „Technische Details“</span>
               </div>
-              <InspectorField label="Generation Mode" value={generationModeLabel} />
-              <InspectorField label="Resolution" value={selectedAsset?.dimensions ?? "1024 × 1024"} />
+              <InspectorField label="Produktionsmodus" value={ownerGenerationModeLabel} />
+              <InspectorField label="Auflösung" value={selectedAsset?.dimensions ?? "1024 × 1024"} />
               <InspectorField label="Seed" value={selectedAsset?.id?.slice(0, 10) ?? "—"} mono />
               <InspectorField
-                label="Generation Time"
+                label="Erstellungsdauer"
                 value={
                   selectedAsset
                     ? formatAssetElapsedTime(assetTimers[selectedAsset.id]?.elapsedMs)
@@ -1661,7 +1713,7 @@ export function ImageStudioWorkspace() {
             </InspectorCard>
 
             <InspectorCard
-              title="Prompt"
+              title="Technische Details · Prompt"
               open={openSections.prompt}
               onToggle={() => toggleSection("prompt")}
             >
@@ -1676,7 +1728,7 @@ export function ImageStudioWorkspace() {
             </InspectorCard>
 
             <InspectorCard
-              title="Production Progress"
+              title="Produktionsfortschritt"
               open={openSections.progress}
               onToggle={() => toggleSection("progress")}
             >
@@ -1690,21 +1742,21 @@ export function ImageStudioWorkspace() {
             </InspectorCard>
 
             <InspectorCard
-              title="Commercial Review"
+              title="Kommerzielle Prüfung"
               open={openSections.review}
               onToggle={() => toggleSection("review")}
             >
               <div className="is-score-cards">
-                <ScoreCard label="Commercial" value={commercialScore ?? "—"} unit={commercialScore != null ? "%" : ""} accent="emerald" />
-                <ScoreCard label="Luxury" value={commercialScore != null ? Math.min(99, commercialScore + 2) : "—"} unit={commercialScore != null ? "%" : ""} accent="gold" />
-                <ScoreCard label="Print Ready" value={hasResults ? "Staged" : "Pending"} accent="muted" />
+                <ScoreCard label="Kommerziell" value={commercialScore ?? "—"} unit={commercialScore != null ? "%" : ""} accent="emerald" />
+                <ScoreCard label="Markenwirkung" value={commercialScore != null ? Math.min(99, commercialScore + 2) : "—"} unit={commercialScore != null ? "%" : ""} accent="gold" />
+                <ScoreCard label="Produktionsbereit" value={hasResults ? "Vorbereitet" : "Ausstehend"} accent="muted" />
               </div>
-              <InspectorField label="Print Readiness" value={printReadiness} />
-              <InspectorField label="Blueprint Review" value={blueprint?.blueprintReview ?? "—"} />
+              <InspectorField label="Produktionsreife" value={printReadiness} />
+              <InspectorField label="Prüfung der Design-Hinweise" value={blueprint?.blueprintReview ?? "—"} />
             </InspectorCard>
 
             <InspectorCard
-              title="Version Timeline"
+              title="Versionsverlauf"
               open={openSections.history}
               onToggle={() => toggleSection("history")}
             >
@@ -1724,6 +1776,7 @@ export function ImageStudioWorkspace() {
           </div>
         </aside>
       </div>
+      </details>
 
       {showHandoffDebug ? (
         <HandoffDebugOverlay
@@ -1815,26 +1868,26 @@ function BlueprintSummary({ blueprint }: { blueprint: import("@/lib/image/image-
   return (
     <div className="is-blueprint-summary">
       <div className="is-blueprint-summary-row">
-        <span className="is-blueprint-summary-label">Design Hints (non-authoritative)</span>
+        <span className="is-blueprint-summary-label">Design-Hinweise (nicht verbindlich)</span>
         <p className="is-blueprint-summary-text">
           {blueprint.collection} · {blueprint.garment} · {blueprint.colorway}
         </p>
       </div>
       <div className="is-blueprint-summary-row">
-        <span className="is-blueprint-summary-label">Creative Direction</span>
+        <span className="is-blueprint-summary-label">Kreative Richtung</span>
         <p className="is-blueprint-summary-text">{blueprint.creativeDirection}</p>
       </div>
       <div className="is-blueprint-summary-grid">
         <div>
-          <span className="is-blueprint-summary-label">Design Story</span>
+          <span className="is-blueprint-summary-label">Designgeschichte</span>
           <p>{blueprint.designStory}</p>
         </div>
         <div>
-          <span className="is-blueprint-summary-label">Fashion Language</span>
+          <span className="is-blueprint-summary-label">Gestaltungssprache</span>
           <p>{blueprint.fashionLanguage}</p>
         </div>
         <div>
-          <span className="is-blueprint-summary-label">Commercial Intent</span>
+          <span className="is-blueprint-summary-label">Kommerzielle Absicht</span>
           <p>{blueprint.commercialIntent}</p>
         </div>
       </div>
@@ -1923,14 +1976,14 @@ function MissionAssetCard({
         <ProgressRing status={status} progress={progress} size={30} active={active} />
         <span className="is-asset-card-body">
           <span className="is-asset-card-top">
-            <span className="is-asset-card-label">{slot.label}</span>
+            <span className="is-asset-card-label">{ownerShotLabel(slot.label)}</span>
             {slot.commercial ? <span className="is-commercial-badge">COM</span> : null}
           </span>
           <span className="is-asset-card-meta">
             <span className={cn("is-asset-card-status", `is-asset-card-status--${status}`)}>
               <span className={cn("is-production-dot", `is-production-dot--${PRODUCTION_QUEUE_DOT[status]}`)} />
               {MISSION_STATUS_LABELS[status]}
-              {status === "ready" ? <span className="is-asset-card-ready-tag">Ready</span> : null}
+              {status === "ready" ? <span className="is-asset-card-ready-tag">Bereit</span> : null}
             </span>
             <span className="is-asset-card-version">{version}</span>
           </span>
@@ -1946,7 +1999,7 @@ function MissionAssetCard({
       </button>
       {canGenerate ? (
         <button type="button" className="is-asset-generate" onClick={onGenerate}>
-          Generate
+          Generieren
         </button>
       ) : null}
     </li>

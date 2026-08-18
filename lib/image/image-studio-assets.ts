@@ -24,13 +24,13 @@ export type ProductionQueueStatus =
   | "failed";
 
 export const PRODUCTION_QUEUE_LABELS: Record<ProductionQueueStatus, string> = {
-  waiting: "Waiting",
-  preparing: "Preparing",
-  generating: "Generating",
-  ready: "Complete",
-  approved: "Approved",
-  needs_revision: "Needs Revision",
-  failed: "Failed",
+  waiting: "Wartet",
+  preparing: "Wird vorbereitet",
+  generating: "Wird erstellt",
+  ready: "Abgeschlossen",
+  approved: "Freigegeben",
+  needs_revision: "Überarbeitung erforderlich",
+  failed: "Fehlgeschlagen",
 };
 
 /** Visual indicator class suffix for production queue status dots */
@@ -82,8 +82,8 @@ export interface MissionAssetSlot {
 
 export const ASSET_PRIORITY_LABELS: Record<AssetSlotPriority, string> = {
   hero: "Hero",
-  core: "Core",
-  support: "Support",
+  core: "Kern",
+  support: "Ergänzung",
 };
 
 export const MISSION_ASSET_SLOTS: MissionAssetSlot[] = [
@@ -102,24 +102,24 @@ export const MISSION_ASSET_SLOTS: MissionAssetSlot[] = [
 ];
 
 export const FASHION_PRODUCTION_PIPELINE = [
-  { id: "blueprint", label: "Preparing Blueprint" },
-  { id: "composition", label: "Building Composition" },
-  { id: "hero", label: "Generating Hero Image" },
-  { id: "lifestyle", label: "Creating Lifestyle Scene" },
-  { id: "mockup", label: "Rendering Product Mockup" },
-  { id: "evaluation", label: "Commercial Evaluation" },
-  { id: "approved", label: "Production Approved" },
+  { id: "blueprint", label: "Produktionsgrundlage wird vorbereitet" },
+  { id: "composition", label: "Komposition wird aufgebaut" },
+  { id: "hero", label: "Hero-Aufnahme wird erstellt" },
+  { id: "lifestyle", label: "Lifestyle-Szene wird erstellt" },
+  { id: "mockup", label: "Produktansicht wird erstellt" },
+  { id: "evaluation", label: "Kommerzielle Prüfung" },
+  { id: "approved", label: "Produktion freigegeben" },
 ] as const;
 
 export type FashionProductionStepId = (typeof FASHION_PRODUCTION_PIPELINE)[number]["id"];
 
 export const HANDOFF_CHECKLIST = [
-  { id: "mission", label: "Mission Imported", check: (h: HandoffChecks) => Boolean(h.hasMission) },
-  { id: "blueprint", label: "AI Designer Blueprint Received", check: (h: HandoffChecks) => Boolean(h.hasBlueprint) },
-  { id: "image-prompt", label: "Image Prompt Ready", check: (h: HandoffChecks) => Boolean(h.hasImagePrompt) },
-  { id: "mockup-prompt", label: "Mockup Prompt Ready", check: (h: HandoffChecks) => Boolean(h.hasMockupPrompt) },
-  { id: "master-artwork", label: "Master Artwork Approved", check: (h: HandoffChecks) => Boolean(h.hasMasterArtwork) },
-  { id: "assets", label: "12 Assets Planned", check: (h: HandoffChecks) => Boolean(h.hasMission) },
+  { id: "mission", label: "Projektkontext übernommen", check: (h: HandoffChecks) => Boolean(h.hasMission) },
+  { id: "blueprint", label: "Design-Hinweise übernommen", check: (h: HandoffChecks) => Boolean(h.hasBlueprint) },
+  { id: "image-prompt", label: "Bildbeschreibung verfügbar", check: (h: HandoffChecks) => Boolean(h.hasImagePrompt) },
+  { id: "mockup-prompt", label: "Mockup-Hinweise verfügbar", check: (h: HandoffChecks) => Boolean(h.hasMockupPrompt) },
+  { id: "master-artwork", label: "Master Artwork freigegeben", check: (h: HandoffChecks) => Boolean(h.hasMasterArtwork) },
+  { id: "assets", label: "Weitere Aufnahmen geplant", check: (h: HandoffChecks) => Boolean(h.hasMission) },
 ] as const;
 
 export interface HandoffChecks {

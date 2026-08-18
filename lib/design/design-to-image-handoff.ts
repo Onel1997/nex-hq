@@ -8,6 +8,13 @@ import type {
 } from "@/lib/design/master-artwork-authority/types";
 import type { DesignStudioHandoffInput } from "@/lib/image/image-handoff-store";
 
+export {
+  assertHandoffSafeForBrowserPersistence,
+  DESIGN_IMAGE_HANDOFF_MAX_SERIALIZED_BYTES,
+  measureHandoffSerializedBytes,
+  stripHandoffTransportPayload,
+} from "@/lib/image/handoff-payload-slim";
+
 export const DESIGN_TO_IMAGE_HANDOFF_ROUTE = "/agents/image" as const;
 
 export const DESIGN_TO_IMAGE_HANDOFF_PROVENANCE =
@@ -32,32 +39,32 @@ export function assertCanContinueToImageStudio(
 ): void {
   if (!input.isApproved) {
     throw new DesignToImageHandoffError(
-      "Approve Master Artwork before continuing to Image Studio.",
+      "Gib das Master Artwork frei, bevor du ins Image Studio wechselst.",
     );
   }
   if (!input.hasLocalUpload) {
     throw new DesignToImageHandoffError(
-      "Upload and approve artwork before continuing to Image Studio.",
+      "Lade das Artwork hoch und gib es frei, bevor du ins Image Studio wechselst.",
     );
   }
   if (!input.mission?.brief.designId) {
     throw new DesignToImageHandoffError(
-      "Open a Design mission before continuing to Image Studio.",
+      "Öffne eine Design-Mission, bevor du ins Image Studio wechselst.",
     );
   }
   if (input.validation.status === "invalid") {
     throw new DesignToImageHandoffError(
-      "Fix artwork validation errors before continuing to Image Studio.",
+      "Behebe die Artwork-Prüffehlern, bevor du ins Image Studio wechselst.",
     );
   }
   if (input.validation.status === "checking") {
     throw new DesignToImageHandoffError(
-      "Wait for artwork validation to finish before continuing to Image Studio.",
+      "Warte, bis die Artwork-Prüfung abgeschlossen ist.",
     );
   }
   if (!input.validation.metadata) {
     throw new DesignToImageHandoffError(
-      "Artwork metadata is missing. Re-upload the file and try again.",
+      "Die Artwork-Metadaten fehlen. Lade die Datei erneut hoch.",
     );
   }
 }
@@ -97,11 +104,42 @@ export function buildApproveMasterArtworkRequest(input: {
   };
 }
 
+export function buildApproveMasterArtworkFormData(input: {
+  file: Blob;
+  fileName?: string;
+  designId: string;
+  version: string;
+  reportId?: string;
+  mimeType: "image/png" | "image/jpeg" | "image/webp";
+  placement?: string | null;
+  printMethod?: string | null;
+  sourceType?: ApproveMasterArtworkRequest["sourceType"];
+}): FormData {
+  const form = new FormData();
+  form.append(
+    "file",
+    input.file,
+    input.fileName ?? "master-artwork.png",
+  );
+  form.append("designId", input.designId);
+  form.append("version", input.version);
+  form.append("sourceType", input.sourceType ?? "uploaded");
+  if (input.reportId) form.append("sourceReportId", input.reportId);
+  form.append("sourceHandoffAt", new Date().toISOString());
+  if (input.placement) form.append("placement", input.placement);
+  if (input.printMethod) form.append("printMethod", input.printMethod);
+  form.append("mimeType", input.mimeType);
+  form.append("approvalAttestation", "true");
+  form.append("provenance", DESIGN_TO_IMAGE_HANDOFF_PROVENANCE);
+  return form;
+}
+
 export function buildDesignStudioHandoffInput(input: {
   mission: DesignMissionState;
   durableArtwork: ApprovedMasterArtworkView;
   imagePrompt?: string;
   mockupPrompt?: string;
+  artworkFileName?: string;
 }): DesignStudioHandoffInput {
   const { mission, durableArtwork } = input;
   const { brief } = mission;
@@ -120,6 +158,7 @@ export function buildDesignStudioHandoffInput(input: {
     imagePrompt: input.imagePrompt ?? brief.imagePrompt,
     mockupPrompt: input.mockupPrompt,
     durableMasterArtwork: durableArtwork,
+    artworkFileName: input.artworkFileName,
   };
 }
 
@@ -129,10 +168,19 @@ export function parseDurableMasterArtworkResponse(payload: unknown): ApprovedMas
       "Durable Master Artwork approval returned an invalid response.",
     );
   }
-  const record = payload as { artwork?: ApprovedMasterArtworkView; error?: string; success?: boolean };
+  const record = payload as {
+    artwork?: ApprovedMasterArtworkView;
+    error?: string;
+    success?: boolean;
+    code?: string;
+    stage?: string;
+  };
   if (!record.artwork) {
+    const detail = [record.error, record.stage ? `stage=${record.stage}` : null, record.code]
+      .filter(Boolean)
+      .join(" · ");
     throw new DesignToImageHandoffError(
-      record.error ?? "Durable Master Artwork approval failed.",
+      detail || "Durable Master Artwork approval failed.",
     );
   }
   return record.artwork;

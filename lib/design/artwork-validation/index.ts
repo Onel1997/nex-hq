@@ -28,7 +28,7 @@ export async function validateArtworkFile(
       issues: [
         {
           code: "unsupported-type",
-          message: "Unsupported file type. Use PNG, SVG, PDF, AI, or EPS.",
+          message: "Nicht unterstützter Dateityp. Verwende PNG, SVG, PDF, AI oder EPS.",
           severity: "error",
         },
       ],
@@ -117,15 +117,15 @@ export function createCheckingValidation(): ArtworkValidationResult {
 export function formatValidationStatusLabel(status: ValidationStatus): string {
   switch (status) {
     case "not-uploaded":
-      return "Not Uploaded";
+      return "Nicht hochgeladen";
     case "checking":
-      return "Checking";
+      return "Wird geprüft";
     case "valid":
-      return "Valid";
+      return "Gültig";
     case "warning":
-      return "Warning";
+      return "Warnung";
     case "invalid":
-      return "Invalid";
+      return "Ungültig";
   }
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { ownerAnalysisLabel } from "@/lib/ux/owner-terminology";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
@@ -87,7 +88,7 @@ export function ColorSwatchRow({
   swatches: Array<{ hex: string; role: string; percentage: number }>;
 }) {
   if (swatches.length === 0) {
-    return <p className="dsv2-inspector-placeholder">No colors extracted.</p>;
+    return <p className="dsv2-inspector-placeholder">Keine Farben erkannt.</p>;
   }
 
   return (
@@ -96,7 +97,7 @@ export function ColorSwatchRow({
         <div key={`${swatch.hex}-${swatch.role}`} className="dsv2-swatch-card">
           <span className="dsv2-swatch-chip" style={{ backgroundColor: swatch.hex }} />
           <div className="dsv2-swatch-meta">
-            <span className="dsv2-swatch-role">{swatch.role}</span>
+            <span className="dsv2-swatch-role">{ownerAnalysisLabel(swatch.role)}</span>
             <span className="dsv2-swatch-hex">{swatch.hex}</span>
             <span className="dsv2-swatch-pct">{swatch.percentage}%</span>
           </div>
@@ -112,14 +113,14 @@ export function TypographyChipList({
   blocks: Array<{ role: string; content: string; fontFamily?: string; fontSize?: number }>;
 }) {
   if (blocks.length === 0) {
-    return <p className="dsv2-inspector-placeholder">No typography layers detected.</p>;
+    return <p className="dsv2-inspector-placeholder">Keine Typografieebenen erkannt.</p>;
   }
 
   return (
     <div className="dsv2-typo-chips">
       {blocks.slice(0, 5).map((block, index) => (
         <div key={`${block.role}-${index}`} className="dsv2-typo-chip">
-          <span className="dsv2-typo-chip-role">{block.role}</span>
+          <span className="dsv2-typo-chip-role">{ownerAnalysisLabel(block.role)}</span>
           <span className="dsv2-typo-chip-text">{block.content}</span>
           {block.fontFamily || block.fontSize ? (
             <span className="dsv2-typo-chip-meta">
@@ -153,7 +154,7 @@ export function PrintCoveragePreview({
       </div>
       <div className="dsv2-print-preview-meta">
         <span>{placement}</span>
-        <span>{coveragePercent}% coverage</span>
+        <span>{coveragePercent}% Abdeckung</span>
       </div>
     </div>
   );
@@ -169,7 +170,7 @@ export function FocalPointMap({
   label: string;
 }) {
   return (
-    <div className="dsv2-focal-map" aria-label={`Focal point: ${label}`}>
+    <div className="dsv2-focal-map" aria-label={`Fokuspunkt: ${label}`}>
       <div className="dsv2-focal-grid" />
       <span
         className="dsv2-focal-dot"

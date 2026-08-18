@@ -1,5 +1,6 @@
 import type { DesignStudioBrief } from "@/agents/design/studio-brief";
 import type { DesignMissionAssets } from "@/lib/design/design-mission-store";
+import { sanitizeHandoffUrlField } from "@/lib/design/design-mission-storage";
 import type { ImageGenerationMode } from "@/lib/image/image-generation-config";
 import {
   sanitizePrintArtworkSvg,
@@ -95,7 +96,7 @@ function parseSvgDimensions(svgMarkup?: string): string {
   const width = svgMarkup.match(/\bwidth=["']([^"']+)["']/i)?.[1];
   const height = svgMarkup.match(/\bheight=["']([^"']+)["']/i)?.[1];
   if (width && height) return `${width} × ${height}`;
-  return "Vector (scalable)";
+  return "Vektor (skalierbar)";
 }
 
 function detectTransparency(svgMarkup?: string): boolean {
@@ -108,11 +109,11 @@ function resolvePrintReadiness(
   score?: number,
   printReady?: boolean,
 ): string {
-  if (printReady) return "Print ready";
-  if (score != null && score >= 90) return "Print ready";
-  if (brief.printReadinessScore >= 75) return "Print ready";
-  if (score != null && score >= 75) return "Near ready";
-  return "Needs refinement";
+  if (printReady) return "Druckbereit";
+  if (score != null && score >= 90) return "Druckbereit";
+  if (brief.printReadinessScore >= 75) return "Druckbereit";
+  if (score != null && score >= 75) return "Fast druckbereit";
+  return "Nacharbeit nötig";
 }
 
 export function createEmptyMasterArtwork(version = "V1"): MasterArtworkState {
@@ -189,7 +190,7 @@ export function buildVectorMasterArtworkDraft(input: {
     commercialScore: score,
     commercialApproved,
     printReadiness: input.printReadyDraft
-      ? "Print ready"
+      ? "Druckbereit"
       : resolvePrintReadiness(input.brief, score, input.printReady),
     resolutionLabel: parseSvgDimensions(sanitizedSvg),
     resolution: input.resolution,
@@ -200,7 +201,7 @@ export function buildVectorMasterArtworkDraft(input: {
     printMethod: input.brief.productionMethod,
     generatedAt: new Date().toISOString(),
     vectorSvgMarkup: sanitizedSvg,
-    vectorArtworkLabel: input.vectorArtworkLabel ?? "Premium Vector Artwork",
+    vectorArtworkLabel: input.vectorArtworkLabel ?? "Vektor-Artwork",
     kittlBenchmarkScore: input.kittlBenchmarkScore,
     textSafe: input.textSafe ?? true,
     printReadyDraft: input.printReadyDraft,
@@ -337,15 +338,15 @@ export function approveMasterArtworkState(
 export function resolveMasterArtworkSourceLabel(sourceType?: MasterArtworkSourceType): string {
   switch (sourceType) {
     case "vector-artwork":
-      return "Vector Artwork — Text Safe";
+      return "Vektor-Artwork";
     case "ai-designer-artwork":
-      return "AI Designer Artwork";
+      return "KI-Designer-Artwork";
     case "svg-draft":
-      return "SVG Draft";
+      return "SVG-Entwurf";
     case "uploaded":
-      return "Uploaded";
+      return "Hochgeladen";
     default:
-      return "Not generated";
+      return "Noch nicht vorhanden";
   }
 }
 
@@ -435,13 +436,13 @@ export function resolveMasterArtworkStatusLabel(
   if (transparencyWarning?.trim()) return transparencyWarning;
   switch (status) {
     case "empty":
-      return "Not generated";
+      return "Noch nicht vorhanden";
     case "draft":
-      return "Draft artwork";
+      return "Entwurf";
     case "in_review":
-      return "Commercial review";
+      return "Kommerzielle Prüfung";
     case "approved":
-      return "Approved Master Artwork";
+      return "Freigegebenes Artwork";
     default:
       return "—";
   }
@@ -538,12 +539,12 @@ export function buildMasterArtworkHandoffPayload(assets: DesignMissionAssets): {
     masterArtworkApproved: view.isApproved,
     masterArtworkSourceType: state.sourceType,
     masterArtworkVersion: state.version,
-    masterArtworkArtworkUrl: state.artworkImageUrl ?? view.previewImageUrl,
-    masterArtworkTransparentPngUrl: state.transparentPngUrl,
-    masterArtworkProductionPngUrl: state.productionPngUrl,
-    masterArtworkApprovedArtworkUrl: approvedArtworkUrl,
-    masterArtworkApprovedProductionFileUrl: approvedProductionUrl,
-    masterArtworkSvgUrl: view.previewSvgUrl,
+    masterArtworkArtworkUrl: sanitizeHandoffUrlField(state.artworkImageUrl ?? view.previewImageUrl),
+    masterArtworkTransparentPngUrl: sanitizeHandoffUrlField(state.transparentPngUrl),
+    masterArtworkProductionPngUrl: sanitizeHandoffUrlField(state.productionPngUrl),
+    masterArtworkApprovedArtworkUrl: sanitizeHandoffUrlField(approvedArtworkUrl),
+    masterArtworkApprovedProductionFileUrl: sanitizeHandoffUrlField(approvedProductionUrl),
+    masterArtworkSvgUrl: sanitizeHandoffUrlField(view.previewSvgUrl),
     masterArtworkSvgMarkup: view.isApproved && state.sourceType === "svg-draft" ? markup : undefined,
     masterArtworkPlacement: state.placement,
     masterArtworkPrintMethod: state.printMethod,

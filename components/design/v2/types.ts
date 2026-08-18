@@ -25,10 +25,10 @@ export const ARTWORK_WORKFLOW_STEPS: Array<{
   id: ArtworkWorkflowStep;
   label: string;
 }> = [
-  { id: "upload", label: "Upload" },
-  { id: "analysis", label: "Analysis" },
-  { id: "commercial-review", label: "Commercial Review" },
-  { id: "approve", label: "Approve" },
+  { id: "upload", label: "Hochladen" },
+  { id: "analysis", label: "Analyse" },
+  { id: "commercial-review", label: "Kommerzielle Prüfung" },
+  { id: "approve", label: "Freigabe" },
   { id: "image-studio", label: "Image Studio" },
 ];
 

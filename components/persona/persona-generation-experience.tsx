@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 const LIVE_GENERATION_STEPS = [
-  "Preparing discovery casting",
-  "Building identity locks",
-  "Provider processing Candidate 1",
-  "Provider processing Candidate 2",
-  "Provider processing Candidate 3",
-  "Provider processing Candidate 4",
-  "Saving discovery assets",
-  "Computing brief-fit scores",
-  "Discovery ready",
+  "Entdeckungs-Casting wird vorbereitet",
+  "Identitätsfestschreibungen werden aufgebaut",
+  "Anbieter verarbeitet Kandidat 1",
+  "Anbieter verarbeitet Kandidat 2",
+  "Anbieter verarbeitet Kandidat 3",
+  "Anbieter verarbeitet Kandidat 4",
+  "Entdeckungsassets werden gespeichert",
+  "Briefing-Passung wird bewertet",
+  "Entdeckung bereit",
 ] as const;
 
 function formatElapsed(seconds: number): string {
@@ -38,13 +38,11 @@ export function PersonaGenerationExperience({
   const [stepIndex, setStepIndex] = useState(0);
   const [elapsed, setElapsed] = useState(0);
 
-  const steps = LIVE_GENERATION_STEPS.map((label, i) => {
-    if (label.startsWith("Rendering Candidate")) {
-      const n = Number(label.replace(/\D/g, ""));
-      if (n > candidateCount) return null;
-    }
-    return label;
-  }).filter((s): s is (typeof LIVE_GENERATION_STEPS)[number] => s != null);
+  const steps = LIVE_GENERATION_STEPS.filter((label) => {
+    const match = label.match(/Kandidat (\d+)/);
+    if (!match) return true;
+    return Number(match[1]) <= candidateCount;
+  });
 
   useEffect(() => {
     if (!active) {
@@ -69,7 +67,7 @@ export function PersonaGenerationExperience({
 
   if (!active) return null;
 
-  // Never show 100% until the final "Discovery ready" step (cosmetic timeline only —
+  // Never show 100% until the final "Entdeckung bereit" step (cosmetic timeline only —
   // real readiness is DB finalization on the server).
   const rawProgress = Math.round(((stepIndex + 1) / steps.length) * 100);
   const progress =
@@ -96,11 +94,11 @@ export function PersonaGenerationExperience({
         </div>
       </div>
 
-      <p className="ps-eyebrow">Discovery casting</p>
-      <h2 className="ps-gen-live-title">Finding 4 distinct Brand Faces</h2>
+      <p className="ps-eyebrow">Entdeckungs-Casting</p>
+      <h2 className="ps-gen-live-title">4 eindeutige Markengesichter werden gesucht</h2>
       <p className="ps-gen-live-subtitle">
-        Automatically resolving biological duplicates within your confirmed budget —
-        no manual Generate New Face required.
+        Biologische Duplikate werden innerhalb des bestätigten Budgets automatisch aufgelöst —
+        kein manuelles „Neues Gesicht erzeugen“ nötig.
       </p>
 
       <div className="ps-gen-live-progress" aria-hidden>
@@ -115,22 +113,22 @@ export function PersonaGenerationExperience({
 
       <dl className="ps-gen-live-timing">
         <div>
-          <dt>Current Step</dt>
+          <dt>Aktueller Schritt</dt>
           <dd>{currentStep}</dd>
         </div>
         <div>
-          <dt>Elapsed</dt>
+          <dt>Vergangen</dt>
           <dd>{formatElapsed(elapsed)}</dd>
         </div>
         <div>
-          <dt>Est. Remaining</dt>
+          <dt>Geschätzte Restzeit</dt>
           <dd>{formatElapsed(remaining)}</dd>
         </div>
       </dl>
 
       {stillWaiting ? (
         <p className="ps-muted">
-          Provider is still processing. Your request remains active.
+          Der Anbieter arbeitet noch. Deine Anfrage bleibt aktiv.
         </p>
       ) : null}
       <ol className="ps-gen-live-timeline">

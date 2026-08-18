@@ -7,11 +7,12 @@ import type {
 } from "@/lib/design/ai-designer/types";
 import type { DesignMissionAssets } from "@/lib/design/design-mission-store";
 import { buildMasterArtworkHandoffPayload } from "@/lib/design/master-artwork";
-import {
-  slimConceptForStorage,
-  slimRenderPlanForStorage,
-} from "@/lib/design/design-mission-storage";
 import type { ApprovedMasterArtworkView } from "@/lib/design/master-artwork-authority/types";
+import {
+  assertHandoffSafeForBrowserPersistence,
+  DESIGN_IMAGE_HANDOFF_MAX_SERIALIZED_BYTES,
+  stripHandoffTransportPayload,
+} from "@/lib/image/handoff-payload-slim";
 
 export const IMAGE_STUDIO_HANDOFF_KEY = "nexhq-image-studio-handoff";
 export const IMAGE_STUDIO_HANDOFF_KEY_V2 = "nexhq-image-studio-handoff-v2";
@@ -32,6 +33,7 @@ export interface ImageStudioHandoffMission {
 export interface ImageStudioHandoff {
   brief: string;
   sourceTitle?: string;
+  artworkFileName?: string;
   designId?: string;
   reportId?: string;
   handoffAt: string;
@@ -228,11 +230,12 @@ export function normalizeImageStudioHandoff(
   if (rejectReason) return null;
 
   const concept = raw.concept;
+  const durableMasterArtwork = raw.durableMasterArtwork;
   const mission =
     raw.mission ??
     buildMissionSnapshot({
       sourceTitle: raw.sourceTitle,
-      designId: raw.designId,
+      designId: raw.designId ?? durableMasterArtwork?.designId,
       concept,
     });
 
@@ -255,7 +258,8 @@ export function normalizeImageStudioHandoff(
   return {
     brief,
     sourceTitle: trim(raw.sourceTitle) || mission.title,
-    designId: raw.designId,
+    artworkFileName: trim(raw.artworkFileName) || undefined,
+    designId: raw.designId ?? durableMasterArtwork?.designId,
     reportId: raw.reportId,
     handoffAt: raw.handoffAt ?? new Date().toISOString(),
     mission,
@@ -267,9 +271,9 @@ export function normalizeImageStudioHandoff(
     renderPlan: raw.renderPlan,
     concept,
     review: raw.review,
-    masterArtworkApproved: raw.masterArtworkApproved,
-    masterArtworkSourceType: raw.masterArtworkSourceType,
-    masterArtworkVersion: raw.masterArtworkVersion,
+    masterArtworkApproved: raw.masterArtworkApproved ?? Boolean(durableMasterArtwork),
+    masterArtworkSourceType: raw.masterArtworkSourceType ?? durableMasterArtwork?.sourceType,
+    masterArtworkVersion: raw.masterArtworkVersion ?? durableMasterArtwork?.version,
     masterArtworkArtworkUrl: raw.masterArtworkArtworkUrl,
     masterArtworkTransparentPngUrl: raw.masterArtworkTransparentPngUrl,
     masterArtworkProductionPngUrl: raw.masterArtworkProductionPngUrl,
@@ -286,13 +290,14 @@ export function normalizeImageStudioHandoff(
     masterArtworkPrintReady: raw.masterArtworkPrintReady,
     masterArtworkDesignDirection: raw.masterArtworkDesignDirection,
     masterArtworkCommercialScore: raw.masterArtworkCommercialScore,
-    durableMasterArtwork: raw.durableMasterArtwork,
+    durableMasterArtwork,
   };
 }
 
 export function buildImageStudioHandoff(input: {
   brief: string;
   sourceTitle?: string;
+  artworkFileName?: string;
   designId?: string;
   reportId?: string;
   assets?: DesignMissionAssets;
@@ -319,6 +324,7 @@ export function buildImageStudioHandoff(input: {
   const handoff: ImageStudioHandoff = {
     brief: imagePromptPrimary ?? trim(input.brief),
     sourceTitle: input.sourceTitle ?? mission.title,
+    artworkFileName: input.artworkFileName,
     designId: input.designId,
     reportId: input.reportId,
     handoffAt: new Date().toISOString(),
@@ -338,50 +344,48 @@ export function buildImageStudioHandoff(input: {
 }
 
 function compactForWindowName(handoff: ImageStudioHandoff): ImageStudioHandoff {
+  const stripped = stripHandoffTransportPayload(handoff);
   return {
-    brief: handoff.brief,
-    sourceTitle: handoff.sourceTitle,
-    designId: handoff.designId,
-    reportId: handoff.reportId,
-    handoffAt: handoff.handoffAt,
-    mission: handoff.mission,
-    imagePromptPrimary: handoff.imagePromptPrimary,
-    mockupPromptPrimary: handoff.mockupPromptPrimary,
-    commercialBlueprint: handoff.commercialBlueprint,
-    commercialScore: handoff.commercialScore,
-    commercialApproved: handoff.commercialApproved,
-    masterArtworkApproved: handoff.masterArtworkApproved,
-    masterArtworkApprovedArtworkUrl: handoff.masterArtworkApprovedArtworkUrl,
-    masterArtworkApprovedProductionFileUrl: handoff.masterArtworkApprovedProductionFileUrl,
-    masterArtworkDesignDirection: handoff.masterArtworkDesignDirection,
-    masterArtworkResolution: handoff.masterArtworkResolution,
-    masterArtworkDpi: handoff.masterArtworkDpi,
-    masterArtworkPrintReady: handoff.masterArtworkPrintReady,
-    durableMasterArtwork: handoff.durableMasterArtwork,
+    brief: stripped.brief,
+    sourceTitle: stripped.sourceTitle,
+    artworkFileName: stripped.artworkFileName,
+    designId: stripped.designId,
+    reportId: stripped.reportId,
+    handoffAt: stripped.handoffAt,
+    mission: stripped.mission,
+    imagePromptPrimary: stripped.imagePromptPrimary,
+    mockupPromptPrimary: stripped.mockupPromptPrimary,
+    commercialBlueprint: stripped.commercialBlueprint,
+    commercialScore: stripped.commercialScore,
+    commercialApproved: stripped.commercialApproved,
+    masterArtworkApproved: stripped.masterArtworkApproved,
+    masterArtworkVersion: stripped.masterArtworkVersion,
+    masterArtworkSourceType: stripped.masterArtworkSourceType,
+    masterArtworkPlacement: stripped.masterArtworkPlacement,
+    masterArtworkPrintMethod: stripped.masterArtworkPrintMethod,
+    masterArtworkResolution: stripped.masterArtworkResolution,
+    masterArtworkDpi: stripped.masterArtworkDpi,
+    masterArtworkPrintReady: stripped.masterArtworkPrintReady,
+    masterArtworkDesignDirection: stripped.masterArtworkDesignDirection,
+    durableMasterArtwork: stripped.durableMasterArtwork,
   };
 }
 
 function slimHandoffForStorage(handoff: ImageStudioHandoff): ImageStudioHandoff {
-  const concept = handoff.concept ? slimConceptForStorage(handoff.concept) : undefined;
-  const renderPlan = handoff.renderPlan ? slimRenderPlanForStorage(handoff.renderPlan) : undefined;
-  const slim: ImageStudioHandoff = {
-    ...handoff,
-    concept,
-    renderPlan,
-    masterArtworkSvgMarkup:
-      handoff.masterArtworkSvgMarkup && handoff.masterArtworkSvgMarkup.length <= 12_000
-        ? handoff.masterArtworkSvgMarkup
-        : undefined,
-  };
-  return normalizeImageStudioHandoff(slim) ?? slim;
+  return stripHandoffTransportPayload(handoff);
 }
 
 function handoffPayloadVariants(handoff: ImageStudioHandoff): ImageStudioHandoff[] {
   const normalized = normalizeImageStudioHandoff(handoff) ?? handoff;
+  const stripped = stripHandoffTransportPayload(normalized);
   const variants: ImageStudioHandoff[] = [];
   const seen = new Set<string>();
 
-  for (const candidate of [normalized, slimHandoffForStorage(normalized), compactForWindowName(normalized)]) {
+  const candidates = handoff.durableMasterArtwork
+    ? [stripped, compactForWindowName(stripped)]
+    : [stripped, slimHandoffForStorage(stripped), compactForWindowName(stripped)];
+
+  for (const candidate of candidates) {
     const key = JSON.stringify(candidate);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -406,6 +410,7 @@ export interface DesignStudioHandoffInput {
   renderPlan?: RenderPlan;
   review?: DesignConceptReview;
   durableMasterArtwork?: ApprovedMasterArtworkView;
+  artworkFileName?: string;
 }
 
 function rebuildImageStudioHandoffFromMission(
@@ -439,6 +444,7 @@ function rebuildImageStudioHandoffFromMission(
   return {
     brief,
     sourceTitle: mission.title,
+    artworkFileName: input.artworkFileName,
     designId: input.designId,
     reportId: input.reportId,
     handoffAt: new Date().toISOString(),
@@ -469,6 +475,7 @@ export function sendDesignHandoffToImageStudio(input: DesignStudioHandoffInput):
   let handoff = buildImageStudioHandoff({
     brief: input.imagePrompt,
     sourceTitle: input.title,
+    artworkFileName: input.artworkFileName,
     designId: input.designId,
     reportId: input.reportId,
     assets: mergedAssets,
@@ -485,13 +492,27 @@ export function sendDesignHandoffToImageStudio(input: DesignStudioHandoffInput):
     handoff = { ...handoff, mission: { ...handoff.mission, version: input.version } };
   }
   if (input.durableMasterArtwork) {
-    handoff = {
+    handoff = stripHandoffTransportPayload({
       ...handoff,
+      artworkFileName: input.artworkFileName ?? handoff.artworkFileName,
       durableMasterArtwork: input.durableMasterArtwork,
       masterArtworkApproved: true,
       masterArtworkVersion: input.durableMasterArtwork.version,
       masterArtworkSourceType: input.durableMasterArtwork.sourceType,
-    };
+      masterArtworkPlacement:
+        input.durableMasterArtwork.placement ?? handoff.masterArtworkPlacement,
+      masterArtworkPrintMethod:
+        input.durableMasterArtwork.printMethod ?? handoff.masterArtworkPrintMethod,
+      masterArtworkArtworkUrl: undefined,
+      masterArtworkTransparentPngUrl: undefined,
+      masterArtworkProductionPngUrl: undefined,
+      masterArtworkApprovedArtworkUrl: undefined,
+      masterArtworkApprovedProductionFileUrl: undefined,
+      masterArtworkSvgUrl: undefined,
+      masterArtworkSvgMarkup: undefined,
+    });
+  } else {
+    handoff = stripHandoffTransportPayload(handoff);
   }
 
   console.info("[Design Studio] handoff built", {
@@ -522,13 +543,11 @@ function readRawFromWindowName(): unknown {
 function writeWindowNameHandoff(handoff: ImageStudioHandoff): boolean {
   if (typeof window === "undefined") return false;
   try {
-    const full = JSON.stringify(handoff);
-    if (full.length <= 1_500_000) {
-      window.name = WINDOW_NAME_PREFIX + full;
-      return true;
-    }
-    const compact = JSON.stringify(compactForWindowName(handoff));
-    window.name = WINDOW_NAME_PREFIX + compact;
+    const compact = compactForWindowName(handoff);
+    assertHandoffSafeForBrowserPersistence(compact);
+    const serialized = JSON.stringify(compact);
+    if (serialized.length > 1_500_000) return false;
+    window.name = WINDOW_NAME_PREFIX + serialized;
     return true;
   } catch {
     return false;
@@ -689,7 +708,12 @@ export function saveImageStudioHandoff(handoff: ImageStudioHandoff): HandoffSave
 
     let payload: string;
     try {
+      assertHandoffSafeForBrowserPersistence(variant);
       payload = JSON.stringify(variant);
+      if (payload.length > DESIGN_IMAGE_HANDOFF_MAX_SERIALIZED_BYTES) {
+        persistErrors.push(`payload too large: ${payload.length} bytes`);
+        continue;
+      }
     } catch (error) {
       persistErrors.push(`stringify: ${error instanceof Error ? error.message : "failed"}`);
       continue;

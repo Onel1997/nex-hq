@@ -3,6 +3,7 @@
 import { MasterArtworkPreviewMedia } from "@/components/design/master-artwork-preview-media";
 import { MasterArtworkPreviewSurface } from "@/components/design/master-artwork-preview-surface";
 import type { ArtworkPreviewSource } from "@/components/design/v2/types";
+import { FALLBACK_ARTWORK_DISPLAY_NAME } from "@/lib/design/artwork-display-name";
 import { ViewportControls } from "@/components/design/v2/center/viewport-controls";
 import { ValidationStatusBadge } from "@/components/design/v2/inspector/validation-status";
 import type { ValidationStatus } from "@/lib/design/artwork-validation";
@@ -14,6 +15,7 @@ import { useCallback, useRef, useState } from "react";
 interface ArtworkPreviewStageProps {
   preview: ArtworkPreviewSource;
   fileName?: string;
+  provenanceLabel?: string | null;
   validationStatus?: ValidationStatus;
   uploadError?: string | null;
   onReplace?: () => void;
@@ -25,6 +27,7 @@ type ZoomMode = "fit" | number;
 export function ArtworkPreviewStage({
   preview,
   fileName,
+  provenanceLabel,
   validationStatus,
   uploadError,
   onReplace,
@@ -68,8 +71,11 @@ export function ArtworkPreviewStage({
       <div className="dsv2-preview-toolbar">
         <div className="dsv2-preview-meta">
           <span className="dsv2-preview-filename">
-            {fileName ?? preview.fileName ?? "Master Artwork"}
+            {fileName ?? preview.fileName ?? FALLBACK_ARTWORK_DISPLAY_NAME}
           </span>
+          {provenanceLabel ? (
+            <span className="dsv2-preview-provenance">{provenanceLabel}</span>
+          ) : null}
           {preview.mimeType ? (
             <span className="dsv2-preview-type">{preview.mimeType.split("/").pop()}</span>
           ) : null}
@@ -80,7 +86,7 @@ export function ArtworkPreviewStage({
         <div className="dsv2-preview-actions">
           {onReplace ? (
             <button type="button" className="dsv2-preview-replace" onClick={onReplace}>
-              Replace
+              Ersetzen
             </button>
           ) : null}
           {hasVisualPreview ? (
@@ -114,7 +120,7 @@ export function ArtworkPreviewStage({
               <MasterArtworkPreviewMedia
                 imageUrl={preview.imageUrl}
                 svgMarkup={preview.svgMarkup}
-                alt={fileName ?? "Master artwork preview"}
+                alt={fileName ?? "Vorschau des Master Artworks"}
                 className="dsv2-preview-media"
               />
             </MasterArtworkPreviewSurface>
@@ -123,7 +129,7 @@ export function ArtworkPreviewStage({
               <FileImage className="size-12" strokeWidth={1} />
               <p className="dsv2-preview-placeholder-name">{preview.fileName}</p>
               <p className="dsv2-preview-placeholder-hint">
-                Preview support coming soon. File metadata has been captured in the inspector.
+                Für dieses Dateiformat ist noch keine direkte Vorschau verfügbar. Die Dateiinformationen wurden übernommen.
               </p>
             </div>
           )}

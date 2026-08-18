@@ -101,7 +101,7 @@ export function resolveOfficialArchetypeStatus(input: {
   const activeFace = input.activeFace ?? null;
   if (activeFace) {
     return {
-      label: "1/1 approved — official brand face",
+      label: "1/1 freigegeben — offizielles Markenmodel",
       tone: "official",
     };
   }
@@ -113,20 +113,20 @@ export function resolveOfficialArchetypeStatus(input: {
   if (activeSelection) {
     if (AWAITING_APPROVAL_STATUSES.has(activeSelection.status)) {
       return {
-        label: "0/1 approved — awaiting final approval",
+        label: "0/1 freigegeben — finale Freigabe ausstehend",
         tone: "awaiting_approval",
       };
     }
     if (CASTING_IN_PROGRESS_STATUSES.has(activeSelection.status)) {
       return {
-        label: "0/1 approved — casting in progress",
+        label: "0/1 freigegeben — Casting läuft",
         tone: "casting",
       };
     }
   }
 
   return {
-    label: "0/1 approved — ready for discovery",
+    label: "0/1 freigegeben — bereit für die Entdeckung",
     tone: "ready",
   };
 }
@@ -138,15 +138,15 @@ export function resolveStartDiscoveryDisabledReason(input: {
   providerGateMessage?: string | null;
 }): string | null {
   if (input.isCreating) {
-    return "Creating a new discovery project…";
+    return "Neues Entdeckungsprojekt wird angelegt…";
   }
   if (!input.archetypeActive) {
-    return "Archetype configuration is missing or inactive.";
+    return "Die Archetyp-Konfiguration fehlt oder ist inaktiv.";
   }
   if (input.providerGateFailed) {
     return (
       input.providerGateMessage ??
-      "Paid generation is not enabled or the provider is not configured."
+      "Die bezahlte Generierung ist nicht aktiviert oder der Anbieter ist nicht konfiguriert."
     );
   }
   return null;

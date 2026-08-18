@@ -23,16 +23,16 @@ import {
 } from "@/lib/design/design-mission-store";
 import {
   assertCanContinueToImageStudio,
-  buildApproveMasterArtworkRequest,
+  buildApproveMasterArtworkFormData,
   buildDesignStudioHandoffInput,
   DesignToImageHandoffError,
   DESIGN_TO_IMAGE_HANDOFF_ROUTE,
   parseDurableMasterArtworkResponse,
   resolveHandoffVersion,
-  uint8ArrayToBase64,
 } from "@/lib/design/design-to-image-handoff";
 import { readArtworkBytesForHandoff } from "@/components/design/v2/artwork-handoff-bytes";
 import { sendDesignHandoffToImageStudio } from "@/lib/image/image-handoff-store";
+import { resolveArtworkDisplayName } from "@/lib/design/artwork-display-name";
 import { resolveMasterArtworkView } from "@/lib/design/master-artwork";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -121,16 +121,34 @@ export function useArtworkWorkspace({
     [mission],
   );
 
+  const artworkIdentity = useMemo(
+    () =>
+      resolveArtworkDisplayName({
+        fileName: localUpload?.fileName ?? validation.metadata?.fileName,
+        durableDisplayName: missionView?.state.vectorArtworkLabel,
+        designId: mission?.brief.designId,
+        researchTitle: mission?.brief.title ?? mission?.reportTitle,
+      }),
+    [
+      localUpload?.fileName,
+      mission?.brief.designId,
+      mission?.brief.title,
+      mission?.reportTitle,
+      missionView?.state.vectorArtworkLabel,
+      validation.metadata?.fileName,
+    ],
+  );
+
   const missionPreview = useMemo((): ArtworkPreviewSource | null => {
     if (!missionView?.hasArtwork || localUpload) return null;
     return {
       imageUrl: missionView.previewImageUrl,
       svgMarkup: missionView.previewSvgMarkup,
-      fileName: mission?.brief.title,
+      fileName: artworkIdentity.displayName,
       mimeType: missionView.previewSvgMarkup ? "image/svg+xml" : "image/png",
       source: "mission",
     };
-  }, [localUpload, mission?.brief.title, missionView]);
+  }, [artworkIdentity.displayName, localUpload, missionView]);
 
   const resolvedPreview = useMemo((): ArtworkPreviewSource | null => {
     if (localUpload) {
@@ -186,7 +204,7 @@ export function useArtworkWorkspace({
 
     if (validationResult.status === "invalid") {
       const reason = validationResult.issues.find((i) => i.severity === "error")?.message;
-      setUploadError(reason ?? "File validation failed.");
+      setUploadError(reason ?? "Die Dateiprüfung ist fehlgeschlagen.");
       setAnalysis(createIdleAnalysis());
       return;
     }
@@ -210,7 +228,7 @@ export function useArtworkWorkspace({
   const ingestFile = useCallback(
     (file: File) => {
       if (!isAcceptedArtworkFile(file)) {
-        setUploadError("Unsupported file type. Use PNG, SVG, PDF, AI, or EPS.");
+        setUploadError("Nicht unterstützter Dateityp. Verwende PNG, SVG, PDF, AI oder EPS.");
         return false;
       }
 
@@ -299,26 +317,26 @@ export function useArtworkWorkspace({
       });
       if (!localUpload || !mission) {
         throw new DesignToImageHandoffError(
-          "Upload and approve artwork before continuing to Image Studio.",
+          "Lade das Artwork hoch und gib es frei, bevor du ins Image Studio wechselst.",
         );
       }
 
-      const { bytes, mimeType } = await readArtworkBytesForHandoff(localUpload);
+      const { mimeType } = await readArtworkBytesForHandoff(localUpload);
       const version = resolveHandoffVersion(mission);
-      const approvalRequest = buildApproveMasterArtworkRequest({
+      const approvalForm = buildApproveMasterArtworkFormData({
+        file: localUpload.file,
+        fileName: localUpload.fileName,
         designId: mission.brief.designId,
         version,
         reportId: mission.reportId,
         mimeType,
-        contentBase64: uint8ArrayToBase64(bytes),
         placement: mission.brief.placement ?? validation.metadata?.fileName ?? null,
         printMethod: mission.brief.productionMethod ?? null,
       });
 
       const durableResponse = await fetch("/api/design/master-artworks", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(approvalRequest),
+        body: approvalForm,
       });
       const durablePayload = (await durableResponse.json()) as {
         artwork?: import("@/lib/design/master-artwork-authority/types").ApprovedMasterArtworkView;
@@ -326,7 +344,7 @@ export function useArtworkWorkspace({
       };
       if (!durableResponse.ok || !durablePayload.artwork) {
         throw new DesignToImageHandoffError(
-          durablePayload.error ?? "Durable Master Artwork approval failed.",
+          durablePayload.error ?? "Die dauerhafte Artwork-Freigabe ist fehlgeschlagen.",
         );
       }
       const durableArtwork = parseDurableMasterArtworkResponse(durablePayload);
@@ -335,11 +353,12 @@ export function useArtworkWorkspace({
         buildDesignStudioHandoffInput({
           mission,
           durableArtwork,
+          artworkFileName: localUpload.fileName,
         }),
       );
       if (!saveResult.saved) {
         throw new DesignToImageHandoffError(
-          saveResult.error ?? "Failed to save Image Studio handoff.",
+          saveResult.error ?? "Die Übergabe an das Image Studio konnte nicht gespeichert werden.",
         );
       }
 
@@ -351,7 +370,7 @@ export function useArtworkWorkspace({
           ? error.message
           : error instanceof Error
             ? error.message
-            : "Design to Image Studio handoff failed.";
+            : "Die Übergabe an das Image Studio ist fehlgeschlagen.";
       setHandoffError(message);
     } finally {
       setHandoffBusy(false);
@@ -384,6 +403,7 @@ export function useArtworkWorkspace({
     missionView,
     health,
     preview: resolvedPreview,
+    artworkIdentity,
     hasArtwork,
     workflowStep,
     localUpload,

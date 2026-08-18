@@ -83,35 +83,35 @@ export function resolvePaidPrepareIdentityBlocker(input: {
   projectBrandModelTrace?: BrandModelTrace | null;
 }): string | null {
   if (!input.handoff?.masterArtworkApproved && !input.handoff?.durableMasterArtwork) {
-    return "Approved Master Artwork is required before paid Image preparation.";
+    return "Ein freigegebenes Master Artwork ist erforderlich, bevor du die Generierung vorbereitest.";
   }
 
   const durableReference = resolveDurableMasterArtworkReference(input.handoff);
   if (!durableReference) {
     if (!input.handoff?.durableMasterArtwork) {
-      return "This browser handoff has no durable Design-owned Master Artwork. Return to Design Studio and send the approved artwork again.";
+      return "Diese Übergabe enthält kein dauerhaftes Design-Artwork. Kehre ins Design Studio zurück und sende das freigegebene Artwork erneut.";
     }
     if (!input.handoff.durableMasterArtwork.id?.trim()) {
-      return "Paid Image preparation requires a durable Master Artwork ID from Design authority.";
+      return "Für die Vorbereitung ist eine dauerhafte Artwork-ID aus dem Design Studio erforderlich.";
     }
     if (!input.handoff.durableMasterArtwork.designId?.trim()) {
-      return "Paid Image preparation requires a durable Design ID on the approved Master Artwork.";
+      return "Für die Vorbereitung ist eine Design-ID auf dem freigegebenen Artwork erforderlich.";
     }
     if (!input.handoff.durableMasterArtwork.version?.trim()) {
-      return "Paid Image preparation requires an approved Master Artwork version.";
+      return "Für die Vorbereitung ist eine Artwork-Version erforderlich.";
     }
     if (!/^[a-f0-9]{64}$/.test(input.handoff.durableMasterArtwork.checksum)) {
-      return "Paid Image preparation requires a valid durable Master Artwork checksum.";
+      return "Für die Vorbereitung ist eine gültige Artwork-Prüfsumme erforderlich.";
     }
     if (input.handoff.durableMasterArtwork.status !== "APPROVED") {
-      return "Paid Image preparation requires an approved durable Master Artwork record.";
+      return "Für die Vorbereitung ist ein freigegebenes dauerhaftes Artwork erforderlich.";
     }
-    return "Paid Image preparation could not identify the durable Master Artwork reference.";
+    return "Das dauerhafte Artwork konnte nicht eindeutig erkannt werden.";
   }
 
   const { designId, reportId } = resolveDesignHandoffIdentity(input.handoff);
   if (!designId && !reportId) {
-    return "Paid Image preparation requires an identifiable approved Design handoff (design ID or report ID).";
+    return "Für die Vorbereitung ist eine erkennbare Design-Übergabe (Design-ID oder Report-ID) erforderlich.";
   }
 
   const selectedTrace = resolveBrandModelTraceForPrepare({
@@ -119,7 +119,7 @@ export function resolvePaidPrepareIdentityBlocker(input: {
     projectBrandModelTrace: input.projectBrandModelTrace,
   });
   if (!selectedTrace) {
-    return "Select an eligible Brand Model before paid Image preparation.";
+    return "Wähle ein für Bilder freigegebenes Markenmodel aus, bevor du die Generierung vorbereitest.";
   }
 
   if (
@@ -130,7 +130,7 @@ export function resolvePaidPrepareIdentityBlocker(input: {
       selectedTrace: input.brandModelSelection.productionContext.trace,
     })
   ) {
-    return "Production package must be re-staged with the selected Brand Model before paid Image preparation.";
+    return "Das Produktionspaket muss mit dem gewählten Markenmodel neu vorbereitet werden.";
   }
 
   return null;
@@ -155,14 +155,14 @@ export function resolvePaidJobStaleReason(input: {
       durable.checksum !== snapshot.masterArtwork.checksum ||
       durable.version !== snapshot.masterArtwork.version)
   ) {
-    return "The approved Master Artwork changed after this paid job was prepared. Prepare / Estimate again before execution.";
+    return "Das freigegebene Artwork hat sich nach dieser Vorbereitung geändert. Bereite den Auftrag erneut vor.";
   }
 
   if (
     input.selectedAssetId &&
     input.selectedAssetId !== snapshot.production.assetId
   ) {
-    return "The selected production shot changed after this paid job was prepared. Prepare / Estimate for the selected shot before execution.";
+    return "Die ausgewählte Aufnahme hat sich nach dieser Vorbereitung geändert. Bereite den Auftrag für die neue Aufnahme erneut vor.";
   }
 
   const selectedTrace = resolveBrandModelTraceForPrepare({
@@ -173,14 +173,14 @@ export function resolvePaidJobStaleReason(input: {
     selectedTrace &&
     !brandModelTracesEqual(selectedTrace, snapshot.brandModel)
   ) {
-    return "The selected Brand Model changed after this paid job was prepared. Prepare / Estimate again before execution.";
+    return "Das gewählte Markenmodel hat sich nach dieser Vorbereitung geändert. Bereite den Auftrag erneut vor.";
   }
 
   if (
     input.productProductionContext &&
     !productContextsEqual(input.productProductionContext, snapshot.product)
   ) {
-    return "The selected Shopify product changed after this paid job was prepared. Prepare / Estimate again before execution.";
+    return "Das gewählte Shopify-Produkt hat sich nach dieser Vorbereitung geändert. Bereite den Auftrag erneut vor.";
   }
 
   return null;

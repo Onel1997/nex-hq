@@ -554,7 +554,7 @@ describe("Phase 1.8B Brand Face Casting Start UX", () => {
       archetypeId: ARCH.mediterranean,
       selectionProjects: [],
     });
-    assert.equal(status.label, "0/1 approved — ready for discovery");
+    assert.equal(status.label, "0/1 freigegeben — bereit für die Entdeckung");
     assert.ok(!/discovery review/i.test(status.label));
     assert.ok(!/session/i.test(status.label));
   });
@@ -594,7 +594,7 @@ describe("Phase 1.8B Brand Face Casting Start UX", () => {
         isCreating: true,
         providerGateFailed: false,
       }) ?? "",
-      /creating/i,
+      /angelegt|Entdeckungsprojekt/i,
     );
     assert.match(
       resolveStartDiscoveryDisabledReason({
@@ -602,7 +602,7 @@ describe("Phase 1.8B Brand Face Casting Start UX", () => {
         isCreating: false,
         providerGateFailed: true,
       }) ?? "",
-      /paid generation|provider/i,
+      /bezahlt|Anbieter|konfiguriert/i,
     );
     assert.equal(
       resolveStartDiscoveryDisabledReason({
@@ -623,7 +623,7 @@ describe("Phase 1.8B Brand Face Casting Start UX", () => {
       creationProjects: oldCreationRuns,
     });
     assert.equal(model.previousRunCount, 2);
-    assert.equal(model.officialStatus.label, "0/1 approved — ready for discovery");
+    assert.equal(model.officialStatus.label, "0/1 freigegeben — bereit für die Entdeckung");
   });
 
   it("12. unfinished run count points users to Creation Projects browsing", () => {
@@ -643,7 +643,7 @@ describe("Phase 1.8B Brand Face Casting Start UX", () => {
       archetypeId: ARCH.mediterranean,
       selectionProjects: [selection],
     });
-    assert.match(status.label, /casting in progress/i);
+    assert.match(status.label, /Casting läuft/i);
     assert.ok(!/discovery review/i.test(status.label));
   });
 
@@ -657,6 +657,6 @@ describe("Phase 1.8B Brand Face Casting Start UX", () => {
       activeFace: face,
     });
     assert.equal(model.primaryAction, "view_brand_cast");
-    assert.match(model.officialStatus.label, /official brand face/i);
+    assert.match(model.officialStatus.label, /offizielles Markenmodel/i);
   });
 });
