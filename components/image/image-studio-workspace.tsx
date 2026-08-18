@@ -15,11 +15,13 @@ import {
 } from "@/components/image/image-studio-primitives";
 import {
   applyImageStudioHandoff,
+  acknowledgeImageStudioHandoff,
   loadHandoffSendDebug,
   type HandoffLoadDebug,
   type HandoffSaveResult,
   type ImageStudioHandoff,
 } from "@/lib/image/image-handoff-store";
+import { bootstrapImageStudioHandoff } from "@/lib/image/image-studio-handoff-bootstrap";
 import {
   applyMasterArtworkToBrief,
   enrichProductionAssetsWithMasterArtwork,
@@ -68,7 +70,6 @@ import {
   logPaidPrepareValidationError,
 } from "@/lib/image/prepare-estimate-error";
 import {
-  enrichHandoffDesignAuthority,
   productionProjectMatchesBrandModel,
   resolveBrandModelTraceForPrepare,
   resolveDurableMasterArtworkReference,
@@ -82,7 +83,12 @@ import {
   resolveImageStudioProductHeader,
   resolvePrepareEstimateBlocker,
 } from "@/lib/image/image-studio-product-display";
-import { resolveArtworkDisplayName } from "@/lib/design/artwork-display-name";
+import {
+  isResearchReportTitle,
+  RESEARCH_ARTWORK_PROVENANCE,
+  formatArtworkSecondaryLine,
+  resolveArtworkDisplayName,
+} from "@/lib/design/artwork-display-name";
 import { useT } from "@/lib/i18n";
 import {
   ownerAuthorityLabel,
@@ -134,7 +140,8 @@ type InspectorSection =
 
 /** Survives React Strict Mode remounts so handoff apply/bootstrap runs once per navigation. */
 let handoffBootstrapLock = false;
-let cachedAppliedHandoff: ImageStudioHandoff | null = null;
+let cachedAppliedArtworkHandoff: ImageStudioHandoff | null = null;
+let cachedProjectContextHandoff: ImageStudioHandoff | null = null;
 let cachedProductionProject: ImageRunResult | null = null;
 let productionPackagePromise: Promise<ImageRunResult | null> | null = null;
 
@@ -156,38 +163,40 @@ const HANDOFF_RETRY_DELAYS_MS = [50, 250, 1000] as const;
 
 function resolveGenerationBrief(
   brief: string,
-  handoff: ImageStudioHandoff | null,
+  artworkHandoff: ImageStudioHandoff | null,
+  projectContextHandoff: ImageStudioHandoff | null,
   blueprint: ImportedCreativeBlueprint | null,
 ): string {
+  const contextHandoff = projectContextHandoff ?? artworkHandoff;
   const trimmedBrief = brief.trim();
   if (trimmedBrief.length >= 3) {
-    return applyMasterArtworkToBrief(trimmedBrief.slice(0, 4000), handoff);
+    return applyMasterArtworkToBrief(trimmedBrief.slice(0, 4000), artworkHandoff);
   }
 
-  if (!handoff && !blueprint) return "";
+  if (!contextHandoff && !blueprint) return "";
 
   const candidates = [
-    handoff?.brief,
-    handoff?.imagePromptPrimary,
-    handoff?.mockupPromptPrimary,
-    handoff?.concept?.imagePrompt?.primary,
-    handoff?.concept?.imagePrompt?.campaign,
-    handoff?.concept?.mockupPrompt?.primary,
-    handoff?.commercialBlueprint,
-    handoff?.concept?.creativeDirection?.summary,
-    handoff?.concept?.designStory,
-    handoff?.renderPlan?.handoffNotes?.[0],
+    contextHandoff?.brief,
+    contextHandoff?.imagePromptPrimary,
+    contextHandoff?.mockupPromptPrimary,
+    contextHandoff?.concept?.imagePrompt?.primary,
+    contextHandoff?.concept?.imagePrompt?.campaign,
+    contextHandoff?.concept?.mockupPrompt?.primary,
+    contextHandoff?.commercialBlueprint,
+    contextHandoff?.concept?.creativeDirection?.summary,
+    contextHandoff?.concept?.designStory,
+    contextHandoff?.renderPlan?.handoffNotes?.[0],
     blueprint?.imagePrompt,
     blueprint?.mockupPrompt,
-    handoff?.mission?.title
-      ? `${handoff.mission.title} — ${handoff.mission.collection} — ${handoff.mission.garment} in ${handoff.mission.colorway}`
+    contextHandoff?.mission?.title
+      ? `${contextHandoff.mission.title} — ${contextHandoff.mission.collection} — ${contextHandoff.mission.garment} in ${contextHandoff.mission.colorway}`
       : "",
   ];
 
   for (const candidate of candidates) {
     const text = typeof candidate === "string" ? candidate.trim() : "";
     if (text.length >= 3) {
-      return applyMasterArtworkToBrief(text.slice(0, 4000), handoff);
+      return applyMasterArtworkToBrief(text.slice(0, 4000), artworkHandoff);
     }
   }
 
@@ -219,6 +228,8 @@ function InspectorCard({
 export function ImageStudioWorkspace() {
   const t = useT();
   const [handoff, setHandoff] = useState<ImageStudioHandoff | null>(null);
+  const [projectContextHandoff, setProjectContextHandoff] =
+    useState<ImageStudioHandoff | null>(null);
   const [brandModelSelection, setBrandModelSelection] =
     useState<ImageBrandModelSelection | null>(null);
   const [productSelection, setProductSelection] =
@@ -478,13 +489,13 @@ export function ImageStudioWorkspace() {
   ]);
 
   const blueprint = useMemo(
-    () => resolveImportedBlueprint(handoff, result?.projectName),
-    [handoff, result?.projectName],
+    () => resolveImportedBlueprint(projectContextHandoff, result?.projectName),
+    [projectContextHandoff, result?.projectName],
   );
 
   const effectiveBrief = useMemo(
-    () => resolveGenerationBrief(brief, handoff, blueprint),
-    [brief, handoff, blueprint],
+    () => resolveGenerationBrief(brief, handoff, projectContextHandoff, blueprint),
+    [brief, handoff, projectContextHandoff, blueprint],
   );
 
   const canStartGeneration = effectiveBrief.trim().length >= 3;
@@ -511,17 +522,29 @@ export function ImageStudioWorkspace() {
   const artworkIdentity = useMemo(
     () =>
       resolveArtworkDisplayName({
-        fileName: handoff?.artworkFileName,
+        userFacingTitle: handoff?.durableMasterArtwork?.displayName,
+        fileName:
+          handoff?.artworkFileName ??
+          handoff?.durableMasterArtwork?.originalFileName,
+        durableDisplayName: handoff?.durableMasterArtwork?.designId,
         designId: handoff?.designId ?? handoff?.durableMasterArtwork?.designId,
-        researchTitle: handoff?.sourceTitle,
+        researchTitle: projectContextHandoff?.sourceTitle,
       }),
-    [handoff?.artworkFileName, handoff?.designId, handoff?.durableMasterArtwork?.designId, handoff?.sourceTitle],
+    [
+      handoff?.artworkFileName,
+      handoff?.designId,
+      handoff?.durableMasterArtwork?.designId,
+      handoff?.durableMasterArtwork?.displayName,
+      handoff?.durableMasterArtwork?.originalFileName,
+      projectContextHandoff?.sourceTitle,
+    ],
   );
   const designMissionHints = resolveDesignMissionHints(blueprint);
 
   const hasBlueprint = Boolean(blueprint?.imported || brief.trim());
   const hasResults = productionAssets.length > 0;
-  const hasHandoff = Boolean(handoff);
+  const hasArtworkHandoff = Boolean(handoff);
+  const hasProjectContext = Boolean(projectContextHandoff || blueprint?.imported);
   const completedAssetCount = useMemo(
     () => countCompletedMissionAssets(productionAssets),
     [productionAssets],
@@ -544,14 +567,29 @@ export function ImageStudioWorkspace() {
   );
 
   const handoffChecks = buildHandoffChecks({
-    handoff: hasHandoff,
+    handoff: hasProjectContext,
     hasBlueprint,
-    imagePrompt: handoff?.imagePromptPrimary ?? brief,
-    mockupPrompt: handoff?.mockupPromptPrimary,
+    imagePrompt: projectContextHandoff?.imagePromptPrimary ?? brief,
+    mockupPrompt: projectContextHandoff?.mockupPromptPrimary,
     masterArtworkApproved: handoff?.masterArtworkApproved,
   });
 
-  const projectContextTitle = blueprint?.designName ?? (hasHandoff ? handoff?.sourceTitle : null) ?? "Kein Projektkontext vorhanden";
+  const projectContextTitle =
+    blueprint?.designName ??
+    projectContextHandoff?.sourceTitle ??
+    "Kein Projektkontext vorhanden";
+  const artworkVersionLabel = handoff?.durableMasterArtwork?.version ?? handoff?.masterArtworkVersion ?? "—";
+  const artworkStatusLabel = resolveDurableMasterArtworkReference(handoff)
+    ? "Freigegeben"
+    : "Nicht ausgewählt";
+  const artworkOriginalFileName =
+    handoff?.artworkFileName ?? handoff?.durableMasterArtwork?.originalFileName ?? null;
+  const artworkSecondaryLine = hasArtworkHandoff
+    ? formatArtworkSecondaryLine({
+        version: artworkVersionLabel !== "—" ? artworkVersionLabel : null,
+        originalFileName: artworkOriginalFileName,
+      }) || artworkStatusLabel
+    : "Wähle ein freigegebenes Artwork aus der Bibliothek";
   const version = blueprint?.version ?? (hasResults ? "V1" : "—");
   const commercialStatus = resolveCommercialStatus(blueprint);
   const isDraftGenerationMode = IMAGE_GENERATION.mode === "draft";
@@ -653,9 +691,9 @@ export function ImageStudioWorkspace() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               brief: text,
-              productName: handoff?.mission?.garment,
-              collectionName: handoff?.mission?.collection,
-              color: handoff?.mission?.colorway,
+              productName: projectContextHandoff?.mission?.garment,
+              collectionName: projectContextHandoff?.mission?.collection,
+              color: projectContextHandoff?.mission?.colorway,
               material:
                 productProductionContext?.authoritative !== true
                   ? productProductionContext?.material ?? undefined
@@ -745,7 +783,7 @@ export function ImageStudioWorkspace() {
 
       return productionPackagePromise;
     },
-    [brandModelSelection, handoff, productProductionContext, t],
+    [brandModelSelection, handoff, projectContextHandoff, productProductionContext, t],
   );
 
   const releaseExecutionLocks = useCallback((reason: string) => {
@@ -773,7 +811,12 @@ export function ImageStudioWorkspace() {
       pipelineActive,
     });
 
-    const briefForRun = resolveGenerationBrief(brief, handoff, blueprint);
+    const briefForRun = resolveGenerationBrief(
+      brief,
+      handoff,
+      projectContextHandoff,
+      blueprint,
+    );
     if (!briefForRun.trim()) {
       console.warn("[Image Studio] runImage early return: missing brief", {
         abortReason: "missing brief",
@@ -784,7 +827,7 @@ export function ImageStudioWorkspace() {
       return null;
     }
 
-    if (!handoff && !blueprint && !brief.trim()) {
+    if (!handoff && !projectContextHandoff && !blueprint && !brief.trim()) {
       console.warn("[Image Studio] runImage early return: missing handoff", {
         abortReason: "missing handoff",
       });
@@ -1077,9 +1120,15 @@ export function ImageStudioWorkspace() {
     const retryTimers: ReturnType<typeof setTimeout>[] = [];
 
     const restoreCachedHandoff = () => {
-      if (!cachedAppliedHandoff) return false;
-      setHandoff(cachedAppliedHandoff);
-      setBrief(cachedAppliedHandoff.brief);
+      if (cachedProjectContextHandoff) {
+        setProjectContextHandoff(cachedProjectContextHandoff);
+      }
+      if (!cachedAppliedArtworkHandoff) return false;
+      setHandoff(cachedAppliedArtworkHandoff);
+      setBrief(
+        cachedProjectContextHandoff?.brief ??
+          cachedAppliedArtworkHandoff.brief,
+      );
       setHandoffStateApplied(true);
       return true;
     };
@@ -1090,14 +1139,16 @@ export function ImageStudioWorkspace() {
       const { handoff: normalized, debug } = applyImageStudioHandoff();
       setHandoffLoadDebug(debug);
 
-      if (handoffBootstrapLock && cachedAppliedHandoff) {
+      if (handoffBootstrapLock && cachedAppliedArtworkHandoff) {
         const cachedArtworkKey =
-          cachedAppliedHandoff.durableMasterArtwork?.checksum ??
-          cachedAppliedHandoff.handoffAt;
+          cachedAppliedArtworkHandoff.durableMasterArtwork?.checksum ??
+          cachedAppliedArtworkHandoff.handoffAt;
+        const bootstrapped = bootstrapImageStudioHandoff(normalized);
         const freshArtworkKey =
-          normalized?.durableMasterArtwork?.checksum ?? normalized?.handoffAt;
+          bootstrapped.artworkHandoff?.durableMasterArtwork?.checksum ??
+          normalized?.handoffAt;
         if (
-          normalized &&
+          bootstrapped.artworkHandoff &&
           freshArtworkKey &&
           cachedArtworkKey &&
           freshArtworkKey !== cachedArtworkKey
@@ -1133,34 +1184,55 @@ export function ImageStudioWorkspace() {
         rejectReason: debug.rejectReason,
       });
 
-      if (!normalized) {
+      const bootstrapped = bootstrapImageStudioHandoff(normalized);
+      if (!normalized && !bootstrapped.projectContextHandoff) {
         console.info("[Image Studio] handoff not present or invalid", debug.rejectReason);
+        setHandoffStateApplied(true);
         return;
       }
 
-      console.info("[Image Studio] handoff brief validated", {
-        briefLength: normalized.brief.length,
-        title: normalized.mission?.title ?? normalized.sourceTitle,
-        hasConcept: Boolean(normalized.concept),
-        imagePrompt: Boolean(normalized.imagePromptPrimary),
-        mockupPrompt: Boolean(normalized.mockupPromptPrimary),
-      });
+      if (bootstrapped.artworkRejectReason && !bootstrapped.artworkHandoff) {
+        console.info("[Image Studio] artwork authority ignored", {
+          reason: bootstrapped.artworkRejectReason,
+        });
+      }
 
       handoffBootstrapLock = true;
-      cachedAppliedHandoff = normalized;
-      const enriched = enrichHandoffDesignAuthority(normalized);
-      setHandoff(enriched);
-      setBrief(enriched.brief);
+      cachedAppliedArtworkHandoff = bootstrapped.artworkHandoff;
+      cachedProjectContextHandoff = bootstrapped.projectContextHandoff;
+
+      setHandoff(bootstrapped.artworkHandoff);
+      setProjectContextHandoff(bootstrapped.projectContextHandoff);
+      setBrief(
+        bootstrapped.projectContextHandoff?.brief ??
+          bootstrapped.artworkHandoff?.brief ??
+          "",
+      );
       setHandoffStateApplied(true);
 
-      console.info("[Image Studio] mission state populated", {
-        title: enriched.mission?.title,
-        collection: enriched.mission?.collection,
-        garment: enriched.mission?.garment,
-        colorway: enriched.mission?.colorway,
-        designId: enriched.designId ?? enriched.durableMasterArtwork?.designId,
-        durableArtworkId: enriched.durableMasterArtwork?.id,
-      });
+      if (bootstrapped.artworkHandoff) {
+        console.info("[Image Studio] explicit artwork authority applied", {
+          designId:
+            bootstrapped.artworkHandoff.designId ??
+            bootstrapped.artworkHandoff.durableMasterArtwork?.designId,
+          durableArtworkId: bootstrapped.artworkHandoff.durableMasterArtwork?.id,
+          version: bootstrapped.artworkHandoff.durableMasterArtwork?.version,
+          source: bootstrapped.artworkSource,
+        });
+      }
+
+      if (bootstrapped.projectContextHandoff) {
+        console.info("[Image Studio] project context retained (non-authoritative)", {
+          title:
+            bootstrapped.projectContextHandoff.mission?.title ??
+            bootstrapped.projectContextHandoff.sourceTitle,
+          reportId: bootstrapped.projectContextHandoff.reportId,
+        });
+      }
+
+      if (bootstrapped.shouldClearStorage) {
+        acknowledgeImageStudioHandoff();
+      }
     };
 
     tryApplyHandoff("sync");
@@ -1178,7 +1250,12 @@ export function ImageStudioWorkspace() {
     if (!handoffStateApplied || !handoff) return;
     if (cachedProductionProject || productionAssets.length > 0) return;
 
-    const missionBrief = resolveGenerationBrief(brief, handoff, blueprint);
+    const missionBrief = resolveGenerationBrief(
+      brief,
+      handoff,
+      projectContextHandoff,
+      blueprint,
+    );
     if (!missionBrief.trim()) {
       console.info("[Image Studio] handoff staging skipped — missing prompt/brief", {
         abortReason: "missing brief",
@@ -1205,6 +1282,7 @@ export function ImageStudioWorkspace() {
   }, [
     handoffStateApplied,
     handoff,
+    projectContextHandoff,
     brief,
     blueprint,
     createProductionPackage,
@@ -1231,12 +1309,23 @@ export function ImageStudioWorkspace() {
   };
 
   const activePrompt =
-    selectedAsset?.prompt.openai ?? blueprint?.imagePrompt ?? handoff?.imagePromptPrimary ?? brief;
+    selectedAsset?.prompt.openai ??
+    blueprint?.imagePrompt ??
+    projectContextHandoff?.imagePromptPrimary ??
+    brief;
 
-  const printReadiness = handoff?.concept?.productionNotes?.printReadiness?.join(", ") ?? "Noch nicht geprüft";
+  const printReadiness =
+    projectContextHandoff?.concept?.productionNotes?.printReadiness?.join(", ") ??
+    "Noch nicht geprüft";
 
   const versionTimeline = [
-    { version: blueprint?.version ?? "V1", label: "Design-Hinweise übernommen", time: handoff?.handoffAt ? new Date(handoff.handoffAt).toLocaleString("de-DE") : "—" },
+    {
+      version: blueprint?.version ?? "V1",
+      label: "Design-Hinweise übernommen",
+      time: projectContextHandoff?.handoffAt
+        ? new Date(projectContextHandoff.handoffAt).toLocaleString("de-DE")
+        : "—",
+    },
     ...(hasResults ? [{ version: "V1.0", label: "Produktionspaket erstellt", time: "Projekt vorbereitet" }] : []),
     ...(selectedAsset?.createdAt
       ? [{ version: assetVersionLabel(selectedAsset), label: ownerShotLabel(selectedAsset.title ?? "Ergebnis"), time: new Date(selectedAsset.createdAt).toLocaleString("de-DE") }]
@@ -1294,6 +1383,10 @@ export function ImageStudioWorkspace() {
               {designMissionHints.garment} · {designMissionHints.colorway}. Die echte Produktauswahl erfolgt unten.
             </p>
           ) : null}
+          {isResearchReportTitle(projectContextHandoff?.sourceTitle) ||
+          isResearchReportTitle(projectContextHandoff?.mission?.title) ? (
+            <p className="is-hero-design-hints">{RESEARCH_ARTWORK_PROVENANCE}</p>
+          ) : null}
         </div>
       </details>
 
@@ -1333,7 +1426,7 @@ export function ImageStudioWorkspace() {
         </div>
       </details>
 
-      {prepareEstimateBlocker && hasHandoff ? (
+      {prepareEstimateBlocker && hasArtworkHandoff ? (
         <div className="is-error-banner is-error-banner--muted">
           <p className="is-error-banner__summary">{prepareEstimateBlocker}</p>
         </div>
@@ -1395,8 +1488,8 @@ export function ImageStudioWorkspace() {
 
       <section className="is-v2-inputs" aria-label="Produktionsauswahl">
         <div className="is-v2-input-card">
-          <span className="is-v2-input-number">01</span><div><p>Artwork</p><strong>{handoff ? artworkIdentity.displayName : "Noch kein Artwork ausgewählt"}</strong><span>{resolveDurableMasterArtworkReference(handoff) ? "Freigegeben und dauerhaft versioniert" : "Wähle ein freigegebenes Artwork aus der Bibliothek"}{artworkIdentity.provenanceLabel ? ` · ${artworkIdentity.provenanceLabel}` : ""}</span></div>
-          {!resolveDurableMasterArtworkReference(handoff) ? <Link href="/agents/design" className="nx-button">Artwork wählen</Link> : null}
+          <span className="is-v2-input-number">01</span><div><p>Artwork</p><strong>{hasArtworkHandoff ? artworkIdentity.displayName : "Kein Artwork ausgewählt"}</strong><span>{artworkSecondaryLine}</span></div>
+          {!hasArtworkHandoff ? <Link href="/agents/design" className="nx-button">Artwork auswählen</Link> : null}
         </div>
         <div className="is-v2-input-card is-v2-input-card--form"><span className="is-v2-input-number">02–03</span><ProductProductionSelector onSelectionChange={handleProductSelectionChange} /></div>
         <div className="is-v2-input-card is-v2-input-card--form"><span className="is-v2-input-number">04</span><BrandModelSelector onSelectionChange={handleBrandModelSelection} /></div>
@@ -1421,7 +1514,7 @@ export function ImageStudioWorkspace() {
             <h3 className="is-panel-heading">Generative Vorschau — Artwork kann verändert werden</h3>
             <p>Dieser historische Modus kann Typografie, Logos, Farben oder Layout generativ verändern. Für freigegebene Artworks ausschließlich das deterministische Mockup verwenden.</p>
             <p><strong>Markenmodel:</strong> {paidJob.inputSnapshot.brandModel.displayName}</p>
-            <p><strong>Artwork:</strong> Version {paidJob.inputSnapshot.masterArtwork.version}</p>
+            <p><strong>Artwork:</strong> {artworkIdentity.displayName} · Version {paidJob.inputSnapshot.masterArtwork.version}</p>
             <p><strong>Produkt:</strong> {paidJob.inputSnapshot.product.productName} · {paidJob.inputSnapshot.product.color} · {ownerAuthorityLabel(paidJob.inputSnapshot.product.authority)}</p>
             <p><strong>Aufnahme:</strong> {ownerShotLabel(paidJob.inputSnapshot.production.shotTitle)}</p>
             <p><strong>Geschätztes Maximum:</strong> {paidJob.estimate.maximum.toFixed(4)} {paidJob.estimate.currency}</p>
@@ -1576,7 +1669,7 @@ export function ImageStudioWorkspace() {
                 />
 
                 <div className="is-staging-panel">
-                  {hasHandoff && blueprint ? (
+                  {hasProjectContext && blueprint ? (
                     <>
                       <div className="is-handoff-checklist">
                         <h3 className="is-panel-heading">Produktionsgrundlage</h3>

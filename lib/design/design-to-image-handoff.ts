@@ -114,6 +114,8 @@ export function buildApproveMasterArtworkFormData(input: {
   placement?: string | null;
   printMethod?: string | null;
   sourceType?: ApproveMasterArtworkRequest["sourceType"];
+  displayName?: string | null;
+  originalFileName?: string | null;
 }): FormData {
   const form = new FormData();
   form.append(
@@ -131,6 +133,9 @@ export function buildApproveMasterArtworkFormData(input: {
   form.append("mimeType", input.mimeType);
   form.append("approvalAttestation", "true");
   form.append("provenance", DESIGN_TO_IMAGE_HANDOFF_PROVENANCE);
+  if (input.displayName?.trim()) form.append("displayName", input.displayName.trim());
+  const originalFileName = input.originalFileName ?? input.fileName;
+  if (originalFileName?.trim()) form.append("originalFileName", originalFileName.trim());
   return form;
 }
 
@@ -158,7 +163,8 @@ export function buildDesignStudioHandoffInput(input: {
     imagePrompt: input.imagePrompt ?? brief.imagePrompt,
     mockupPrompt: input.mockupPrompt,
     durableMasterArtwork: durableArtwork,
-    artworkFileName: input.artworkFileName,
+    artworkFileName:
+      input.artworkFileName ?? durableArtwork.originalFileName ?? undefined,
   };
 }
 

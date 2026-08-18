@@ -68,6 +68,8 @@ export interface ImageStudioHandoff {
   masterArtworkCommercialScore?: number;
   /** Durable Design-owned authority. Browser URLs remain transport/preview only. */
   durableMasterArtwork?: ApprovedMasterArtworkView;
+  /** Set when Design Studio explicitly sends approved artwork to Image Studio. */
+  explicitArtworkHandoff?: boolean;
 }
 
 export interface HandoffSaveResult {
@@ -291,6 +293,7 @@ export function normalizeImageStudioHandoff(
     masterArtworkDesignDirection: raw.masterArtworkDesignDirection,
     masterArtworkCommercialScore: raw.masterArtworkCommercialScore,
     durableMasterArtwork,
+    explicitArtworkHandoff: raw.explicitArtworkHandoff,
   };
 }
 
@@ -368,6 +371,7 @@ function compactForWindowName(handoff: ImageStudioHandoff): ImageStudioHandoff {
     masterArtworkPrintReady: stripped.masterArtworkPrintReady,
     masterArtworkDesignDirection: stripped.masterArtworkDesignDirection,
     durableMasterArtwork: stripped.durableMasterArtwork,
+    explicitArtworkHandoff: stripped.explicitArtworkHandoff,
   };
 }
 
@@ -496,6 +500,7 @@ export function sendDesignHandoffToImageStudio(input: DesignStudioHandoffInput):
       ...handoff,
       artworkFileName: input.artworkFileName ?? handoff.artworkFileName,
       durableMasterArtwork: input.durableMasterArtwork,
+      explicitArtworkHandoff: true,
       masterArtworkApproved: true,
       masterArtworkVersion: input.durableMasterArtwork.version,
       masterArtworkSourceType: input.durableMasterArtwork.sourceType,

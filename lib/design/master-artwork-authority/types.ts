@@ -8,6 +8,8 @@ export const DESIGN_MASTER_ARTWORK_SOURCE_TYPES = [
   "svg-draft",
 ] as const;
 
+const postgresDateTime = z.string().datetime({ offset: true });
+
 export const approvedMasterArtworkSchema = z
   .object({
     contractVersion: z.literal(DESIGN_MASTER_ARTWORK_VERSION),
@@ -21,10 +23,12 @@ export const approvedMasterArtworkSchema = z
     sourceType: z.enum(DESIGN_MASTER_ARTWORK_SOURCE_TYPES),
     storagePath: z.string().min(1),
     status: z.literal("APPROVED"),
+    displayName: z.string().min(1).max(120).nullable().optional(),
+    originalFileName: z.string().min(1).max(255).nullable().optional(),
     placement: z.string().min(1).nullable(),
     printMethod: z.string().min(1).nullable(),
     sourceReportId: z.string().min(1).nullable(),
-    sourceHandoffAt: z.string().datetime(),
+    sourceHandoffAt: postgresDateTime,
     provenance: z
       .object({
         authority: z.literal("DESIGN_STUDIO"),
@@ -33,8 +37,8 @@ export const approvedMasterArtworkSchema = z
       })
       .strict(),
     approvedBy: z.string().min(1),
-    approvedAt: z.string().datetime(),
-    createdAt: z.string().datetime(),
+    approvedAt: postgresDateTime,
+    createdAt: postgresDateTime,
   })
   .strict();
 
@@ -50,21 +54,28 @@ export function toApprovedMasterArtworkView(
   return view;
 }
 
-export const approveMasterArtworkRequestSchema = z
+export const approveMasterArtworkMetaSchema = z
   .object({
     designId: z.string().min(1),
     version: z.string().min(1),
     sourceType: z.enum(DESIGN_MASTER_ARTWORK_SOURCE_TYPES),
     sourceReportId: z.string().min(1).nullable(),
-    sourceHandoffAt: z.string().datetime(),
+    sourceHandoffAt: postgresDateTime,
     placement: z.string().min(1).nullable(),
     printMethod: z.string().min(1).nullable(),
     mimeType: z.enum(["image/png", "image/jpeg", "image/webp"]),
-    contentBase64: z.string().min(4),
     approvalAttestation: z.literal(true),
     provenance: z.string().min(1),
+    displayName: z.string().min(1).max(120).nullable().optional(),
+    originalFileName: z.string().min(1).max(255).nullable().optional(),
   })
   .strict();
+
+export type ApproveMasterArtworkMeta = z.infer<typeof approveMasterArtworkMetaSchema>;
+
+export const approveMasterArtworkRequestSchema = approveMasterArtworkMetaSchema.extend({
+  contentBase64: z.string().min(4),
+});
 
 export type ApproveMasterArtworkRequest = z.infer<
   typeof approveMasterArtworkRequestSchema

@@ -460,6 +460,54 @@ body:has(.dsv2-root) {
   white-space: nowrap;
 }
 
+.dsv2-preview-original,
+.dsv2-preview-rename-btn {
+  font-size: 11px;
+  color: var(--dsv2-text-muted);
+  white-space: nowrap;
+}
+
+.dsv2-preview-rename-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dsv2-preview-rename {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.dsv2-preview-rename input {
+  min-width: 12rem;
+  max-width: 24rem;
+  flex: 1;
+  height: 32px;
+  border: 1px solid var(--dsv2-border);
+  border-radius: 6px;
+  padding: 0 10px;
+  font-size: 13px;
+  background: var(--dsv2-surface);
+}
+
+.dsv2-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .dsv2-preview-provenance {
   min-width: 0;
   max-width: 16rem;

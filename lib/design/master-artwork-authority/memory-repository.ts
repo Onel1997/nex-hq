@@ -37,6 +37,18 @@ export class MemoryMasterArtworkAuthorityRepository
       : null;
   }
 
+  async updateDisplayName(
+    scope: WorkspaceScope & { actorId: string },
+    artworkId: string,
+    displayName: string,
+  ) {
+    const record = this.records.get(artworkId);
+    if (!record || record.workspaceId !== scope.workspaceId) return null;
+    record.displayName = displayName;
+    this.records.set(artworkId, record);
+    return structuredClone(record);
+  }
+
   async list(scope: WorkspaceScope, designId?: string) {
     return [...this.records.values()]
       .filter(

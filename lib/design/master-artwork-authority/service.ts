@@ -1,16 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { PersonaDomainError } from "@/lib/persona/domain/errors";
 import type { WorkspaceScope } from "@/lib/persona/domain/types";
+import {
+  normalizeOriginalFileName,
+  normalizeOwnerArtworkDisplayName,
+} from "@/lib/design/artwork-display-name";
 import type { MasterArtworkAuthorityRepository } from "./repository";
 import { SupabaseMasterArtworkAuthorityRepository } from "./supabase-repository";
 import {
   checksumMasterArtwork,
   decodeMasterArtworkUpload,
+  DESIGN_MASTER_ARTWORK_MAX_BYTES,
   downloadApprovedMasterArtwork,
   uploadApprovedMasterArtwork,
 } from "./storage";
 import type {
   ApprovedMasterArtwork,
+  ApproveMasterArtworkMeta,
   ApproveMasterArtworkRequest,
   MasterArtworkReference,
 } from "./types";
@@ -47,13 +53,25 @@ function requireActor(
 
 export async function approveDurableMasterArtwork(
   scope: WorkspaceScope,
-  request: ApproveMasterArtworkRequest,
+  request: ApproveMasterArtworkMeta,
+  bytes: Buffer,
   overrides: Partial<Dependencies> = {},
 ): Promise<ApprovedMasterArtwork> {
   requireActor(scope);
   const deps = dependencies(overrides);
-  const bytes = decodeMasterArtworkUpload(request.contentBase64);
+  if (!bytes.length || bytes.length > DESIGN_MASTER_ARTWORK_MAX_BYTES) {
+    throw new PersonaDomainError(
+      "Master Artwork is empty or exceeds the 20 MB limit.",
+      "WORKFLOW",
+    );
+  }
   const checksum = checksumMasterArtwork(bytes);
+  const named = request.displayName
+    ? normalizeOwnerArtworkDisplayName(request.displayName)
+    : null;
+  if (named && !named.ok) {
+    throw new PersonaDomainError(named.error, "WORKFLOW");
+  }
   const storagePath = await deps.upload({
     workspaceId: scope.workspaceId,
     designId: request.designId,
@@ -78,6 +96,8 @@ export async function approveDurableMasterArtwork(
     printMethod: request.printMethod,
     sourceReportId: request.sourceReportId,
     sourceHandoffAt: request.sourceHandoffAt,
+    displayName: named?.ok ? named.value : null,
+    originalFileName: normalizeOriginalFileName(request.originalFileName),
     provenance: {
       authority: "DESIGN_STUDIO",
       humanApproved: true,
@@ -86,6 +106,18 @@ export async function approveDurableMasterArtwork(
     approvedBy: scope.actorId,
     approvedAt: now,
   });
+}
+
+/** JSON transport helper for small payloads and tests. */
+export async function approveDurableMasterArtworkFromRequest(
+  scope: WorkspaceScope,
+  request: ApproveMasterArtworkRequest,
+  overrides: Partial<Dependencies> = {},
+): Promise<ApprovedMasterArtwork> {
+  const bytes = decodeMasterArtworkUpload(request.contentBase64);
+  const { contentBase64: _content, ...meta } = request;
+  void _content;
+  return approveDurableMasterArtwork(scope, meta, bytes, overrides);
 }
 
 export async function resolveApprovedMasterArtwork(
@@ -116,4 +148,27 @@ export async function resolveApprovedMasterArtwork(
     expectedByteLength: artwork.byteLength,
   });
   return { artwork, bytes };
+}
+
+export async function renameApprovedMasterArtworkDisplayName(
+  scope: WorkspaceScope,
+  artworkId: string,
+  rawName: string,
+  overrides: Partial<Dependencies> = {},
+): Promise<ApprovedMasterArtwork> {
+  requireActor(scope);
+  const normalized = normalizeOwnerArtworkDisplayName(rawName);
+  if (!normalized.ok) {
+    throw new PersonaDomainError(normalized.error, "WORKFLOW");
+  }
+  const deps = dependencies(overrides);
+  const updated = await deps.repository.updateDisplayName(
+    scope,
+    artworkId,
+    normalized.value,
+  );
+  if (!updated) {
+    throw new PersonaDomainError("Approved Master Artwork was not found.", "NOT_FOUND");
+  }
+  return updated;
 }

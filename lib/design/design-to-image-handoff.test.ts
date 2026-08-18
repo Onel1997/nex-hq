@@ -119,6 +119,8 @@ function durableArtwork(): ApprovedMasterArtworkView {
       humanApproved: true,
       source: "test",
     },
+    displayName: "Quiet Ascent Chest Graphic",
+    originalFileName: "hero.png",
     approvedBy: "owner",
     approvedAt: "2026-08-17T00:00:00.000Z",
     createdAt: "2026-08-17T00:00:00.000Z",
@@ -212,6 +214,8 @@ describe("Design Studio approved artwork → Image Studio handoff", () => {
     assert.equal(handoffInput.durableMasterArtwork?.version, "V2");
     assert.equal(handoffInput.durableMasterArtwork?.checksum, artwork.checksum);
     assert.equal(handoffInput.designId, artwork.designId);
+    assert.equal(handoffInput.artworkFileName, artwork.originalFileName);
+    assert.equal(handoffInput.durableMasterArtwork?.displayName, "Quiet Ascent Chest Graphic");
     assertExactDurableArtworkIdentity(artwork, artwork);
   });
 
@@ -238,10 +242,14 @@ describe("Design Studio approved artwork → Image Studio handoff", () => {
         masterArtworkApproved?: boolean;
         masterArtworkVersion?: string;
         masterArtworkApprovedArtworkUrl?: string;
+        explicitArtworkHandoff?: boolean;
       };
       assert.equal(parsed.masterArtworkApproved, true);
+      assert.equal(parsed.explicitArtworkHandoff, true);
       assert.equal(parsed.durableMasterArtwork?.checksum, artwork.checksum);
       assert.equal(parsed.masterArtworkVersion, artwork.version);
+      assert.equal(parsed.durableMasterArtwork?.displayName, artwork.displayName);
+      assert.equal(parsed.durableMasterArtwork?.originalFileName, artwork.originalFileName);
       assert.equal(parsed.masterArtworkApprovedArtworkUrl, undefined);
       assert.doesNotMatch(raw!, /data:image\/[a-zA-Z0-9.+-]+;base64,/i);
       assert.ok(raw!.length < DESIGN_IMAGE_HANDOFF_MAX_SERIALIZED_BYTES);

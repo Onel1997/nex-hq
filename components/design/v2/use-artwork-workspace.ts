@@ -32,8 +32,12 @@ import {
 } from "@/lib/design/design-to-image-handoff";
 import { readArtworkBytesForHandoff } from "@/components/design/v2/artwork-handoff-bytes";
 import { sendDesignHandoffToImageStudio } from "@/lib/image/image-handoff-store";
-import { resolveArtworkDisplayName } from "@/lib/design/artwork-display-name";
+import {
+  normalizeOwnerArtworkDisplayName,
+  resolveArtworkDisplayName,
+} from "@/lib/design/artwork-display-name";
 import { resolveMasterArtworkView } from "@/lib/design/master-artwork";
+import type { ApprovedMasterArtworkView } from "@/lib/design/master-artwork-authority/types";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -108,8 +112,15 @@ export function useArtworkWorkspace({
   const [activeSidebarSection, setActiveSidebarSection] =
     useState<SidebarSectionId>("master-artwork");
   const [recentUploads, setRecentUploads] = useState<LocalArtworkUpload[]>([]);
+  const [ownerDisplayName, setOwnerDisplayName] = useState<string | null>(null);
+  const [durableArtwork, setDurableArtwork] =
+    useState<ApprovedMasterArtworkView | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameBusy, setRenameBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pipelineRunRef = useRef(0);
+  const localUploadRef = useRef<LocalArtworkUpload | null>(null);
+  localUploadRef.current = localUpload;
 
   const missionView = useMemo(
     () => (mission ? resolveMasterArtworkView(mission.assets) : null),
@@ -121,21 +132,29 @@ export function useArtworkWorkspace({
     [mission],
   );
 
+  const originalFileName =
+    localUpload?.fileName ??
+    validation.metadata?.fileName ??
+    durableArtwork?.originalFileName ??
+    null;
+
   const artworkIdentity = useMemo(
     () =>
       resolveArtworkDisplayName({
-        fileName: localUpload?.fileName ?? validation.metadata?.fileName,
+        userFacingTitle: ownerDisplayName ?? durableArtwork?.displayName,
+        fileName: originalFileName,
         durableDisplayName: missionView?.state.vectorArtworkLabel,
         designId: mission?.brief.designId,
         researchTitle: mission?.brief.title ?? mission?.reportTitle,
       }),
     [
-      localUpload?.fileName,
+      durableArtwork?.displayName,
       mission?.brief.designId,
       mission?.brief.title,
       mission?.reportTitle,
       missionView?.state.vectorArtworkLabel,
-      validation.metadata?.fileName,
+      originalFileName,
+      ownerDisplayName,
     ],
   );
 
@@ -254,6 +273,8 @@ export function useArtworkWorkspace({
       setIsApproved(false);
       setUploadError(null);
       setHandoffError(null);
+      setOwnerDisplayName(null);
+      setRenameError(null);
       setAnalysis(createIdleAnalysis());
       setRecentUploads((prev) =>
         [upload, ...prev.filter((u) => u.fileName !== file.name)].slice(0, 8),
@@ -289,6 +310,8 @@ export function useArtworkWorkspace({
     setAnalysis(createIdleAnalysis());
     setUploadError(null);
     setIsApproved(false);
+    setOwnerDisplayName(null);
+    setRenameError(null);
   }, [localUpload]);
 
   const approveArtwork = useCallback(() => {
@@ -332,6 +355,8 @@ export function useArtworkWorkspace({
         mimeType,
         placement: mission.brief.placement ?? validation.metadata?.fileName ?? null,
         printMethod: mission.brief.productionMethod ?? null,
+        displayName: ownerDisplayName,
+        originalFileName: localUpload.fileName,
       });
 
       const durableResponse = await fetch("/api/design/master-artworks", {
@@ -348,6 +373,10 @@ export function useArtworkWorkspace({
         );
       }
       const durableArtwork = parseDurableMasterArtworkResponse(durablePayload);
+      setDurableArtwork(durableArtwork);
+      if (durableArtwork.displayName) {
+        setOwnerDisplayName(durableArtwork.displayName);
+      }
 
       const saveResult = sendDesignHandoffToImageStudio(
         buildDesignStudioHandoffInput({
@@ -380,6 +409,7 @@ export function useArtworkWorkspace({
     localUpload,
     mission,
     onPatchMission,
+    ownerDisplayName,
     router,
     validation,
   ]);
@@ -391,6 +421,80 @@ export function useArtworkWorkspace({
       }
     };
   }, [localUpload?.objectUrl]);
+
+  useEffect(() => {
+    const designId = mission?.brief.designId;
+    if (!designId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/design/master-artworks?designId=${encodeURIComponent(designId)}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) return;
+        const payload = (await response.json()) as {
+          artworks?: ApprovedMasterArtworkView[];
+        };
+        const latest = payload.artworks?.[0];
+        if (cancelled || !latest) return;
+        setDurableArtwork(latest);
+        setOwnerDisplayName((current) => {
+          if (localUploadRef.current) return current;
+          return current ?? latest.displayName ?? null;
+        });
+      } catch {
+        /* durable library may be unmigrated */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mission?.brief.designId]);
+
+  const renameArtworkDisplayName = useCallback(
+    async (rawName: string) => {
+      const normalized = normalizeOwnerArtworkDisplayName(rawName);
+      if (!normalized.ok) {
+        setRenameError(normalized.error);
+        return false;
+      }
+      setRenameError(null);
+      const persistedId = durableArtwork?.id;
+      if (persistedId) {
+        setRenameBusy(true);
+        try {
+          const response = await fetch(`/api/design/master-artworks/${persistedId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ displayName: normalized.value }),
+          });
+          const payload = (await response.json()) as {
+            artwork?: ApprovedMasterArtworkView;
+            error?: string;
+          };
+          if (!response.ok || !payload.artwork) {
+            throw new Error(payload.error ?? "Der Artwork-Name konnte nicht gespeichert werden.");
+          }
+          setDurableArtwork(payload.artwork);
+          setOwnerDisplayName(payload.artwork.displayName ?? normalized.value);
+          return true;
+        } catch (error) {
+          setRenameError(
+            error instanceof Error
+              ? error.message
+              : "Der Artwork-Name konnte nicht gespeichert werden.",
+          );
+          return false;
+        } finally {
+          setRenameBusy(false);
+        }
+      }
+      setOwnerDisplayName(normalized.value);
+      return true;
+    },
+    [durableArtwork?.id],
+  );
 
   const canApprove =
     validation.canApprove &&
@@ -404,6 +508,7 @@ export function useArtworkWorkspace({
     health,
     preview: resolvedPreview,
     artworkIdentity,
+    originalFileName,
     hasArtwork,
     workflowStep,
     localUpload,
@@ -412,6 +517,8 @@ export function useArtworkWorkspace({
     uploadError,
     handoffError,
     handoffBusy,
+    renameError,
+    renameBusy,
     isApproved,
     canApprove,
     canContinueToImageStudio,
@@ -425,6 +532,7 @@ export function useArtworkWorkspace({
     clearLocalUpload,
     approveArtwork,
     continueToImageStudio,
+    renameArtworkDisplayName,
     versionHistory: mission?.versionHistory ?? [],
   };
 }

@@ -5,7 +5,6 @@ import { ArtworkPreviewStage } from "@/components/design/v2/center/artwork-previ
 import { ArtworkUploadZone } from "@/components/design/v2/center/artwork-upload-zone";
 import { ArtworkInspector } from "@/components/design/v2/inspector/artwork-inspector";
 import { SidebarSectionPanel } from "@/components/design/v2/sidebar/artwork-sidebar";
-import { ArtworkWorkflowRail } from "@/components/design/v2/workflow/artwork-workflow-rail";
 import { useArtworkWorkspace } from "@/components/design/v2/use-artwork-workspace";
 import type { SidebarSectionId } from "@/components/design/v2/types";
 import { usePersistedCollapse } from "@/hooks/use-persisted-collapse";
@@ -26,12 +25,12 @@ const SECTIONS: Array<{
   icon: typeof Image;
   disabled?: boolean;
 }> = [
-  { id: "master-artwork", label: "Master Artwork", icon: Image },
-  { id: "versions", label: "Versions", icon: Layers },
-  { id: "collections", label: "Collections", icon: FolderOpen },
-  { id: "brand-library", label: "Brand Library", icon: BookOpen, disabled: true },
-  { id: "history", label: "History", icon: History },
-  { id: "recent-uploads", label: "Recent Uploads", icon: Upload },
+  { id: "master-artwork", label: "Artwork", icon: Image },
+  { id: "versions", label: "Versionen", icon: Layers },
+  { id: "collections", label: "Kollektionen", icon: FolderOpen },
+  { id: "brand-library", label: "Markenbibliothek", icon: BookOpen, disabled: true },
+  { id: "history", label: "Verlauf", icon: History },
+  { id: "recent-uploads", label: "Letzte Uploads", icon: Upload },
 ];
 
 interface MasterArtworkWorkspaceProps {
@@ -54,14 +53,18 @@ export function MasterArtworkWorkspace({
   const showArtworkStage = workspace.activeSidebarSection === "master-artwork";
 
   return (
-    <div className={cn("dsv2-root", className)}>
+    <div className={cn("dsv2-root nx-studio", className)}>
       <ArtworkFileInput
         fileInputRef={workspace.fileInputRef}
         onFileSelect={workspace.handleFileSelect}
       />
       <div className="dsv2-workspace dsv2-workspace-single">
-        <main className="dsv2-center" aria-label="Master artwork canvas">
-          <div className="dsv2-section-tabs" role="tablist" aria-label="Workspace sections">
+        <main className="dsv2-center" aria-label="Artwork-Arbeitsfläche">
+          <div className="dsv2-library-intro">
+            <div><p className="nx-page-header__eyebrow">Artwork-Bibliothek</p><h1>Artwork hochladen, prüfen und freigeben</h1><p>Artwork bleibt unabhängig von Produkten und kann später in mehreren Produktionen verwendet werden.</p></div>
+            {!workspace.hasArtwork ? <button type="button" className="nx-button nx-button--primary" onClick={workspace.openFilePicker}><Upload className="size-4" />Artwork hochladen</button> : null}
+          </div>
+          <div className="dsv2-section-tabs" role="tablist" aria-label="Bereiche der Artwork-Bibliothek">
             {SECTIONS.map(({ id, label, icon: Icon, disabled }) => {
               const count =
                 id === "versions"
@@ -89,7 +92,7 @@ export function MasterArtworkWorkspace({
                   {count != null && count > 0 ? (
                     <span className="dsv2-section-tab-badge">{count}</span>
                   ) : null}
-                  {disabled ? <span className="dsv2-section-tab-soon">Soon</span> : null}
+                  {disabled ? <span className="dsv2-section-tab-soon">Später</span> : null}
                 </button>
               );
             })}
@@ -99,10 +102,15 @@ export function MasterArtworkWorkspace({
             workspace.hasArtwork && workspace.preview ? (
               <ArtworkPreviewStage
                 preview={workspace.preview}
-                fileName={workspace.localUpload?.fileName ?? mission?.brief.title}
+                fileName={workspace.artworkIdentity.displayName}
+                originalFileName={workspace.originalFileName}
+                provenanceLabel={workspace.artworkIdentity.provenanceLabel}
                 validationStatus={workspace.validation.status}
                 uploadError={workspace.uploadError}
+                renameError={workspace.renameError}
+                renameBusy={workspace.renameBusy}
                 onReplace={workspace.openFilePicker}
+                onRename={workspace.renameArtworkDisplayName}
               />
             ) : (
               <ArtworkUploadZone
@@ -126,6 +134,7 @@ export function MasterArtworkWorkspace({
           collapsed={inspectorCollapsed}
           onCollapsedChange={setInspectorCollapsed}
           preview={workspace.preview}
+          artworkIdentity={workspace.artworkIdentity}
           validation={workspace.validation}
           analysis={workspace.analysis}
           missionView={workspace.missionView}
@@ -139,13 +148,6 @@ export function MasterArtworkWorkspace({
         />
       </div>
 
-      <ArtworkWorkflowRail
-        activeStep={workspace.workflowStep}
-        canContinueToImageStudio={workspace.canContinueToImageStudio}
-        handoffBusy={workspace.handoffBusy}
-        handoffError={workspace.handoffError}
-        onContinueToImageStudio={() => void workspace.continueToImageStudio()}
-      />
     </div>
   );
 }

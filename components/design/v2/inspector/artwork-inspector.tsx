@@ -122,8 +122,8 @@ export function ArtworkInspector({
           >
             {hasUpload && metadata ? (
               <dl className="dsv2-info-list">
-                <InfoRow label="Dateiname" value={metadata.fileName} />
                 <InfoRow label="Artwork" value={artworkIdentity?.displayName} />
+                <InfoRow label="Dateiname" value={metadata.fileName} />
                 {artworkIdentity?.provenanceLabel ? (
                   <InfoRow label="Herkunft" value={artworkIdentity.provenanceLabel.replace(/^Herkunft:\s*/, "")} />
                 ) : null}

@@ -57,7 +57,9 @@ test("Design Studio behaves as an artwork library with fit controls and no botto
   assert.match(workspace, /Artwork-Bibliothek/);
   assert.doesNotMatch(workspace, /ArtworkWorkflowRail/);
   assert.match(preview, /useMasterArtworkViewport/);
-  assert.match(preview, /dsv2-preview-provenance/);
+  assert.match(preview, /Namen ändern/);
+  assert.match(preview, /Originaldatei/);
+  assert.match(workspace, /renameArtworkDisplayName/);
   assert.match(controls, /An Bildschirm anpassen/);
 });
 
@@ -117,6 +119,7 @@ test("owner-facing Image production keeps V2 primary and raw job details collaps
   assert.doesNotMatch(workspace, /Select an eligible Brand Model/);
   assert.match(workspace, /ownerAuthorityLabel\(productHeader\.authorityLabel\)/);
   assert.match(workspace, /artworkIdentity\.displayName/);
+  assert.match(workspace, /formatArtworkSecondaryLine/);
 });
 
 test("Persona primary journey and technical noise are owner-friendly", async () => {
@@ -157,6 +160,14 @@ test("Product Library uses document scroll instead of a viewport-height overflow
     studioCss,
     /\.product-library\.nx-studio\s*\{[^}]*overflow-y:\s*(auto|scroll|hidden)/,
   );
+});
+
+test("Image Studio surfaces owner Artwork names without using name as authority", async () => {
+  const image = await source("components/image/image-studio-workspace.tsx");
+  assert.match(image, /userFacingTitle: handoff\?\.durableMasterArtwork\?\.displayName/);
+  assert.match(image, /formatArtworkSecondaryLine/);
+  assert.match(image, /artworkOriginalFileName/);
+  assert.match(await source("lib/design/artwork-display-name.ts"), /Originaldatei/);
 });
 
 test("no UX surface introduces provider execution or paid-generation toggles", async () => {

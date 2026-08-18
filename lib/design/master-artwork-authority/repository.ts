@@ -13,4 +13,9 @@ export interface MasterArtworkAuthorityRepository {
   ): Promise<ApprovedMasterArtwork>;
   get(scope: WorkspaceScope, id: string): Promise<ApprovedMasterArtwork | null>;
   list(scope: WorkspaceScope, designId?: string): Promise<ApprovedMasterArtwork[]>;
+  updateDisplayName(
+    scope: WorkspaceScope & { actorId: string },
+    artworkId: string,
+    displayName: string,
+  ): Promise<ApprovedMasterArtwork | null>;
 }

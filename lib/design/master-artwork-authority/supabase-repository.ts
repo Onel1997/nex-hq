@@ -1,34 +1,15 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PersonaStoreError } from "@/lib/persona/domain/errors";
 import type { WorkspaceScope } from "@/lib/persona/domain/types";
+import { mapApprovedMasterArtworkRow } from "./normalize";
 import type {
   CreateApprovedMasterArtwork,
   MasterArtworkAuthorityRepository,
 } from "./repository";
-import { approvedMasterArtworkSchema, type ApprovedMasterArtwork } from "./types";
+import type { ApprovedMasterArtwork } from "./types";
 
 function mapArtwork(row: Record<string, unknown>): ApprovedMasterArtwork {
-  return approvedMasterArtworkSchema.parse({
-    contractVersion: "design-master-artwork-v1",
-    id: row.id,
-    workspaceId: row.workspace_id,
-    designId: row.design_id,
-    version: row.version,
-    checksum: row.checksum,
-    mimeType: row.mime_type,
-    byteLength: Number(row.byte_length),
-    sourceType: row.source_type,
-    storagePath: row.storage_path,
-    status: row.status,
-    placement: row.placement,
-    printMethod: row.print_method,
-    sourceReportId: row.source_report_id,
-    sourceHandoffAt: row.source_handoff_at,
-    provenance: row.provenance,
-    approvedBy: row.approved_by,
-    approvedAt: row.approved_at,
-    createdAt: row.created_at,
-  });
+  return mapApprovedMasterArtworkRow(row);
 }
 
 export class SupabaseMasterArtworkAuthorityRepository
@@ -63,6 +44,8 @@ export class SupabaseMasterArtworkAuthorityRepository
         source_type: input.sourceType,
         storage_path: input.storagePath,
         status: input.status,
+        display_name: input.displayName ?? null,
+        original_file_name: input.originalFileName ?? null,
         placement: input.placement,
         print_method: input.printMethod,
         source_report_id: input.sourceReportId,
@@ -96,6 +79,22 @@ export class SupabaseMasterArtworkAuthorityRepository
       .select("*")
       .eq("workspace_id", scope.workspaceId)
       .eq("id", id)
+      .maybeSingle();
+    if (error) throw new PersonaStoreError(error.message);
+    return data ? mapArtwork(data as Record<string, unknown>) : null;
+  }
+
+  async updateDisplayName(
+    scope: WorkspaceScope & { actorId: string },
+    artworkId: string,
+    displayName: string,
+  ) {
+    const { data, error } = await createAdminClient()
+      .from("design_master_artworks")
+      .update({ display_name: displayName })
+      .eq("workspace_id", scope.workspaceId)
+      .eq("id", artworkId)
+      .select("*")
       .maybeSingle();
     if (error) throw new PersonaStoreError(error.message);
     return data ? mapArtwork(data as Record<string, unknown>) : null;

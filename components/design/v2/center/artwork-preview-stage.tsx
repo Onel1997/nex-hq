@@ -15,10 +15,14 @@ import { useCallback, useRef, useState } from "react";
 interface ArtworkPreviewStageProps {
   preview: ArtworkPreviewSource;
   fileName?: string;
+  originalFileName?: string | null;
   provenanceLabel?: string | null;
   validationStatus?: ValidationStatus;
   uploadError?: string | null;
+  renameError?: string | null;
+  renameBusy?: boolean;
   onReplace?: () => void;
+  onRename?: (name: string) => Promise<boolean> | boolean;
   className?: string;
 }
 
@@ -27,10 +31,14 @@ type ZoomMode = "fit" | number;
 export function ArtworkPreviewStage({
   preview,
   fileName,
+  originalFileName,
   provenanceLabel,
   validationStatus,
   uploadError,
+  renameError,
+  renameBusy = false,
   onReplace,
+  onRename,
   className,
 }: ArtworkPreviewStageProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -38,6 +46,8 @@ export function ArtworkPreviewStage({
   const [zoom, setZoom] = useState<ZoomMode>("fit");
   const [fitScale, setFitScale] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [draftName, setDraftName] = useState("");
 
   const hasVisualPreview = Boolean(preview.imageUrl || preview.svgMarkup);
   const previewKey = preview.imageUrl ?? preview.svgMarkup ?? preview.fileName ?? "empty";
@@ -66,13 +76,79 @@ export function ArtworkPreviewStage({
     }
   }, []);
 
+  const displayName = fileName ?? preview.fileName ?? FALLBACK_ARTWORK_DISPLAY_NAME;
+  const showOriginal =
+    Boolean(originalFileName) && originalFileName !== displayName;
+
+  const startRename = () => {
+    setDraftName(displayName);
+    setIsRenaming(true);
+  };
+
+  const cancelRename = () => {
+    setIsRenaming(false);
+    setDraftName("");
+  };
+
+  const saveRename = async () => {
+    if (!onRename) return;
+    const saved = await onRename(draftName);
+    if (saved) {
+      setIsRenaming(false);
+      setDraftName("");
+    }
+  };
+
   return (
     <div className={cn("dsv2-preview-stage", isFullscreen && "is-fullscreen", className)}>
       <div className="dsv2-preview-toolbar">
         <div className="dsv2-preview-meta">
-          <span className="dsv2-preview-filename">
-            {fileName ?? preview.fileName ?? FALLBACK_ARTWORK_DISPLAY_NAME}
-          </span>
+          {isRenaming ? (
+            <form
+              className="dsv2-preview-rename"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveRename();
+              }}
+            >
+              <label className="dsv2-sr-only" htmlFor="artwork-display-name">
+                Artwork-Name
+              </label>
+              <input
+                id="artwork-display-name"
+                type="text"
+                value={draftName}
+                maxLength={120}
+                autoFocus
+                disabled={renameBusy}
+                onChange={(event) => setDraftName(event.target.value)}
+                aria-invalid={Boolean(renameError)}
+              />
+              <button type="submit" className="dsv2-preview-replace" disabled={renameBusy}>
+                {renameBusy ? "Speichern…" : "Speichern"}
+              </button>
+              <button
+                type="button"
+                className="dsv2-preview-replace"
+                onClick={cancelRename}
+                disabled={renameBusy}
+              >
+                Abbrechen
+              </button>
+            </form>
+          ) : (
+            <>
+              <span className="dsv2-preview-filename">{displayName}</span>
+              {onRename ? (
+                <button type="button" className="dsv2-preview-rename-btn" onClick={startRename}>
+                  Namen ändern
+                </button>
+              ) : null}
+            </>
+          )}
+          {showOriginal ? (
+            <span className="dsv2-preview-original">Originaldatei: {originalFileName}</span>
+          ) : null}
           {provenanceLabel ? (
             <span className="dsv2-preview-provenance">{provenanceLabel}</span>
           ) : null}
@@ -106,6 +182,12 @@ export function ArtworkPreviewStage({
           <div className="dsv2-preview-error" role="alert">
             <AlertCircle className="size-4 shrink-0" />
             <span>{uploadError}</span>
+          </div>
+        ) : null}
+        {renameError ? (
+          <div className="dsv2-preview-error" role="alert">
+            <AlertCircle className="size-4 shrink-0" />
+            <span>{renameError}</span>
           </div>
         ) : null}
         <div
