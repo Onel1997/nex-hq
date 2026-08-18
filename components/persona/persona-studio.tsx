@@ -56,6 +56,15 @@ import {
   type IdentityReviewCheckKey,
 } from "@/lib/persona/domain/creation-types";
 import type { BrandModelApprovalsView } from "@/lib/persona/creation/use-approvals/types";
+import {
+  reconcileAfterPersonaMutation,
+  VIDEO_IDENTITY_REVIEW_SAVING_LABEL,
+  VIDEO_USE_APPROVAL_SAVING_LABEL,
+} from "@/lib/persona/studio/persona-mutation-reconcile";
+import type {
+  VideoIdentityReadinessView,
+  VideoIdentityReviewChecklist,
+} from "@/lib/persona/creation/video-readiness/types";
 import type {
   ReferenceRightsConfirmations,
   ReferenceRightsView,
@@ -81,6 +90,17 @@ const NAV: Array<{
   { id: "brand_looks", label: "Markenlooks", icon: Sparkles },
   { id: "outfits", label: "Outfits", icon: Shirt },
 ];
+
+function hasCurrentVideoApprovalProjection(persona: Persona): boolean {
+  return Boolean(
+    persona.video_use_approved &&
+      persona.video_identity_ready &&
+      persona.video_identity_review_id &&
+      persona.video_use_approval_review_id === persona.video_identity_review_id &&
+      persona.video_identity_ready_lock_version === persona.identity_lock_version &&
+      persona.video_use_approval_lock_version === persona.identity_lock_version,
+  );
+}
 
 const RECONCILIATION_REVIEW_LABELS: Record<IdentityReviewCheckKey, string> = {
   same_person_across_references: "Alle Referenzen zeigen dieselbe Person",
@@ -510,7 +530,7 @@ function PersonaDetail({
           </span>
           <span>
             Video-Freigabe:{" "}
-            {readiness.video_use_approved ?? persona.video_use_approved
+            {hasCurrentVideoApprovalProjection(persona)
               ? "freigegeben"
               : "nicht freigegeben"}
           </span>
@@ -553,7 +573,7 @@ function PersonaDetail({
         />
         <Meta
           label="Video-Nutzung"
-          value={persona.video_use_approved ? "freigegeben" : "nicht festgelegt"}
+          value={hasCurrentVideoApprovalProjection(persona) ? "freigegeben" : "nicht festgelegt"}
         />
       </dl>
 
@@ -612,15 +632,23 @@ function PersonaDetail({
       ) : null}
 
       {persona.identity_lock_status === "approved" ? (
+        <VideoIdentityReadinessPanel
+          persona={persona}
+          references={allReferences}
+          busy={busy}
+          onBusy={setBusy}
+          onError={setError}
+          onReviewed={() => studio.reloadPersonaDetail(persona.id)}
+        />
+      ) : null}
+
+      {persona.identity_lock_status === "approved" ? (
         <BrandModelApprovalsPanel
           persona={persona}
           busy={busy}
           onBusy={setBusy}
           onError={setError}
-          onApproved={() => {
-            studio.selectPersona(persona.id);
-            void studio.refreshCreation();
-          }}
+          onApproved={() => studio.reloadPersonaDetail(persona.id)}
         />
       ) : null}
 
@@ -2150,6 +2178,318 @@ function ReferenceRightsPanel({
   );
 }
 
+const VIDEO_REVIEW_LABELS: Record<keyof VideoIdentityReviewChecklist, string> = {
+  faceIdentityStable: "Gesichtsidentität bleibt über alle Referenzen stabil",
+  masterReferenceValid: "Master-Referenz ist eindeutig und gültig",
+  anglesSufficient: "Blickwinkel reichen für Video-Bewegung aus",
+  hairstyleConsistent: "Frisur und Haarlinie sind konsistent",
+  facialHairConsistent: "Gesichtsbehaarung ist konsistent",
+  ageAppearanceConsistent: "Alterswirkung ist konsistent",
+  bodyFrameUsable: "Körperbau ist für die Videoquelle nachvollziehbar",
+  noIdentityConflict: "Es gibt keinen ungelösten Identitätskonflikt",
+  referencesSuitableForMotion: "Referenzen sind für Bewegungsübertragung geeignet",
+};
+
+const VIDEO_REFERENCE_ROLE_LABELS: Record<
+  VideoIdentityReadinessView["canonicalReferences"][number]["role"],
+  string
+> = {
+  front: "Frontal",
+  three_quarter_left: "Dreiviertel links",
+  three_quarter_right: "Dreiviertel rechts",
+  left_profile: "Profil links",
+  right_profile: "Profil rechts",
+};
+
+function emptyVideoReviewChecklist(): VideoIdentityReviewChecklist {
+  return Object.fromEntries(
+    Object.keys(VIDEO_REVIEW_LABELS).map((key) => [key, false]),
+  ) as VideoIdentityReviewChecklist;
+}
+
+function VideoIdentityReadinessPanel({
+  persona,
+  references,
+  busy,
+  onBusy,
+  onError,
+  onReviewed,
+}: {
+  persona: Persona;
+  references: PersonaReferenceAssetView[];
+  busy: boolean;
+  onBusy: (value: boolean) => void;
+  onError: (message: string | null) => void;
+  onReviewed: () => Promise<void>;
+}) {
+  const [view, setView] = useState<VideoIdentityReadinessView | null>(null);
+  const [checklist, setChecklist] = useState<VideoIdentityReviewChecklist>(
+    emptyVideoReviewChecklist,
+  );
+  const [note, setNote] = useState("");
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  async function loadReadinessView(): Promise<VideoIdentityReadinessView | null> {
+    const response = await fetch(`/api/persona/${persona.id}/video-identity-review`, {
+      cache: "no-store",
+    });
+    const data = (await response.json().catch(() => null)) as {
+      readiness?: VideoIdentityReadinessView;
+      error?: string;
+    } | null;
+    if (!response.ok || !data?.readiness) {
+      return null;
+    }
+    return data.readiness;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const readiness = await loadReadinessView();
+        if (!cancelled && readiness) setView(readiness);
+      } catch (error) {
+        if (!cancelled) {
+          onError(
+            error instanceof Error
+              ? error.message
+              : "Video-Bereitschaft konnte nicht geladen werden.",
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [persona.id, persona.video_identity_ready, onError]);
+
+  async function submit(decision: "APPROVE" | "REJECT") {
+    if (!view || busy) return;
+    onBusy(true);
+    onError(null);
+    setActionError(null);
+    setStatusMessage(VIDEO_IDENTITY_REVIEW_SAVING_LABEL);
+    try {
+      const response = await fetch(
+        `/api/persona/${persona.id}/video-identity-review`,
+        {
+          method: "POST",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operationId: crypto.randomUUID(),
+            expectedIdentityLockSnapshotId: view.identityLockSnapshotId,
+            expectedIdentityLockVersion: view.identityLockVersion,
+            expectedIdentityFingerprint: view.identityFingerprint,
+            expectedReferencePackageFingerprint:
+              view.referencePackageFingerprint,
+            checklist,
+            decision,
+            note,
+          }),
+        },
+      );
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      if (!response.ok) throw new Error(data?.error ?? response.statusText);
+
+      setReviewOpen(false);
+      setChecklist(emptyVideoReviewChecklist());
+      setNote("");
+
+      const reconcileResult = await reconcileAfterPersonaMutation({
+        reloadPersona: onReviewed,
+        reloadPanelState: loadReadinessView,
+        applyPanelState: setView,
+      });
+      if (reconcileResult.refreshWarning) {
+        setActionError(reconcileResult.refreshWarning);
+      }
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Video-Identitätsprüfung konnte nicht gespeichert werden.",
+      );
+    } finally {
+      onBusy(false);
+      setStatusMessage(null);
+    }
+  }
+
+  const referenceById = new Map(references.map((reference) => [reference.id, reference]));
+  const master = view ? referenceById.get(view.masterReferenceAssetId) : null;
+  const allChecked = Object.values(checklist).every(Boolean);
+
+  return (
+    <section className="ps-section" data-testid="video-identity-readiness-panel">
+      <div className="ps-section-heading-row">
+        <div>
+          <p className="ps-kicker">VIDEO-MEILENSTEIN</p>
+          <h3>Video-Identität</h3>
+          <p className="ps-muted">
+            Die Bildfreigabe ersetzt diese eigenständige menschliche Prüfung nicht.
+          </p>
+        </div>
+        <span className={`ps-ready-chip ${view?.videoIdentityReady ? "is-ok" : ""}`}>
+          {view?.videoIdentityReady
+            ? "Video-Identität bereit"
+            : "Video noch nicht bereit"}
+        </span>
+      </div>
+
+      {view ? (
+        <>
+          <ul className="ps-completeness">
+            <li className="is-ok">Identity Lock · Version {view.identityLockVersion}</li>
+            <li className={view.referencePackageSufficientForV1 ? "is-ok" : ""}>
+              Referenzpaket · {view.referencePackageSufficientForV1 ? "vollständig" : "unvollständig"}
+            </li>
+            <li className={view.referenceRightsConfirmed ? "is-ok" : ""}>
+              Referenzrechte · {view.referenceRightsConfirmed ? "bestätigt" : "offen"}
+            </li>
+            <li className={view.currentReview?.decision === "APPROVE" ? "is-ok" : ""}>
+              Menschliche Prüfung · {view.currentReview
+                ? view.currentReview.decision === "APPROVE"
+                  ? "bestanden"
+                  : "abgelehnt"
+                : "offen"}
+            </li>
+          </ul>
+
+          {view.blockers.map((blocker) => (
+            <p className="ps-inline-error" key={blocker}>{blocker}</p>
+          ))}
+
+          {statusMessage ? (
+            <p className="ps-muted" data-testid="video-identity-review-saving">
+              {statusMessage}
+            </p>
+          ) : null}
+
+          {!view.videoIdentityReady && view.canReview && !reviewOpen ? (
+            <button
+              type="button"
+              className="ps-btn ps-btn-primary"
+              disabled={busy}
+              data-testid="open-video-identity-review"
+              onClick={() => setReviewOpen(true)}
+            >
+              Video-Identität prüfen
+            </button>
+          ) : null}
+
+          {reviewOpen ? (
+            <div className="ps-video-review" data-testid="video-identity-review-form">
+              <div className="ps-video-review-references">
+                <figure className="ps-video-master-reference">
+                  {master?.signed_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- short-lived private signed reference
+                    <img src={master.signed_url} alt="Master-Identitätsreferenz" />
+                  ) : (
+                    <div className="ps-ref-empty">Vorschau nicht verfügbar</div>
+                  )}
+                  <figcaption>Master-Identitätsreferenz</figcaption>
+                </figure>
+                <div className="ps-video-reference-grid">
+                  {view.canonicalReferences.map((entry) => {
+                    const reference = referenceById.get(entry.assetId);
+                    return (
+                      <figure key={entry.assetId}>
+                        {reference?.signed_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- short-lived private signed reference
+                          <img
+                            src={reference.signed_url}
+                            alt={VIDEO_REFERENCE_ROLE_LABELS[entry.role]}
+                          />
+                        ) : (
+                          <div className="ps-ref-empty">Keine Vorschau</div>
+                        )}
+                        <figcaption>{VIDEO_REFERENCE_ROLE_LABELS[entry.role]}</figcaption>
+                      </figure>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <fieldset className="ps-video-review-checklist">
+                <legend>Prüfliste</legend>
+                {(Object.keys(VIDEO_REVIEW_LABELS) as Array<keyof VideoIdentityReviewChecklist>).map((key) => (
+                  <label key={key}>
+                    <input
+                      type="checkbox"
+                      checked={checklist[key]}
+                      onChange={(event) =>
+                        setChecklist((current) => ({
+                          ...current,
+                          [key]: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span>{VIDEO_REVIEW_LABELS[key]}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <label className="ps-field">
+                <span>Notiz (optional)</span>
+                <textarea
+                  value={note}
+                  maxLength={2_000}
+                  onChange={(event) => setNote(event.target.value)}
+                />
+              </label>
+              {actionError ? <p className="ps-inline-error">{actionError}</p> : null}
+              <div className="ps-btn-row">
+                <button
+                  type="button"
+                  className="ps-btn"
+                  disabled={busy}
+                  onClick={() => setReviewOpen(false)}
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="button"
+                  className="ps-btn ps-btn-danger"
+                  disabled={busy}
+                  data-testid="reject-video-identity-review"
+                  onClick={() => void submit("REJECT")}
+                >
+                  Prüfung ablehnen
+                </button>
+                <button
+                  type="button"
+                  className="ps-btn ps-btn-primary"
+                  disabled={busy || !allChecked}
+                  data-testid="approve-video-identity-review"
+                  onClick={() => void submit("APPROVE")}
+                >
+                  Video-Identität bestätigen
+                </button>
+              </div>
+              <details>
+                <summary>Technische Details</summary>
+                <dl className="ps-meta-grid">
+                  <Meta label="Lock-Version" value={`v${view.identityLockVersion}`} />
+                  <Meta label="Lock-Snapshot" value={view.identityLockSnapshotId} />
+                  <Meta label="Identitätsfingerabdruck" value={view.identityFingerprint} />
+                  <Meta label="Referenzpaket-Fingerabdruck" value={view.referencePackageFingerprint} />
+                </dl>
+              </details>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="ps-muted">Video-Bereitschaft wird geprüft …</p>
+      )}
+    </section>
+  );
+}
+
 function BrandModelApprovalsPanel({
   persona,
   busy,
@@ -2161,27 +2501,35 @@ function BrandModelApprovalsPanel({
   busy: boolean;
   onBusy: (v: boolean) => void;
   onError: (msg: string | null) => void;
-  onApproved: () => void;
+  onApproved: () => Promise<void>;
 }) {
   const [view, setView] = useState<BrandModelApprovalsView | null>(null);
   const [confirmGate, setConfirmGate] = useState<
     "image_use" | "video_use" | "brand_cast" | null
   >(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  async function loadApprovalsView(): Promise<BrandModelApprovalsView | null> {
+    const res = await fetch(`/api/persona/${persona.id}/use-approvals`, {
+      cache: "no-store",
+    });
+    const data = (await res.json().catch(() => null)) as {
+      approvals?: BrandModelApprovalsView;
+      error?: string;
+    } | null;
+    if (!res.ok || !data?.approvals) {
+      return null;
+    }
+    return data.approvals;
+  }
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`/api/persona/${persona.id}/use-approvals`);
-        const data = (await res.json().catch(() => null)) as {
-          approvals?: BrandModelApprovalsView;
-          error?: string;
-        } | null;
-        if (!res.ok) {
-          throw new Error(data?.error ?? `Freigabestatus konnte nicht geladen werden (${res.status})`);
-        }
-        if (!cancelled && data?.approvals) setView(data.approvals);
+        const approvals = await loadApprovalsView();
+        if (!cancelled && approvals) setView(approvals);
       } catch (err) {
         if (!cancelled) {
           onError(
@@ -2200,14 +2548,22 @@ function BrandModelApprovalsPanel({
     persona.brand_cast_approved,
     persona.approved,
     persona.status,
+    persona.video_identity_ready,
     onError,
   ]);
 
   async function confirmApproval() {
-    if (!confirmGate) return;
+    if (!confirmGate || busy) return;
     onBusy(true);
     setActionError(null);
     onError(null);
+    setStatusMessage(
+      confirmGate === "video_use"
+        ? VIDEO_USE_APPROVAL_SAVING_LABEL
+        : confirmGate === "image_use"
+          ? "Image-Freigabe wird gespeichert …"
+          : "Brand-Cast-Freigabe wird gespeichert …",
+    );
     try {
       const body =
         confirmGate === "image_use"
@@ -2217,6 +2573,7 @@ function BrandModelApprovalsPanel({
             : { action: "approve_brand_cast", confirmBrandCastApproval: true };
       const res = await fetch(`/api/persona/${persona.id}/use-approvals`, {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -2228,23 +2585,53 @@ function BrandModelApprovalsPanel({
         throw new Error(data?.error ?? res.statusText);
       }
       setConfirmGate(null);
-      onApproved();
+
+      const reconcileResult = await reconcileAfterPersonaMutation({
+        reloadPersona: onApproved,
+        reloadPanelState: loadApprovalsView,
+        applyPanelState: setView,
+      });
+      if (reconcileResult.refreshWarning) {
+        setActionError(reconcileResult.refreshWarning);
+      }
     } catch (err) {
       setActionError(
         err instanceof Error ? err.message : "Freigabe fehlgeschlagen.",
       );
     } finally {
       onBusy(false);
+      setStatusMessage(null);
     }
   }
 
   const imageApproved =
     view?.imageUse.alreadyApproved ?? persona.image_use_approved;
   const videoApproved =
-    view?.videoUse.alreadyApproved ?? persona.video_use_approved;
+    view?.videoUse.alreadyApproved ?? hasCurrentVideoApprovalProjection(persona);
   const brandCastApproved =
     view?.brandCast.alreadyApproved ??
     persona.brand_cast_approved;
+
+  function blockerLabel(reason: string): string {
+    const labels: Record<string, string> = {
+      "Identity is not locked": "Die Identität ist noch nicht festgeschrieben.",
+      "Valid identity lock snapshot and persisted identity review are missing or unresolved":
+        "Der aktuelle Identity Lock kann nicht sicher aufgelöst werden.",
+      "Identity lock snapshot does not belong to this Persona":
+        "Der Identity Lock gehört nicht zu diesem Markenmodel.",
+      "Locked Brand Model reference rights are not confirmed.":
+        "Die Referenzrechte des festgeschriebenen Markenmodels sind nicht bestätigt.",
+      "Image identity validation is not complete":
+        "Die Identitätsprüfung für Bilder ist nicht abgeschlossen.",
+      "Identity revision is pending": "Eine Identitätsüberarbeitung ist offen.",
+      "Persona is archived": "Dieses Markenmodel ist archiviert.",
+      "Image Studio use is not approved":
+        "Die Nutzung im Image Studio ist nicht freigegeben.",
+      "Official Brand Cast not approved":
+        "Das Markenmodel ist noch nicht im Brand Cast freigegeben.",
+    };
+    return labels[reason] ?? reason;
+  }
 
   return (
     <section className="ps-section" data-testid="brand-model-approvals-panel">
@@ -2269,7 +2656,7 @@ function BrandModelApprovalsPanel({
           {!imageApproved && view && !view.imageUse.eligible
             ? view.imageUse.blockingReasons.map((r) => (
                 <span key={r} className="ps-muted">
-                  {r}
+                  {blockerLabel(r)}
                 </span>
               ))
             : null}
@@ -2295,7 +2682,7 @@ function BrandModelApprovalsPanel({
           {!videoApproved && view && !view.videoUse.eligible
             ? view.videoUse.blockingReasons.map((r) => (
                 <span key={r} className="ps-muted">
-                  {r}
+                  {blockerLabel(r)}
                 </span>
               ))
             : null}
@@ -2316,12 +2703,18 @@ function BrandModelApprovalsPanel({
           {!brandCastApproved && view && !view.brandCast.eligible
             ? view.brandCast.blockingReasons.map((r) => (
                 <span key={r} className="ps-muted">
-                  {r}
+                  {blockerLabel(r)}
                 </span>
               ))
             : null}
         </li>
       </ul>
+
+      {statusMessage ? (
+        <p className="ps-muted" data-testid="brand-model-approval-saving">
+          {statusMessage}
+        </p>
+      ) : null}
 
       {confirmGate === "image_use" ? (
         <div className="ps-ref-pkg-confirm" data-testid="image-use-confirm">
@@ -2365,6 +2758,18 @@ function BrandModelApprovalsPanel({
           <p>
             Diese festgeschriebene Identität darf danach für Milaene Video- und Kampagnenabläufe verwendet werden.
           </p>
+          <ul className="ps-completeness">
+            <li className="is-ok">Markenmodel · {persona.name}</li>
+            <li className={view?.identityLocked ? "is-ok" : ""}>
+              Identity Lock · Version {view?.lockedIdentity?.lockVersion ?? persona.identity_lock_version}
+            </li>
+            <li className={view?.eligibility.referenceRightsConfirmed ? "is-ok" : ""}>
+              Referenzrechte · {view?.eligibility.referenceRightsConfirmed ? "bestätigt" : "offen"}
+            </li>
+            <li className={view?.videoIdentityReady ? "is-ok" : ""}>
+              Video-Identität · {view?.videoIdentityReady ? "bereit" : "nicht bereit"}
+            </li>
+          </ul>
           {actionError ? (
             <div className="ps-inline-error">
               <p>{actionError}</p>

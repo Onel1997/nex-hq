@@ -263,6 +263,23 @@ export function usePersonaStudio() {
     }
   }, []);
 
+  const refreshSnapshot = useCallback(async () => {
+    const res = await fetch("/api/persona", { cache: "no-store" });
+    const data = (await res.json()) as {
+      error?: string;
+      snapshot?: PersonaStudioSnapshot;
+      counts?: PersonaStudioDashboardCounts;
+    };
+    if (!res.ok) {
+      throw new Error(data.error ?? "Persona Studio konnte nicht geladen werden");
+    }
+    setState((prev) => ({
+      ...prev,
+      snapshot: data.snapshot ?? prev.snapshot,
+      counts: data.counts ?? prev.counts,
+    }));
+  }, []);
+
   const refresh = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
     void refreshHealth();
@@ -987,7 +1004,7 @@ export function usePersonaStudio() {
   );
 
   const loadPersonaDetail = useCallback(async (id: string) => {
-    const res = await fetch(`/api/persona/${id}`);
+    const res = await fetch(`/api/persona/${id}`, { cache: "no-store" });
     const data = (await res.json()) as {
       error?: string;
       readiness?: PersonaReadinessReport;
@@ -1010,6 +1027,13 @@ export function usePersonaStudio() {
         : prev.snapshot,
     }));
   }, []);
+
+  const reloadPersonaDetail = useCallback(
+    async (id: string) => {
+      await Promise.all([loadPersonaDetail(id), refreshSnapshot()]);
+    },
+    [loadPersonaDetail, refreshSnapshot],
+  );
 
   useEffect(() => {
     void refresh();
@@ -1189,6 +1213,8 @@ export function usePersonaStudio() {
     outfits,
     selectedPersona,
     refresh,
+    refreshSnapshot,
+    reloadPersonaDetail,
     setSection,
     selectPersona,
     patchPersona,

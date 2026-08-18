@@ -264,25 +264,30 @@
   overflow: visible;
 }
 .facility-app-layout:has(.ps-shell.nx-studio),
-.facility-app-layout:has(.product-library) {
+.facility-app-layout:has(.product-library),
+.facility-app-layout:has(.video-studio) {
   height: auto;
   min-height: 100dvh;
   overflow-x: hidden;
   overflow-y: visible;
 }
 .facility-app-main:has(.ps-shell.nx-studio),
-.facility-app-main:has(.product-library) { overflow-y: visible; }
+.facility-app-main:has(.product-library),
+.facility-app-main:has(.video-studio) { overflow-y: visible; }
 .ps-shell.nx-studio .ps-body { min-height: calc(100dvh - 4rem); }.ps-shell.nx-studio .ps-main { overflow: visible; }.ps-shell.nx-studio .ps-sidebar { align-self: stretch; overflow: visible; }
 
 html:has(.product-library),
-body:has(.product-library) {
+body:has(.product-library),
+html:has(.video-studio),
+body:has(.video-studio) {
   height: auto;
   min-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
 }
 
-.facility-app-layout:has(.product-library) .hq-sidebar {
+.facility-app-layout:has(.product-library) .hq-sidebar,
+.facility-app-layout:has(.video-studio) .hq-sidebar {
   position: sticky;
   top: 0;
   align-self: flex-start;
@@ -295,6 +300,15 @@ body:has(.product-library) {
   overflow: visible;
 }
 
+.video-studio.nx-studio,
+.video-studio {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  color: var(--nx-text);
+}
+
+/* Video Studio Foundation V1 — component rules below; shell scroll lives above with Product Library */
 @media (max-width: 1100px) {
   .nx-page-header { flex-direction: column; }
   .nx-stepper { grid-template-columns: repeat(var(--nx-step-count, 6), minmax(7rem, 1fr)); }
@@ -384,7 +398,6 @@ body:has(.product-library) {
 @media (max-width: 760px) { .product-create-form, .product-form-grid { grid-template-columns: 1fr; }.product-form-wide { grid-column: auto; }.product-quad-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.product-library__section-heading { align-items: flex-start; flex-direction: column; } }
 
 /* Video Studio Foundation V1 */
-.video-studio { min-height:100dvh; color:var(--nx-text); }
 .video-studio h2 { margin:0 0 .75rem; font:700 var(--nx-type-section)/1.2 var(--nx-font-ui); }
 .video-source { display:grid; gap:1rem; padding:1rem; margin-top:1rem; }.video-source p{color:var(--nx-text-muted)}
 .video-authority-selectors { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.65rem; padding:.75rem; border:1px solid var(--nx-border); border-radius:var(--nx-radius-sm); background:rgb(255 255 255/2%); }

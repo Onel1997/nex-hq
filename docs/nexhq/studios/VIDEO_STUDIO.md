@@ -1,58 +1,78 @@
 # Video Studio
 
-Status: Canonical Current-State Integration Note  
-Last verified against code: 2026-08-16  
-Studio implementation status: **PLACEHOLDER**  
-Persona contract foundation status: **IMPLEMENTED IN CODE / RUNTIME NOT VERIFIED**
+Status: Canonical current state
+Last verified against code: 2026-08-18
+Runtime status: **Foundation implemented; migration APPLIED and live-verified; no real provider wired**
 
 ## Purpose
 
-Video Studio will reuse approved Brand Models, products, designs, and campaign context for video production. Persona Studio remains the sole authority for identity, Identity Lock, Video Use approval, Brand Cast membership, and Video eligibility.
+Video Studio combines separate approved authorities:
 
-## Current Studio State
+- **WHO:** Persona-owned, independently Video-eligible Brand Model.
+- **GARMENT:** exact versioned Product Profile, variant, construction, and frozen references.
+- **PRINT:** approved Design-owned Artwork identity/version/checksum.
+- **SOURCE VISUAL:** exact durable, human-`APPROVED` deterministic Image Studio asset.
+- **DIRECTION:** structured Video type, movement, camera, scene, lighting, format, and duration.
+- **OUTPUT:** exactly one private Video asset requiring human review.
 
-The dashboard route remains a coming-later placeholder. No Video project aggregate, shot/timeline state, durable job, provider execution, generated asset, review UI, or paid generation exists. Milestone 3 deliberately did not create fake Video functionality.
+## Previous state audit
 
-## Persona → Video Contract Boundary
+| Area | Previous state |
+|---|---|
+| Route/UI | PLACEHOLDER — coming-later page only |
+| Persona handoff | COMPLETE contract seam, runtime UI absent |
+| Product/Artwork/source handoff | MISSING |
+| Video input/direction contracts | MISSING |
+| Provider | MISSING |
+| Projects/jobs/assets/review | MISSING |
+| Reload/history | MISSING |
+| Paid safety | MISSING |
 
-The protected Persona integration API supports `consumer=video` for both eligible summaries and a full `brand-model-v1` handoff. The server:
+No unsafe legacy Video executor or queue was found.
 
-1. resolves the authorized actor and server-selected workspace;
-2. loads the workspace-scoped durable Persona;
-3. resolves the immutable Identity Lock snapshot;
-4. derives centralized Persona eligibility;
-5. rejects anything not canonically Video-eligible with typed safe reasons;
-6. binds the exact snapshot ID/version/fingerprint and Reference Package fingerprint;
-7. rejects stale expected identity versions; and
-8. keeps private asset signing transient and separate from canonical identity truth.
+## Current foundation
 
-`lib/video/brand-model-production-context.ts` is the typed consumer seam. It validates the shared contract, requires a Video handoff, accepts Persona's eligibility result without redefining its formula, and produces the audit trace a future Video job must persist.
+`video-generation-input-v1` freezes Persona Video eligibility and lock trace; Product Profile/version/variant/reference package/construction; Artwork identity/version/checksum; approved Image source and complete lineage; structured direction; exactly one source strategy; and provider adapter settings. SHA-256 canonical fingerprinting covers all fields.
 
-## Independent Video Eligibility
+Three standalone Video aggregates are modeled: `video_production_projects`, `video_generation_jobs`, and `video_production_assets`. The additive migration `20260818003000_video_studio_foundation_v1.sql` is **APPLIED** (2026-08-18). It added server-only/RLS-protected tables, a 30-minute atomic claim RPC, and private `video-production-assets` storage. Live schema, constraints, indexes, FKs, RLS (deny-by-default), service-role-only grants, claim RPC (`SECURITY DEFINER`, service_role EXECUTE only), and the private `video-production-assets` bucket were verified post-apply.
 
-Video eligibility is independent from Image eligibility. It uses the same locked Persona authority but additionally requires canonical video readiness and explicit Video Use approval. Brand Cast approval plus Image Use approval can produce an Image-eligible model while Video remains ineligible; this is valid and tested.
+Prepare → Estimate → Confirm → Execute is durable. One confirmed job permits one atomic claim and one output row. An ambiguous claimed attempt becomes `unknown_outcome`; blind retry is forbidden. Output starts `REVIEW_REQUIRED` and uses a nine-item human checklist.
 
-Image approval never implies Video approval. Legacy `Approved`, browser state, seed data, and the process-local Brand Face registry cannot grant Video handoff eligibility.
+## Persona Video eligibility
 
-## Private Assets and Security
+Video Studio reuses `buildVideoStudioPersonaHandoff()` and Persona's canonical eligibility. Image/Brand Cast approval never grants Video approval. The locked identity, Video Identity Ready, Video Use approval, reference rights, exact lock version and fingerprints are persisted. The UI states: **„Dieses Markenmodel ist noch nicht für Video freigegeben.“** and fails closed.
 
-The canonical contract never exposes private storage paths, secrets, or persistent signed URLs. When requested, the Persona server issues short-lived workspace-scoped signed accesses in the transient handoff envelope. Client input cannot override workspace authority, and cross-workspace Persona IDs fail closed.
+Persona now defines Video Identity Ready from a dedicated immutable owner review tied to the exact current lock and reference package; the raw boolean alone is not authority. Video Use approval is a separate explicit action tied to that review. The Video blocker links back to **„Im Persona Studio prüfen“**. Migration `20260818160000_persona_video_readiness_v1.sql` remains unapplied, so live eligibility stays blocked until migration plus the owner's real review/approval actions.
 
-## Remaining Work
+## Source-image strategy
 
-- Design and implement the actual Video Studio UX and operational domain.
-- Persist exact Brand Model traces on future Video projects/jobs/assets.
-- Resolve controlled reference assets server-side at execution time without persisting expiring URLs.
-- Add provider governance, explicit paid intent, durable jobs, retries/idempotency, review, approval, and observability.
-- Runtime-verify the protected API, Supabase/storage boundary, and a non-paid or explicitly authorized end-to-end flow.
+Production V1 intentionally uses only an `APPROVED` deterministic Image Studio asset. The server validates workspace, source checksum, Image project/job/fingerprint, Brand Model trace, Product Profile/version/variant, Artwork version/checksum, review actor/time, and private object identity. Browser uploads cannot impersonate production sources.
 
-No video provider was called and no video was generated in Milestone 3.
+This provides stronger starting continuity than text-to-video, but it does **not** prove frame-by-frame Artwork fidelity after motion synthesis.
 
-## Relevant Paths
+## Artwork fidelity truth
 
-- `app/(dashboard)/agents/video/page.tsx`
-- `lib/video/brand-model-production-context.ts`
-- `lib/persona/future/video-studio-hooks.ts`
-- `lib/persona/integrations/brand-model-handoff.ts`
-- `app/api/persona/integrations/route.ts`
-- `lib/persona/domain/brand-model-contract.ts`
+Exact Video Artwork fidelity is not solved. Image-to-video may distort text/print between frames. Future production exactness requires provider verification and likely tracking/homography, garment deformation, occlusion masks, and deterministic frame recompositing. The current snapshot labels its strategy `SOURCE_IMAGE_ONLY_NO_REDRAW_GUARANTEE`; no UI or docs claim otherwise.
+
+## Provider foundation
+
+`VideoProvider` defines `capabilities`, `estimate`, `generate`, `getStatus`, and `reconcile`. Repository-verified capability matrix contains only `nexhq-synthetic-video-v1`. It emits a deterministic metadata fixture with zero network calls; it is not a cinematic renderer and is refused by the API in production builds. Real provider capabilities remain unverified until a separate provider-selection/documentation milestone.
+
+## German owner UX
+
+The shared Geist/blue-cyan system now exposes Ausgangsbild, lineage, Video type, motion presets, camera presets, scene/light, 9:16/4:5/1:1/16:9, 3/5/8/10 seconds, cost review, confirmation, synthetic development execution, reload/history, and human review. Provider identifiers and fingerprints remain under **Technische Details**.
+
+The owner first selects Artwork, Product, exact variant, and Markenmodel. NexHQ then filters the approved Image sources to exact matching lineage. Normal status and shot labels are German; raw job/provider data remains secondary. Synthetic execution is visible only in development/test builds and is rejected by the API in production.
+
+## Migration apply and live verification (2026-08-18)
+
+Linked project `lggogmvpktedkimbpzix` confirmed. Migration history showed all 30 prior migrations synchronized and exactly `20260818003000_video_studio_foundation_v1.sql` pending. Fresh `supabase db push --dry-run` proposed only that file. The SQL is entirely additive (no DROP/TRUNCATE/DELETE/destructive ALTER). Migration was applied; post-apply history shows `20260818003000` on both local and remote with no pending migrations. Live schema queries verified all three Video tables, all columns, all constraints/indexes/FKs, RLS enabled with zero policies (deny-by-default), service_role-only table grants, `claim_video_generation_job` (SECURITY DEFINER, service_role EXECUTE only, confirms `status='confirmed'` + `confirmed_at IS NOT NULL` + `confirmation_expires_at > p_now`), workspace-source enforcement trigger active, and private `video-production-assets` bucket (public=false, 500 MB, video/mp4+webm+fake-video). All five existing private buckets unaffected. Persona Video state: 1 persona, 0 video_identity_ready, 0 video_use_approved — unchanged. 1237 tests pass, TypeScript clean, production build clean. No provider calls; no `.env.local` modification.
+
+## Current blockers
+
+1. ~~Apply and verify the additive Video migration~~ — **DONE** (2026-08-18).
+2. ~~Apply Persona Video readiness migration~~ — **DONE** (2026-08-18). Durable review/approval authority columns and service-role RPCs are live.
+3. **ACTIVE:** Zero Video-eligible Brand Models in the Milaene workspace. The owner must manually complete the Persona Video-readiness/approval process (Video Identity Ready + Video Use Approved) for `North African Street Premium`. No Persona row was changed by either migration task.
+4. Authenticated owner QA with approved Image source and a canonically Video-approved Brand Model.
+5. Select and verify a real image-to-video provider; none is wired or claimed.
+6. Exact frame-by-frame Artwork fidelity requires a later tracking/compositing milestone.

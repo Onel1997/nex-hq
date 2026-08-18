@@ -3,8 +3,8 @@
 Status: Canonical Studio Specification  
 Studio: Persona Studio  
 Current workspace: Milaene  
-Last verified against code and controlled read-only live data: 2026-08-17  
-Implementation status: **PARTIAL — substantial lifecycle implemented in code; not production-complete**
+Last verified against code and controlled read-only live data: 2026-08-18  
+Implementation status: **PARTIAL — substantial lifecycle implemented in code; Persona Video readiness migration APPLIED; manual Video approval pending**
 
 This specification uses the following labels:
 
@@ -18,7 +18,7 @@ Unless stated otherwise, every current-state capability below is **implemented i
 
 ## 1. Status Header
 
-Persona Studio has the most developed governed lifecycle among the NexHQ production studios. Candidate discovery, human selection, Draft Persona conversion, a Master Identity Reference, controlled reference packages, identity checks, immutable lock snapshots, separate use approvals, one versioned downstream contract, real Image/Video handoff boundaries, an actor/workspace authorization boundary, and a focused human legacy-reconciliation path all exist in code. The Supabase-backed Persona lifecycle is the canonical identity authority: generic CRUD rejects governed fields, eligibility derives from explicit durable approvals plus a validated lock snapshot, and process-local Brand Face state cannot grant production use. Both Persona Foundation migrations are applied and their live schema/RLS/grants are verified. Persona Studio remains **PARTIAL** because the production allowlist is not durable workspace membership/RBAC, no general Identity Revision exists, Image paid execution has a durable confirmation/job/idempotency boundary in code, but its migration is unapplied and live-provider verification is absent, Video Studio remains a placeholder, and no full live end-to-end production path has been verified.
+Persona Studio has the most developed governed lifecycle among the NexHQ production studios. Candidate discovery, human selection, Draft Persona conversion, a Master Identity Reference, controlled reference packages, identity checks, immutable lock snapshots, separate use approvals, one versioned downstream contract, real Image/Video handoff boundaries, an actor/workspace authorization boundary, and a focused human legacy-reconciliation path all exist in code. The Supabase-backed Persona lifecycle is the canonical identity authority: generic CRUD rejects governed fields, eligibility derives from explicit durable approvals plus a validated lock snapshot, and process-local Brand Face state cannot grant production use. Both Persona Foundation migrations and the Persona Video readiness migration (`20260818160000`) are applied and live schema/RLS/grants/RPCs verified. Persona Studio remains **PARTIAL** because the production allowlist is not durable workspace membership/RBAC, no general Identity Revision exists, real Image/Video provider validation is absent, and the owner has not yet completed the manual Video identity review and Video Use approval for the live Brand Model.
 
 Primary implementation roots:
 
@@ -229,7 +229,7 @@ The persisted checklist includes same-person consistency, face structure, skin t
 Limitations:
 
 - The API describes this checklist as manual, with no AI verification in V1 (`app/api/persona/[id]/identity-review/route.ts`).
-- There is no automated video identity validation pipeline. `video_identity_ready` is a persisted manual checklist result.
+- There is no automated Video identity validation pipeline. `video_identity_ready` is only a current projection of the separate human Video review bound to the exact Identity Lock; the old pre-lock suitability checkbox is advisory/historical and cannot grant Video authority.
 - Image and video readiness are now separate derivations. A Persona can pass the Identity Lock/image gate while video suitability remains unapproved; this does not grant video use.
 - General “visual casting evaluation” is disabled by default and is not evidence of realism or commercial quality.
 
@@ -594,11 +594,11 @@ Important limits:
 - Security deployment: protected Persona APIs are hardened in code and both Foundation migrations plus live RLS/grants are verified, but the environment allowlist is not durable workspace membership/RBAC and health/version reporting remains stale.
 - Reference Boards are seed-only with disabled actions.
 - Image downstream integration reaches a controlled exact-lock generation/provider seam and persists safe lineage; durable paid-job/idempotency controls, live-provider verification, and full operational durability remain incomplete.
-- Video has only the contract/consumer foundation; the studio remains a placeholder.
+- Video consumes the canonical contract through a fake-only Studio foundation; real provider execution remains absent and its migration is unapplied.
 
-### PLACEHOLDER
+### VIDEO DOWNSTREAM STATUS
 
-- Video Studio UI, operational production state, provider execution, and generation.
+- German Video Studio UI, fake orchestration and durable repository contracts exist; no real provider or generated Video is implemented, and live persistence awaits its unapplied migration.
 
 ### PLANNED / NOT FOUND
 
@@ -757,7 +757,7 @@ Persona Studio is **not DONE** as of this verification. Done requires all of the
 
 - one canonical `brand-model-v1` production package serves Image and Video consumers and exposes actual per-reference rights state without private paths;
 - Image and Video boundaries enforce centralized independent eligibility, exact locked-package rights, and stale-version rejection;
-- Image has a selector/planning/audit seam plus controlled exact-lock generation/provider input, while Video has a typed foundation only;
+- Image has a selector/planning/audit seam plus controlled exact-lock generation/provider input, while Video now adds a fake-only project/job/review foundation that still consumes this same Persona authority;
 - controlled signed asset access is transient and never canonical identity truth;
 - local tests, TypeScript, targeted lint, and build pass; the owner reports the live selector handoff, while paid-provider execution and full E2E remain future work.
 
@@ -800,4 +800,31 @@ Persona Studio is **not DONE** as of this verification. Done requires all of the
 
 ## 2026-08-17 Image Paid-Input Boundary
 
-Persona remains the sole WHO authority. Image paid preparation stores the exact `brand-model-v1` trace, current lock/package fingerprints, and Master Identity asset ID in `image-generation-input-v1`. Execution re-resolves Persona eligibility, rights, exact lock, and private Master bytes before the atomic paid claim. The separate durable Design Master Artwork is resolved by immutable ID/version/checksum and sent as provider input 2; it cannot replace the Persona Master. Image project/job/asset persistence now carries the exact Persona trace through human output review. Both new Image/Design migrations remain unapplied, Video approval remains irrelevant to Image eligibility, and no paid provider was called.
+Persona remains the sole WHO authority. Image and Video preparation freeze the exact `brand-model-v1` trace and re-resolve canonical consumer eligibility. Image/Design/deterministic migrations are applied; Video migration `20260818003000` is not. Video approval remains irrelevant to Image eligibility, Image approval never grants Video eligibility, and no provider was called by the Video foundation work.
+
+## Owner UX — 2026-08-17
+
+The primary German journey is now Markenmodel finden → auswählen → Referenzpaket → Identitätsprüfung → Referenzrechte → Image-Freigabe → Brand Cast. The landing screen separates all Models, discovery, approved Models and work in progress. Primary readiness is owner-readable; raw identity/provenance remains secondary. Persona authority and all approval prerequisites are unchanged.
+
+The final cleanup translated the deep Identity Lock/reconciliation, reference-rights, reference-package, candidate-replacement, comparison, lightbox, error and loading microcopy. Attempt history and raw provider evaluation metadata are collapsed as technical history where applicable. Operational Persona typography is now the shared Geist Sans scale; historical enum values remain unchanged internally.
+
+## Video Studio consumption — 2026-08-18
+
+Video Studio now consumes the existing Persona `consumer=video` handoff directly. It persists exact lock/reference fingerprints and refuses Image-only or Video-ineligible models. No Persona readiness, rights or approval formula changed, and no Video approval is inferred or granted by the new Studio.
+
+Read-only canonical inspection on 2026-08-18 returned zero Video-eligible Brand Models for the Milaene workspace. That is an expected fail-closed production blocker, not an invitation to infer or auto-grant approval.
+
+## Persona Video Readiness + Video Use Approval V1 — 2026-08-18
+
+The previous Video authority was **partial and unsafe for owner completion**: the pre-lock general identity checklist could set the raw `video_identity_ready` boolean, while explicit Video Use approval checked that boolean without binding it to the current lock/reference package. There was no dedicated owner Video identity review.
+
+The new boundary separates two human decisions:
+
+1. **Video Identity Ready** — an immutable human checklist review bound to the exact Identity Lock snapshot, lock version, identity fingerprint and reference-package fingerprint.
+2. **Video Use Approved** — a later explicit owner confirmation bound to that exact current review and lock trace.
+
+Image approval, Identity Lock and Brand Cast membership never substitute for either decision. A new lock, changed package, revoked rights or rejected review makes current Video eligibility fail closed; historical evidence remains in `brain_events` and historical Video jobs remain unchanged. Generic Persona CRUD rejects all new authority fields.
+
+The additive migration `20260818160000_persona_video_readiness_v1.sql` adds only lock/review binding metadata to `persona_personas`; it is **created and intentionally UNAPPLIED**. Until it is separately preflighted/applied, the live Persona remains not Video-ready and not Video-approved, and the new manual workflow is migration-blocked.
+
+For Video V1, the existing Master plus frontal, left/right three-quarter and left/right profile package is the required locked facial identity package. This is sufficient only for the current approved-Image-to-Video identity source strategy. It is not a claim that general text-to-video or full-body motion references are complete.

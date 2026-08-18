@@ -173,6 +173,12 @@ On 2026-08-17, the linked project ref was reverified as `lggogmvpktedkimbpzix` w
 
 Both migrations were applied successfully on 2026-08-17. Post-apply verification confirmed synchronized migration history, live tables (`image_generation_jobs`, `design_master_artworks`, `image_production_projects`, `image_production_assets`), indexes/constraints/FKs, RLS enabled with no policies (deny-by-default for direct clients), service-role-only grants, `claim_image_generation_job` with expiry enforcement, and private buckets `image-generation-inputs`, `design-master-artworks`, `image-production-assets` (existing `persona-references` unchanged). New tables are empty. See [[docs/nexhq/studios/IMAGE_PAID_MIGRATION_PREFLIGHT_2026-08-17.md]].
 
+### Deterministic V2 migration (applied and verified 2026-08-17)
+
+`20260817170000_deterministic_mockup_foundation_v1.sql` is additive and **APPLIED**. On 2026-08-17 a fresh `db push --dry-run` against linked project `lggogmvpktedkimbpzix` proposed exactly this migration; it was then applied alone and local/remote history synchronized. Live service-role reads, anon denial, table/column/constraint/trigger presence, and the private `product-profile-references` bucket were verified. Counts and status/update snapshots for the 4 historical jobs, 1 asset, 1 Artwork, and 4 projects were unchanged; old v1 rows retain null v2 markers. No fixture/business row or Storage object was created during verification.
+
+Later migration-history retries encountered a transient remote Postgres timeout; this did not apply or mutate anything. A separately authorized application task must repeat linked-project/history/dry-run/recovery/RLS/grant/bucket/function/trigger verification before applying.
+
 ## 10. Remaining Gaps
 
 - No durable user/workspace membership or RBAC table exists; the production allowlist is an interim single-workspace control.
@@ -193,3 +199,38 @@ Both migrations were applied successfully on 2026-08-17. Post-apply verification
 6. Migration files never prove deployed schema state.
 7. Legacy review evidence must not be fabricated.
 8. No key, token, credential, or private signed asset URL belongs in documentation.
+
+## Product Intelligence V1 persistence — 2026-08-17
+
+The already-applied `product_profiles` table and private `product-profile-references` bucket are reused. Product versions are insert-only at the repository boundary; JSONB fields hold structured variants, construction, references and PrintSurfaces, while provenance carries lifecycle and explicit-link metadata. Product Library routes require authenticated workspace scope and use server repositories/storage helpers. No schema migration was created or applied in this milestone.
+
+## Video Studio Foundation migration — APPLIED 2026-08-18
+
+`20260818003000_video_studio_foundation_v1.sql` is additive and **APPLIED** on 2026-08-18 to project `lggogmvpktedkimbpzix`. Pre-apply verification confirmed linked ref, 30 prior migrations synchronized, exactly one file pending, and a clean dry-run. The SQL is entirely additive: no DROP/TRUNCATE/DELETE/destructive ALTER/business-row rewrite. Post-apply verification confirmed:
+
+- `20260818003000` recorded in remote history; no pending migrations; local/remote synchronized.
+- Live tables: `video_production_projects`, `video_generation_jobs`, `video_production_assets` — all columns, check constraints, unique constraints, foreign keys, and indexes present as defined.
+- RLS enabled on all three tables; zero policies (deny-by-default for direct clients).
+- Grants: `service_role` and `postgres` only; no `anon`, `authenticated`, or `public` grants.
+- `claim_video_generation_job(uuid,uuid,text,timestamptz)`: `SECURITY DEFINER`, enforces `status='confirmed'`, `confirmed_at IS NOT NULL`, `confirmation_expires_at > p_now`; EXECUTE granted to `service_role` only.
+- `trg_video_source_workspace` trigger active on `video_production_assets`; enforces APPROVED source image within same workspace.
+- `video-production-assets` bucket: `public=false`, 500 MB limit, `video/mp4`, `video/webm`, `application/vnd.nexhq.fake-video+json`.
+- All five existing private buckets (`persona-references`, `image-generation-inputs`, `design-master-artworks`, `image-production-assets`, `product-profile-references`) unaffected.
+- Persona Video state: 1 persona, 0 `video_identity_ready`, 0 `video_use_approved` — unchanged.
+- 1237 tests pass; TypeScript clean; production build clean. No provider calls; `.env.local` untouched.
+
+## Persona Video readiness migration — APPLIED 2026-08-18
+
+`20260818160000_persona_video_readiness_v1.sql` is additive and **APPLIED** on 2026-08-18 to project `lggogmvpktedkimbpzix`. Pre-apply verification confirmed linked ref, 31 prior migrations synchronized, exactly one file pending, and a clean dry-run. The SQL is entirely additive: no DROP/TRUNCATE/DELETE/destructive ALTER/business-row rewrite. Post-apply verification confirmed:
+
+- `20260818160000` recorded in remote history; no pending migrations; local/remote synchronized.
+- New columns on `persona_personas`: `video_identity_review_id`, `video_identity_ready_at/by`, `video_identity_ready_lock_snapshot_id/version`, `video_identity_ready_identity_fingerprint`, `video_identity_ready_reference_package_fingerprint`, `video_use_approval_review_id`, `video_use_approval_lock_snapshot_id/version`, `video_use_approval_identity_fingerprint`, `video_use_approval_reference_package_fingerprint`.
+- Evidence-completeness checks (`persona_video_ready_evidence_complete`, `persona_video_approval_evidence_complete`) and lock-version positive checks — all `NOT VALID` (protect future writes without rejecting existing rows).
+- Workspace-safe FKs to `persona_identity_lock_snapshots(id, workspace_id)` and `brain_events(id, workspace_id)` — all `NOT VALID`.
+- Supporting unique indexes: `persona_identity_lock_snapshots_id_workspace_uidx`, `brain_events_id_workspace_uidx`; eligibility index `persona_personas_video_eligibility_idx`.
+- `record_persona_video_identity_review(uuid,uuid,uuid,uuid,jsonb)`: `SECURITY DEFINER`, exact-lock/fingerprint/rights/checklist enforcement, immutable audit via `brain_events`, stale approval clearing on new review.
+- `approve_persona_video_use(uuid,uuid,uuid,uuid,uuid,uuid,integer,text,text,timestamptz)`: `SECURITY DEFINER`, requires current Video Identity Ready + exact review/lock/fingerprint match, idempotent on identical approval.
+- Both RPCs: EXECUTE granted to `service_role` and `postgres` only; no `anon`, `authenticated`, or `public`.
+- `persona_personas` RLS remains enabled; no new permissive policies; existing table grants unchanged.
+- North African Street Premium: `video_identity_ready=false`, `video_use_approved=false`, lock v3, Image/Brand Cast approvals unchanged — no auto-approval.
+- 1244 tests pass; TypeScript clean; production build clean. No provider calls; no human Video review performed; `.env.local` untouched.
