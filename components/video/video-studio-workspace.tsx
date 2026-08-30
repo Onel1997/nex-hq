@@ -372,7 +372,7 @@ export function VideoStudioWorkspace({
   return (
     <div className="nx-studio video-studio">
       <StudioHeader
-        eyebrow="NexHQ · Video-Produktion"
+        eyebrow="Xeriamo · Video-Produktion"
         title="Video Studio"
         description="Videos aus freigegebenem Markenmodel, Produkt, Artwork und Image-Ausgangsbild vorbereiten."
         actions={

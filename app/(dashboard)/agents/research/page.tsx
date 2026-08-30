@@ -1,16 +1,6 @@
-import type { Metadata } from "next";
-import { ResearchStudioV3 } from "@/components/research/v3";
-import { DEFAULT_LOCALE } from "@/lib/i18n";
-import { getDictionary } from "@/lib/i18n/get-dictionary";
-import "@/app/research-studio-v3.css";
+import { redirect } from "next/navigation";
 
-const dict = getDictionary(DEFAULT_LOCALE);
-
-export const metadata: Metadata = {
-  title: "Research Studio",
-  description: dict.research.page.description,
-};
-
-export default function ResearchAgentPage() {
-  return <ResearchStudioV3 />;
+/** Retired Owner surface. Research infrastructure remains available to active dependants. */
+export default function RetiredResearchAgentPage() {
+  redirect("/hq/customers");
 }

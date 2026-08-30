@@ -10,7 +10,7 @@ import {
 test("one canonical navigation authority projects only customer-authorized routes", () => {
   const owner = getStudioSidebarSections("de", "OWNER").flatMap((section) => section.items);
   const customer = getStudioSidebarSections("de", "CUSTOMER").flatMap((section) => section.items);
-  assert.ok(owner.some((item) => item.id === "ceo"));
+  assert.ok(!owner.some((item) => item.id === "ceo" || item.id === "research"));
   assert.ok(owner.some((item) => item.id === "shopify"));
   assert.deepEqual(
     customer.map((item) => item.href),
@@ -77,6 +77,9 @@ test("customer and Owner shells each mount the one shared drawer at shell level"
   assert.match(shared, /is-\$\{audience\.toLowerCase\(\)\}/);
   assert.match(shared, /data-audience=\{audience\}/);
   assert.match(shared, /getStudioSidebarSections\(locale, audience\)/);
+  assert.match(shared, /audience === "OWNER"/);
+  assert.match(shared, /action=\{logoutOwner\}/);
+  assert.match(shared, />Abmelden</);
   assert.doesNotMatch(creative, /CreativeMobileNavigation|StudioMobileNavigation/);
   assert.doesNotMatch(ugc, /UgcMobileNavigation|StudioMobileNavigation/);
   assert.equal(existsSync("components/creative-studio/creative-mobile-navigation.tsx"), false);
@@ -123,13 +126,11 @@ test("Owner navigation has one canonical route authority and exact active routes
   assert.deepEqual(
     owner.map((item) => item.label),
     [
-      "CEO",
-      "Research Studio",
       "Design Studio",
-      "Persona Studio",
-      "Image Studio",
       "Creative Studio",
       "UGC Video Studio",
+      "Persona Studio",
+      "Image Studio",
       "Video Studio",
       "Produktbibliothek",
       "Shopify Studio",
@@ -146,6 +147,42 @@ test("Owner navigation has one canonical route authority and exact active routes
   assert.equal(isSidebarNavItemActive("/creative-studio", creative), true);
   assert.equal(isSidebarNavItemActive("/ugc-video-studio", ugc), true);
   assert.equal(isSidebarNavItemActive(video.href, video), true);
+});
+
+test("Owner navigation groups the active Studios, unfinished Studios and administration", () => {
+  const sections = getStudioSidebarSections("de", "OWNER");
+  assert.deepEqual(sections.map((section) => section.label), [
+    "Studios",
+    "Weitere Studios",
+    "Verwaltung",
+  ]);
+  assert.deepEqual(sections[0]?.items.map((item) => item.label), [
+    "Design Studio",
+    "Creative Studio",
+    "UGC Video Studio",
+  ]);
+  assert.deepEqual(sections[1]?.items.map((item) => item.label), [
+    "Persona Studio",
+    "Image Studio",
+    "Video Studio",
+    "Produktbibliothek",
+    "Shopify Studio",
+  ]);
+  assert.deepEqual(sections[2]?.items.map((item) => item.label), [
+    "Kunden",
+    "Einstellungen",
+  ]);
+});
+
+test("retired CEO and Research surfaces and the Owner root lead to Customer Center", () => {
+  for (const file of [
+    "app/(dashboard)/hq/page.tsx",
+    "app/(dashboard)/agents/ceo/page.tsx",
+    "app/(dashboard)/agents/research/page.tsx",
+  ]) {
+    const source = readFileSync(file, "utf8");
+    assert.match(source, /redirect\("\/hq\/customers"\)/);
+  }
 });
 
 test("Owner shell and both canonical navigation surfaces use Xeriamo branding", () => {
@@ -170,6 +207,9 @@ test("Owner drawer scroll and shell scroll-lock are iPhone safe and reversible",
   assert.match(css, /touch-action: pan-y/);
   assert.match(css, /env\(safe-area-inset-top\)/);
   assert.match(css, /env\(safe-area-inset-bottom\)/);
+  assert.match(css, /\.studio-mobile-nav-footer/);
+  assert.match(css, /\.studio-mobile-nav-signout/);
+  assert.match(css, /min-height: 48px/);
   assert.match(css, /\.hq-sidebar \{\s*display: none !important/);
   assert.match(css, /\.hq-owner-mobile-header \{[\s\S]*display: flex/);
   assert.match(shared, /snapshot = lockBody\(\)/);

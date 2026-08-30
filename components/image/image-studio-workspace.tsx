@@ -1715,7 +1715,7 @@ export function ImageStudioWorkspace() {
         <nav className="is-breadcrumbs" aria-label="Brotkrümelnavigation">
           <Link href="/" className="is-crumb">
             <Home className="size-3.5" />
-            NexHQ
+            Xeriamo
           </Link>
           <span className="is-crumb-sep" aria-hidden>
             ›

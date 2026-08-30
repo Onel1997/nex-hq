@@ -1550,7 +1550,7 @@ export function ProductLibraryWorkspace() {
   return (
     <div className="nx-studio product-library">
       <StudioHeader
-        eyebrow="NexHQ · Produktintelligenz"
+        eyebrow="Xeriamo · Produktintelligenz"
         title="Produktbibliothek"
         description="Shopify-Katalogwahrheit und manuell gepflegtes Produktionswissen für Image Studio."
         actions={

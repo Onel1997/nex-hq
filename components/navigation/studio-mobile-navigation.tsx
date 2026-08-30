@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { LogOut, Menu, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -13,6 +13,7 @@ import {
 } from "react";
 
 import { useLocale } from "@/lib/i18n";
+import { logoutOwner } from "@/app/auth-actions";
 import {
   getStudioSidebarSections,
   isSidebarNavItemActive,
@@ -153,6 +154,16 @@ export function StudioMobileNavigation({
                 </section>
               ))}
             </nav>
+            {audience === "OWNER" ? (
+              <footer className="studio-mobile-nav-footer">
+                <form action={logoutOwner}>
+                  <button type="submit" className="studio-mobile-nav-signout">
+                    <LogOut size={19} aria-hidden="true" />
+                    <span>Abmelden</span>
+                  </button>
+                </form>
+              </footer>
+            ) : null}
           </aside>
         </div>
       ) : null}

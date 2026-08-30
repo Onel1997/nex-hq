@@ -10,7 +10,11 @@ import {
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import type { LucideIcon } from "lucide-react";
 
-export type HqSidebarSectionId = "studios" | "settings";
+export type HqSidebarSectionId =
+  | "studios"
+  | "moreStudios"
+  | "management"
+  | "settings";
 
 export interface SidebarNavItem {
   id: string;

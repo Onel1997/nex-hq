@@ -148,7 +148,7 @@ export function PersonaStudio() {
         <nav className="ps-breadcrumbs" aria-label="Brotkrümelnavigation">
           <Link href="/" className="ps-crumb">
             <Home className="size-3.5" />
-            NexHQ
+            Xeriamo
           </Link>
           <ChevronRight className="size-3.5 opacity-40" />
           <span className="ps-crumb ps-crumb-current">
