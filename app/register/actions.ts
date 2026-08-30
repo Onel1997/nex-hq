@@ -8,6 +8,11 @@ import {
   sanitizeXerianoAuthDestination,
   withXerianoPlanIntent,
 } from "@/lib/xeriano/plan-intent";
+import {
+  logXeriamoRegistrationUnavailable,
+  resolveXeriamoRegistrationEnvironment,
+  resolveXeriamoRegistrationSchema,
+} from "@/lib/xeriano/registration-readiness";
 
 export type RegisterState = { success: boolean; error: string | null };
 
@@ -19,15 +24,28 @@ export async function registerCustomer(_state: RegisterState, formData: FormData
   if (typeof name !== "string" || !name.trim() || typeof email !== "string" || typeof password !== "string" || password.length < 8) {
     return { success: false, error: "Bitte gib einen Namen, eine gültige E-Mail und mindestens 8 Zeichen als Passwort ein." };
   }
+  const runtime = resolveXeriamoRegistrationEnvironment(process.env);
+  if (!runtime.ready) {
+    logXeriamoRegistrationUnavailable({
+      code: runtime.code,
+      stage: "environment",
+      flags: runtime.flags,
+    });
+    return { success: false, error: "Die Xeriamo-Kontoverwaltung ist noch nicht aktiviert. Es wurde kein Konto erstellt." };
+  }
   try {
     const admin = createAdminClient();
-    const foundation = await Promise.all([
-      admin.from("xeriano_accounts").select("id", { head: true }),
-      admin.from("xeriano_credit_accounts").select("account_id", { head: true }),
-      admin.from("xeriano_billing_customers").select("account_id", { head: true }),
-      admin.from("xeriano_library_assets").select("id", { head: true }),
-    ]);
-    if (foundation.some((result) => result.error)) return { success: false, error: "Die Xeriamo-Kontoverwaltung ist noch nicht aktiviert. Es wurde kein Konto erstellt." };
+    const foundation = await resolveXeriamoRegistrationSchema(({ table, column }) =>
+      admin.from(table).select(column, { head: true }),
+    );
+    if (!foundation.ready) {
+      logXeriamoRegistrationUnavailable({
+        code: foundation.code,
+        stage: "schema",
+        flags: runtime.flags,
+      });
+      return { success: false, error: "Die Xeriamo-Kontoverwaltung ist noch nicht aktiviert. Es wurde kein Konto erstellt." };
+    }
     const supabase = await createServerSupabase();
     const destination = sanitizeXerianoAuthDestination(
       planIntent ? withXerianoPlanIntent("/app/credits", planIntent) : "/app",
@@ -37,6 +55,11 @@ export async function registerCustomer(_state: RegisterState, formData: FormData
     if (error) return { success: false, error: "Das Konto konnte nicht erstellt werden. Prüfe deine Angaben oder versuche es später erneut." };
     return { success: true, error: null };
   } catch {
+    logXeriamoRegistrationUnavailable({
+      code: "REGISTRATION_UNEXPECTED_FAILURE",
+      stage: "unexpected",
+      flags: runtime.flags,
+    });
     return { success: false, error: "Die Registrierung ist gerade nicht verfügbar." };
   }
 }

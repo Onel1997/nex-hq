@@ -224,9 +224,11 @@ test("public app metadata, private noindex and legal placeholders exist", () => 
 
 test("registration checks Xeriano tenancy readiness before creating an auth user", () => {
   const source = read("app/register/actions.ts");
-  assert.ok(source.indexOf('from("xeriano_accounts")') < source.indexOf("auth.signUp"));
+  const readiness = read("lib/xeriano/registration-readiness.ts");
+  assert.ok(source.indexOf("resolveXeriamoRegistrationSchema") < source.indexOf("auth.signUp"));
   for (const table of ["xeriano_credit_accounts", "xeriano_billing_customers", "xeriano_library_assets"]) {
-    assert.ok(source.indexOf(`from("${table}")`) < source.indexOf("auth.signUp"), table);
+    assert.match(readiness, new RegExp(table));
   }
+  assert.match(readiness, /xeriano_accounts/);
   assert.match(source, /Es wurde kein Konto erstellt/);
 });
