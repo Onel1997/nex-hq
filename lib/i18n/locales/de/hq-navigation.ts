@@ -2,8 +2,6 @@ export const hqNavigation = {
   studios: "Studios",
   settings: "Einstellungen",
   home: "Home",
-  /** @deprecated Hidden from primary nav — kept for facility department pages */
-  facility: "Facility",
   /** @deprecated Hidden from primary nav */
   agents: "KI-Agenten",
   general: "Allgemein",
@@ -20,5 +18,5 @@ export const hqNavigation = {
   collapseNav: "Navigation einklappen",
   expand: "Erweitern",
   collapse: "Einklappen",
-  navAriaLabel: "NexHQ-Navigation",
+  navAriaLabel: "Xeriamo Owner-Navigation",
 } as const;

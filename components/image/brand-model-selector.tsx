@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BrandModelSummary } from "@/lib/persona/domain/brand-model-contract";
 import {
   fetchImageBrandModelSelection,
   fetchImageEligibleBrandModels,
   type ImageBrandModelSelection,
 } from "@/lib/image/brand-model-production-context";
+import { loadCachedOwnerData } from "@/lib/image/client-owner-data-cache";
 
 export function BrandModelSelector({
   onSelectionChange,
@@ -17,12 +18,19 @@ export function BrandModelSelector({
   const [selectedPersonaId, setSelectedPersonaId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  const selectionRequestRef = useRef(0);
+  onSelectionChangeRef.current = onSelectionChange;
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const eligible = await fetchImageEligibleBrandModels();
+        const eligible = await loadCachedOwnerData({
+          key: "image:eligible-brand-models-v1",
+          ttlMs: 30_000,
+          load: fetchImageEligibleBrandModels,
+        });
         if (cancelled) return;
         setModels(eligible);
         const receivedPersonaId = new URLSearchParams(window.location.search).get(
@@ -38,14 +46,14 @@ export function BrandModelSelector({
         if (initialPersonaId) {
           setSelectedPersonaId(initialPersonaId);
           const selection = await fetchImageBrandModelSelection(initialPersonaId);
-          if (!cancelled) onSelectionChange(selection);
+          if (!cancelled) onSelectionChangeRef.current(selection);
         }
       } catch (cause) {
         if (!cancelled) {
           setError(
             cause instanceof Error
               ? cause.message
-              : "Eligible Brand Models could not be loaded.",
+              : "Freigegebene Markenmodels konnten nicht geladen werden.",
           );
         }
       } finally {
@@ -55,27 +63,32 @@ export function BrandModelSelector({
     return () => {
       cancelled = true;
     };
-  }, [onSelectionChange]);
+  }, []);
 
   async function selectPersona(personaId: string) {
+    const requestId = selectionRequestRef.current + 1;
+    selectionRequestRef.current = requestId;
     setSelectedPersonaId(personaId);
     setError(null);
     if (!personaId) {
-      onSelectionChange(null);
+      onSelectionChangeRef.current(null);
       return;
     }
     setLoading(true);
     try {
-      onSelectionChange(await fetchImageBrandModelSelection(personaId));
+      const selection = await fetchImageBrandModelSelection(personaId);
+      if (selectionRequestRef.current !== requestId) return;
+      onSelectionChangeRef.current(selection);
     } catch (cause) {
-      onSelectionChange(null);
+      if (selectionRequestRef.current !== requestId) return;
+      onSelectionChangeRef.current(null);
       setError(
         cause instanceof Error
           ? cause.message
-          : "Brand Model handoff could not be resolved.",
+          : "Das Markenmodel konnte nicht für die Produktion geladen werden.",
       );
     } finally {
-      setLoading(false);
+      if (selectionRequestRef.current === requestId) setLoading(false);
     }
   }
 
@@ -84,9 +97,9 @@ export function BrandModelSelector({
   );
 
   return (
-    <div className="space-y-2">
+    <div className="is-owner-selector">
       <label className="is-field-label" htmlFor="image-brand-model">
-        Persona Brand Model
+        Markenmodel
       </label>
       <select
         id="image-brand-model"
@@ -95,24 +108,22 @@ export function BrandModelSelector({
         disabled={loading}
         onChange={(event) => void selectPersona(event.target.value)}
       >
-        <option value="">No Persona selected</option>
+        <option value="">Kein Markenmodel ausgewählt</option>
         {models.map((model) => (
           <option key={model.brandModelId} value={model.personaId}>
-            {model.displayName} · Lock v{model.identityLockVersion}
+            {model.displayName}
           </option>
         ))}
       </select>
       {selected ? (
-        <p className="text-[11px] text-muted-foreground">
-          Persona authority · {selected.identityLockSnapshotId.slice(0, 8)} · v
-          {selected.identityLockVersion}
-        </p>
+        <div className="is-brand-model-selected"><span className="is-brand-model-avatar">{selected.displayName.slice(0, 1).toLocaleUpperCase("de-DE")}</span><div><strong>{selected.displayName}</strong><span>Für Bilder freigegeben · Identität festgeschrieben</span></div></div>
       ) : null}
       {error ? (
         <p className="text-[11px] text-destructive" role="alert">
           {error}
         </p>
       ) : null}
+      {selected ? <details className="nx-technical"><summary>Technische Details</summary><div className="nx-technical__body">Identity Lock v{selected.identityLockVersion} · {selected.identityLockSnapshotId.slice(0, 8)}</div></details> : null}
     </div>
   );
 }

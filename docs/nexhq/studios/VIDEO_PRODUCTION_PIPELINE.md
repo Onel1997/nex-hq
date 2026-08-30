@@ -30,3 +30,7 @@ Video execution consumes only current-lock-bound Persona authority:
 `Identity Lock + exact reference package + rights + approved human Video identity review + explicit Video Use approval`.
 
 Image approval and Brand Cast never substitute. The handoff carries the exact lock snapshot/version/fingerprint and is re-evaluated when selected; a stale review or approval cannot pass. The owner must complete both Persona actions manually before any Video workflow can proceed.
+
+## Recovery rule update — 2026-08-19
+
+Terminal reviewed jobs must never redefine the next active run after reload. Owner changes to motion/camera/scene/lighting/format/duration invalidate and cancel only unexecuted confirmation state. Running or unknown-outcome jobs remain fail-closed; no blind retry or automatic next Video exists.

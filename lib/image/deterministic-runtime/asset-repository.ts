@@ -20,5 +20,9 @@ export interface RecordDeterministicAsset {
 export interface DeterministicAssetRepository {
   record(scope: WorkspaceScope, input: RecordDeterministicAsset): Promise<DeterministicAsset>;
   getByJob(scope: WorkspaceScope, jobId: string): Promise<DeterministicAsset | null>;
+  getByJobs?(
+    scope: WorkspaceScope,
+    jobIds: readonly string[],
+  ): Promise<Map<string, DeterministicAsset>>;
   review(scope: WorkspaceScope & { actorId: string }, assetId: string, input: DeterministicReviewRequest, now: string): Promise<DeterministicAsset>;
 }

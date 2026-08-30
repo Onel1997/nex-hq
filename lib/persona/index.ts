@@ -446,6 +446,20 @@ export {
   listOfficialBrandCastMembers,
   UseApprovalError,
 } from "./creation/use-approvals";
+export {
+  getVideoIdentityReadinessView,
+  submitVideoIdentityReview,
+  isCurrentVideoIdentityReady,
+  isCurrentVideoUseApproved,
+  VIDEO_IDENTITY_REVIEW_VERSION,
+  VIDEO_IDENTITY_REVIEW_KEYS,
+} from "./creation/video-readiness";
+export type {
+  VideoIdentityReviewChecklist,
+  VideoIdentityReviewEvidence,
+  VideoIdentityReadinessView,
+  SubmitVideoIdentityReviewInput,
+} from "./creation/video-readiness";
 export type {
   UseApprovalGate,
   UseApprovalEligibility,

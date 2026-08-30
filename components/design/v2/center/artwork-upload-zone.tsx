@@ -40,24 +40,24 @@ export function ArtworkUploadZone({
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         role="region"
-        aria-label="Upload master artwork"
+        aria-label="Master Artwork hochladen"
       >
         <div className="dsv2-upload-icon-wrap">
           <Upload className="size-8" strokeWidth={1.25} />
         </div>
 
-        <h2 className="dsv2-upload-title">Upload Master Artwork</h2>
+        <h2 className="dsv2-upload-title">Artwork hochladen</h2>
         <p className="dsv2-upload-caption">
-          Drop your production-ready artwork here, or browse from your computer.
+          Ziehe dein produktionsfertiges Artwork hierher oder wähle eine Datei aus.
         </p>
 
         <button type="button" className="dsv2-upload-btn" onClick={onOpenPicker}>
           <Upload className="size-4" />
-          Choose File
+          Datei auswählen
         </button>
 
         <p className="dsv2-upload-formats">
-          Supported: {ACCEPTED_ARTWORK_EXTENSIONS.join(" · ")}
+          Unterstützt: {ACCEPTED_ARTWORK_EXTENSIONS.join(" · ")}
         </p>
 
         {error ? (

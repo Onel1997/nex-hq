@@ -16,14 +16,13 @@ export type UseApprovalGate =
 export type VideoIdentityReadinessPolicy =
   /**
    * Product rule (current): Video Use requires identity_locked + valid lock snapshot
-   * AND the persisted `video_identity_ready` checklist flag.
-   * There is NO automated video validation pipeline yet — when the flag is false,
-   * the gate stays BLOCKED with "Video identity validation not completed."
+   * AND a current, immutable human review bound to the exact lock snapshot and
+   * reference package. The boolean alone is never authority.
    */
-  | "requires_video_identity_ready_flag";
+  | "requires_current_lock_bound_human_video_review";
 
 export const VIDEO_IDENTITY_READINESS_POLICY: VideoIdentityReadinessPolicy =
-  "requires_video_identity_ready_flag";
+  "requires_current_lock_bound_human_video_review";
 
 /**
  * Brand Cast official membership does NOT require video_use_approved.

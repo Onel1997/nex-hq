@@ -10,6 +10,10 @@ import type { Persona } from "@/lib/persona/domain/types";
 import { isPersonaIdentityLocked } from "../identity-lock/identity-lock-service";
 import type { LockedBrandIdentity } from "../identity-lock/types";
 import {
+  isCurrentVideoIdentityReady,
+  isCurrentVideoUseApproved,
+} from "../video-readiness/authority";
+import {
   BRAND_CAST_REQUIRES_VIDEO_USE_APPROVED,
   VIDEO_IDENTITY_READINESS_POLICY,
   type BrandModelEligibility,
@@ -91,14 +95,19 @@ export function evaluateVideoUseEligibility(input: {
   persona: Persona;
   lockedIdentity: LockedBrandIdentity | null;
 }): UseApprovalEligibility {
-  const alreadyApproved = Boolean(input.persona.video_use_approved);
+  const alreadyApproved = isCurrentVideoUseApproved(
+    input.persona,
+    input.lockedIdentity,
+  );
   const blockingReasons = identityAuthorityBlockingReasons(input);
 
   // No automated video validation exists. The independent persisted checklist
   // result must remain false until a human explicitly validates video use.
   void VIDEO_IDENTITY_READINESS_POLICY;
-  if (!input.persona.video_identity_ready) {
-    blockingReasons.push("Video identity validation not completed.");
+  if (!isCurrentVideoIdentityReady(input.persona, input.lockedIdentity)) {
+    blockingReasons.push(
+      "Die Video-Identitätsprüfung für den aktuellen Identity Lock ist nicht abgeschlossen.",
+    );
   }
 
   return {
@@ -168,11 +177,15 @@ export function evaluateBrandModelEligibility(input: {
   if (!persona.image_use_approved) {
     imageBlockingReasons.push("Image Studio use is not approved");
   }
-  if (!persona.video_identity_ready) {
-    videoBlockingReasons.push("Video identity validation not completed.");
+  const videoIdentityReady = isCurrentVideoIdentityReady(persona, lockedIdentity);
+  const videoUseApproved = isCurrentVideoUseApproved(persona, lockedIdentity);
+  if (!videoIdentityReady) {
+    videoBlockingReasons.push(
+      "Die Video-Identitätsprüfung für den aktuellen Identity Lock ist nicht abgeschlossen.",
+    );
   }
-  if (!persona.video_use_approved) {
-    videoBlockingReasons.push("Video Studio use is not approved");
+  if (!videoUseApproved) {
+    videoBlockingReasons.push("Die Nutzung im Video Studio ist nicht freigegeben.");
   }
 
   return {
@@ -182,9 +195,9 @@ export function evaluateBrandModelEligibility(input: {
     referenceRightsConfirmed,
     brandCastApproved: Boolean(persona.brand_cast_approved),
     imageUseApproved: Boolean(persona.image_use_approved),
-    videoUseApproved: Boolean(persona.video_use_approved),
+    videoUseApproved,
     imageIdentityReady: Boolean(persona.image_identity_ready),
-    videoIdentityReady: Boolean(persona.video_identity_ready),
+    videoIdentityReady,
     imageEligible: imageBlockingReasons.length === 0,
     videoEligible: videoBlockingReasons.length === 0,
     imageBlockingReasons,

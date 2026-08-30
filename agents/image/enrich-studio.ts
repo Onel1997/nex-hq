@@ -9,6 +9,7 @@ import {
 import { migrateLegacyImageSections } from "./migrate-legacy";
 import { buildV2ImageOutput } from "./enrich-packages";
 import { STUDIO_ASSET_SPECS, type StudioAssetSpec } from "./studio-specs";
+import { sanitizeOptionalProjectContextList } from "@/lib/image/optional-project-context";
 import {
   type ImageLookbookShot,
   type ImageMoodboardSection,
@@ -137,11 +138,15 @@ function normalizePaletteSection(value: unknown): ImagePalette {
   };
 }
 
-function normalizeColorSystem(colors: string[]): string[] {
-  const normalized = colors.map((color) => color.trim()).filter((color) => color.length >= 2);
-  if (normalized.length >= 2) return normalized.slice(0, 8);
-  const base = normalized[0] ?? "Core neutral";
-  return [base, ...COLOR_SYSTEM_PAD].slice(0, 8);
+function normalizeColorSystem(
+  colors: unknown,
+  fallback: string[] = COLOR_SYSTEM_PAD,
+): string[] {
+  return sanitizeOptionalProjectContextList(
+    colors,
+    [...fallback, ...COLOR_SYSTEM_PAD],
+    { minLength: 2, maxItems: 8 },
+  );
 }
 
 function normalizeMoodboardSection(
@@ -169,8 +174,6 @@ function normalizeMoodboardSection(
   const obj = asRecord(value);
   if (!obj) return defaults;
 
-  const colorInput = asStringArray(obj.colorSystem);
-
   return {
     visualDirection: ensureMinLength(
       asString(obj.visualDirection) || defaults.visualDirection,
@@ -181,9 +184,7 @@ function normalizeMoodboardSection(
       asStringArray(obj.aestheticKeywords).length >= 3
         ? asStringArray(obj.aestheticKeywords).slice(0, 12)
         : defaults.aestheticKeywords,
-    colorSystem: normalizeColorSystem(
-      colorInput.length > 0 ? colorInput : defaults.colorSystem,
-    ),
+    colorSystem: normalizeColorSystem(obj.colorSystem, defaults.colorSystem),
     materialReferences:
       asStringArray(obj.materialReferences).length >= 2
         ? asStringArray(obj.materialReferences).slice(0, 8)
@@ -514,7 +515,6 @@ function migrateV2PayloadToV3(
 
   const productRefs = resolveProductRefs(options);
   const moodboard = v2.moodboard as ImageMoodboardSection;
-  const photographyStyle = moodboard?.photographyStyle;
 
   const core = (v2.corePackage as ImageStudioAsset[]) ?? [];
   const advanced = (v2.advancedPackage as ImageStudioAsset[]) ?? [];
@@ -718,7 +718,15 @@ export function normalizeStudioSections(
 
   const sections = raw as Record<string, unknown>;
   if (sections.productionAssets && Array.isArray(sections.productionAssets)) {
-    return sections;
+    const identity = resolveIdentityFromPayload(sections, {
+      collectionName,
+      campaignName: collectionName,
+      projectName: asString(sections.projectName),
+    });
+    return {
+      ...sections,
+      moodboard: normalizeMoodboardSection(sections.moodboard, identity),
+    };
   }
 
   if (

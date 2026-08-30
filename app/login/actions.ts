@@ -6,6 +6,7 @@ import {
   GENERIC_LOGIN_ERROR,
 } from "@/lib/auth/password-session";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
+import { parseXerianoPlanIntent, withXerianoPlanIntent } from "@/lib/xeriano/plan-intent";
 
 export type LoginActionState = {
   error: string | null;
@@ -17,6 +18,7 @@ export async function loginOwner(
 ): Promise<LoginActionState> {
   const email = formData.get("email");
   const password = formData.get("password");
+  const planIntent = parseXerianoPlanIntent(formData.get("planIntent"));
 
   if (typeof email !== "string" || typeof password !== "string") {
     return { error: GENERIC_LOGIN_ERROR };
@@ -36,5 +38,5 @@ export async function loginOwner(
     return { error: GENERIC_LOGIN_ERROR };
   }
 
-  redirect("/");
+  redirect(planIntent ? withXerianoPlanIntent("/app/credits", planIntent) : "/app");
 }

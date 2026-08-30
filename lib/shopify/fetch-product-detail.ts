@@ -6,13 +6,25 @@ export interface ShopifyProductVariant {
   price: string;
   currency: string;
   inventory: number;
+  available: boolean;
+  sku?: string | null;
+  updatedAt: string;
   options: Array<{ name: string; value: string }>;
+}
+
+export interface ShopifyProductImageReference {
+  id: string;
+  url: string;
+  altText: string | null;
+  width: number | null;
+  height: number | null;
 }
 
 export interface ShopifyProductDetail {
   id: string;
   title: string;
   handle: string;
+  vendor?: string | null;
   status: string;
   productType: string;
   description: string;
@@ -23,6 +35,8 @@ export interface ShopifyProductDetail {
   currency: string;
   imageUrl: string | null;
   images: string[];
+  imageReferences: ShopifyProductImageReference[];
+  updatedAt: string;
   collections: string[];
   variants: ShopifyProductVariant[];
 }
@@ -33,14 +47,16 @@ const PRODUCT_DETAIL_QUERY = `
       id
       title
       handle
+      vendor
       status
       productType
       tags
       description
       totalInventory
-      featuredImage { url }
+      updatedAt
+      featuredImage { id url altText width height }
       images(first: 12) {
-        edges { node { url } }
+        edges { node { id url altText width height } }
       }
       priceRangeV2 {
         minVariantPrice { amount currencyCode }
@@ -56,6 +72,9 @@ const PRODUCT_DETAIL_QUERY = `
             title
             price
             inventoryQuantity
+            availableForSale
+            sku
+            updatedAt
             selectedOptions { name value }
           }
         }
@@ -69,13 +88,15 @@ interface ProductDetailData {
     id: string;
     title: string;
     handle: string;
+    vendor: string | null;
     status: string;
     productType: string;
     tags: string[];
     description: string;
     totalInventory: number;
-    featuredImage: { url: string } | null;
-    images: { edges: Array<{ node: { url: string } }> };
+    updatedAt: string;
+    featuredImage: ShopifyProductImageReference | null;
+    images: { edges: Array<{ node: ShopifyProductImageReference }> };
     priceRangeV2: {
       minVariantPrice: { amount: string; currencyCode: string };
       maxVariantPrice: { amount: string; currencyCode: string };
@@ -88,6 +109,9 @@ interface ProductDetailData {
           title: string;
           price: string;
           inventoryQuantity: number;
+          availableForSale: boolean;
+          sku: string | null;
+          updatedAt: string;
           selectedOptions: Array<{ name: string; value: string }>;
         };
       }>;
@@ -108,15 +132,18 @@ export async function fetchShopifyProductDetail(
   if (!node) return null;
 
   const currency = node.priceRangeV2.minVariantPrice.currencyCode;
-  const images = node.images.edges.map((e) => e.node.url);
+  const imageReferences = node.images.edges.map((e) => e.node);
+  const images = imageReferences.map((image) => image.url);
   if (node.featuredImage?.url && !images.includes(node.featuredImage.url)) {
     images.unshift(node.featuredImage.url);
+    imageReferences.unshift(node.featuredImage);
   }
 
   return {
     id: node.id,
     title: node.title,
     handle: node.handle,
+    vendor: node.vendor?.trim() || null,
     status: node.status,
     productType: node.productType?.trim() || "Uncategorized",
     description: node.description ?? "",
@@ -127,6 +154,8 @@ export async function fetchShopifyProductDetail(
     currency,
     imageUrl: node.featuredImage?.url ?? images[0] ?? null,
     images,
+    imageReferences,
+    updatedAt: node.updatedAt,
     collections: node.collections.edges.map((e) => e.node.title),
     variants: node.variants.edges.map((e) => ({
       id: e.node.id,
@@ -134,6 +163,9 @@ export async function fetchShopifyProductDetail(
       price: e.node.price,
       currency,
       inventory: e.node.inventoryQuantity ?? 0,
+      available: e.node.availableForSale,
+      sku: e.node.sku?.trim() || null,
+      updatedAt: e.node.updatedAt,
       options: e.node.selectedOptions ?? [],
     })),
   };

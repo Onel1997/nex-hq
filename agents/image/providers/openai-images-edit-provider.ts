@@ -20,6 +20,8 @@ export const OPENAI_STAGE_B_IMAGE_EDIT_PATH =
   "openai.images.edit(gpt-image-1, image=master, input_fidelity=high)" as const;
 export const OPENAI_PAID_IDENTITY_ARTWORK_EDIT_PATH =
   "openai.images.edit(gpt-image-1, image=[persona-master,master-artwork], input_fidelity=high)" as const;
+export const OPENAI_BASE_PRODUCT_REFERENCE_EDIT_PATH =
+  "openai.images.edit(gpt-image-1, image=[persona-master,persona-supporting,product-references], input_fidelity=high)" as const;
 
 export type OpenAiIdentityEditRequest = {
   prompt: string;
@@ -30,6 +32,16 @@ export type OpenAiIdentityEditRequest = {
     bytes: Buffer;
     mimeType: string;
   };
+  /** Exact locked Persona support package; never arbitrary browser images. */
+  supportingIdentityReferences?: Array<{
+    bytes: Buffer;
+    mimeType: string;
+  }>;
+  /** Product imagery is garment truth for Stage A, never final Artwork truth. */
+  productReferences?: Array<{
+    bytes: Buffer;
+    mimeType: string;
+  }>;
   size?: OpenAiImageSize;
   quality?: "low" | "medium" | "high" | "auto";
   signal?: AbortSignal;
@@ -41,7 +53,10 @@ export type OpenAiIdentityEditResult = {
   providerId: "openai";
   imageBytes: Buffer;
   providerRequestId: string | null;
-  path: typeof OPENAI_STAGE_B_IMAGE_EDIT_PATH | typeof OPENAI_PAID_IDENTITY_ARTWORK_EDIT_PATH;
+  path:
+    | typeof OPENAI_STAGE_B_IMAGE_EDIT_PATH
+    | typeof OPENAI_PAID_IDENTITY_ARTWORK_EDIT_PATH
+    | typeof OPENAI_BASE_PRODUCT_REFERENCE_EDIT_PATH;
   inputFidelity: "high";
 };
 
@@ -90,11 +105,41 @@ export async function editOpenAiImageFromReference(
         `master-artwork.${request.artworkReference.mimeType === "image/svg+xml" ? "svg" : request.artworkReference.mimeType.includes("jpeg") ? "jpg" : request.artworkReference.mimeType.split("/")[1] ?? "png"}`,
         { type: request.artworkReference.mimeType },
       )
-    : null;
+      : null;
+
+  if (
+    artworkFile &&
+    (request.productReferences?.length ||
+      request.supportingIdentityReferences?.length)
+  ) {
+    throw new Error(
+      "Artwork cannot share the legacy provider role with Product or supporting Persona references.",
+    );
+  }
+  const supportingIdentityFiles = await Promise.all(
+    (request.supportingIdentityReferences ?? []).map((reference, index) =>
+      toFile(
+        reference.bytes,
+        `persona-support-${index + 1}.${reference.mimeType.includes("jpeg") ? "jpg" : reference.mimeType.split("/")[1] ?? "png"}`,
+        { type: reference.mimeType },
+      ),
+    ),
+  );
+  const productFiles = await Promise.all(
+    (request.productReferences ?? []).map((reference, index) =>
+      toFile(reference.bytes, `product-reference-${index + 1}.${reference.mimeType.includes("jpeg") ? "jpg" : reference.mimeType.split("/")[1] ?? "png"}`, {
+        type: reference.mimeType,
+      }),
+    ),
+  );
 
   const payload = {
     model,
-    image: artworkFile ? [imageFile, artworkFile] : imageFile,
+    image: artworkFile
+      ? [imageFile, artworkFile]
+      : supportingIdentityFiles.length || productFiles.length
+        ? [imageFile, ...supportingIdentityFiles, ...productFiles]
+        : imageFile,
     prompt: request.prompt,
     n: 1,
     size: request.size ?? ("1024x1536" as OpenAiImageSize),
@@ -102,14 +147,20 @@ export async function editOpenAiImageFromReference(
     input_fidelity: "high" as const,
   };
 
-  console.info("[OpenAI Images Edit] Stage B identity reference", {
-    path: OPENAI_STAGE_B_IMAGE_EDIT_PATH,
+  console.info("[OpenAI Images Edit] identity-conditioned request", {
+    path: artworkFile
+      ? OPENAI_PAID_IDENTITY_ARTWORK_EDIT_PATH
+      : productFiles.length
+        ? OPENAI_BASE_PRODUCT_REFERENCE_EDIT_PATH
+        : OPENAI_STAGE_B_IMAGE_EDIT_PATH,
     model: payload.model,
     size: payload.size,
     quality: payload.quality,
     inputFidelity: payload.input_fidelity,
     promptLength: payload.prompt.length,
     referenceBytes: request.referenceImageBytes.length,
+    supportingIdentityReferenceCount: supportingIdentityFiles.length,
+    productReferenceCount: productFiles.length,
   });
 
   try {
@@ -140,7 +191,9 @@ export async function editOpenAiImageFromReference(
       providerRequestId,
       path: artworkFile
         ? OPENAI_PAID_IDENTITY_ARTWORK_EDIT_PATH
-        : OPENAI_STAGE_B_IMAGE_EDIT_PATH,
+        : productFiles.length
+          ? OPENAI_BASE_PRODUCT_REFERENCE_EDIT_PATH
+          : OPENAI_STAGE_B_IMAGE_EDIT_PATH,
       inputFidelity: "high",
     };
   } catch (error) {

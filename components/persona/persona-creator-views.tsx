@@ -2553,6 +2553,8 @@ export function CandidatesView({ studio }: { studio: PersonaStudioController }) 
                   intervalMs: NOVELTY_REPLACEMENT_POLL_INTERVAL_MS,
                   timeoutMs: NOVELTY_REPLACEMENT_POLL_TIMEOUT_MS,
                   now: () => Date.now(),
+                  isPollingAllowed: () =>
+                    document.visibilityState !== "hidden",
                   poll: readStatus,
                   reconcile: async () => {
                     const res = await fetch(

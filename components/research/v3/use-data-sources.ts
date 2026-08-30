@@ -38,6 +38,7 @@ export function useDataSources(options: UseDataSourcesOptions = {}) {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mounted = useRef(true);
+  const pollInFlight = useRef(false);
 
   const fetchSources = useCallback(async (force = false) => {
     try {
@@ -175,10 +176,27 @@ export function useDataSources(options: UseDataSourcesOptions = {}) {
 
   useEffect(() => {
     if (!autoRefresh) return;
-    const timer = setInterval(() => {
-      void fetchSources();
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
+    const poll = async () => {
+      if (
+        document.visibilityState === "hidden" ||
+        pollInFlight.current
+      ) return;
+      pollInFlight.current = true;
+      try {
+        await fetchSources();
+      } finally {
+        pollInFlight.current = false;
+      }
+    };
+    const timer = setInterval(() => void poll(), POLL_INTERVAL_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [autoRefresh, fetchSources]);
 
   return {

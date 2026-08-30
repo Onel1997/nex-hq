@@ -35,6 +35,12 @@ import type {
 import { VIDEO_IDENTITY_READINESS_POLICY } from "./types";
 import { createPersonaReferenceSignedUrl } from "@/lib/persona/storage/reference-storage";
 import { findMasterIdentityReference } from "../master-identity-reference";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { randomUUID } from "node:crypto";
+import {
+  isCurrentVideoIdentityReady,
+  isCurrentVideoUseApproved,
+} from "../video-readiness/authority";
 
 function personaRepo() {
   return getPersonaRepository();
@@ -59,7 +65,7 @@ export async function getBrandModelApprovalsView(
   return {
     identityLocked: isPersonaIdentityLocked(persona),
     imageIdentityReady: Boolean(persona.image_identity_ready),
-    videoIdentityReady: Boolean(persona.video_identity_ready),
+    videoIdentityReady: isCurrentVideoIdentityReady(persona, lockedIdentity),
     imageUse: evaluateImageUseEligibility({ persona, lockedIdentity }),
     videoUse: evaluateVideoUseEligibility({ persona, lockedIdentity }),
     brandCast: evaluateBrandCastEligibility({ persona, lockedIdentity }),
@@ -165,7 +171,7 @@ export async function approveVideoUse(
   }
   const lockedIdentity = await resolveLockedBrandIdentity(scope, personaId);
 
-  if (persona.video_use_approved) {
+  if (isCurrentVideoUseApproved(persona, lockedIdentity)) {
     return {
       persona,
       gate: "video_use",
@@ -186,25 +192,73 @@ export async function approveVideoUse(
 
   const approvedAt = new Date().toISOString();
   const approvedBy = coerceUuidOrNull(scope.actorId);
-  const updated = await personaRepo().updatePersona(scope, personaId, {
-    video_use_approved: true,
-    video_use_approved_at: approvedAt,
-    video_use_approved_by: approvedBy,
-  });
+  if (!approvedBy) {
+    throw new UseApprovalError(
+      "Für die Video-Freigabe ist ein authentifizierter Eigentümer erforderlich.",
+      { gate: "video_use" },
+    );
+  }
+  if (!lockedIdentity || !persona.video_identity_review_id) {
+    throw new UseApprovalError("Die aktuelle Video-Identitätsprüfung fehlt.", {
+      gate: "video_use",
+    });
+  }
+  let updated: Persona;
+  if (personaRepo().kind === "supabase") {
+    const { error } = await createAdminClient().rpc("approve_persona_video_use", {
+      p_workspace_id: scope.workspaceId,
+      p_persona_id: personaId,
+      p_operation_id: randomUUID(),
+      p_approved_by: approvedBy,
+      p_expected_review_id: persona.video_identity_review_id,
+      p_expected_lock_snapshot_id: lockedIdentity.identityLockSnapshotId,
+      p_expected_lock_version: lockedIdentity.lockVersion,
+      p_expected_identity_fingerprint: lockedIdentity.identityFingerprint,
+      p_expected_reference_package_fingerprint:
+        lockedIdentity.referencePackageFingerprint,
+      p_approved_at: approvedAt,
+    });
+    if (error) {
+      throw new UseApprovalError(
+        "Die Video-Freigabe konnte nicht atomar gespeichert werden.",
+        { gate: "video_use", reason: error.message },
+      );
+    }
+    const reloaded = await personaRepo().getPersona(scope, personaId);
+    if (!reloaded) {
+      throw new PersonaDomainError("Persona not found", "NOT_FOUND", { personaId });
+    }
+    updated = reloaded;
+  } else {
+    updated = await personaRepo().updatePersona(scope, personaId, {
+      video_use_approved: true,
+      video_use_approved_at: approvedAt,
+      video_use_approved_by: approvedBy,
+      video_use_approval_review_id: persona.video_identity_review_id,
+      video_use_approval_lock_snapshot_id: lockedIdentity.identityLockSnapshotId,
+      video_use_approval_lock_version: lockedIdentity.lockVersion,
+      video_use_approval_identity_fingerprint: lockedIdentity.identityFingerprint,
+      video_use_approval_reference_package_fingerprint:
+        lockedIdentity.referencePackageFingerprint,
+    });
 
-  await logPersonaAuditEvent({
-    workspaceId: scope.workspaceId,
-    eventType: "persona.video_use_approved",
-    recordId: personaId,
-    actorId: scope.actorId,
-    payload: {
-      personaId,
-      approvedAt,
-      approvedBy,
-      identityLockVersion: lockedIdentity?.lockVersion ?? persona.identity_lock_version,
-      identityFingerprint: lockedIdentity?.identityFingerprint ?? null,
-    },
-  });
+    await logPersonaAuditEvent({
+      workspaceId: scope.workspaceId,
+      eventType: "persona.video_use_approved",
+      recordId: personaId,
+      actorId: scope.actorId,
+      payload: {
+        personaId,
+        approvedAt,
+        approvedBy,
+        identityLockSnapshotId: lockedIdentity.identityLockSnapshotId,
+        identityLockVersion: lockedIdentity.lockVersion,
+        identityFingerprint: lockedIdentity.identityFingerprint,
+        referencePackageFingerprint: lockedIdentity.referencePackageFingerprint,
+        videoIdentityReviewId: persona.video_identity_review_id,
+      },
+    });
+  }
 
   return {
     persona: updated,
@@ -359,8 +413,8 @@ export async function listVideoStudioEligibleBrandModels(
       personaId: p.id,
       eligible: true,
       identityLocked: isPersonaIdentityLocked(p),
-      videoIdentityReady: Boolean(p.video_identity_ready),
-      videoUseApproved: Boolean(p.video_use_approved),
+      videoIdentityReady: isCurrentVideoIdentityReady(p, lockedIdentity),
+      videoUseApproved: isCurrentVideoUseApproved(p, lockedIdentity),
       brandCastApproved: Boolean(p.brand_cast_approved),
       blockingReasons: [],
       lockVersion: lockedIdentity!.lockVersion,
@@ -399,8 +453,8 @@ export async function listOfficialBrandCastMembers(
     }
 
     let videoStatus: BrandCastMemberCard["videoStatus"] = "not_approved";
-    if (persona.video_use_approved) videoStatus = "approved";
-    else if (!persona.video_identity_ready) videoStatus = "not_ready";
+    if (isCurrentVideoUseApproved(persona, locked)) videoStatus = "approved";
+    else if (!isCurrentVideoIdentityReady(persona, locked)) videoStatus = "not_ready";
 
     members.push({
       personaId: persona.id,

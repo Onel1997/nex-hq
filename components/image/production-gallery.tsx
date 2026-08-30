@@ -3,6 +3,7 @@
 import type { ImageStudioAsset } from "@/agents/image/types";
 import { ImageGenerationCard } from "@/components/image/image-generation-card";
 import { cn } from "@/lib/utils";
+import { ownerShotLabel } from "@/lib/ux/owner-terminology";
 import {
   Columns2,
   Heart,
@@ -62,15 +63,16 @@ export function ProductionGallery({
     <>
       <div className="is-gallery-chrome">
         <div className="is-gallery-tools">
-          <span className="is-gallery-tool-label">Grid</span>
+          <span className="is-gallery-tool-label">Raster</span>
           <button
             type="button"
             className={cn("is-gallery-tool", compareMode && "active")}
             onClick={onToggleCompare}
-            title="Compare versions"
+            title="Versionen vergleichen"
+            aria-label="Versionen vergleichen"
           >
             <Columns2 className="size-3.5" />
-            Compare
+            Vergleichen
           </button>
           <button
             type="button"
@@ -80,10 +82,11 @@ export function ProductionGallery({
               const asset = assets.find((a) => a.id === selectedAssetId);
               if (asset?.imageUrl) setFullscreenAsset(asset);
             }}
-            title="Fullscreen preview"
+            title="Große Vorschau"
+            aria-label="Große Vorschau öffnen"
           >
             <Maximize2 className="size-3.5" />
-            Preview
+            Vorschau
           </button>
         </div>
         <div className="is-gallery-version">
@@ -135,21 +138,21 @@ export function ProductionGallery({
           <div className="is-fullscreen-backdrop" onClick={closeFullscreen} aria-hidden />
           <div className="is-fullscreen-panel">
             <header className="is-fullscreen-header">
-              <span>{fullscreenAsset.title ?? fullscreenAsset.productName}</span>
+              <span>{ownerShotLabel(fullscreenAsset.title ?? fullscreenAsset.productName)}</span>
               <div className="is-fullscreen-actions">
-                <button type="button" className="is-fullscreen-btn" onClick={() => setZoom((z) => Math.min(2, z + 0.25))}>
+                <button type="button" className="is-fullscreen-btn" aria-label="Vergrößern" onClick={() => setZoom((z) => Math.min(2, z + 0.25))}>
                   <ZoomIn className="size-4" />
                 </button>
-                <button type="button" className="is-fullscreen-btn" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}>
+                <button type="button" className="is-fullscreen-btn" aria-label="Verkleinern" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}>
                   <ZoomOut className="size-4" />
                 </button>
-                <button type="button" className="is-fullscreen-btn" onClick={() => onToggleFavorite(fullscreenAsset.id)}>
+                <button type="button" className="is-fullscreen-btn" aria-label="Favorit umschalten" onClick={() => onToggleFavorite(fullscreenAsset.id)}>
                   <Heart className={cn("size-4", favorites.has(fullscreenAsset.id) && "fill-current")} />
                 </button>
-                <button type="button" className="is-fullscreen-btn" onClick={() => onApprove(fullscreenAsset.id)}>
+                <button type="button" className="is-fullscreen-btn" aria-label="Ergebnis freigeben" onClick={() => onApprove(fullscreenAsset.id)}>
                   <Star className="size-4" />
                 </button>
-                <button type="button" className="is-fullscreen-btn" onClick={closeFullscreen}>
+                <button type="button" className="is-fullscreen-btn" aria-label="Vorschau schließen" onClick={closeFullscreen}>
                   <X className="size-4" />
                 </button>
               </div>

@@ -1,6 +1,6 @@
 import { getBrainClient } from "@/brain/client";
 import type { BrainReportContent } from "@/brain/domains/reports";
-import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { resolveWorkspace } from "@/brain/seed";
 import type { BrainActor, BrainRecordStatus } from "@/brain/types";
 import { completeTaskFromApproval } from "@/lib/orchestration/task-review";
 import { maybeTriggerCeoFinalReport } from "@/lib/reports/final-report-trigger";
@@ -70,7 +70,7 @@ export async function reviewReportRecord(
   action: ReportReviewAction,
   options: ReviewReportOptions = {},
 ): Promise<ReviewReportResult> {
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const brain = getBrainClient();
   const record = await brain.getRecord("reports", brainRecordId);
 

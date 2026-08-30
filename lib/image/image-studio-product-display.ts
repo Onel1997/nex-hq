@@ -107,7 +107,7 @@ export function resolvePrepareEstimateBlocker(input: {
     return "Wähle ein für Bilder freigegebenes Markenmodel aus, bevor du die Generierung vorbereitest.";
   }
   if (!isAuthoritativeProductContext(input.productContext)) {
-    return "Wähle ein Live-Shopify-Produkt aus, bevor du vorbereitest. Design-Hinweise sind keine Produktionswahrheit.";
+    return "Als Nächstes: Wähle Produkt, Farbe und Größe aus. Design-Hinweise sind keine Produktionswahrheit.";
   }
   return null;
 }

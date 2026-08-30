@@ -3,7 +3,7 @@ import type {
   ReportsCenterDesignCollection,
   ReportsCenterDesignConceptSummary,
   ReportsCenterDesignResearch,
-} from "@/lib/facility/reports-center-types";
+} from "@/lib/reports/reports-center-types";
 
 interface DesignResearchPayload {
   title?: string;

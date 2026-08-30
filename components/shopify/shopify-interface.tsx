@@ -442,7 +442,7 @@ export function ShopifyInterface() {
               </span>
             </div>
             <Link
-              href="/facility/reports"
+              href="/agents/research"
               className="inline-flex items-center gap-2 text-base text-primary hover:underline"
             >
               {t("shopify.interface.viewReports")}

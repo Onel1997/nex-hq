@@ -122,9 +122,9 @@ export function HqSidebar() {
       aria-label={t("hqNavigation.navAriaLabel")}
     >
       <div className="hq-sidebar-header">
-        <Link href="/" className="hq-sidebar-logo" title="NexHQ">
-          <span className="hq-sidebar-logo-mark">N</span>
-          {showLabels ? <span className="hq-sidebar-logo-text">NexHQ</span> : null}
+        <Link href="/hq" className="hq-sidebar-logo" title="Xeriamo Owner">
+          <span className="hq-sidebar-logo-mark">X</span>
+          {showLabels ? <span className="hq-sidebar-logo-text">Xeriamo</span> : null}
         </Link>
         <button
           type="button"
@@ -197,15 +197,15 @@ export function HqSidebar() {
 
       <div className="hq-sidebar-auth">
         <form action={logoutOwner}>
-          <CollapsedTooltip label="Sign out" collapsed={collapsed}>
+          <CollapsedTooltip label="Abmelden" collapsed={collapsed}>
             <button
               type="submit"
               className="hq-sidebar-signout"
-              aria-label="Sign out"
-              title={collapsed ? "Sign out" : undefined}
+              aria-label="Abmelden"
+              title={collapsed ? "Abmelden" : undefined}
             >
               <LogOut className="size-4" strokeWidth={1.75} aria-hidden />
-              <span className="hq-sidebar-signout-label">Sign out</span>
+              <span className="hq-sidebar-signout-label">Abmelden</span>
             </button>
           </CollapsedTooltip>
         </form>

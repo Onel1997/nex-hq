@@ -1,0 +1,1 @@
+export default function DatenschutzPage(){return <main className="xeriano-legal"><h1>Datenschutz</h1><div className="xeriano-legal-notice">Kein finaler Rechtstext. Vor Veröffentlichung ist eine rechtliche Prüfung erforderlich.</div><p>Dieser Platzhalter beschreibt noch keine vollständige Verarbeitung durch Supabase, Stripe oder KI-Anbieter.</p></main>}

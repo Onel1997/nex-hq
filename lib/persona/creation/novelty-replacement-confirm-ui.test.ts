@@ -332,9 +332,9 @@ describe("Phase 2.1E.1 novelty replacement confirm/loading/result", () => {
       join(process.cwd(), "components/persona/candidate-board.tsx"),
       "utf8",
     );
-    assert.match(board, /Generating new face/i);
-    assert.match(board, /Generating image and checking face novelty/i);
-    assert.match(board, /Elapsed \{replacementUi\.elapsedDisplay\}/);
+    assert.match(board, /Neues Gesicht wird erstellt/i);
+    assert.match(board, /Bild wird erstellt und Gesichtsähnlichkeit geprüft/i);
+    assert.match(board, /Vergangen \{replacementUi\.elapsedDisplay\}/);
 
     const studio = readFileSync(
       join(process.cwd(), "components/persona/use-persona-studio.ts"),

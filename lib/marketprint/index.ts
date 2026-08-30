@@ -36,8 +36,8 @@ export {
   formatAgentMarketPrintRules,
   formatMarketPrintCatalogIntelligence,
   formatMarketPrintPrompt,
-  getFacilityMarketPrintSections,
-  type FacilityMarketPrintSection,
+  getAgentMarketPrintSections,
+  type AgentMarketPrintSection,
 } from "./production-rules";
 
 export {

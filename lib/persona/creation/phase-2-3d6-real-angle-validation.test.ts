@@ -229,8 +229,8 @@ describe("Phase 2.3D.6 real image angle validation", () => {
       join(ROOT, "components/persona/persona-studio.tsx"),
       "utf8",
     );
-    assert.match(studio, /Wrong camera direction/);
-    assert.match(studio, /Reassign angle/);
-    assert.match(studio, /Reject/);
+    assert.match(studio, /Falsche Kamerarichtung/);
+    assert.match(studio, /Winkel neu zuordnen/);
+    assert.match(studio, /Ablehnen/);
   });
 });

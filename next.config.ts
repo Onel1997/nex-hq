@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // The installed Next runtime clones request bodies at 10 MiB by default.
+    // Master Artwork accepts at most 20 MiB of raw binary data; keep a small
+    // transport margin while exact length/checksum verification stays mandatory.
+    middlewareClientMaxBodySize: 21 * 1024 * 1024,
+  },
   // Ensure face-api weight files under server-assets are included in
   // serverless/output file tracing (Vercel / standalone).
   outputFileTracingIncludes: {

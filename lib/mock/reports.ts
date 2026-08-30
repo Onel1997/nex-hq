@@ -23,7 +23,7 @@ import type {
   ShopifyReportType,
 } from "@/brain/domains/reports";
 import type { ImageProjectView } from "@/lib/reports/image-project";
-import type { ReportsCenterDesignResearch } from "@/lib/facility/reports-center-types";
+import type { ReportsCenterDesignResearch } from "@/lib/reports/reports-center-types";
 import type { ReportAgentTab, ReportSource } from "@/lib/reports/report-source";
 import type { AgentId } from "@/lib/constants/agents";
 

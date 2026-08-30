@@ -185,7 +185,7 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
 
   async list(
     scope: WorkspaceScope,
-    filters: { productionProjectId?: string; reportRecordId?: string; assetId?: string } = {},
+    filters: { productionProjectId?: string; reportRecordId?: string; assetId?: string; limit?: number } = {},
   ) {
     let query = createAdminClient()
       .from("image_generation_jobs")
@@ -201,6 +201,7 @@ export class SupabaseImageGenerationJobRepository implements ImageGenerationJobR
       query = query.eq("report_record_id", filters.reportRecordId);
     }
     if (filters.assetId) query = query.eq("asset_id", filters.assetId);
+    query = query.limit(Math.min(Math.max(filters.limit ?? 50, 1), 100));
     const { data, error } = await query;
     if (error) throw new PersonaStoreError(error.message);
     return (data ?? []).map((row) => mapJob(row as Record<string, unknown>));

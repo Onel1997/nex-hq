@@ -7,7 +7,7 @@ import {
 import { useWorkspaceContext } from "@/components/workspace/use-workspace-context";
 import { AgentStatusBadge } from "@/components/shared/agent-status-badge";
 import { AGENT_CATALOG, type AgentId } from "@/lib/constants/agents";
-import { getAgentColor } from "@/lib/facility/facility-theme";
+import { getAgentColor } from "@/lib/workspace/agent-theme";
 import {
   getAgentStudioName,
   getAgentWorkspaceRoute,

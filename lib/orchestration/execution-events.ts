@@ -1,5 +1,5 @@
 import { getBrainClient } from "@/brain/client";
-import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { resolveWorkspace } from "@/brain/seed";
 import type { BrainActor } from "@/brain/types";
 
 export type TaskExecutionEventType =
@@ -19,7 +19,7 @@ export async function logTaskExecutionEvent(params: {
   payload: Record<string, unknown>;
   actor?: BrainActor;
 }): Promise<string> {
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const brain = getBrainClient();
 
   return brain.logTaskEvent({

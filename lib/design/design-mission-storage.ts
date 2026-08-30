@@ -45,6 +45,11 @@ function sanitizeUrlField(value: unknown): string | undefined {
   return undefined;
 }
 
+/** Strip data URLs and other non-persistable artwork transport from handoff fields. */
+export function sanitizeHandoffUrlField(value: unknown): string | undefined {
+  return sanitizeUrlField(value);
+}
+
 export function slimConceptForStorage(concept: DesignConcept): DesignConcept {
   return {
     designId: concept.designId,

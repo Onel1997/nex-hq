@@ -20,6 +20,8 @@ import type {
   ApproveMasterArtworkRequest,
   MasterArtworkReference,
 } from "./types";
+import { DESIGN_ARTWORK_INCOMPLETE_OWNER_ERROR } from "./types";
+import { assertMasterArtworkImageIntegrity } from "./image-integrity";
 
 type Dependencies = {
   repository: MasterArtworkAuthorityRepository;
@@ -66,6 +68,23 @@ export async function approveDurableMasterArtwork(
     );
   }
   const checksum = checksumMasterArtwork(bytes);
+  if (
+    bytes.length !== request.expectedByteLength ||
+    checksum !== request.expectedChecksumSha256
+  ) {
+    throw new PersonaDomainError(
+      DESIGN_ARTWORK_INCOMPLETE_OWNER_ERROR,
+      "WORKFLOW",
+      {
+        expectedByteLength: request.expectedByteLength,
+        receivedByteLength: bytes.length,
+        expectedChecksumSha256: request.expectedChecksumSha256,
+        receivedChecksumSha256: checksum,
+        integrityFailure: true,
+      },
+    );
+  }
+  assertMasterArtworkImageIntegrity(bytes, request.mimeType);
   const named = request.displayName
     ? normalizeOwnerArtworkDisplayName(request.displayName)
     : null;
@@ -147,7 +166,33 @@ export async function resolveApprovedMasterArtwork(
     expectedChecksum: artwork.checksum,
     expectedByteLength: artwork.byteLength,
   });
+  assertMasterArtworkImageIntegrity(bytes, artwork.mimeType);
   return { artwork, bytes };
+}
+
+/**
+ * Resolves a browser-supplied identifier back to canonical private authority.
+ * No browser-supplied path, checksum, version, or approval claim is trusted.
+ */
+export async function resolveApprovedMasterArtworkForHandoff(
+  scope: WorkspaceScope,
+  artworkId: string,
+  overrides: Partial<Dependencies> = {},
+): Promise<ApprovedMasterArtwork> {
+  const deps = dependencies(overrides);
+  const artwork = await deps.repository.get(scope, artworkId);
+  if (!artwork || artwork.status !== "APPROVED") {
+    throw new PersonaDomainError("Approved Master Artwork was not found.", "NOT_FOUND");
+  }
+
+  const bytes = await deps.download({
+    workspaceId: scope.workspaceId,
+    storagePath: artwork.storagePath,
+    expectedChecksum: artwork.checksum,
+    expectedByteLength: artwork.byteLength,
+  });
+  assertMasterArtworkImageIntegrity(bytes, artwork.mimeType);
+  return artwork;
 }
 
 export async function renameApprovedMasterArtworkDisplayName(

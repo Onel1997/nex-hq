@@ -8,15 +8,15 @@ body:has(.design-studio-shell) {
   height: auto;
 }
 
-.facility-app-layout:has(.design-studio-shell) {
+.hq-app-layout:has(.design-studio-shell) {
   height: auto;
   min-height: 100dvh;
   overflow-x: hidden;
   overflow-y: visible;
 }
 
-.facility-app-main:has(.design-studio-shell),
-.facility-app-main:has(.design-studio-shell) .facility-app-transition {
+.hq-app-main:has(.design-studio-shell),
+.hq-app-main:has(.design-studio-shell) .hq-app-content {
   height: auto;
   min-height: 0;
   overflow-x: hidden;
@@ -137,7 +137,7 @@ body:has(.design-studio-shell) {
 }
 
 .design-studio-crumb-design {
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 0.88rem;
   font-weight: 500;
   color: var(--design-accent);

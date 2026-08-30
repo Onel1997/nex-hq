@@ -141,9 +141,12 @@ export function MasterArtworkWorkspace({
           canApprove={workspace.canApprove}
           isApproved={workspace.isApproved}
           onApprove={workspace.approveArtwork}
+          approvalBusy={workspace.approvalBusy}
+          approvalError={workspace.approvalError}
           canContinueToImageStudio={workspace.canContinueToImageStudio}
           handoffBusy={workspace.handoffBusy}
           handoffError={workspace.handoffError}
+          transferDiagnostic={workspace.transferDiagnostic}
           onContinueToImageStudio={() => void workspace.continueToImageStudio()}
         />
       </div>

@@ -1,22 +1,12 @@
-import {
-  Brain,
-  ClipboardList,
-  FileText,
-  LayoutDashboard,
-  Settings,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { Crown, LayoutDashboard, Search, Settings, type LucideIcon } from "lucide-react";
 import type { NavItem } from "@/lib/constants/navigation";
 import type { Locale } from "../config";
 import { getDictionary } from "../get-dictionary";
 
 const NAV_ICONS: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
-  agents: Users,
-  brain: Brain,
-  tasks: ClipboardList,
-  reports: FileText,
+  ceo: Crown,
+  research: Search,
   settings: Settings,
 };
 
@@ -25,10 +15,8 @@ export function getMainNav(locale: Locale): NavItem[] {
 
   return [
     { title: navigation.dashboard, href: "/", icon: NAV_ICONS.dashboard },
-    { title: navigation.agents, href: "/facility/agents", icon: NAV_ICONS.agents },
-    { title: navigation.brain, href: "/facility/knowledge", icon: NAV_ICONS.brain },
-    { title: navigation.tasks, href: "/facility/missions", icon: NAV_ICONS.tasks },
-    { title: navigation.reports, href: "/facility/reports", icon: NAV_ICONS.reports },
+    { title: navigation.agents, href: "/agents/ceo", icon: NAV_ICONS.ceo },
+    { title: navigation.reports, href: "/agents/research", icon: NAV_ICONS.research },
   ];
 }
 

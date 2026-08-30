@@ -35,7 +35,10 @@ export function MasterArtworkPreviewMedia({
   }
 
   return (
-    <div className={cn("ma-artwork-preview", className)}>
+    <div
+      className={cn("ma-artwork-preview", className)}
+      data-artwork-fit-mode="contain"
+    >
       <div className="ma-artwork-frame">
         {previewSvg ? (
           <div

@@ -436,7 +436,7 @@ describe("Phase 2.5B.3 — novelty persist failure + UI terminal contract", () =
     assert.match(views, /isTerminalNoveltyReplacementStatus/);
     assert.match(views, /REPLACEMENT_PERSIST_FAILED_USER_MESSAGE/);
     assert.match(views, /phase === "failed"/);
-    assert.match(board, /Retry Candidate/);
+    assert.match(board, /Kandidat \{slotLabel\} erneut versuchen/);
     assert.match(board, /onRetryFailedReplacement/);
     assert.equal(getFakeBatchInvocationCount(), 0);
   });

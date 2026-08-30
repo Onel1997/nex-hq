@@ -376,6 +376,6 @@ describe("post-reconciliation reference rights and Image handoff", () => {
     );
     assert.match(source, /eligible\.length === 1/);
     assert.doesNotMatch(source, /random|Math\.random/);
-    assert.match(source, /<option value="">No Persona selected<\/option>/);
+    assert.match(source, /<option value="">Kein Markenmodel ausgewählt<\/option>/);
   });
 });

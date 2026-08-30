@@ -479,10 +479,10 @@ describe("Phase 2.3D.4 wrong-angle reassignment", () => {
       join(ROOT, "components/persona/persona-studio.tsx"),
       "utf8",
     );
-    assert.match(studio, /Reassign angle/);
-    assert.match(studio, /REASSIGNED/);
-    assert.match(studio, /Requested angle/);
-    assert.match(studio, /Effective angle/);
+    assert.match(studio, /Winkel neu zuordnen/);
+    assert.match(studio, /NEU ZUGEORDNET/);
+    assert.match(studio, /Angeforderter Winkel/);
+    assert.match(studio, /Wirksamer Winkel/);
     assert.match(studio, /Reassigned →/);
     assert.doesNotMatch(studio, /from \"@\/lib\/persona\/creation\/reference-package\"/);
   });

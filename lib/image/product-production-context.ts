@@ -12,6 +12,7 @@ export const PRODUCT_PRODUCTION_CONTEXT_VERSION =
 
 export const PRODUCT_PRODUCTION_AUTHORITIES = [
   "SHOPIFY_LIVE",
+  "MANUAL_PROFILE",
   "DESIGN_HANDOFF_LOCAL",
   "SEED",
   "BRAIN",
@@ -101,6 +102,12 @@ export const productProductionSelectionSchema = z.discriminatedUnion(
         variantId: z.string().min(1).nullable().default(null),
       })
       .strict(),
+    z.object({
+      authority: z.literal("MANUAL_PROFILE"),
+      productProfileId: z.string().min(1),
+      profileVersion: z.number().int().positive(),
+      variantId: z.string().min(1),
+    }).strict(),
     nonAuthoritativeProductSelectionSchema,
   ],
 );
@@ -129,6 +136,12 @@ export async function resolveProductProductionContext(
   );
 
   if (parsed.authority !== "SHOPIFY_LIVE") {
+    if (parsed.authority === "MANUAL_PROFILE") {
+      throw new PersonaDomainError(
+        "Manual Product context must be resolved from the durable workspace-scoped Product Profile repository.",
+        "WORKFLOW",
+      );
+    }
     return productProductionContextSchema.parse({
       version: PRODUCT_PRODUCTION_CONTEXT_VERSION,
       productId: parsed.productId,

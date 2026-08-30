@@ -12,7 +12,7 @@ import "server-only";
  */
 
 import { getBrainClient } from "@/brain/client";
-import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { resolveWorkspace } from "@/brain/seed";
 import { loadBusinessContext } from "@/lib/business/load-business-context";
 import { loadHistoricalIntelligence } from "@/lib/commerce/historical-intelligence";
 import { buildMarketPrintIntelligence, type MarketPrintIntelligence } from "@/lib/marketprint";
@@ -79,7 +79,7 @@ function getStoreDomain(): string {
 
 async function countAgentReports() {
   try {
-    const { workspace } = await ensureWorkspaceBrainSeeded();
+    const workspace = await resolveWorkspace();
     const brain = getBrainClient();
     const result = await brain.searchRecords({
       workspaceId: workspace.id,

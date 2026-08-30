@@ -23,12 +23,18 @@ import {
 } from "@/lib/design/design-mission-store";
 import {
   assertCanContinueToImageStudio,
-  buildApproveMasterArtworkFormData,
+  assertExactDurableArtworkIdentity,
+  buildApproveMasterArtworkBinaryFetch,
   buildDesignStudioHandoffInput,
+  buildDesignToImageHandoffRoute,
+  DESIGN_ARTWORK_INCOMPLETE_OWNER_ERROR,
+  DESIGN_ARTWORK_APPROVAL_OWNER_ERROR,
   DesignToImageHandoffError,
-  DESIGN_TO_IMAGE_HANDOFF_ROUTE,
+  DESIGN_TO_IMAGE_HANDOFF_OWNER_ERROR,
   parseDurableMasterArtworkResponse,
+  resolveCanonicalArtworkForImageHandoff,
   resolveHandoffVersion,
+  type DesignArtworkTransferDiagnostic,
 } from "@/lib/design/design-to-image-handoff";
 import { readArtworkBytesForHandoff } from "@/components/design/v2/artwork-handoff-bytes";
 import { sendDesignHandoffToImageStudio } from "@/lib/image/image-handoff-store";
@@ -108,6 +114,10 @@ export function useArtworkWorkspace({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const [handoffBusy, setHandoffBusy] = useState(false);
+  const [approvalBusy, setApprovalBusy] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [transferDiagnostic, setTransferDiagnostic] =
+    useState<DesignArtworkTransferDiagnostic | null>(null);
   const [isApproved, setIsApproved] = useState(false);
   const [activeSidebarSection, setActiveSidebarSection] =
     useState<SidebarSectionId>("master-artwork");
@@ -268,11 +278,15 @@ export function useArtworkWorkspace({
         fileKind: kind,
       };
 
+      localUploadRef.current = upload;
       setLocalUpload(upload);
       setLocalPreviewSvg(undefined);
       setIsApproved(false);
+      setDurableArtwork(null);
       setUploadError(null);
+      setApprovalError(null);
       setHandoffError(null);
+      setTransferDiagnostic(null);
       setOwnerDisplayName(null);
       setRenameError(null);
       setAnalysis(createIdleAnalysis());
@@ -304,24 +318,100 @@ export function useArtworkWorkspace({
     if (localUpload?.objectUrl) {
       URL.revokeObjectURL(localUpload.objectUrl);
     }
+    localUploadRef.current = null;
     setLocalUpload(null);
     setLocalPreviewSvg(undefined);
     setValidation(createNotUploadedValidation());
     setAnalysis(createIdleAnalysis());
     setUploadError(null);
     setIsApproved(false);
+    setDurableArtwork(null);
+    setApprovalError(null);
+    setTransferDiagnostic(null);
     setOwnerDisplayName(null);
     setRenameError(null);
   }, [localUpload]);
 
-  const approveArtwork = useCallback(() => {
+  const approveArtwork = useCallback(async () => {
     if (!validation.canApprove || !isAnalysisReady(analysis)) return;
-    setIsApproved(true);
+    if (!localUpload || !mission?.brief.designId) {
+      setApprovalError(DESIGN_ARTWORK_APPROVAL_OWNER_ERROR);
+      return;
+    }
+
+    setApprovalBusy(true);
+    setApprovalError(null);
     setHandoffError(null);
-  }, [analysis, validation.canApprove]);
+    setTransferDiagnostic(null);
+    try {
+      const { bytes, mimeType } = await readArtworkBytesForHandoff(localUpload);
+      const version = resolveHandoffVersion(mission);
+      const approvalFetch = await buildApproveMasterArtworkBinaryFetch({
+        bytes,
+        designId: mission.brief.designId,
+        version,
+        reportId: mission.reportId,
+        mimeType,
+        placement: mission.brief.placement ?? null,
+        printMethod: mission.brief.productionMethod ?? null,
+        displayName: ownerDisplayName,
+        originalFileName: localUpload.fileName,
+      });
+      const response = await fetch(approvalFetch.url, approvalFetch.init);
+      const payload = (await response.json()) as {
+        artwork?: ApprovedMasterArtworkView;
+        error?: string;
+        code?: string;
+        stage?: string;
+        requestId?: string;
+        details?: {
+          expectedByteLength?: number;
+          receivedByteLength?: number;
+        };
+      };
+      if (!response.ok || !payload.artwork) {
+        throw new DesignToImageHandoffError(DESIGN_ARTWORK_APPROVAL_OWNER_ERROR, {
+          operation: "approval_persist",
+          status: response.status,
+          code: payload.code,
+          requestId: payload.requestId,
+          designId: mission.brief.designId,
+          version,
+          expectedByteLength: payload.details?.expectedByteLength,
+          receivedByteLength: payload.details?.receivedByteLength,
+          message: payload.error ?? "Durable Artwork approval was not persisted.",
+        });
+      }
+      const approved = parseDurableMasterArtworkResponse(payload);
+      setDurableArtwork(approved);
+      setOwnerDisplayName(approved.displayName ?? ownerDisplayName);
+      setIsApproved(true);
+    } catch (error) {
+      const diagnostic =
+        error instanceof DesignToImageHandoffError
+          ? error.diagnostic
+          : {
+              operation: "approval_persist" as const,
+              designId: mission.brief.designId,
+              version: resolveHandoffVersion(mission),
+              message: error instanceof Error ? error.message : "Unknown approval error",
+            };
+      console.error("[Design Studio] durable Artwork approval failed", diagnostic);
+      setTransferDiagnostic(diagnostic ?? null);
+      setApprovalError(
+        diagnostic?.message === DESIGN_ARTWORK_INCOMPLETE_OWNER_ERROR
+          ? DESIGN_ARTWORK_INCOMPLETE_OWNER_ERROR
+          : DESIGN_ARTWORK_APPROVAL_OWNER_ERROR,
+      );
+      setIsApproved(false);
+    } finally {
+      setApprovalBusy(false);
+    }
+  }, [analysis, localUpload, mission, ownerDisplayName, validation]);
 
   const canContinueToImageStudio =
     isApproved &&
+    Boolean(durableArtwork) &&
     Boolean(localUpload) &&
     Boolean(mission?.brief.designId) &&
     validation.status !== "invalid" &&
@@ -344,63 +434,57 @@ export function useArtworkWorkspace({
         );
       }
 
-      const { mimeType } = await readArtworkBytesForHandoff(localUpload);
-      const version = resolveHandoffVersion(mission);
-      const approvalForm = buildApproveMasterArtworkFormData({
-        file: localUpload.file,
-        fileName: localUpload.fileName,
-        designId: mission.brief.designId,
-        version,
-        reportId: mission.reportId,
-        mimeType,
-        placement: mission.brief.placement ?? validation.metadata?.fileName ?? null,
-        printMethod: mission.brief.productionMethod ?? null,
-        displayName: ownerDisplayName,
-        originalFileName: localUpload.fileName,
-      });
-
-      const durableResponse = await fetch("/api/design/master-artworks", {
-        method: "POST",
-        body: approvalForm,
-      });
-      const durablePayload = (await durableResponse.json()) as {
-        artwork?: import("@/lib/design/master-artwork-authority/types").ApprovedMasterArtworkView;
-        error?: string;
-      };
-      if (!durableResponse.ok || !durablePayload.artwork) {
-        throw new DesignToImageHandoffError(
-          durablePayload.error ?? "Die dauerhafte Artwork-Freigabe ist fehlgeschlagen.",
-        );
+      if (!durableArtwork) {
+        throw new DesignToImageHandoffError(DESIGN_TO_IMAGE_HANDOFF_OWNER_ERROR, {
+          operation: "authority_resolve",
+          designId: mission.brief.designId,
+          version: resolveHandoffVersion(mission),
+          message: "No persisted approved Artwork is selected.",
+        });
       }
-      const durableArtwork = parseDurableMasterArtworkResponse(durablePayload);
-      setDurableArtwork(durableArtwork);
-      if (durableArtwork.displayName) {
-        setOwnerDisplayName(durableArtwork.displayName);
+
+      const canonicalArtwork = await resolveCanonicalArtworkForImageHandoff(
+        durableArtwork.id,
+      );
+      assertExactDurableArtworkIdentity(canonicalArtwork, durableArtwork);
+      setDurableArtwork(canonicalArtwork);
+      if (canonicalArtwork.displayName) {
+        setOwnerDisplayName(canonicalArtwork.displayName);
       }
 
       const saveResult = sendDesignHandoffToImageStudio(
         buildDesignStudioHandoffInput({
           mission,
-          durableArtwork,
+          durableArtwork: canonicalArtwork,
           artworkFileName: localUpload.fileName,
         }),
       );
       if (!saveResult.saved) {
-        throw new DesignToImageHandoffError(
-          saveResult.error ?? "Die Übergabe an das Image Studio konnte nicht gespeichert werden.",
-        );
+        throw new DesignToImageHandoffError(DESIGN_TO_IMAGE_HANDOFF_OWNER_ERROR, {
+          operation: "handoff_store",
+          artworkId: canonicalArtwork.id,
+          designId: canonicalArtwork.designId,
+          version: canonicalArtwork.version,
+          message: saveResult.error ?? "Browser handoff state could not be persisted.",
+        });
       }
 
       onPatchMission?.((state) => setPipelineStage(state, "image"));
-      router.push(DESIGN_TO_IMAGE_HANDOFF_ROUTE);
+      router.push(buildDesignToImageHandoffRoute(canonicalArtwork.id));
     } catch (error) {
-      const message =
+      const diagnostic =
         error instanceof DesignToImageHandoffError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : "Die Übergabe an das Image Studio ist fehlgeschlagen.";
-      setHandoffError(message);
+          ? error.diagnostic
+          : {
+              operation: "authority_resolve" as const,
+              artworkId: durableArtwork?.id,
+              designId: mission?.brief.designId,
+              version: durableArtwork?.version,
+              message: error instanceof Error ? error.message : "Unknown handoff error",
+            };
+      console.error("[Design Studio] Image Studio handoff failed", diagnostic);
+      setTransferDiagnostic(diagnostic ?? null);
+      setHandoffError(DESIGN_TO_IMAGE_HANDOFF_OWNER_ERROR);
     } finally {
       setHandoffBusy(false);
     }
@@ -409,7 +493,7 @@ export function useArtworkWorkspace({
     localUpload,
     mission,
     onPatchMission,
-    ownerDisplayName,
+    durableArtwork,
     router,
     validation,
   ]);
@@ -438,6 +522,7 @@ export function useArtworkWorkspace({
         };
         const latest = payload.artworks?.[0];
         if (cancelled || !latest) return;
+        if (localUploadRef.current) return;
         setDurableArtwork(latest);
         setOwnerDisplayName((current) => {
           if (localUploadRef.current) return current;
@@ -500,6 +585,7 @@ export function useArtworkWorkspace({
     validation.canApprove &&
     Boolean(localUpload) &&
     isAnalysisReady(analysis) &&
+    !approvalBusy &&
     !isApproved;
 
   return {
@@ -517,6 +603,9 @@ export function useArtworkWorkspace({
     uploadError,
     handoffError,
     handoffBusy,
+    approvalBusy,
+    approvalError,
+    transferDiagnostic,
     renameError,
     renameBusy,
     isApproved,

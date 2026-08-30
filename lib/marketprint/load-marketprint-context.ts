@@ -13,8 +13,8 @@ import {
   evaluateProductionFit,
   formatAgentMarketPrintRules,
   formatMarketPrintPrompt,
-  getFacilityMarketPrintSections,
-  type FacilityMarketPrintSection,
+  getAgentMarketPrintSections,
+  type AgentMarketPrintSection,
 } from "@/lib/marketprint/production-rules";
 
 export type MarketPrintCatalogMatch = {
@@ -51,7 +51,7 @@ export type MarketPrintIntelligence = {
 export type MarketPrintContext = {
   intelligence: MarketPrintIntelligence;
   prompt: string;
-  facilitySections: Partial<Record<AgentId, FacilityMarketPrintSection[]>>;
+  agentSections: Partial<Record<AgentId, AgentMarketPrintSection[]>>;
 };
 
 function toCatalogMatch(product: ShopifyKnowledgeProduct): MarketPrintCatalogMatch {
@@ -184,7 +184,7 @@ export function loadMarketPrintContext(
   return {
     intelligence: buildMarketPrintIntelligence(products),
     prompt: formatMarketPrintPrompt(),
-    facilitySections: getFacilityMarketPrintSections(),
+    agentSections: getAgentMarketPrintSections(),
   };
 }
 
@@ -197,7 +197,7 @@ export async function loadMarketPrintContextAsync(
 export {
   formatAgentMarketPrintRules,
   formatMarketPrintPrompt,
-  getFacilityMarketPrintSections,
+  getAgentMarketPrintSections,
   matchProductToMarketPrint,
   evaluateProductionFit,
 };

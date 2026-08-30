@@ -3,7 +3,7 @@
  * Probes without blocking UI; auto-disables when backend recovers.
  */
 
-import { isProviderQuotaError } from "@/lib/facility/provider-errors";
+import { isProviderQuotaError } from "@/lib/providers/provider-errors";
 
 const PROBE_INTERVAL_MS = 45_000;
 const PROBE_TIMEOUT_MS = 30_000;

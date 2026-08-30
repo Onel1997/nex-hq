@@ -93,7 +93,7 @@ export function CanvasPlaceholder({
             <line x1="380" y1="268" x2="580" y2="268" stroke="rgba(74,222,154,0.06)" strokeWidth="0.75" />
             <circle cx="480" cy="268" r="100" stroke="rgba(74,222,154,0.05)" strokeWidth="0.75" strokeDasharray="4 8" />
             <text x="480" y="500" textAnchor="middle" fill="rgba(74,222,154,0.25)" fontSize="11" fontFamily="monospace" letterSpacing="0.2em">
-              BLUEPRINT STAGED
+              DESIGN-HINWEISE BEREIT
             </text>
           </>
         ) : null}
@@ -103,7 +103,7 @@ export function CanvasPlaceholder({
         <span className="is-alive-tag">{garmentLabel}</span>
         <span className="is-alive-tag is-alive-tag--muted">{aspectHint}</span>
         {hasBlueprint ? (
-          <span className="is-alive-tag is-alive-tag--emerald">AI Designer · Ready</span>
+          <span className="is-alive-tag is-alive-tag--emerald">Design-Hinweise · Bereit</span>
         ) : null}
       </div>
     </div>
@@ -159,10 +159,10 @@ export function ProductionTimeline({
 }: ProductionTimelineProps) {
   const steps = [
     { id: "research", label: "Research" },
-    { id: "creative", label: "Creative Director" },
-    { id: "ai-designer", label: "AI Designer" },
+    { id: "creative", label: "Kreative Leitung" },
+    { id: "ai-designer", label: "Design Studio" },
     { id: "image-studio", label: "Image Studio" },
-    { id: "commercial", label: "Commercial Review" },
+    { id: "commercial", label: "Kommerzielle Prüfung" },
     { id: "marketing", label: "Marketing" },
     { id: "shopify", label: "Shopify" },
   ];
@@ -171,7 +171,7 @@ export function ProductionTimeline({
   const activeIndex = steps.findIndex((s) => s.id === activeId);
 
   return (
-    <div className="is-production-timeline" aria-label="Production pipeline">
+    <div className="is-production-timeline" aria-label="Produktionsablauf">
       <div className="is-timeline-track">
         {steps.map((step, index) => {
           const done = index < activeIndex;

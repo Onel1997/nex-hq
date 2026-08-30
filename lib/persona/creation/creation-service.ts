@@ -5169,7 +5169,24 @@ export async function submitIdentityReview(
       ? "review"
       : "needs_revision",
     image_identity_ready: qualityGate.imageIdentityReady,
-    video_identity_ready: qualityGate.videoIdentityReady,
+    // The general pre-lock identity review cannot grant Video readiness.
+    // Video requires a separate human review bound to the resulting lock.
+    video_identity_ready: false,
+    video_identity_review_id: null,
+    video_identity_ready_at: null,
+    video_identity_ready_by: null,
+    video_identity_ready_lock_snapshot_id: null,
+    video_identity_ready_lock_version: null,
+    video_identity_ready_identity_fingerprint: null,
+    video_identity_ready_reference_package_fingerprint: null,
+    video_use_approved: false,
+    video_use_approved_at: null,
+    video_use_approved_by: null,
+    video_use_approval_review_id: null,
+    video_use_approval_lock_snapshot_id: null,
+    video_use_approval_lock_version: null,
+    video_use_approval_identity_fingerprint: null,
+    video_use_approval_reference_package_fingerprint: null,
   });
 
   await logPersonaAuditEvent({
@@ -5181,7 +5198,8 @@ export async function submitIdentityReview(
       allPassed,
       identityLockQualityGatePassed: qualityGate.identityLockPassed,
       imageIdentityReady: qualityGate.imageIdentityReady,
-      videoIdentityReady: qualityGate.videoIdentityReady,
+      videoIdentityReady: false,
+      videoIdentityReadinessSource: "separate_current_lock_human_review_required",
       checklist: input.checklist,
     },
   });

@@ -68,8 +68,8 @@
   --cw-panel-elevated: #18212b;
   --cw-accent: #63e3e3;
   --cw-accent-glow: rgb(99 227 227 / 0.35);
-  --cw-gold: #d9b46b;
-  --cw-gold-glow: rgb(217 180 107 / 0.3);
+  --cw-gold: #5de6f2;
+  --cw-gold-glow: rgb(93 230 242 / 0.3);
   --cw-soft-white: #f4f1eb;
   --cw-muted: #97a4b3;
   --cw-border: rgb(255 255 255 / 0.06);
@@ -250,18 +250,18 @@
 }
 
 .cw-iter-add {
-  border-color: rgb(217 180 107 / 0.35);
+  border-color: rgb(93 230 242 / 0.35);
   color: var(--cw-gold);
 }
 
 .cw-iter-add:hover {
-  border-color: rgb(217 180 107 / 0.55);
+  border-color: rgb(93 230 242 / 0.55);
   color: var(--cw-gold);
   box-shadow: 0 0 16px var(--cw-gold-glow);
 }
 
 .cw-empty h1 {
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 2.5rem;
   font-weight: 500;
   color: var(--cw-soft-white);
@@ -301,7 +301,7 @@
 
 .cw-mission-header-title {
   margin: 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: clamp(1.85rem, 3.8vw, 2.75rem);
   font-weight: 500;
   letter-spacing: -0.03em;
@@ -359,9 +359,9 @@
 }
 
 .cw-mission-metric.is-highlight {
-  border-color: rgb(217 180 107 / 0.22);
-  background: linear-gradient(180deg, rgb(217 180 107 / 0.05) 0%, rgb(217 180 107 / 0.02) 100%);
-  box-shadow: inset 0 1px 0 rgb(217 180 107 / 0.1);
+  border-color: rgb(93 230 242 / 0.22);
+  background: linear-gradient(180deg, rgb(93 230 242 / 0.05) 0%, rgb(93 230 242 / 0.02) 100%);
+  box-shadow: inset 0 1px 0 rgb(93 230 242 / 0.1);
 }
 
 .cw-mission-metric-label {
@@ -460,7 +460,7 @@
 
 .cw-ai-pipeline-node.is-current {
   color: rgb(232 201 140 / 0.92);
-  text-shadow: 0 0 10px rgb(217 180 107 / 0.22);
+  text-shadow: 0 0 10px rgb(93 230 242 / 0.22);
 }
 
 .cw-ai-pipeline-node.is-future {
@@ -600,7 +600,7 @@
 
 .cw-toolbar-pro-action:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px rgb(217 180 107 / 0.3);
+  box-shadow: inset 0 0 0 2px rgb(93 230 242 / 0.3);
 }
 
 .cw-toolbar-pro-action:disabled {
@@ -677,7 +677,7 @@
 
 .cw-toolbar-dropdown-trigger:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px rgb(217 180 107 / 0.3);
+  box-shadow: inset 0 0 0 2px rgb(93 230 242 / 0.3);
 }
 
 .cw-toolbar-dropdown-chevron {
@@ -763,7 +763,7 @@
 
 .cw-toolbar-dropdown-item:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 1px rgb(217 180 107 / 0.3);
+  box-shadow: inset 0 0 0 1px rgb(93 230 242 / 0.3);
 }
 
 .cw-toolbar-dropdown-item:disabled {
@@ -847,7 +847,7 @@
 
 .cw-mission-bar h1 {
   margin: 0.15rem 0 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: clamp(1.5rem, 2.8vw, 2.1rem);
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -905,13 +905,13 @@
 .cw-version-badge {
   padding: 0.22rem 0.55rem;
   border-radius: 999px;
-  border: 1px solid rgb(217 180 107 / 0.28);
-  background: rgb(217 180 107 / 0.1);
+  border: 1px solid rgb(93 230 242 / 0.28);
+  background: rgb(93 230 242 / 0.1);
   color: var(--cw-gold);
   font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
-  box-shadow: 0 0 16px rgb(217 180 107 / 0.08);
+  box-shadow: 0 0 16px rgb(93 230 242 / 0.08);
 }
 
 /* ── Sticky generation toolbar ── */
@@ -1015,7 +1015,7 @@
 }
 
 .cw-btn-secondary:hover:not(:disabled) {
-  border-color: rgb(217 180 107 / 0.25);
+  border-color: rgb(93 230 242 / 0.25);
   color: var(--cw-soft-white);
 }
 
@@ -1157,12 +1157,12 @@
 
 .cw-canvas-tab:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgb(217 180 107 / 0.28);
+  box-shadow: 0 0 0 2px rgb(93 230 242 / 0.28);
 }
 
 .cw-canvas-zoom button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgb(217 180 107 / 0.25);
+  box-shadow: 0 0 0 2px rgb(93 230 242 / 0.25);
 }
 
 .cw-canvas-tab.is-unavailable:not(.active) {
@@ -1204,7 +1204,7 @@
   z-index: 0;
   background:
     radial-gradient(ellipse 50% 45% at 50% 40%, rgb(255 255 255 / 0.025) 0%, transparent 70%),
-    radial-gradient(ellipse 42% 38% at 62% 58%, rgb(217 180 107 / 0.03) 0%, transparent 72%),
+    radial-gradient(ellipse 42% 38% at 62% 58%, rgb(93 230 242 / 0.03) 0%, transparent 72%),
     linear-gradient(180deg, #111419 0%, #0a0c10 55%, #08090c 100%);
 }
 
@@ -1226,7 +1226,7 @@
   z-index: 0;
   background: radial-gradient(
     ellipse 75% 65% at 50% 48%,
-    rgb(217 180 107 / 0.018) 0%,
+    rgb(93 230 242 / 0.018) 0%,
     transparent 68%
   );
 }
@@ -1243,7 +1243,7 @@
   background: radial-gradient(
     ellipse at center,
     rgb(255 255 255 / 0.045) 0%,
-    rgb(217 180 107 / 0.012) 38%,
+    rgb(93 230 242 / 0.012) 38%,
     transparent 74%
   );
 }
@@ -1537,7 +1537,7 @@
   font-size: 0.8rem;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: rgb(217 180 107 / 0.75);
+  color: rgb(93 230 242 / 0.75);
 }
 
 .cw-canvas-studio-card {
@@ -1565,7 +1565,7 @@
 
 .cw-canvas-studio-card-title {
   margin: 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: clamp(1.35rem, 2.4vw, 1.65rem);
   font-weight: 500;
   letter-spacing: 0.015em;
@@ -2230,19 +2230,19 @@
   width: 0.75rem;
   height: 0.75rem;
   background: var(--cw-gold);
-  border-color: rgb(217 180 107 / 0.7);
-  box-shadow: 0 0 14px rgb(217 180 107 / 0.28);
+  border-color: rgb(93 230 242 / 0.7);
+  box-shadow: 0 0 14px rgb(93 230 242 / 0.28);
   animation: cw-timeline-pulse 2.5s ease-in-out infinite;
 }
 
 @keyframes cw-timeline-pulse {
   0%,
   100% {
-    box-shadow: 0 0 10px rgb(217 180 107 / 0.22);
+    box-shadow: 0 0 10px rgb(93 230 242 / 0.22);
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 18px rgb(217 180 107 / 0.38);
+    box-shadow: 0 0 18px rgb(93 230 242 / 0.38);
     transform: scale(1.06);
   }
 }
@@ -2315,7 +2315,7 @@
 
 .cw-director-section-toggle:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px rgb(217 180 107 / 0.28);
+  box-shadow: inset 0 0 0 2px rgb(93 230 242 / 0.28);
 }
 
 .cw-director-section-heading {
@@ -2341,7 +2341,7 @@
 
 .cw-director-section-heading h2 {
   margin: 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 1.0625rem;
   font-weight: 500;
   color: var(--cw-soft-white);
@@ -2433,9 +2433,9 @@
 }
 
 .cw-director-chip:hover {
-  border-color: rgb(217 180 107 / 0.32);
-  background: rgb(217 180 107 / 0.07);
-  box-shadow: 0 4px 18px rgb(217 180 107 / 0.12);
+  border-color: rgb(93 230 242 / 0.32);
+  background: rgb(93 230 242 / 0.07);
+  box-shadow: 0 4px 18px rgb(93 230 242 / 0.12);
   transform: translateY(-1px);
   color: var(--cw-soft-white);
 }
@@ -2446,7 +2446,7 @@
 
 .cw-director-chip:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgb(217 180 107 / 0.28);
+  box-shadow: 0 0 0 2px rgb(93 230 242 / 0.28);
 }
 
 .cw-director-thread {
@@ -2525,8 +2525,8 @@
 
 .cw-director-input input:focus {
   outline: none;
-  border-color: rgb(217 180 107 / 0.32);
-  box-shadow: 0 0 0 3px rgb(217 180 107 / 0.12);
+  border-color: rgb(93 230 242 / 0.32);
+  box-shadow: 0 0 0 3px rgb(93 230 242 / 0.12);
 }
 
 .cw-director-input button {
@@ -2743,7 +2743,7 @@
 }
 
 .cw-empty h1 {
-  font-family: var(--font-display, Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 2.5rem;
   font-weight: 500;
   color: #fafafa;
@@ -3099,7 +3099,7 @@
 .cw-inspector-empty-icon {
   width: 1.35rem;
   height: 1.35rem;
-  color: rgb(217 180 107 / 0.55);
+  color: rgb(93 230 242 / 0.55);
 }
 
 .cw-inspector-empty-title {
@@ -3188,7 +3188,7 @@
 
 .cw-inspector-card-header:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px rgb(217 180 107 / 0.25);
+  box-shadow: inset 0 0 0 2px rgb(93 230 242 / 0.25);
 }
 
 .cw-inspector-card-leading {
@@ -3726,12 +3726,12 @@
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgb(217 180 107 / 0.75);
+  color: rgb(93 230 242 / 0.75);
 }
 
 .cw-v2-section-title {
   margin: 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 1.35rem;
   font-weight: 500;
   color: var(--cw-soft-white);
@@ -3937,8 +3937,8 @@
 }
 
 .cw-v2-direction-card.is-selected {
-  border-color: rgb(217 180 107 / 0.45);
-  box-shadow: 0 0 24px rgb(217 180 107 / 0.12);
+  border-color: rgb(93 230 242 / 0.45);
+  box-shadow: 0 0 24px rgb(93 230 242 / 0.12);
 }
 
 .cw-v2-direction-card.is-archived {
@@ -3986,8 +3986,8 @@
 }
 
 .cw-v2-direction-badge.is-winner {
-  background: rgb(217 180 107 / 0.18);
-  color: rgb(217 180 107 / 0.95);
+  background: rgb(93 230 242 / 0.18);
+  color: rgb(93 230 242 / 0.95);
 }
 
 .cw-v2-direction-badge.is-archived {
@@ -4036,7 +4036,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgb(99 227 227 / 0.7), rgb(217 180 107 / 0.85));
+  background: linear-gradient(90deg, rgb(99 227 227 / 0.7), rgb(93 230 242 / 0.85));
 }
 
 .cw-v2-direction-score-value {
@@ -4068,7 +4068,7 @@
   width: 2rem;
   height: 2rem;
   margin: 0 auto 0.75rem;
-  color: rgb(217 180 107 / 0.7);
+  color: rgb(93 230 242 / 0.7);
 }
 
 .cw-v2-brief-header {
@@ -4204,8 +4204,8 @@
 
 .cw-v2-commercial-dimension.is-overall {
   grid-column: 1 / -1;
-  border-color: rgb(217 180 107 / 0.25);
-  background: rgb(217 180 107 / 0.06);
+  border-color: rgb(93 230 242 / 0.25);
+  background: rgb(93 230 242 / 0.06);
 }
 
 .cw-v2-commercial-label {
@@ -4252,9 +4252,9 @@
   flex-direction: column;
   min-height: min(72vh, 42rem);
   border-radius: calc(var(--cw-card-radius) + 4px);
-  border: 1px solid rgb(217 180 107 / 0.15);
+  border: 1px solid rgb(93 230 242 / 0.15);
   background:
-    radial-gradient(ellipse 70% 45% at 50% 0%, rgb(217 180 107 / 0.08), transparent 60%),
+    radial-gradient(ellipse 70% 45% at 50% 0%, rgb(93 230 242 / 0.08), transparent 60%),
     linear-gradient(180deg, rgb(14 18 24 / 0.98), rgb(8 10 14 / 1));
   box-shadow: var(--cw-shadow-deep);
   overflow: hidden;
@@ -4272,7 +4272,7 @@
 
 .cw-v2-master-showcase-title {
   margin: 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 1.65rem;
   font-weight: 500;
 }
@@ -4558,7 +4558,7 @@
   font-size: 0.68rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgb(217 180 107 / 0.85);
+  color: rgb(93 230 242 / 0.85);
 }
 
 .cw-v2-director-insight p {
@@ -4595,7 +4595,7 @@
 }
 
 .cw-v2-director-chip:hover {
-  border-color: rgb(217 180 107 / 0.35);
+  border-color: rgb(93 230 242 / 0.35);
 }
 
 .cw-v2-director-thread {
@@ -4641,9 +4641,9 @@
   place-items: center;
   width: 2.25rem;
   border-radius: var(--cw-radius-sm);
-  border: 1px solid rgb(217 180 107 / 0.3);
-  background: rgb(217 180 107 / 0.12);
-  color: rgb(217 180 107 / 0.95);
+  border: 1px solid rgb(93 230 242 / 0.3);
+  background: rgb(93 230 242 / 0.12);
+  color: rgb(93 230 242 / 0.95);
   cursor: pointer;
 }
 

@@ -20,7 +20,7 @@ export interface ImageGenerationJobRepository {
   get(scope: WorkspaceScope, id: string): Promise<ImageGenerationJob | null>;
   list(
     scope: WorkspaceScope,
-    filters?: { productionProjectId?: string; reportRecordId?: string; assetId?: string },
+    filters?: { productionProjectId?: string; reportRecordId?: string; assetId?: string; limit?: number },
   ): Promise<ImageGenerationJob[]>;
   confirm(scope: WorkspaceScope & { actorId: string }, id: string, fingerprint: string, token: string, now: string): Promise<ImageGenerationJob>;
   cancel(scope: WorkspaceScope, id: string, fingerprint: string, now: string): Promise<ImageGenerationJob>;

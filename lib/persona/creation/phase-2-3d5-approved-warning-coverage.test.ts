@@ -220,11 +220,11 @@ describe("Phase 2.3D.5 reassigned approved warning coverage", () => {
       join(ROOT, "components/persona/persona-studio.tsx"),
       "utf8",
     );
-    assert.match(studio, /Identity:/);
-    assert.match(studio, /Human review:/);
-    assert.match(studio, /Angle: manually reassigned/);
+    assert.match(studio, /Identität:/);
+    assert.match(studio, /Menschliche Prüfung:/);
+    assert.match(studio, /Winkel: manuell neu zugeordnet/);
     assert.match(studio, /Identity evaluation:/);
-    assert.match(studio, /Human review: approved/);
+    assert.match(studio, /Menschliche Prüfung: freigegeben/);
     assert.equal(OPENAI_PROVIDER_CAPABILITY.stageBUsesFlux, false);
     assert.equal(FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD, 0.45);
   });

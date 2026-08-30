@@ -141,11 +141,11 @@ export function CandidateComparePanel({
 
   return (
     <div className="ps-ci-compare">
-      <h3>Compare Against Others</h3>
+      <h3>Mit anderen Kandidaten vergleichen</h3>
       {diversity?.lowDiversity ? (
         <div className="ps-callout ps-callout-warn">
           <p>
-            <strong>Candidate diversity is low.</strong> Consider regenerating.
+            <strong>Die Kandidaten ähneln sich zu stark.</strong> Erwäge eine neue Entdeckung.
           </p>
         </div>
       ) : null}
@@ -157,7 +157,7 @@ export function CandidateComparePanel({
                 #{row.peer.candidate_number} {row.label}
               </span>
               <strong>
-                {row.similarity == null ? "—" : `${row.similarity}% similar`}
+                {row.similarity == null ? "—" : `${row.similarity}% ähnlich`}
               </strong>
             </div>
             <div className="ps-score-track" aria-hidden>
@@ -171,22 +171,22 @@ export function CandidateComparePanel({
       </div>
       <dl className="ps-ci-diff-fingerprint">
         <div>
-          <dt>Difference Fingerprint</dt>
+          <dt>Unterscheidungsmerkmal</dt>
           <dd>
             {(candidate.generation_settings?.variation as { id?: string } | undefined)?.id ??
               "—"}
           </dd>
         </div>
         <div>
-          <dt>Lighting</dt>
-          <dd>Studio soft key</dd>
+          <dt>Licht</dt>
+          <dd>Weiches Studiolicht</dd>
         </div>
         <div>
           <dt>Pose</dt>
-          <dd>Front · Three Quarter · Half Body</dd>
+          <dd>Frontal · Dreiviertel · Halbkörper</dd>
         </div>
         <div>
-          <dt>Expression</dt>
+          <dt>Ausdruck</dt>
           <dd>
             {(candidate.generation_settings?.variation as { style?: string } | undefined)
               ?.style ?? "—"}
@@ -200,12 +200,12 @@ export function CandidateComparePanel({
           </dd>
         </div>
         <div>
-          <dt>Camera</dt>
-          <dd>Identity-locked multi-angle set</dd>
+          <dt>Kamera</dt>
+          <dd>Identitätsgesichertes Set aus mehreren Winkeln</dd>
         </div>
         <div>
-          <dt>Color Temperature</dt>
-          <dd>Neutral premium daylight</dd>
+          <dt>Farbtemperatur</dt>
+          <dd>Neutrales Premium-Tageslicht</dd>
         </div>
       </dl>
     </div>
@@ -325,21 +325,21 @@ export function CandidateBoardCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={previewUrl} alt={titleLabel} />
         ) : (
-          <div className="ps-ci-card-hero-empty">No preview</div>
+          <div className="ps-ci-card-hero-empty">Keine Vorschau</div>
         )}
         {candidate.status === "selected" && !candidate.converted_persona_id ? (
-          <span className="ps-ci-selected-badge">SELECTED BRAND FACE</span>
+          <span className="ps-ci-selected-badge">AUSGEWÄHLTES MARKENMODEL</span>
         ) : isRecommendedBrandFace ? (
-          <span className="ps-ci-recommended-badge">★ Recommended Brand Face</span>
+          <span className="ps-ci-recommended-badge">★ Empfohlenes Markenmodel</span>
         ) : null}
         <div className="ps-ci-card-hero-meta">
           <CandidateStatusBadge candidate={candidate} />
           {showSimilarityWarning ? (
             <span
               className="ps-ci-score-pill"
-              title="Some resemblance to another face — still selectable"
+              title="Ähnlichkeit mit einem anderen Gesicht – weiterhin auswählbar"
             >
-              Similarity warning
+              Ähnlichkeit prüfen
             </span>
           ) : null}
           {overall != null ? (
@@ -368,11 +368,11 @@ export function CandidateBoardCard({
         </div>
         <dl className="ps-ci-card-stats">
           <div>
-            <dt>Brief Fit</dt>
+            <dt>Briefing-Passung</dt>
             <dd>{casting.briefFit ?? overall ?? "—"}</dd>
           </div>
           <div>
-            <dt>Technical</dt>
+            <dt>Technisch</dt>
             <dd>{casting.technicalCompleteness ?? "—"}</dd>
           </div>
           {showFaceFreshnessDebug ? (
@@ -391,15 +391,15 @@ export function CandidateBoardCard({
             </div>
           ) : null}
           <div>
-            <dt>Visual Casting</dt>
+            <dt>Visuelle Prüfung</dt>
             <dd>{visualLabel}</dd>
           </div>
           <div>
-            <dt>Intended Use</dt>
+            <dt>Geplante Nutzung</dt>
             <dd>{intendedUse ?? recommendedUse ?? "—"}</dd>
           </div>
           <div>
-            <dt>Cost</dt>
+            <dt>Kosten</dt>
             <dd>
               {candidate.actual_generation_cost != null
                 ? `${candidate.actual_generation_cost.toFixed(2)} €`
@@ -407,12 +407,12 @@ export function CandidateBoardCard({
             </dd>
           </div>
           <div>
-            <dt>Cost status</dt>
+            <dt>Kostenstatus</dt>
             <dd>
               {costLabel === "allocated_estimate"
-                ? "Allocated estimate"
+                ? "Zugeordnete Schätzung"
                 : costLabel === "estimated"
-                  ? "Estimated"
+                  ? "Geschätzt"
                   : String(costLabel)}
             </dd>
           </div>
@@ -472,13 +472,13 @@ export function NoveltyFailureSlotCard({
         data-replacement-phase="failed"
       >
         <div className="ps-ci-card-hero">
-          <div className="ps-ci-card-hero-empty">Replacement failed</div>
+          <div className="ps-ci-card-hero-empty">Ersetzung fehlgeschlagen</div>
         </div>
         <div className="ps-ci-card-body">
-          <strong>Candidate {slotLabel}</strong>
+          <strong>Kandidat {slotLabel}</strong>
           <p style={{ marginTop: "0.5rem" }}>
             {replacementUi.safeError ??
-              "Replacement failed after provider generation. The generated result could not be saved. No additional generation will start automatically."}
+              "Die Ersetzung ist nach der Provider-Generierung fehlgeschlagen. Das Ergebnis konnte nicht gespeichert werden. Es wird keine weitere Generierung automatisch gestartet."}
           </p>
           {onRetryFailedReplacement ? (
             <button
@@ -487,7 +487,7 @@ export function NoveltyFailureSlotCard({
               style={{ marginTop: "0.75rem" }}
               onClick={() => void onRetryFailedReplacement()}
             >
-              Retry Candidate {slotLabel}
+              Kandidat {slotLabel} erneut versuchen
             </button>
           ) : null}
         </div>
@@ -503,16 +503,16 @@ export function NoveltyFailureSlotCard({
         data-replacement-phase={replacementUi.phase}
       >
         <div className="ps-ci-card-hero">
-          <div className="ps-ci-card-hero-empty">Generating new face</div>
+          <div className="ps-ci-card-hero-empty">Neues Gesicht wird erstellt</div>
         </div>
         <div className="ps-ci-card-body">
-          <strong>Candidate {slotLabel}</strong>
+          <strong>Kandidat {slotLabel}</strong>
           <p style={{ marginTop: "0.5rem" }}>
-            Attempt {replacementUi.attemptNumber} of {replacementUi.maxAttempts}
+            Versuch {replacementUi.attemptNumber} von {replacementUi.maxAttempts}
           </p>
           <div
             role="progressbar"
-            aria-valuetext={replacementUi.stageLabel ?? "Generating"}
+            aria-valuetext={replacementUi.stageLabel ?? "Wird erstellt"}
             style={{
               marginTop: "0.75rem",
               height: 6,
@@ -534,10 +534,10 @@ export function NoveltyFailureSlotCard({
           </div>
           <p className="ps-muted" style={{ fontSize: "12px", marginTop: "0.75rem" }}>
             {replacementUi.stageLabel ??
-              "Generating image and checking face novelty..."}
+              "Bild wird erstellt und Gesichtsähnlichkeit geprüft…"}
           </p>
           <p className="ps-muted" style={{ fontSize: "12px" }}>
-            Elapsed {replacementUi.elapsedDisplay}
+            Vergangen {replacementUi.elapsedDisplay}
           </p>
           {replacementUi.safeError ? (
             <p style={{ marginTop: "0.75rem", color: "var(--ps-danger, #b42318)" }}>
@@ -554,32 +554,32 @@ export function NoveltyFailureSlotCard({
       <div className="ps-ci-card-hero">
         <div className="ps-ci-card-hero-empty">
           {exhausted
-            ? "Slot exhausted"
+            ? "Versuche ausgeschöpft"
             : isBlocked
-              ? "Blocked slot"
-              : "Failed slot"}
+              ? "Blockierter Platz"
+              : "Fehlgeschlagener Platz"}
         </div>
       </div>
       <div className="ps-ci-card-body">
-        <strong>Candidate {slotLabel}</strong>
+        <strong>Kandidat {slotLabel}</strong>
         <p className="ps-muted" style={{ marginTop: "0.5rem" }}>
           {exhausted
-            ? "Slot exhausted after 4 attempts. Start a new discovery."
+            ? "Nach vier Versuchen ausgeschöpft. Starte eine neue Entdeckung."
             : isBlocked
               ? slot.reason?.includes("similar") ||
                 slot.reason === "face_similarity_duplicate"
-                ? "New face was still too similar."
-                : "Candidate blocked by face novelty protection."
-              : "Face novelty evaluation failed. No candidate was shown."}
+                ? "Das neue Gesicht war weiterhin zu ähnlich."
+                : "Kandidat durch den Schutz vor Gesichtsduplikaten blockiert."
+              : "Die Prüfung auf Gesichtsduplikate ist fehlgeschlagen. Es wurde kein Kandidat angezeigt."}
         </p>
         <p className="ps-muted" style={{ fontSize: "12px" }}>
           {slot.reason}
         </p>
         {typeof slot.attemptNumber === "number" ? (
           <p className="ps-muted" style={{ fontSize: "12px" }}>
-            Attempt {slot.attemptNumber} of {slot.maxAttempts ?? 4}
+            Versuch {slot.attemptNumber} von {slot.maxAttempts ?? 4}
             {slot.nextAttemptNumber != null
-              ? ` · next ${slot.nextAttemptNumber}`
+              ? ` · nächster ${slot.nextAttemptNumber}`
               : ""}
           </p>
         ) : null}
@@ -590,7 +590,7 @@ export function NoveltyFailureSlotCard({
             style={{ marginTop: "0.75rem" }}
             onClick={() => void onGenerateNewFace?.()}
           >
-            Generate New Face
+                    Neues Gesicht erstellen
           </button>
         ) : null}
         {showRetryEval ? (
@@ -600,7 +600,7 @@ export function NoveltyFailureSlotCard({
             style={{ marginTop: "0.75rem" }}
             onClick={() => void onRetryEvaluation?.()}
           >
-            Retry Face Evaluation
+                    Gesichtsprüfung wiederholen
           </button>
         ) : null}
       </div>
@@ -619,9 +619,9 @@ function assetLabel(type: CandidateAssetType): string {
     case "portrait_front":
       return "Front";
     case "portrait_three_quarter":
-      return "Three Quarter";
+              return "Dreiviertel";
     case "half_body":
-      return "Half Body";
+              return "Halbkörper";
     default:
       return type.replace(/_/g, " ");
   }
@@ -669,13 +669,13 @@ export function CandidateLightbox({
           <span>{assetLabel(current.asset_type)}</span>
           <div className="ps-ci-lightbox-actions">
             <button type="button" onClick={() => setZoomed((z) => !z)}>
-              {zoomed ? "Fit" : "Zoom"}
+                      {zoomed ? "Einpassen" : "Vergrößern"}
             </button>
             <a href={current.signed_url} download target="_blank" rel="noreferrer">
-              Download
+                      Herunterladen
             </a>
             <button type="button" onClick={onClose}>
-              Close
+                      Schließen
             </button>
           </div>
         </header>
@@ -684,7 +684,7 @@ export function CandidateLightbox({
           <img src={current.signed_url} alt={current.asset_type} />
         </div>
         <p className="ps-muted">
-          ← → to switch · Esc to close · {index + 1}/{viewable.length}
+                  ← → wechseln · Esc schließen · {index + 1}/{viewable.length}
         </p>
       </div>
     </div>
@@ -729,43 +729,42 @@ export function CandidateQualityPanel({ candidate }: { candidate: PersonaCandida
 
   return (
     <div className="ps-ci-quality">
-      <h3>Casting Analysis</h3>
+      <h3>Casting-Analyse</h3>
       <p className="ps-muted ps-ci-quality-lede">
-        {qa?.scoreHonesty?.briefFitLabel ?? "Brief Fit"} ·{" "}
-        {qa?.scoreHonesty?.technicalLabel ?? "Technical Completeness"} ·{" "}
-        {qa?.scoreHonesty?.visualLabel ?? "Not visually evaluated"}
+                {qa?.scoreHonesty?.briefFitLabel ?? "Briefing-Passung"} ·{" "}
+                {qa?.scoreHonesty?.technicalLabel ?? "Technische Vollständigkeit"} ·{" "}
+                {qa?.scoreHonesty?.visualLabel ?? "Nicht visuell geprüft"}
         {qa?.method ? ` · ${qa.method}` : ""}
       </p>
       <div className="ps-ci-quality-grid">
         {[
-          ["Brief Fit", casting.briefFit ?? qa?.briefFit ?? dims.overall],
-          ["Technical Completeness", casting.technicalCompleteness ?? qa?.technicalCompleteness],
-          ["Visual evaluation", null],
-          ["Brief · Streetwear Match", dims.streetwearMatch],
-          ["Brief · Brand Match", dims.brandMatch],
-          ["Brief · Community", dims.communityAppeal],
-          ["Brief · Authenticity", dims.authenticity ?? dims.lifestyleAuthenticity],
+                  ["Briefing-Passung", casting.briefFit ?? qa?.briefFit ?? dims.overall],
+                  ["Technische Vollständigkeit", casting.technicalCompleteness ?? qa?.technicalCompleteness],
+                  ["Visuelle Prüfung", null],
+                  ["Briefing · Streetwear-Passung", dims.streetwearMatch],
+                  ["Briefing · Marken-Passung", dims.brandMatch],
+                  ["Briefing · Community", dims.communityAppeal],
+                  ["Briefing · Authentizität", dims.authenticity ?? dims.lifestyleAuthenticity],
         ].map(([label, value]) => (
           <div key={String(label)}>
             <span>{label}</span>
             <strong>
-              {label === "Visual evaluation"
+                      {label === "Visuelle Prüfung"
                 ? casting.visualStatus === "completed"
-                  ? "Completed"
-                  : "Not visually evaluated"
+                          ? "Abgeschlossen"
+                          : "Nicht visuell geprüft"
                 : (value ?? "—")}
             </strong>
           </div>
         ))}
       </div>
       <p className="ps-muted">
-        Brief-fit dimensions are metadata heuristics — not verified image analysis.
-        Commercial Face scores are not shown as visual judgments.
+                Briefing-Werte sind Metadatenheuristiken und keine verifizierte Bildanalyse. Kommerzielle Bewertungen werden nicht als visuelle Urteile dargestellt.
       </p>
 
       {qa?.casting?.bestFor?.length ? (
         <div className="ps-ci-casting-rec">
-          <h4>Best for (brief-fit)</h4>
+          <h4>Besonders geeignet für</h4>
           <ul>
             {qa.casting.bestFor.map((channel) => (
               <li key={channel}>{channel}</li>
@@ -776,7 +775,7 @@ export function CandidateQualityPanel({ candidate }: { candidate: PersonaCandida
 
       {qa?.strengths?.length ? (
         <div className="ps-ci-strengths">
-          <h4>Strengths</h4>
+          <h4>Stärken</h4>
           <ul>
             {qa.strengths.map((s) => (
               <li key={s}>{s}</li>
@@ -786,7 +785,7 @@ export function CandidateQualityPanel({ candidate }: { candidate: PersonaCandida
       ) : null}
       {qa?.risks?.length ? (
         <div className="ps-ci-risks">
-          <h4>Potential Risks</h4>
+          <h4>Mögliche Risiken</h4>
           <ul>
             {qa.risks.map((r) => (
               <li key={r}>{r}</li>
@@ -817,25 +816,25 @@ export function CandidateNotesPanel({
   return (
     <div className="ps-ci-notes">
       <label>
-        Notes
+                Notizen
         <textarea
           value={notes}
           onChange={(e) => onNotesChange(e.target.value)}
           rows={3}
-          placeholder="Creative direction, casting notes…"
+                  placeholder="Kreative Richtung, Casting-Notizen…"
         />
       </label>
       <button type="button" onClick={onSave}>
-        Save note
+                Notiz speichern
       </button>
       {history.length > 0 ? (
         <details className="ps-tech">
-          <summary>Note history ({history.length})</summary>
+                  <summary>Notizverlauf ({history.length})</summary>
           <ul className="ps-ci-note-history">
             {[...history].reverse().map((rev) => (
               <li key={rev.version}>
                 <strong>v{rev.version}</strong> · {formatWhen(rev.timestamp)} · {rev.author}
-                <p>{rev.note || "(empty)"}</p>
+                        <p>{rev.note || "(leer)"}</p>
               </li>
             ))}
           </ul>
@@ -878,7 +877,7 @@ export function CandidateDetailGallery({
           <img src={hero.signed_url} alt={hero.asset_type} />
         </button>
       ) : (
-        <div className="ps-ci-hero ps-ci-hero-empty">No hero portrait</div>
+        <div className="ps-ci-hero ps-ci-hero-empty">Kein Hero-Porträt</div>
       )}
       <div className="ps-ci-angle-strip">
         {angleStrip.map((a) => {
@@ -911,7 +910,7 @@ export function CandidateDetailGallery({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={a.signed_url} alt={a.asset_type} />
                 ) : (
-                  <div className="ps-muted">Unavailable</div>
+                  <div className="ps-muted">Nicht verfügbar</div>
                 )}
                 <figcaption>{assetLabel(a.asset_type)}</figcaption>
               </figure>

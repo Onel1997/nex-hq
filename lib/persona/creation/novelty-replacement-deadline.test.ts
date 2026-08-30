@@ -417,7 +417,7 @@ describe("Phase 2.1E.4 provider deadline execution", () => {
       join(process.cwd(), "components/persona/persona-creator-views.tsx"),
       "utf8",
     );
-    assert.match(views, /Image generation timed out\./);
+    assert.match(views, /Bildgenerierung hat das Zeitlimit überschritten/);
     assert.match(views, /provider_generation_timeout/);
   });
 

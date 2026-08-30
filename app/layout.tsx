@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
@@ -12,14 +12,11 @@ import "./design-studio.css";
 import "./design-lab.css";
 import "./design-creative-workspace.css";
 import "./commerce-lab.css";
-import "./facility-wings.css";
-import "./mission-control.css";
-import "./knowledge-vault.css";
-import "./reports-center.css";
-import "./brain-core.css";
-import "./analytics-chamber.css";
 import "./image-studio.css";
 import "./persona-studio.css";
+import "./nexhq-studio-system.css";
+import "./xeriano.css";
+import { getXerianoAppUrl } from "@/lib/xeriano/config";
 
 const dict = getDictionary(DEFAULT_LOCALE);
 
@@ -33,18 +30,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const display = Cormorant_Garamond({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
-
 export const metadata: Metadata = {
+  metadataBase: new URL(getXerianoAppUrl()),
   title: {
-    default: "NexHQ",
-    template: "%s · NexHQ",
+    default: "Xeriamo — Vom Design zum Content",
+    template: "%s · Xeriamo",
   },
-  description: dict.common.metadata.description,
+  description: "Erstelle Designs, professionelle Fashion-Bilder und realistische UGC-Videos in einem einfachen Workflow.",
+  applicationName: "Xeriamo",
+  openGraph: { type: "website", locale: "de_DE", siteName: "Xeriamo" },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({
@@ -55,7 +50,7 @@ export default function RootLayout({
   return (
     <html
       lang={DEFAULT_LOCALE}
-      className={`${geistSans.variable} ${geistMono.variable} ${display.variable} dark h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
       <body className="min-h-full font-sans">
         <TooltipProvider>{children}</TooltipProvider>

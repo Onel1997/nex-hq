@@ -42,7 +42,7 @@ Prepare → Estimate → Confirm → Execute is durable. One confirmed job permi
 
 Video Studio reuses `buildVideoStudioPersonaHandoff()` and Persona's canonical eligibility. Image/Brand Cast approval never grants Video approval. The locked identity, Video Identity Ready, Video Use approval, reference rights, exact lock version and fingerprints are persisted. The UI states: **„Dieses Markenmodel ist noch nicht für Video freigegeben.“** and fails closed.
 
-Persona now defines Video Identity Ready from a dedicated immutable owner review tied to the exact current lock and reference package; the raw boolean alone is not authority. Video Use approval is a separate explicit action tied to that review. The Video blocker links back to **„Im Persona Studio prüfen“**. Migration `20260818160000_persona_video_readiness_v1.sql` remains unapplied, so live eligibility stays blocked until migration plus the owner's real review/approval actions.
+Persona now defines Video Identity Ready from a dedicated immutable owner review tied to the exact current lock and reference package; the raw boolean alone is not authority. Video Use approval is a separate explicit action tied to that review. The Video blocker links back to **„Im Persona Studio prüfen“**. Migration `20260818160000_persona_video_readiness_v1.sql` is applied and verified. Live eligibility remains blocked only until the owner completes the real Video identity review and explicit Video Use approval.
 
 ## Source-image strategy
 
@@ -76,3 +76,7 @@ Linked project `lggogmvpktedkimbpzix` confirmed. Migration history showed all 30
 4. Authenticated owner QA with approved Image source and a canonically Video-approved Brand Model.
 5. Select and verify a real image-to-video provider; none is wired or claimed.
 6. Exact frame-by-frame Artwork fidelity requires a later tracking/compositing milestone.
+
+## Fake-flow hardening (2026-08-19)
+
+Reload selection now treats awaiting/confirmed/running/unknown and `REVIEW_REQUIRED` runs as current, while approved/rejected/failed/cancelled runs remain under Vorherige Durchläufe. Changing source or direction cancels only an unexecuted awaiting/confirmed job, preserves it as history, and resets confirmation. The server still revalidates exact approved Image, Product, Artwork, and Persona Video lineage before every prepare. No real provider was connected or called.

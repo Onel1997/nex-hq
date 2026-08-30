@@ -4,6 +4,7 @@ import type { ImageStudioAsset } from "@/agents/image/types";
 import type { ImageGenerationProvider } from "@/agents/image/types-generation";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { ownerShotLabel } from "@/lib/ux/owner-terminology";
 import {
   Check,
   Heart,
@@ -100,14 +101,14 @@ export function ImageGenerationCard({
     : "v1";
 
   const statusLabel = isGenerating || asset.status === "generating"
-    ? "Generating"
+    ? "Wird erstellt"
     : asset.imageUrl
       ? isApproved
-        ? "Approved"
+        ? "Freigegeben"
         : needsRevision
-          ? "Needs Revision"
-          : "Ready"
-      : "Waiting";
+          ? "Überarbeitung erforderlich"
+          : "Bereit"
+      : "Wartet";
 
   return (
     <article
@@ -131,7 +132,7 @@ export function ImageGenerationCard({
         ) : (
           <div className="is-gen-placeholder">
             {isGenerating || asset.status === "generating" ? (
-              <span className="is-gen-status-text">Generating…</span>
+              <span className="is-gen-status-text">Wird erstellt…</span>
             ) : (
               <ImageIcon className="size-10" />
             )}
@@ -141,39 +142,39 @@ export function ImageGenerationCard({
         <div className="is-gen-overlay" onClick={(e) => e.stopPropagation()}>
           {asset.imageUrl ? (
             <>
-              <button type="button" className="is-gen-action" onClick={onFullscreen} title="Fullscreen">
+              <button type="button" className="is-gen-action" onClick={onFullscreen} title="Große Vorschau" aria-label="Große Vorschau">
                 <Maximize2 className="size-3.5" />
               </button>
-              <button type="button" className="is-gen-action" onClick={onToggleFavorite} title="Favorite">
+              <button type="button" className="is-gen-action" onClick={onToggleFavorite} title="Favorit" aria-label="Favorit umschalten">
                 <Heart className={cn("size-3.5", isFavorite && "fill-current text-rose-400")} />
               </button>
-              <button type="button" className="is-gen-action" onClick={onApprove} title="Approve">
+              <button type="button" className="is-gen-action" onClick={onApprove} title="Freigeben" aria-label="Freigeben">
                 <Check className="size-3.5" />
               </button>
-              <button type="button" className="is-gen-action" onClick={onNeedsRevision} title="Needs revision">
+              <button type="button" className="is-gen-action" onClick={onNeedsRevision} title="Überarbeitung erforderlich" aria-label="Überarbeitung anfordern">
                 <X className="size-3.5" />
               </button>
             </>
           ) : (
             <button type="button" className="is-gen-action is-gen-action--primary" onClick={() => void handleGenerate()}>
               <RefreshCw className={cn("size-3.5", isGenerating && "opacity-50")} />
-              Generate
+              Generieren
             </button>
           )}
         </div>
 
         <div className="is-gen-scores">
-          <span className="is-score is-score--emerald" title="Commercial">
+          <span className="is-score is-score--emerald" title="Kommerziell">
             {scores.commercial}
           </span>
-          <span className="is-score is-score--gold" title="Luxury">
+          <span className="is-score is-score--gold" title="Premiumwirkung">
             {scores.luxury}
           </span>
           {isApproved ? <Star className="size-3 text-[var(--is-gold)]" /> : null}
         </div>
       </div>
       <div className="is-gen-meta">
-        <p className="is-gen-title">{asset.title ?? asset.productName}</p>
+        <p className="is-gen-title">{ownerShotLabel(asset.title ?? asset.productName)}</p>
         <div className="is-gen-details">
           <span>{version}</span>
           <span>{statusLabel}</span>

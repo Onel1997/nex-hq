@@ -100,7 +100,7 @@ export function ResearchStudioV3() {
         <nav className="rs3-breadcrumb" aria-label={topbar.breadcrumbAria}>
           <Link href="/" className="rs3-breadcrumb-link">
             <Home className="size-3.5" />
-            <span>{topbar.facility}</span>
+            <span>{topbar.brand}</span>
           </Link>
           <ChevronRight className="size-3.5 opacity-35" aria-hidden />
           <span className="rs3-breadcrumb-current">{agents.studioNames.research}</span>

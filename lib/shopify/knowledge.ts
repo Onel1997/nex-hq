@@ -178,6 +178,7 @@ function mapKnowledgeProduct(
     id: product.id,
     title: product.title,
     handle: product.handle,
+    vendor: product.vendor,
     status: product.status,
     productType: product.productType,
     price: product.priceMin,

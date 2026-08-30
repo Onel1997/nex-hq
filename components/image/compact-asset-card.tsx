@@ -7,6 +7,7 @@ import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { ImageIcon, Loader2, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { ownerShotLabel } from "@/lib/ux/owner-terminology";
 
 interface CompactAssetCardProps {
   asset: NormalizedImageAsset;
@@ -21,7 +22,7 @@ function statusLabel(
 ) {
   switch (status) {
     case "pending":
-      return "Pending";
+      return "Ausstehend";
     case "ready":
       return t("image.interface.statusReady");
     case "generating":
@@ -33,6 +34,26 @@ function statusLabel(
     default:
       return status;
   }
+}
+
+const OWNER_ASSET_TYPE_LABELS: Readonly<Record<string, string>> = {
+  studio_shot: "Studioaufnahme",
+  hero_image: "Hero-Aufnahme",
+  ecommerce_image: "Produktansicht",
+  detail_shot: "Detailaufnahme",
+  editorial_streetwear: "Streetwear-Editorial",
+  editorial_luxury: "Luxus-Editorial",
+  collection_cover: "Kollektions-Cover",
+  launch_banner: "Launch-Banner",
+  instagram_post: "Instagram-Beitrag",
+  story_slide: "Story",
+  carousel_image: "Karussellbild",
+  tiktok_cover: "TikTok-Titelbild",
+  lookbook_outfit: "Lookbook-Outfit",
+};
+
+function ownerAssetTypeLabel(value: string): string {
+  return OWNER_ASSET_TYPE_LABELS[value] ?? "Produktionsergebnis";
 }
 
 export function CompactAssetCard({
@@ -90,10 +111,10 @@ export function CompactAssetCard({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-medium text-foreground">
-            {asset.title ?? asset.productName}
+            {ownerShotLabel(asset.title ?? asset.productName)}
           </p>
           <p className="text-xs text-muted-foreground">
-            {asset.productName} · {asset.assetType}
+            {asset.productName} · {ownerAssetTypeLabel(asset.assetType)}
             {asset.dimensions ? ` · ${asset.dimensions}` : ""}
             {asset.platform ? ` · ${asset.platform}` : ""}
           </p>

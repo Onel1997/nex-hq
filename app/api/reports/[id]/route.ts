@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getBrainClient } from "@/brain/client";
-import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { resolveWorkspace } from "@/brain/seed";
 import type { BrainReportContent } from "@/brain/domains/reports";
 import { brainReportRecordToListItem } from "@/lib/reports/from-brain";
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
@@ -22,7 +22,7 @@ export async function GET(
     }
 
     const { id } = await context.params;
-    const { workspace } = await ensureWorkspaceBrainSeeded();
+    const workspace = await resolveWorkspace();
     const brain = getBrainClient();
     const record = await brain.getRecord("reports", id);
 
@@ -60,7 +60,7 @@ export async function DELETE(
     }
 
     const { id } = await context.params;
-    const { workspace } = await ensureWorkspaceBrainSeeded();
+    const workspace = await resolveWorkspace();
     const brain = getBrainClient();
     const record = await brain.getRecord("reports", id);
 

@@ -9,7 +9,7 @@ import {
   buildSupplierIntelligence,
   formatAgentSupplierRules,
   formatSupplierIntelligencePrompt,
-  getFacilitySupplierSections,
+  getAgentSupplierSections,
   getOperationsBusinessMeta,
   type SupplierIntelligence,
 } from "@/lib/business/supplier-intelligence";
@@ -26,7 +26,7 @@ export type BusinessContext = {
   marketPrint: MarketPrintContext;
   marketPrintPrompt: string;
   operationsMeta: ReturnType<typeof getOperationsBusinessMeta>;
-  facilitySections: ReturnType<typeof getFacilitySupplierSections>;
+  agentSections: ReturnType<typeof getAgentSupplierSections>;
 };
 
 function resolveWorkspaceSlug(_workspaceId: string): string {
@@ -69,7 +69,7 @@ export function loadBusinessContextBySlug(
     marketPrint,
     marketPrintPrompt: marketPrint.prompt,
     operationsMeta: getOperationsBusinessMeta(profile),
-    facilitySections: getFacilitySupplierSections(profile),
+    agentSections: getAgentSupplierSections(profile),
   };
 }
 
@@ -88,6 +88,6 @@ export async function loadBusinessProfile(
 export {
   formatAgentSupplierRules,
   formatSupplierIntelligencePrompt,
-  getFacilitySupplierSections,
+  getAgentSupplierSections,
   getOperationsBusinessMeta,
 };

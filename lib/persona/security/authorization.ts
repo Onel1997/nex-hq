@@ -7,9 +7,11 @@
  * an explicit non-production bypass; it is never treated as production auth.
  */
 
-import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
-import { createClient as createServerSupabase } from "@/lib/supabase/server";
+import { resolveWorkspace } from "@/brain/seed";
+import { NEXHQ_VERIFIED_USER_ID_HEADER } from "@/lib/auth/verified-request";
 import { resolveValidatedNexhqActor } from "@/lib/auth/authentication";
+import { createClient as createServerSupabase } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 import { PersonaDomainError } from "../domain/errors";
 import type { WorkspaceScope } from "../domain/types";
 
@@ -91,6 +93,12 @@ export function authorizePersonaActor(input: {
 
 async function getAuthenticatedUserId(): Promise<string | null> {
   try {
+    const verifiedUserId = (await headers()).get(NEXHQ_VERIFIED_USER_ID_HEADER);
+    if (verifiedUserId) return verifiedUserId;
+  } catch {
+    // Route middleware is not present in every server execution context.
+  }
+  try {
     const supabase = await createServerSupabase();
     const authentication = await resolveValidatedNexhqActor(() =>
       supabase.auth.getUser(),
@@ -134,7 +142,7 @@ export async function resolvePersonaAuthorizationContext(
 
   const workspaceId = dependencies.resolveServerWorkspaceId
     ? await dependencies.resolveServerWorkspaceId()
-    : (await ensureWorkspaceBrainSeeded()).workspace.id;
+    : (await resolveWorkspace()).id;
 
   return {
     ...actor,

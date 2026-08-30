@@ -32,11 +32,12 @@ export class SupabaseDeterministicJobRepository implements DeterministicJobRepos
     if (error) throw new PersonaStoreError(error.message);
     return data ? map(data as Record<string, unknown>) : null;
   }
-  async list(scope: WorkspaceScope, filters: { projectId?: string } = {}) {
+  async list(scope: WorkspaceScope, filters: { projectId?: string; limit?: number } = {}) {
     let query = createAdminClient().from("image_generation_jobs").select("*").eq("workspace_id", scope.workspaceId)
       .eq("input_contract_version", "image-generation-input-v2").eq("production_mode", "DETERMINISTIC_COMPOSITE")
       .order("updated_at", { ascending: false });
     if (filters.projectId) query = query.eq("production_project_id", filters.projectId);
+    if (filters.limit) query = query.limit(filters.limit);
     const { data, error } = await query; if (error) throw new PersonaStoreError(error.message);
     return (data ?? []).map((row) => map(row as Record<string, unknown>));
   }
@@ -103,7 +104,7 @@ export class SupabaseDeterministicJobRepository implements DeterministicJobRepos
     const { data, error } = await createAdminClient().from("image_generation_jobs").update({ status: "running", failure_code: null, failure_message: null, safe_retry_allowed: false, completed_at: null, updated_at: now })
       .eq("workspace_id", scope.workspaceId).eq("id", id).eq("input_contract_version", "image-generation-input-v2")
       .eq("production_mode", "DETERMINISTIC_COMPOSITE").eq("input_fingerprint", fingerprint)
-      .eq("status", "failed").eq("failure_code", "DETERMINISTIC_COMPOSITE_FAILED").select("id").maybeSingle();
+      .eq("status", "failed").in("failure_code", ["DETERMINISTIC_COMPOSITE_FAILED", "SURFACE_INTEGRATION_UNSAFE", "DEPTH_AWARE_SURFACE_UNSAFE", "SURFACE_REALISM_REFINEMENT_UNSAFE","DEPTH_ESTIMATION_FAILED"]).select("id").maybeSingle();
     if (error) throw new PersonaStoreError(error.message); return Boolean(data);
   }
   private async patch(scope: WorkspaceScope, id: string, values: Record<string, unknown>) {
@@ -114,5 +115,5 @@ export class SupabaseDeterministicJobRepository implements DeterministicJobRepos
   }
   markSucceeded(scope: WorkspaceScope, id: string, assetId: string, providerRequestId: string | null, now: string) { return this.patch(scope, id, { status: "succeeded", provider_request_id: providerRequestId, result_asset_ids: [assetId], safe_retry_allowed: false, completed_at: now, updated_at: now }); }
   markFailed(scope: WorkspaceScope, id: string, input: { code: string; message: string; now: string }) { return this.patch(scope, id, { status: "failed", failure_code: input.code, failure_message: input.message, safe_retry_allowed: false, completed_at: input.now, updated_at: input.now }); }
-  markUnknown(scope: WorkspaceScope, id: string, reason: string, now: string) { return this.patch(scope, id, { status: "unknown_outcome", unknown_outcome_reason: reason, reconciliation_state: "required", safe_retry_allowed: false, completed_at: now, updated_at: now }); }
+  markUnknown(scope: WorkspaceScope, id: string, input: { providerRequestId: string | null; reason: string; now: string }) { return this.patch(scope, id, { status: "unknown_outcome", provider_request_id: input.providerRequestId, unknown_outcome_reason: input.reason, reconciliation_state: "required", safe_retry_allowed: false, completed_at: input.now, updated_at: input.now }); }
 }

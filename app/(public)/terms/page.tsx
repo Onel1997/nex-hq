@@ -1,0 +1,1 @@
+export default function TermsPage(){return <main className="xeriano-legal"><h1>Allgemeine Geschäftsbedingungen</h1><div className="xeriano-legal-notice">Entwurfplatzhalter — nicht als finale Rechtsberatung verwenden.</div><p>Nutzungsrechte, Credits, Kündigung, Erstattungen und kommerzielle Nutzung müssen vor dem Produktstart verbindlich geregelt werden.</p></main>}

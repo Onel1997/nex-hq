@@ -132,7 +132,7 @@ Verified current implementation conflicts that new work MUST account for include
 
 - Official Brand Face selection has process-global state alongside Supabase-backed Persona state.
 - Generic Persona CRUD and legacy `Approved` equivalence can bypass or weaken explicit approval paths.
-- Persona-to-Image and Persona-to-Video handoff hooks are placeholders; Video Studio is a placeholder route.
+- Persona-to-Image and Persona-to-Video handoffs are canonical consumer boundaries. Video Studio has a fake-only local foundation with an unapplied schema migration; it must not be represented as real-provider-ready.
 - Design Studio includes autonomous AI artwork-generation paths, while the target gives the user ownership of final Master Artwork.
 - Design-to-Image handoff and parts of Image state use browser storage rather than durable workflow records.
 - Product Intelligence's synchronous path is seed-only and its Shopify provider boundary currently reports unavailable.

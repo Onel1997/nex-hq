@@ -24,6 +24,8 @@ import { slugify } from "./utils";
 export interface BrainSearchOptions extends BrainReadOptions {
   /** Keyword search across title and summary (vector search deferred). */
   query?: string;
+  /** Exact totals require a separate count plan; disabled for normal reads. */
+  includeTotal?: boolean;
 }
 
 /**
@@ -173,12 +175,30 @@ export class SupabaseBrainClient {
     return data ? rowToRecord<D>(data) : null;
   }
 
+  async recordExistsBySlug(
+    workspaceId: string,
+    domain: BrainDomain,
+    slug: string,
+  ): Promise<boolean> {
+    const { data, error } = await this.db
+      .from("brain_records")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("domain", domain)
+      .eq("slug", slug)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(`Brain recordExistsBySlug failed: ${error.message}`);
+    return Boolean(data);
+  }
+
   async searchRecords(
     options: BrainSearchOptions,
   ): Promise<BrainReadResult> {
+    const requestedLimit = Math.min(Math.max(options.limit ?? 100, 1), 200);
     let query = this.db
       .from("brain_records")
-      .select("*", { count: "exact" })
+      .select("*", options.includeTotal ? { count: "exact" } : undefined)
       .eq("workspace_id", options.workspaceId);
 
     if (options.domains?.length) {
@@ -204,10 +224,11 @@ export class SupabaseBrainClient {
       query = query.or(`title.ilike.${term},summary.ilike.${term}`);
     }
 
-    if (options.limit) {
-      const offset = options.offset ?? 0;
-      query = query.range(offset, offset + options.limit - 1);
-    }
+    const offset = options.offset ?? 0;
+    query = query.range(
+      offset,
+      offset + requestedLimit - 1 + (options.includeTotal ? 0 : 1),
+    );
 
     query = query.order("updated_at", { ascending: false });
 
@@ -217,16 +238,18 @@ export class SupabaseBrainClient {
       throw new Error(`Brain searchRecords failed: ${error.message}`);
     }
 
-    const records = (data ?? []).map((row) =>
+    const hasExtraRecord = !options.includeTotal && (data?.length ?? 0) > requestedLimit;
+    const boundedRows = (data ?? []).slice(0, requestedLimit);
+    const records = boundedRows.map((row) =>
       rowToRecord(row as BrainRecordsRow),
     );
 
     return {
       records,
-      total: count ?? records.length,
-      hasMore: options.limit
-        ? (count ?? 0) > (options.offset ?? 0) + records.length
-        : false,
+      ...(options.includeTotal ? { total: count ?? records.length } : {}),
+      hasMore: options.includeTotal
+        ? (count ?? 0) > offset + records.length
+        : hasExtraRecord,
     };
   }
 

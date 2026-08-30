@@ -20,5 +20,13 @@ export class SupabaseStageOutputRepository implements StageOutputRepository {
     if(error||!data){const rows=await this.list(scope,parsed.jobId);const replay=rows.find((row)=>row.stage===parsed.stage&&row.stageAttempt===parsed.stageAttempt);if(replay)return replay;throw new PersonaStoreError(error?.message??"Failed to persist stage output.");} return map(data as Record<string,unknown>);
   }
   async list(scope:WorkspaceScope,jobId:string){await this.assertJob(scope,jobId);const {data,error}=await createAdminClient().from("image_production_stage_outputs").select("*").eq("generation_job_id",jobId).order("created_at",{ascending:true});if(error)throw new PersonaStoreError(error.message);return(data??[]).map((row)=>map(row as Record<string,unknown>));}
+  async listByJobs(_scope:WorkspaceScope,jobIds:readonly string[]){
+    const result=new Map<string,ProductionStageOutput[]>(jobIds.map((id)=>[id,[]]));
+    if(!jobIds.length)return result;
+    const {data,error}=await createAdminClient().from("image_production_stage_outputs").select("*").in("generation_job_id",[...jobIds]).order("created_at",{ascending:true});
+    if(error)throw new PersonaStoreError(error.message);
+    for(const row of data??[]){const stage=map(row as Record<string,unknown>);result.set(stage.jobId,[...(result.get(stage.jobId)??[]),stage]);}
+    return result;
+  }
   async getSucceededBase(scope:WorkspaceScope,jobId:string){const rows=await this.list(scope,jobId);return (rows.find((row)=>row.stage==="BASE_GENERATION"&&row.status==="SUCCEEDED") as SuccessfulBaseStage|undefined)??null;}
 }

@@ -1,6 +1,5 @@
 import type { AgentId } from "@/lib/constants/agents";
-import { getAgentColor } from "@/lib/facility/facility-theme";
-import { FACILITY_ROUTES } from "@/lib/facility/facility-routes";
+import { getAgentColor } from "@/lib/workspace/agent-theme";
 import {
   AGENT_WORKSPACE_ROUTES,
   PERSONA_STUDIO_ROUTE,
@@ -18,18 +17,23 @@ import type {
 } from "@/lib/navigation/hq-navigation";
 import {
   Clapperboard,
+  CircleDollarSign,
   Crown,
   Home,
+  Library,
   Palette,
+  PackageSearch,
   Search,
   Settings,
   ShoppingBag,
   UserRound,
+  UsersRound,
   Wand2,
+  Sparkles,
 } from "lucide-react";
 
-const PERSONA_STUDIO_COLOR = "#C4A574";
-const VIDEO_STUDIO_COLOR = "#7A8FA8";
+const NEXHQ_BLUE = "#3488ff";
+const NEXHQ_CYAN = "#5de6f2";
 
 /** Primary production pipeline — order is intentional. */
 const PRIMARY_STUDIO_NAV: Array<{
@@ -41,7 +45,10 @@ const PRIMARY_STUDIO_NAV: Array<{
     | "designer"
     | "persona"
     | "image"
+    | "creative"
+    | "ugcVideo"
     | "video"
+    | "products"
     | "shopify";
   icon: typeof Crown;
   accent?: string;
@@ -72,7 +79,7 @@ const PRIMARY_STUDIO_NAV: Array<{
     href: AGENT_WORKSPACE_ROUTES.designer,
     labelKey: "designer",
     icon: Palette,
-    accent: getAgentColor("designer"),
+    accent: NEXHQ_BLUE,
     isActive: (pathname) =>
       pathname === AGENT_WORKSPACE_ROUTES.designer ||
       pathname.startsWith(`${AGENT_WORKSPACE_ROUTES.designer}/`),
@@ -82,7 +89,7 @@ const PRIMARY_STUDIO_NAV: Array<{
     href: PERSONA_STUDIO_ROUTE,
     labelKey: "persona",
     icon: UserRound,
-    accent: PERSONA_STUDIO_COLOR,
+    accent: NEXHQ_CYAN,
     isActive: (pathname) => isPersonaStudioPath(pathname),
   },
   {
@@ -90,25 +97,54 @@ const PRIMARY_STUDIO_NAV: Array<{
     href: AGENT_WORKSPACE_ROUTES.image,
     labelKey: "image",
     icon: Wand2,
-    accent: getAgentColor("image"),
+    accent: NEXHQ_BLUE,
     isActive: (pathname) =>
       pathname === AGENT_WORKSPACE_ROUTES.image ||
       pathname.startsWith(`${AGENT_WORKSPACE_ROUTES.image}/`),
+  },
+  {
+    id: "creative",
+    href: "/creative-studio",
+    labelKey: "creative",
+    icon: Sparkles,
+    accent: "#a78bfa",
+    isActive: (pathname) =>
+      pathname === "/creative-studio" ||
+      pathname.startsWith("/creative-studio/"),
+  },
+  {
+    id: "ugc-video",
+    href: "/ugc-video-studio",
+    labelKey: "ugcVideo",
+    icon: Clapperboard,
+    accent: "#7dd3fc",
+    isActive: (pathname) =>
+      pathname === "/ugc-video-studio" ||
+      pathname.startsWith("/ugc-video-studio/"),
   },
   {
     id: "video",
     href: VIDEO_STUDIO_ROUTE,
     labelKey: "video",
     icon: Clapperboard,
-    accent: VIDEO_STUDIO_COLOR,
+    accent: NEXHQ_CYAN,
     isActive: (pathname) => isVideoStudioPath(pathname),
+  },
+  {
+    id: "products",
+    href: "/agents/products",
+    labelKey: "products",
+    icon: PackageSearch,
+    accent: NEXHQ_BLUE,
+    isActive: (pathname) =>
+      pathname === "/agents/products" || pathname.startsWith("/agents/products/"),
   },
   {
     id: "shopify",
     href: AGENT_WORKSPACE_ROUTES.shopify,
     labelKey: "shopify",
     icon: ShoppingBag,
-    accent: getAgentColor("shopify"),
+    accent: NEXHQ_CYAN,
     isActive: (pathname) =>
       pathname === AGENT_WORKSPACE_ROUTES.shopify ||
       pathname.startsWith(`${AGENT_WORKSPACE_ROUTES.shopify}/`),
@@ -129,18 +165,14 @@ export function getHqSidebarSections(locale: Locale): HqSidebarSection[] {
     designer: agents.studioNames.designer,
     persona: agents.personaStudio,
     image: agents.studioNames.image,
+    creative: "Creative Studio",
+    ugcVideo: "UGC Video Studio",
     video: agents.videoStudio,
+    products: "Produktbibliothek",
     shopify: agents.studioNames.shopify,
   };
 
   const studioItems: SidebarNavItem[] = [
-    {
-      id: "home",
-      href: FACILITY_ROUTES.home,
-      label: hqNavigation.home,
-      icon: Home,
-      isActive: (pathname) => pathname === "/",
-    },
     ...PRIMARY_STUDIO_NAV.map((item) => ({
       id: item.id,
       href: item.href,
@@ -153,17 +185,94 @@ export function getHqSidebarSections(locale: Locale): HqSidebarSection[] {
 
   const settingsItems: SidebarNavItem[] = [
     {
+      id: "customers",
+      href: "/hq/customers",
+      label: "Kunden",
+      icon: UsersRound,
+      accent: NEXHQ_CYAN,
+      isActive: (pathname: string) => pathname.startsWith("/hq/customers"),
+    },
+    {
       id: "settings-general",
-      href: FACILITY_ROUTES.settings,
+      href: "/settings",
       label: hqNavigation.settings,
       icon: Settings,
-      isActive: (pathname: string) => pathname.startsWith(FACILITY_ROUTES.settings),
+      isActive: (pathname: string) => pathname.startsWith("/settings"),
     },
   ];
 
   return [
     { id: "studios", label: hqNavigation.studios, items: studioItems },
     { id: "settings", label: hqNavigation.settings, items: settingsItems },
+  ];
+}
+
+/**
+ * Customer navigation is derived from the same Studio navigation authority as
+ * NexHQ. Only routes that have a real, customer-authorized Xeriano equivalent
+ * are projected into the customer shell.
+ */
+export function getCustomerSidebarSections(locale: Locale): HqSidebarSection[] {
+  const ownerSections = getHqSidebarSections(locale);
+  const ownerStudios = ownerSections.find((section) => section.id === "studios");
+  const customerRoutes = new Map<string, { href: string; label?: string; accent: string }>([
+    ["designer", { href: "/app/design-studio", accent: "#b6a1ff" }],
+    ["creative", { href: "/app/creative-studio", accent: "#a78bfa" }],
+    ["ugc-video", { href: "/app/ugc-video-studio", accent: "#68d8f4" }],
+  ]);
+  const studioRoutes = (ownerStudios?.items ?? []).flatMap((item) => {
+    const route = customerRoutes.get(item.id);
+    if (!route) return [];
+    return [{
+      ...item,
+      href: route.href,
+      label: route.label ?? item.label,
+      accent: route.accent,
+      isActive: (pathname: string) =>
+        pathname === route.href || pathname.startsWith(`${route.href}/`),
+    }];
+  });
+  const studios: SidebarNavItem[] = [
+    {
+      id: "home",
+      href: "/app",
+      label: "Home",
+      icon: Home,
+      accent: "#b7becb",
+      isActive: (pathname: string) => pathname === "/app",
+    },
+    ...studioRoutes,
+  ];
+
+  return [
+    { id: "studios", label: "Studios", items: studios },
+    {
+      id: "settings",
+      label: "Konto",
+      items: [
+        {
+          id: "library",
+          href: "/app/library",
+          label: "Bibliothek",
+          icon: Library,
+          accent: "#84aef8",
+        },
+        {
+          id: "credits",
+          href: "/app/credits",
+          label: "Credits / Plan",
+          icon: CircleDollarSign,
+          accent: "#d7b66f",
+        },
+        {
+          id: "account",
+          href: "/app/account",
+          label: "Einstellungen / Account",
+          icon: Settings,
+          accent: "#aeb5c1",
+        },
+      ],
+    },
   ];
 }
 

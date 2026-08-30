@@ -7,10 +7,53 @@ import {
   type ProductProductionContext,
   type ProductProductionSelection,
 } from "@/lib/image/product-production-context";
+import type { PrintSurface } from "@/lib/image/print-surface/types";
+import type { PhysicalProductFamilySelection } from "@/lib/product-library/print-surface-reuse";
+import type { ProductFamilyConfig } from "@/lib/product-library/types";
+
+export type ImagePrintSurfaceSelection = {
+  surface: PrintSurface;
+  ownerProfileKey: string;
+  ownerProfileVersion: number;
+  inherited: boolean;
+};
 
 export type ImageProductSelection = {
-  selection: Extract<ProductProductionSelection, { authority: "SHOPIFY_LIVE" }>;
+  selection: Extract<
+    ProductProductionSelection,
+    { authority: "SHOPIFY_LIVE" | "MANUAL_PROFILE" }
+  >;
   productionContext: ProductProductionContext;
+  garmentFamilyLabel?: string | null;
+  physicalProductFamily?: PhysicalProductFamilySelection | null;
+  reusablePrintSurfaces?: ImagePrintSurfaceSelection[];
+  productProfile: {
+    profileKey: string;
+    version: number;
+    variantId: string;
+    authority: "SHOPIFY_LIVE" | "MANUAL_PROFILE";
+    printSurface: {
+      printSurfaceId: string;
+      version: number;
+      quad: ReadonlyArray<{ x: number; y: number }>;
+      ownerProfileKey?: string;
+      ownerProfileVersion?: number;
+      inherited?: boolean;
+    } | null;
+    printSurfaces: PrintSurface[];
+    reusablePrintSurfaces?: ImagePrintSurfaceSelection[];
+    physicalProductFamily?: PhysicalProductFamilySelection | null;
+    productFamily?: ProductFamilyConfig | null;
+    blankReferences?: Array<{
+      referenceId: string;
+      previewUrl: string | null;
+      width: number | null;
+      height: number | null;
+      side: "FRONT" | "BACK";
+      colorKey: string;
+    }>;
+  } | null;
+  readiness: { eligible: boolean; blockers: string[] };
 };
 
 export class ImageProductConsumerError extends Error {
@@ -42,9 +85,11 @@ async function readIntegrationResponse(response: Response): Promise<unknown> {
     .safeParse(payload);
   throw new ImageProductConsumerError(
     safe.success
-      ? safe.data.error ?? "Shopify product context request failed."
+      ? (safe.data.error ?? "Shopify product context request failed.")
       : "Shopify product context request failed.",
-    safe.success ? safe.data.code ?? "INTEGRATION_ERROR" : "INTEGRATION_ERROR",
+    safe.success
+      ? (safe.data.code ?? "INTEGRATION_ERROR")
+      : "INTEGRATION_ERROR",
   );
 }
 
@@ -71,12 +116,19 @@ export async function fetchImageProductProductionContext(
     body: JSON.stringify({ selection: parsedSelection }),
     cache: "no-store",
   });
-  return resolveResponseSchema.parse(await readIntegrationResponse(response)).context;
+  return resolveResponseSchema.parse(await readIntegrationResponse(response))
+    .context;
 }
 
 export function toImageProductSelection(
   selection: Extract<ProductProductionSelection, { authority: "SHOPIFY_LIVE" }>,
   productionContext: ProductProductionContext,
+  options: {
+    garmentFamilyLabel?: string | null;
+    physicalProductFamily?: PhysicalProductFamilySelection | null;
+    reusablePrintSurfaces?: ImagePrintSurfaceSelection[];
+    productProfile?: ImageProductSelection["productProfile"];
+  } = {},
 ): ImageProductSelection {
   return {
     selection: productProductionSelectionSchema.parse(selection) as Extract<
@@ -84,5 +136,10 @@ export function toImageProductSelection(
       { authority: "SHOPIFY_LIVE" }
     >,
     productionContext: productProductionContextSchema.parse(productionContext),
+    garmentFamilyLabel: options.garmentFamilyLabel ?? null,
+    physicalProductFamily: options.physicalProductFamily ?? null,
+    reusablePrintSurfaces: options.reusablePrintSurfaces ?? [],
+    productProfile: options.productProfile ?? null,
+    readiness: { eligible: true, blockers: [] },
   };
 }

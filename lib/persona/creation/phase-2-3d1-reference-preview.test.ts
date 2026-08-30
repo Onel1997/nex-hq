@@ -22,14 +22,14 @@ describe("Phase 2.3D.1 reference large preview", () => {
     );
     assert.match(studio, /ReferencePreviewLightbox/);
     assert.match(studio, /reference-preview-lightbox/);
-    assert.match(studio, /Compare with Master/);
+    assert.match(studio, /Mit Master vergleichen/);
     assert.match(studio, /reference-master-compare/);
-    assert.match(studio, /Approve/);
-    assert.match(studio, /Reject/);
+    assert.match(studio, /Freigeben/);
+    assert.match(studio, /Ablehnen/);
     assert.match(studio, /e\.key === "Escape"/);
     assert.match(studio, /ps-ref-lightbox-backdrop/);
-    assert.match(studio, /Supporting reference — cannot become Master/);
-    assert.match(studio, /Immutable Master — cannot approve as replacement or delete/);
+    assert.match(studio, /Unterstützende Referenz – kann nicht zum Master werden/);
+    assert.match(studio, /Unveränderlicher Master/);
   });
 
   it("rejected / mismatch notes remain inspectable via parse", () => {

@@ -74,7 +74,7 @@ export const deterministicReviewRequestSchema = z.object({
 
 export const deterministicRecoverySchema = z.object({
   state: z.enum([
-    "AWAITING_CONFIRMATION", "CONFIRMED", "BASE_READY", "COMPOSITING",
+    "AWAITING_CONFIRMATION", "CONFIRMED", "BASE_RUNNING", "BASE_READY", "COMPOSITING", "SAVING_RESULT",
     "REVIEW_REQUIRED", "APPROVED", "REJECTED", "COMPOSITE_FAILED",
     "UNKNOWN_PROVIDER_OUTCOME", "CANCELLED", "BASE_FAILED",
   ]),

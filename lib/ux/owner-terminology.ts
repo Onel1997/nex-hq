@@ -33,8 +33,10 @@ export const OWNER_STATUS_LABELS: Readonly<Record<string, string>> = {
   rejected: "Abgelehnt",
   REVIEW_REQUIRED: "Prüfung erforderlich",
   GENERATED: "Erstellt",
+  BASE_RUNNING: "Basisbild wird erstellt",
   BASE_READY: "Basisbild bereit",
-  COMPOSITING: "Artwork wird platziert",
+  COMPOSITING: "Artwork wird angewendet",
+  SAVING_RESULT: "Ergebnis wird gespeichert",
   COMPOSITE_FAILED: "Platzierung fehlgeschlagen",
   NEEDS_REVISION: "Überarbeitung erforderlich",
   needs_revision: "Überarbeitung erforderlich",
@@ -87,7 +89,9 @@ export const OWNER_AUTHORITY_LABELS: Readonly<Record<string, string>> = {
   UNKNOWN: "Quelle nicht verifiziert",
 };
 
-export const OWNER_PRODUCT_PROFILE_STATUS_LABELS: Readonly<Record<string, string>> = {
+export const OWNER_PRODUCT_PROFILE_STATUS_LABELS: Readonly<
+  Record<string, string>
+> = {
   ACTIVE: "Aktiv",
   SAMPLE: "Muster",
   UPCOMING: "Geplant",
@@ -95,7 +99,9 @@ export const OWNER_PRODUCT_PROFILE_STATUS_LABELS: Readonly<Record<string, string
   ARCHIVED: "Archiviert",
 };
 
-export const OWNER_PRODUCT_REFERENCE_ROLE_LABELS: Readonly<Record<string, string>> = {
+export const OWNER_PRODUCT_REFERENCE_ROLE_LABELS: Readonly<
+  Record<string, string>
+> = {
   FEATURED: "Hauptbild",
   FRONT: "Vorderseite",
   BACK: "Rückseite",
@@ -168,7 +174,10 @@ export const OWNER_ANALYSIS_LABELS: Readonly<Record<string, string>> = {
 
 export function ownerStatusLabel(value: string | null | undefined): string {
   if (!value) return "Status unbekannt";
-  return OWNER_STATUS_LABELS[value] ?? value.replaceAll("_", " ").toLocaleLowerCase("de-DE");
+  return (
+    OWNER_STATUS_LABELS[value] ??
+    value.replaceAll("_", " ").toLocaleLowerCase("de-DE")
+  );
 }
 
 export function ownerAuthorityLabel(value: string | null | undefined): string {
@@ -181,17 +190,26 @@ export function ownerShotLabel(value: string | null | undefined): string {
   return OWNER_SHOT_LABELS[value] ?? value;
 }
 
-export function ownerProductProfileStatusLabel(value: string | null | undefined): string {
+export function ownerProductProfileStatusLabel(
+  value: string | null | undefined,
+): string {
   if (!value) return "Status unbekannt";
   return OWNER_PRODUCT_PROFILE_STATUS_LABELS[value] ?? ownerStatusLabel(value);
 }
 
-export function ownerProductReferenceRoleLabel(value: string | null | undefined): string {
+export function ownerProductReferenceRoleLabel(
+  value: string | null | undefined,
+): string {
   if (!value) return OWNER_PRODUCT_REFERENCE_ROLE_LABELS.UNCLASSIFIED;
-  return OWNER_PRODUCT_REFERENCE_ROLE_LABELS[value] ?? OWNER_PRODUCT_REFERENCE_ROLE_LABELS.UNCLASSIFIED;
+  return (
+    OWNER_PRODUCT_REFERENCE_ROLE_LABELS[value] ??
+    OWNER_PRODUCT_REFERENCE_ROLE_LABELS.UNCLASSIFIED
+  );
 }
 
-export function ownerProductStatusLabel(value: string | null | undefined): string {
+export function ownerProductStatusLabel(
+  value: string | null | undefined,
+): string {
   if (!value) return "Status unbekannt";
   return ownerStatusLabel(value);
 }
@@ -206,8 +224,9 @@ export const IMAGE_PRODUCTION_STEPS = [
   "Produkt",
   "Variante",
   "Markenmodel",
-  "Platzierung",
   "Aufnahme",
+  "Druckseite",
+  "Platzierung",
   "Prüfen",
   "Generieren",
   "Ergebnis",

@@ -3,6 +3,7 @@ export interface ShopifyCatalogProduct {
   id: string;
   title: string;
   handle: string;
+  vendor?: string | null;
   status: string;
   productType: string;
   tags: string[];
@@ -47,6 +48,7 @@ export interface ShopifyKnowledgeProduct {
   id: string;
   title: string;
   handle: string;
+  vendor?: string | null;
   status: string;
   productType: string;
   price: string;

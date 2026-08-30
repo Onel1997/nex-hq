@@ -37,6 +37,18 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local editor / assistant state
+/.claudian/
+/.obsidian/
+/.cursor/
+
+# local Supabase CLI state
+/supabase/.temp/
+
+# one-off local investigation scripts
+/scripts/tmp-*
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+Staging-ENV

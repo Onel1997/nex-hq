@@ -100,12 +100,13 @@ export class SupabaseMasterArtworkAuthorityRepository
     return data ? mapArtwork(data as Record<string, unknown>) : null;
   }
 
-  async list(scope: WorkspaceScope, designId?: string) {
+  async list(scope: WorkspaceScope, designId?: string, limit = 100) {
     let query = createAdminClient()
       .from("design_master_artworks")
       .select("*")
       .eq("workspace_id", scope.workspaceId)
-      .order("approved_at", { ascending: false });
+      .order("approved_at", { ascending: false })
+      .limit(Math.min(Math.max(limit, 1), 100));
     if (designId) query = query.eq("design_id", designId);
     const { data, error } = await query;
     if (error) throw new PersonaStoreError(error.message);

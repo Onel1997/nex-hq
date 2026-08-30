@@ -63,7 +63,10 @@ import { personaIntegrationQuerySchema } from "@/lib/persona/integrations/api-sc
 
 const ROOT = process.cwd();
 const WS = "ws-phase-24d";
-const scope: WorkspaceScope = { workspaceId: WS, actorId: "tester-24d" };
+const scope: WorkspaceScope = {
+  workspaceId: WS,
+  actorId: "00000000-0000-4000-8000-00000000240d",
+};
 
 function minimalPersonaInput(name: string, role: string) {
   return {
@@ -245,8 +248,20 @@ describe("Phase 2.4D — Use Approvals + Brand Cast", () => {
     assert.equal(locked.providerCalled, false);
 
     if (opts?.videoIdentityReady) {
+      const lockedIdentity = await resolveLockedBrandIdentity(scope, persona.id);
+      assert.ok(lockedIdentity);
       await personaRepo.updatePersona(scope, persona.id, {
         video_identity_ready: true,
+        video_identity_review_id: "00000000-0000-4000-8000-00000000a24d",
+        video_identity_ready_at: new Date().toISOString(),
+        video_identity_ready_by: scope.actorId,
+        video_identity_ready_lock_snapshot_id:
+          lockedIdentity.identityLockSnapshotId,
+        video_identity_ready_lock_version: lockedIdentity.lockVersion,
+        video_identity_ready_identity_fingerprint:
+          lockedIdentity.identityFingerprint,
+        video_identity_ready_reference_package_fingerprint:
+          lockedIdentity.referencePackageFingerprint,
       });
     }
 
@@ -343,14 +358,14 @@ describe("Phase 2.4D — Use Approvals + Brand Cast", () => {
   it("7. video approval eligibility follows actual readiness policy", async () => {
     assert.equal(
       VIDEO_IDENTITY_READINESS_POLICY,
-      "requires_video_identity_ready_flag",
+      "requires_current_lock_bound_human_video_review",
     );
     const { persona } = await seedLockedPersona();
     const view = await getBrandModelApprovalsView(scope, persona.id);
     assert.equal(view.videoUse.eligible, false);
     assert.ok(
       view.videoUse.blockingReasons.some((r) =>
-        /video identity validation not completed/i.test(r),
+        /Video-Identitätsprüfung/i.test(r),
       ),
     );
   });
@@ -724,7 +739,7 @@ describe("Phase 2.4D — Use Approvals + Brand Cast", () => {
         error.code === "BRAND_MODEL_INELIGIBLE" &&
         Array.isArray(error.details?.blockingReasons) &&
         error.details.blockingReasons.some((reason) =>
-          /Video Studio use is not approved/i.test(String(reason)),
+          /Video Studio.*nicht freigegeben/i.test(String(reason)),
         ),
     );
     await approveVideoUse(scope, persona.id, {

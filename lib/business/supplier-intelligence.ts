@@ -22,7 +22,7 @@ export type SupplierIntelligence = {
   marketingRules: string[];
 };
 
-export type FacilitySupplierSection = {
+export type AgentSupplierSection = {
   title: string;
   lines: string[];
 };
@@ -168,10 +168,10 @@ export function formatAgentSupplierRules(
   }
 }
 
-/** Facility inspector sections keyed by agent lab. */
-export function getFacilitySupplierSections(
+/** Supplier intelligence sections keyed by active studio agent. */
+export function getAgentSupplierSections(
   profile: BusinessProfile,
-): Partial<Record<AgentId, FacilitySupplierSection[]>> {
+): Partial<Record<AgentId, AgentSupplierSection[]>> {
   const intel = buildSupplierIntelligence(profile);
 
   return {

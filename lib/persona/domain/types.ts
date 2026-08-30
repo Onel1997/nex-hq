@@ -103,6 +103,12 @@ export interface Persona {
   video_use_approved: boolean;
   video_use_approved_at: string | null;
   video_use_approved_by: string | null;
+  /** Video approval is valid only for this exact reviewed Identity Lock. */
+  video_use_approval_review_id?: string | null;
+  video_use_approval_lock_snapshot_id?: string | null;
+  video_use_approval_lock_version?: number | null;
+  video_use_approval_identity_fingerprint?: string | null;
+  video_use_approval_reference_package_fingerprint?: string | null;
   /** Explicit Official Brand Cast membership. Legacy status is not authority. */
   brand_cast_approved: boolean;
   brand_cast_approved_at: string | null;
@@ -136,6 +142,14 @@ export interface Persona {
   default_styling: string;
   image_identity_ready: boolean;
   video_identity_ready: boolean;
+  /** Durable, lock-bound human Video identity review authority. */
+  video_identity_review_id?: string | null;
+  video_identity_ready_at?: string | null;
+  video_identity_ready_by?: string | null;
+  video_identity_ready_lock_snapshot_id?: string | null;
+  video_identity_ready_lock_version?: number | null;
+  video_identity_ready_identity_fingerprint?: string | null;
+  video_identity_ready_reference_package_fingerprint?: string | null;
   intended_usage: "image" | "video" | "image_and_video";
   preferred_location_ids: string[];
   preferred_camera_preset_ids: string[];

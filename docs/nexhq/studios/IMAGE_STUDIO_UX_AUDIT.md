@@ -210,3 +210,35 @@ MAX    $0.24 · expires 02:30
 
 Do not broadly reskin the current studio. First cut the production workflow over to durable authority, then simplify around the state machine above. The visual redesign should follow—not precede—the removal of competing browser/local production truth.
 
+## Deterministic V2 UX Architecture Addendum
+
+The earlier order is superseded where it implied Artwork carries Product context. The target owner flow is:
+
+```text
+1 Artwork   [Approved reusable Artwork V1]
+2 Product   [Shopify Products | Manual Products]
+3 Variant   [Black · L · available] (when applicable)
+4 Model     [Approved Brand Model · Lock v3]
+5 Placement [Front center · calibration required/ready]
+6 Shot      [Studio front · one asset]
+
+REVIEW EXACT INPUTS
+Artwork  checksum/version
+Product  authority/product/variant/reference-package version
+Model    identity lock/package
+Surface  region + calibration status
+Shot     scene/pose/lighting
+Mode     Deterministic Composite
+Cost     Stage A maximum; Stage B local/no provider cost
+
+[Prepare & estimate] -> [Confirm one base generation]
+-> Generate base -> Composite original Artwork -> Review asset
+```
+
+Artwork upload/approval must not ask for a Product. Product management must not ask for Artwork. Placement is its own explicit step and cannot be hidden in prompt text. If Product/shot geometry is unknown, the primary CTA becomes **Calibrate print area**, not Generate. Advanced details contain checksums, transform matrix, provider request ID, stage attempts, and reconciliation state.
+
+Implementation remains specification-only: no broad visual redesign was applied in this milestone.
+
+## Implementation checkpoint — 2026-08-17
+
+Implemented from this audit: German production labels, production-vs-draft distinction, progressive V2 stepper, top-level Artwork/Product/Model/shot selection summary, visual four-corner placement, owner review/cost card, persistent stage loading, hidden fingerprints/diagnostics, separate previous runs, and laptop reflow/page scrolling. Broad legacy queue and inspector simplification is partial; the remaining older V1/technical panels are secondary and need a later dedicated cleanup.

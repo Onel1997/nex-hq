@@ -1,7 +1,9 @@
 import { PersonaDomainError } from "@/lib/persona/domain/errors";
 import {
+  DESIGN_ARTWORK_INCOMPLETE_OWNER_ERROR,
   approveMasterArtworkMetaSchema,
   approveMasterArtworkRequestSchema,
+  DESIGN_MASTER_ARTWORK_BINARY_META_HEADER,
   DESIGN_MASTER_ARTWORK_SOURCE_TYPES,
   type ApproveMasterArtworkRequest,
 } from "./types";
@@ -47,6 +49,86 @@ export async function parseApproveMasterArtworkBody(
   request: Request,
 ): Promise<ParsedApproveMasterArtworkBody> {
   const contentType = request.headers.get("content-type") ?? "";
+  const normalizedContentType = contentType.split(";", 1)[0]?.trim().toLowerCase();
+
+  if (normalizedContentType && MIME_TYPES.has(normalizedContentType)) {
+    const encodedMeta = request.headers.get(DESIGN_MASTER_ARTWORK_BINARY_META_HEADER);
+    if (!encodedMeta) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Binary Master Artwork upload metadata is missing.",
+        code: "VALIDATION",
+        stage: "request_validation",
+      };
+    }
+
+    let input: unknown;
+    try {
+      input = JSON.parse(decodeURIComponent(encodedMeta));
+    } catch {
+      return {
+        ok: false,
+        status: 400,
+        error: "Binary Master Artwork upload metadata is invalid.",
+        code: "VALIDATION",
+        stage: "request_validation",
+      };
+    }
+
+    const parsedMeta = buildMetaFromFields(input as Record<string, unknown>);
+    if (!parsedMeta.success || parsedMeta.data.mimeType !== normalizedContentType) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Invalid durable Master Artwork approval request.",
+        code: "VALIDATION",
+        details: parsedMeta.success ? undefined : parsedMeta.error.flatten(),
+        stage: "request_validation",
+      };
+    }
+
+    let bytes: Buffer;
+    try {
+      bytes = Buffer.from(await request.arrayBuffer());
+    } catch (error) {
+      return {
+        ok: false,
+        status: 413,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Master Artwork binary body could not be read.",
+        code: "REQUEST_TOO_LARGE",
+        stage: "request_parse",
+      };
+    }
+    if (!bytes.length || bytes.length > DESIGN_MASTER_ARTWORK_MAX_BYTES) {
+      return {
+        ok: false,
+        status: 413,
+        error: "Master Artwork is empty or exceeds the 20 MB limit.",
+        code: "REQUEST_TOO_LARGE",
+        stage: "artwork_decode",
+      };
+    }
+    if (
+      bytes.length !== parsedMeta.data.expectedByteLength
+    ) {
+      return {
+        ok: false,
+        status: 409,
+        error: DESIGN_ARTWORK_INCOMPLETE_OWNER_ERROR,
+        code: "ARTWORK_UPLOAD_INCOMPLETE",
+        details: {
+          expectedByteLength: parsedMeta.data.expectedByteLength,
+          receivedByteLength: bytes.length,
+        },
+        stage: "artwork_decode",
+      };
+    }
+    return { meta: { ...parsedMeta.data, contentBase64: "" }, bytes, ok: true };
+  }
 
   if (contentType.includes("multipart/form-data")) {
     let form: FormData;
@@ -128,6 +210,8 @@ export async function parseApproveMasterArtworkBody(
       originalFileName:
         normalizeOriginalFileName(parseNullableText(form.get("originalFileName"))) ??
         normalizeOriginalFileName(file.name),
+      expectedByteLength: Number(form.get("expectedByteLength")),
+      expectedChecksumSha256: form.get("expectedChecksumSha256"),
     });
 
     if (!parsedMeta.success) {

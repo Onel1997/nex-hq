@@ -11,7 +11,7 @@ import { loadHistoricalIntelligence } from "@/lib/commerce/historical-intelligen
 import { matchHistoricalProduct } from "@/lib/commerce/product-performance";
 import { loadBusinessProfile } from "@/lib/business/load-profile";
 import { getBrainClient } from "@/brain/client";
-import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { resolveWorkspace } from "@/brain/seed";
 
 function getStoreDomain(): string {
   return (process.env.SHOPIFY_STORE_DOMAIN ?? "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
@@ -19,7 +19,7 @@ function getStoreDomain(): string {
 
 async function countAgentReports() {
   try {
-    const { workspace } = await ensureWorkspaceBrainSeeded();
+    const workspace = await resolveWorkspace();
     const brain = getBrainClient();
     const result = await brain.searchRecords({
       workspaceId: workspace.id,

@@ -5,6 +5,7 @@ import {
   productReferenceRoleSchema,
   productVisualReferenceSchema,
 } from "@/lib/product-library/types";
+import { productSourceContextSchema } from "@/lib/product-library/product-source-context";
 
 export const PRODUCT_REFERENCE_PACKAGE_VERSION = "product-reference-package-v1" as const;
 
@@ -20,7 +21,7 @@ export const productReferencePackageSchema = z.object({
   provenance: z.string().min(1),
 });
 
-export const productVisualInputSchema = z.object({
+export const productVisualInputV1Schema = z.object({
   contractVersion: z.literal("product-visual-input-v1"),
   productProfileId: z.string().min(1).nullable(),
   authority: z.enum(["SHOPIFY_LIVE", "MANUAL_PROFILE", "SEED", "UNKNOWN"]),
@@ -33,6 +34,30 @@ export const productVisualInputSchema = z.object({
   referencePackage: productReferencePackageSchema,
 });
 
+export const productVisualInputV2Schema = z.object({
+  contractVersion: z.literal("product-visual-input-v2"),
+  productProfileId: z.string().min(1),
+  profileVersion: z.number().int().positive(),
+  authority: z.enum(["SHOPIFY_LIVE", "MANUAL_PROFILE", "SEED", "UNKNOWN"]),
+  status: z.enum(["ACTIVE", "SAMPLE", "UPCOMING", "DRAFT", "ARCHIVED"]),
+  productType: z.string().min(1),
+  sourceContext: productSourceContextSchema.default(() => productSourceContextSchema.parse({})),
+  shopifyProductId: z.string().min(1).nullable(),
+  variantId: z.string().min(1).nullable(),
+  color: z.string().min(1).nullable(),
+  size: z.string().min(1).nullable(),
+  material: z.string().min(1).nullable(),
+  gsm: z.number().positive().nullable(),
+  fit: z.string().min(1).nullable(),
+  construction: z.record(z.string(), z.unknown()),
+  referencePackage: productReferencePackageSchema,
+});
+
+export const productVisualInputSchema = z.discriminatedUnion("contractVersion", [
+  productVisualInputV1Schema,
+  productVisualInputV2Schema,
+]);
+
 export type ProductReferencePackage = z.infer<typeof productReferencePackageSchema>;
 export type ProductVisualInput = z.infer<typeof productVisualInputSchema>;
 
@@ -44,10 +69,15 @@ function inferReferenceRole(
   const normalized = altText?.toLowerCase() ?? "";
   if (/\bfront\b/.test(normalized)) return "FRONT";
   if (/\bback\b|\brear\b/.test(normalized)) return "BACK";
-  if (/\bside\b|\bprofile\b/.test(normalized)) return "SIDE";
-  if (/\bdetail\b|\bclose[ -]?up\b|\bfabric\b|\bmaterial\b/.test(normalized)) {
-    return "DETAIL";
-  }
+  if (/\bleft[ -]?side\b/.test(normalized)) return "LEFT_SIDE";
+  if (/\bright[ -]?side\b/.test(normalized)) return "RIGHT_SIDE";
+  if (/\bmaterial\b|\bfabric\b|\btexture\b/.test(normalized)) return "MATERIAL";
+  if (/\bcollar\b|\bneckline\b/.test(normalized)) return "COLLAR";
+  if (/\bsleeve\b/.test(normalized)) return "SLEEVE";
+  if (/\bzipper\b|\bzip\b/.test(normalized)) return "ZIPPER";
+  if (/\bpocket\b/.test(normalized)) return "POCKET";
+  if (/\bwaistband\b/.test(normalized)) return "WAISTBAND";
+  if (/\bdetail\b|\bclose[ -]?up\b/.test(normalized)) return "DETAIL";
   return "UNCLASSIFIED";
 }
 
@@ -81,6 +111,13 @@ export function buildShopifyProductReferencePackage(
       height: image.height,
       altText: image.altText,
       variantIds: [],
+      roleProvenance: {
+        source: image.url === featuredUrl ? "SHOPIFY_METADATA" : image.altText ? "SHOPIFY_METADATA" : "UNKNOWN",
+        assignedBy: null,
+        assignedAt: capturedAt,
+      },
+      createdAt: capturedAt,
+      updatedAt: capturedAt,
     })),
   });
 }

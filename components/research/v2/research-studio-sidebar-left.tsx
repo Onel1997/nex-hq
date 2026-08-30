@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import type { LabInspectorData } from "@/lib/facility/types";
-import { extractResearchIntelligence } from "@/lib/facility/lab-intelligence";
+import type { LabInspectorData } from "@/lib/workspace/inspector-types";
+import { extractResearchIntelligence } from "@/lib/workspace/lab-intelligence";
 import type { RecentMission } from "./use-research-studio";
 import { cn } from "@/lib/utils";
 import {
@@ -216,7 +216,7 @@ export function ResearchStudioSidebarLeft({
                       </button>
                     ) : (
                       <Link
-                        href="/facility/reports"
+                        href="/agents/research"
                         className="research-studio-nav-link"
                       >
                         <span className="research-studio-nav-link-label">

@@ -6,6 +6,8 @@ import {
   type ImageStudioAssetType,
 } from "@/agents/image/studio-schema";
 import type { ImageBrandModelProductionContext } from "@/lib/image/brand-model-production-context";
+import { CONTENT_SHOTS } from "@/lib/image/content-packs";
+import { sanitizeOptionalProjectContextString } from "@/lib/image/optional-project-context";
 
 export interface DeterministicImagePlanInput {
   brief: string;
@@ -43,7 +45,7 @@ const SHOTS: ReadonlyArray<{
 }));
 
 function normalized(value: string | undefined, fallback: string): string {
-  return value?.trim() || fallback;
+  return sanitizeOptionalProjectContextString(value) ?? fallback;
 }
 
 /** Builds a reviewable shot plan without calling a model or paid provider. */
@@ -86,6 +88,36 @@ export function createDeterministicImageProductionPlan(
     }),
   );
 
+  const contentPlanningAssets = CONTENT_SHOTS.map((shot) => {
+    const shared = `${identityRule} Show ${productName} in ${color}, made from ${material}. The selected approved Master Artwork remains immutable visual truth and may only be applied through the deterministic compositor. ${brief}`;
+    return {
+      id: shot.id,
+      assetType: shot.assetType,
+      outputCategory: shot.outputCategory,
+      productName,
+      collection: collectionName,
+      color,
+      material,
+      location: shot.location,
+      lighting: shot.lighting,
+      photographyStyle: shot.photographyStyle,
+      cameraStyle: shot.cameraStyle,
+      prompt: {
+        openai: `${shared} Prepare the clean base composition for “${shot.label}”. Do not recreate or reinterpret the final artwork; leave the calibrated print surface suitable for deterministic placement.`,
+        midjourney: `${shared} Plan the base composition for “${shot.label}” while preserving verified garment construction and a usable print surface. Do not redraw the final artwork.`,
+        flux: `${shared} Render only the base composition for “${shot.label}” with realistic material behavior and a usable print surface. The final artwork is applied later without generative redrawing.`,
+      },
+      priority: shot.id === "content:campaign-hero" || shot.id === "content:social-hero-story" ? "hero" as const : "core" as const,
+      status: "pending" as const,
+      title: shot.label,
+      platform: shot.intents.join(","),
+      dimensions: shot.aspectIntents.join(" / "),
+      ...(input.brandModelContext ? { brandModelTrace: input.brandModelContext.trace } : {}),
+    };
+  });
+
+  productionAssets.push(...contentPlanningAssets);
+
   return imageOutputSchema.parse({
     title: `${collectionName} Image Production Plan`,
     reportType: "image-project",
@@ -112,6 +144,6 @@ export function createDeterministicImageProductionPlan(
     })),
     confidence: 1,
     sourceReportTitles: ["Owner campaign direction (deterministic planning)"],
-    fullProject: `# ${collectionName} Image Production Plan\n\n## Authority\nThis is a deterministic shot plan, not generated artwork. It does not approve a Persona, artwork, product variant, or output. Paid preparation must resolve and freeze the exact approved Brand Model identity lock, durable Design-owned Master Artwork version/checksum, and typed product production context.\n\n## Direction\n${brief}\n\n## Product\n- Product: ${productName}\n- Collection: ${collectionName}\n- Color: ${color}\n- Material: ${material}\n\n## Shot plan\n${SHOTS.map((shot, index) => `${index + 1}. ${shot.title}: ${shot.location}; ${shot.lighting}; ${shot.cameraStyle}.`).join("\n")}\n\n## Fidelity rules\nThe approved Master Artwork remains canonical and must not be redesigned. Persona identity remains locked while pose and scene may change. Exact Shopify variant claims are permitted only after live server-side resolution. Every provider output requires human review and is never auto-approved.`,
+    fullProject: `# ${collectionName} Image Production Plan\n\n## Authority\nThis is a deterministic shot plan, not generated artwork. It does not approve a Persona, artwork, product variant, or output. Paid preparation must resolve and freeze the exact approved Brand Model identity lock, durable Design-owned Master Artwork version/checksum, and typed product production context. Content Packs select one shot at a time and never authorize a batch.\n\n## Direction\n${brief}\n\n## Product\n- Product: ${productName}\n- Collection: ${collectionName}\n- Color: ${color}\n- Material: ${material}\n\n## Shot plan\n${SHOTS.map((shot, index) => `${index + 1}. ${shot.title}: ${shot.location}; ${shot.lighting}; ${shot.cameraStyle}.`).join("\n")}\n\n## Content planning\nBasis-Pack and Winning Design Expansion are selection aids. Each selected shot still requires its own Prepare, estimate, confirmation, generation job, and owner review.\n\n## Fidelity rules\nThe approved Master Artwork remains canonical and must not be redesigned. Persona identity remains locked while pose and scene may change. Exact Shopify variant claims are permitted only after live server-side resolution. Every provider output requires human review and is never auto-approved.`,
   });
 }

@@ -22,5 +22,13 @@ export class SupabaseDeterministicAssetRepository implements DeterministicAssetR
     return map(data as Record<string,unknown>);
   }
   async getByJob(scope:WorkspaceScope,jobId:string){const {data,error}=await createAdminClient().from("image_production_assets").select("*").eq("workspace_id",scope.workspaceId).eq("generation_job_id",jobId).not("composite_stage_output_id","is",null).maybeSingle();if(error)throw new PersonaStoreError(error.message);return data?map(data as Record<string,unknown>):null;}
+  async getByJobs(scope:WorkspaceScope,jobIds:readonly string[]){
+    const result=new Map<string,DeterministicAsset>();
+    if(!jobIds.length)return result;
+    const {data,error}=await createAdminClient().from("image_production_assets").select("*").eq("workspace_id",scope.workspaceId).in("generation_job_id",[...jobIds]).not("composite_stage_output_id","is",null);
+    if(error)throw new PersonaStoreError(error.message);
+    for(const row of data??[]){const asset=map(row as Record<string,unknown>);result.set(asset.generationJobId,asset);}
+    return result;
+  }
   async review(scope:WorkspaceScope&{actorId:string},assetId:string,input:DeterministicReviewRequest,now:string){const overall=input.decision;const review={contractVersion:"mockup-human-review-v1",overallStatus:overall,identity:input.checklist.identity,productFidelity:input.checklist.productFidelity,artworkFidelityExact:input.checklist.artworkFidelityExact,placement:input.checklist.placement,perspective:input.checklist.perspective,lightingIntegration:input.checklist.lightingIntegration,reviewedBy:scope.actorId,reviewedAt:now,note:input.note};const {data,error}=await createAdminClient().from("image_production_assets").update({review_status:overall,mockup_review:review,reviewed_by:scope.actorId,reviewed_at:now,review_note:input.note,updated_at:now}).eq("workspace_id",scope.workspaceId).eq("id",assetId).not("composite_stage_output_id","is",null).select("*").maybeSingle();if(error||!data)throw new PersonaDomainError(error?.message??"Deterministic asset not found.","NOT_FOUND");return map(data as Record<string,unknown>);}
 }

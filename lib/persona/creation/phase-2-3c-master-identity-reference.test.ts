@@ -210,7 +210,7 @@ describe("Phase 2.3C Master Identity Reference", () => {
       join(ROOT, "components/persona/persona-studio.tsx"),
       "utf8",
     );
-    assert.match(studio, /MASTER IDENTITY REFERENCE/);
+    assert.match(studio, /MASTER-IDENTITÄTSREFERENZ/);
     assert.match(studio, /Original selected Brand Face/);
     assert.match(studio, /master-identity-reference/);
   });

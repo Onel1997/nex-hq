@@ -79,10 +79,10 @@ export function ImageProjectWorkspace({
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <h3 className="font-display text-3xl font-medium">{projectName}</h3>
+        <h3 className="text-3xl font-semibold tracking-tight">{projectName}</h3>
         <p className="text-sm text-muted-foreground">
           {t("image.interface.confidence")}: {Math.round(confidence * 100)}% ·{" "}
-          {productionAssets.length} production assets
+          {productionAssets.length} Produktionsergebnisse
         </p>
       </div>
 
@@ -102,7 +102,7 @@ export function ImageProjectWorkspace({
 
       <section className="space-y-3">
         <p className="text-label text-primary/80">
-          Product & Launch ({primaryAssets.length})
+          Produkt und Launch ({primaryAssets.length})
         </p>
         <ul className="grid gap-4 lg:grid-cols-2">
           {primaryAssets.map((asset) => (
@@ -125,7 +125,7 @@ export function ImageProjectWorkspace({
             className="flex w-full items-center justify-between rounded-xl border border-border bg-muted/10 px-4 py-3 text-left"
           >
             <span className="text-label text-primary/80">
-              Editorial, Social & Lookbook ({secondaryAssets.length})
+              Editorial, Social Media und Lookbook ({secondaryAssets.length})
             </span>
             <ChevronDown
               className={cn(

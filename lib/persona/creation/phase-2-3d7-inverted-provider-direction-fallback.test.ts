@@ -866,13 +866,13 @@ describe("Phase 2.3D.7 inverted provider direction fallback", () => {
       join(ROOT, "components/persona/persona-studio.tsx"),
       "utf8",
     );
-    assert.match(studio, /Target slot:/);
-    assert.match(studio, /Direction strategy:/);
-    assert.match(studio, /Provider instruction:/);
-    assert.match(studio, /Final acceptance:/);
+    assert.match(studio, /Zielplatz:/);
+    assert.match(studio, /Richtungsstrategie:/);
+    assert.match(studio, /Provider-Anweisung:/);
+    assert.match(studio, /Abschließende Freigabe:/);
     assert.match(
       studio,
-      /OpenAI could not reliably produce this camera direction/,
+      /Kamerarichtung konnte nicht zuverlässig erstellt werden/,
     );
     assert.match(studio, /reference-package-direction-plan/);
     assert.match(studio, /invertedFallbackConfirmed/);

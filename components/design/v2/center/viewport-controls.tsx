@@ -37,25 +37,25 @@ export function ViewportControls({
 
   return (
     <div className={cn("dsv2-viewport-controls", className)}>
-      <button type="button" className="dsv2-viewport-btn" onClick={zoomOut} aria-label="Zoom out">
+      <button type="button" className="dsv2-viewport-btn" onClick={zoomOut} aria-label="Verkleinern">
         <Minus className="size-3.5" />
       </button>
       <button type="button" className="dsv2-viewport-btn dsv2-viewport-zoom" onClick={onFit}>
         {displayZoom}
       </button>
-      <button type="button" className="dsv2-viewport-btn" onClick={zoomIn} aria-label="Zoom in">
+      <button type="button" className="dsv2-viewport-btn" onClick={zoomIn} aria-label="Vergrößern">
         <Plus className="size-3.5" />
       </button>
       <span className="dsv2-viewport-divider" />
-      <button type="button" className="dsv2-viewport-btn" onClick={onFit} title="Fit to view">
+      <button type="button" className="dsv2-viewport-btn" onClick={onFit} title="An Bildschirm anpassen">
         <Expand className="size-3.5" />
-        <span>Fit</span>
+        <span>Anpassen</span>
       </button>
       <button
         type="button"
         className="dsv2-viewport-btn"
         onClick={() => onZoomChange(1)}
-        title="Actual size"
+        title="Tatsächliche Größe"
       >
         100%
       </button>
@@ -63,7 +63,7 @@ export function ViewportControls({
         type="button"
         className="dsv2-viewport-btn"
         onClick={onFullscreen}
-        title="Fullscreen"
+        title="Vollbild"
       >
         <Maximize2 className="size-3.5" />
       </button>
@@ -71,8 +71,8 @@ export function ViewportControls({
         type="button"
         className="dsv2-viewport-btn"
         onClick={onFit}
-        title="Reset view"
-        aria-label="Reset view"
+        title="Ansicht zurücksetzen"
+        aria-label="Ansicht zurücksetzen"
       >
         <RotateCcw className="size-3.5" />
       </button>

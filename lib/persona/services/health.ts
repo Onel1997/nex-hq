@@ -84,6 +84,31 @@ export interface PersonaHealthReport {
   };
 }
 
+const PERSONA_HEALTH_CACHE_TTL_MS = 60_000;
+let healthCache:
+  | { expiresAt: number; promise: Promise<PersonaHealthReport> }
+  | null = null;
+
+export function getCachedPersonaStudioHealth(): {
+  cacheStatus: "hit" | "miss";
+  report: Promise<PersonaHealthReport>;
+} {
+  const now = Date.now();
+  if (healthCache && healthCache.expiresAt > now) {
+    return { cacheStatus: "hit", report: healthCache.promise };
+  }
+  const promise = checkPersonaStudioHealth().catch((error) => {
+    if (healthCache?.promise === promise) healthCache = null;
+    throw error;
+  });
+  healthCache = { expiresAt: now + PERSONA_HEALTH_CACHE_TTL_MS, promise };
+  return { cacheStatus: "miss", report: promise };
+}
+
+export function clearPersonaHealthCacheForTests(): void {
+  healthCache = null;
+}
+
 function uiLabelFor(status: PersonaHealthStatus): PersonaHealthUiLabel {
   if (status === "healthy") return "Bereit";
   if (status === "degraded") return "Einrichtung erforderlich";

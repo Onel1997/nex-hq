@@ -18,7 +18,7 @@ import type { ProductProductionSelection } from "@/lib/image/product-production-
 import { PRODUCT_PRODUCTION_CONTEXT_VERSION, resolveProductProductionContext } from "@/lib/image/product-production-context";
 import type { ApprovedMasterArtwork } from "@/lib/design/master-artwork-authority/types";
 import { estimateImageGenerationCost } from "./pricing";
-import { getActiveImageGenerationProfile, resolveOpenAiImageQuality, resolveOpenAiImageSize } from "@/lib/image/image-generation-config";
+import { resolveOpenAiImageQuality, resolveOpenAiImageSize } from "@/lib/image/image-generation-config";
 
 const WS = randomUUID();
 const ACTOR = randomUUID();
@@ -480,7 +480,6 @@ describe("durable paid Image generation jobs", () => {
   it("binds one confirmed job to exactly one shot asset and one provider attempt cost", async () => {
     const repo = new MemoryImageGenerationJobRepository();
     const job = await prepareImageGenerationJob({ workspaceId: WS, actorId: ACTOR }, request(), baseDeps(repo));
-    const profile = getActiveImageGenerationProfile();
     const expected = estimateImageGenerationCost({
       size: resolveOpenAiImageSize(job.inputSnapshot.production.dimensions),
       quality: resolveOpenAiImageQuality(),
@@ -646,6 +645,10 @@ describe("durable paid Image generation jobs", () => {
     assert.match(requestToProvider.prompt, /material: heavyweight cotton/i);
     assert.match(requestToProvider.prompt, /fit\/silhouette: oversized/i);
     assert.match(requestToProvider.prompt, /Scene: Berlin street/i);
+    assert.doesNotMatch(
+      requestToProvider.prompt,
+      /target garment print zone must remain completely blank/i,
+    );
     assert.equal(result.identityStrategy, "openai_master_identity_and_artwork_edit_high_fidelity");
   });
 });

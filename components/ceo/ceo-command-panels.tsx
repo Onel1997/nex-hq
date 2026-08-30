@@ -338,7 +338,7 @@ export function CeoCommandPanels({
                 </p>
                 <p>{data.latestFinalReport.ceoVerdict}</p>
               </div>
-              <Link href="/facility/reports" className="ceo-panel-link">
+              <Link href="/agents/research" className="ceo-panel-link">
                 {t("ceo.executiveSummary.viewReport")}
                 <FileText className="size-3.5" />
               </Link>
@@ -437,7 +437,7 @@ export function CeoCommandPanels({
               })}
             </>
           ) : null}
-          <Link href="/facility/missions" className="ceo-panel-link">
+          <Link href="/agents/ceo" className="ceo-panel-link">
             {t("ceo.dashboard.viewTaskBoard")}
           </Link>
         </CeoAccordionSection>

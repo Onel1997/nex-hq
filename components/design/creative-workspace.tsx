@@ -1699,7 +1699,7 @@ export function CreativeWorkspaceEmpty({
                 Start Demo Flow
               </button>
             ) : null}
-            <Link href="/facility/reports" className="cw-toolbar-btn">
+            <Link href="/agents/research" className="cw-toolbar-btn">
               Browse Reports
             </Link>
           </div>

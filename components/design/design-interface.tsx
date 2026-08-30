@@ -173,7 +173,7 @@ export function DesignInterface({ variant = "default" }: DesignInterfaceProps) {
                   {Math.round(result.confidence * 100)}% confidence
                 </p>
               </div>
-              <Link href="/facility/reports" className="design-mission-result-link">
+              <Link href="/agents/research" className="design-mission-result-link">
                 Reports
                 <ArrowRight className="size-3" />
               </Link>
@@ -526,7 +526,7 @@ export function DesignInterface({ variant = "default" }: DesignInterfaceProps) {
               </span>
             </div>
             <Link
-              href="/facility/reports"
+              href="/agents/research"
               className="inline-flex items-center gap-2 text-base text-primary hover:underline"
             >
               {t("design.interface.viewReports")}

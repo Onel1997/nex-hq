@@ -107,7 +107,7 @@ describe("Image Studio product authority display", () => {
         masterArtworkApproved: true,
         hasBrandModel: true,
       }) ?? "",
-      /Shopify/
+      /Produkt, Farbe und Größe/i,
     );
     assert.equal(
       canPreparePaidImageEstimate({

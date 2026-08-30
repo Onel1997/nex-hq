@@ -121,6 +121,33 @@ export async function getPersonaDashboardCounts(
   return repo().dashboardCounts(scope);
 }
 
+export function derivePersonaDashboardCounts(
+  snap: PersonaStudioSnapshot,
+): PersonaStudioDashboardCounts {
+  let image_ready_personas = 0;
+  let video_ready_personas = 0;
+  for (const persona of snap.personas) {
+    const readiness = computePersonaReadiness(
+      persona,
+      snap.reference_assets.filter((asset) => asset.persona_id === persona.id),
+    );
+    if (readiness.image_ready) image_ready_personas += 1;
+    if (readiness.video_ready) video_ready_personas += 1;
+  }
+  return {
+    approved_personas: snap.personas.filter((persona) => persona.brand_cast_approved).length,
+    locations: snap.locations.filter((location) => location.active).length,
+    camera_presets: snap.camera_presets.length,
+    pose_packs: snap.poses.filter((pose) => pose.active).length,
+    brand_looks: snap.brand_looks.length,
+    outfits: snap.outfits.filter((outfit) => outfit.active).length,
+    draft_personas: snap.personas.filter((persona) => persona.status === "Draft").length,
+    review_personas: snap.personas.filter((persona) => persona.status === "Review").length,
+    image_ready_personas,
+    video_ready_personas,
+  };
+}
+
 export async function listPersonas(scope: WorkspaceScope): Promise<Persona[]> {
   return repo().listPersonas(scope);
 }

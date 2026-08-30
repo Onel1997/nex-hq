@@ -1,11 +1,18 @@
 "use client";
 
 import { IMAGE_GENERATION } from "@/lib/image/image-generation-config";
-import type { ImageStudioAsset, ImageMoodboardSection, ImagePalette } from "@/agents/image/types";
+import type {
+  ImageStudioAsset,
+  ImageMoodboardSection,
+  ImagePalette,
+} from "@/agents/image/types";
 import { ProductionGallery } from "@/components/image/production-gallery";
 import { BrandModelSelector } from "@/components/image/brand-model-selector";
 import { ProductProductionSelector } from "@/components/image/product-production-selector";
 import { DeterministicV2Panel } from "@/components/image/deterministic-v2-panel";
+import { ContentPackSelector } from "@/components/image/content-pack-selector";
+import { SocialCreativeDirectionSelector } from "@/components/image/social-creative-direction-selector";
+import { ArtworkLibrarySelector } from "@/components/image/artwork-library-selector";
 import {
   AssetPreviewPlaceholder,
   CanvasPlaceholder,
@@ -17,11 +24,23 @@ import {
   applyImageStudioHandoff,
   acknowledgeImageStudioHandoff,
   loadHandoffSendDebug,
+  saveImageStudioHandoff,
   type HandoffLoadDebug,
   type HandoffSaveResult,
   type ImageStudioHandoff,
 } from "@/lib/image/image-handoff-store";
-import { bootstrapImageStudioHandoff } from "@/lib/image/image-studio-handoff-bootstrap";
+import type { ApprovedMasterArtworkView } from "@/lib/design/master-artwork-authority/types";
+import {
+  bootstrapImageStudioHandoff,
+  buildResolvedArtworkHandoff,
+  hasRequestedArtworkPointer,
+  resolveRequestedArtworkId,
+} from "@/lib/image/image-studio-handoff-bootstrap";
+import {
+  DESIGN_TO_IMAGE_HANDOFF_OWNER_ERROR,
+  DesignToImageHandoffError,
+  resolveCanonicalArtworkForImageHandoff,
+} from "@/lib/design/design-to-image-handoff";
 import {
   applyMasterArtworkToBrief,
   enrichProductionAssetsWithMasterArtwork,
@@ -65,6 +84,12 @@ import type {
   ProductProductionSelection,
 } from "@/lib/image/product-production-context";
 import type { ImageProductSelection } from "@/lib/image/product-production-client";
+import type {
+  ImageContentMode,
+  SocialCreativeDirectionV1,
+} from "@/lib/image/social-creative-direction";
+import { creativeDirectionForSelection } from "@/lib/image/social-creative-direction";
+import { immediateContentPlanningAssets } from "@/lib/image/immediate-content-plan";
 import {
   formatPaidPrepareError,
   logPaidPrepareValidationError,
@@ -130,13 +155,7 @@ interface ImageRunResult {
 }
 
 type InspectorSection =
-  | "queue"
-  | "model"
-  | "product"
-  | "prompt"
-  | "progress"
-  | "review"
-  | "history";
+  "queue" | "model" | "product" | "prompt" | "progress" | "review" | "history";
 
 /** Survives React Strict Mode remounts so handoff apply/bootstrap runs once per navigation. */
 let handoffBootstrapLock = false;
@@ -156,7 +175,9 @@ function clearCachedProductionProject() {
 }
 
 function buildHandoffMissionKey(handoff: ImageStudioHandoff): string {
-  return handoff.designId ?? handoff.handoffAt ?? handoff.mission?.title ?? "mission";
+  return (
+    handoff.designId ?? handoff.handoffAt ?? handoff.mission?.title ?? "mission"
+  );
 }
 
 const HANDOFF_RETRY_DELAYS_MS = [50, 250, 1000] as const;
@@ -170,7 +191,10 @@ function resolveGenerationBrief(
   const contextHandoff = projectContextHandoff ?? artworkHandoff;
   const trimmedBrief = brief.trim();
   if (trimmedBrief.length >= 3) {
-    return applyMasterArtworkToBrief(trimmedBrief.slice(0, 4000), artworkHandoff);
+    return applyMasterArtworkToBrief(
+      trimmedBrief.slice(0, 4000),
+      artworkHandoff,
+    );
   }
 
   if (!contextHandoff && !blueprint) return "";
@@ -216,9 +240,15 @@ function InspectorCard({
 }) {
   return (
     <div className={cn("is-inspector-card", open && "is-inspector-card--open")}>
-      <button type="button" className="is-inspector-card-toggle" onClick={onToggle}>
+      <button
+        type="button"
+        className="is-inspector-card-toggle"
+        onClick={onToggle}
+      >
         <span>{title}</span>
-        <ChevronDown className={cn("is-inspector-chevron size-3.5", open && "open")} />
+        <ChevronDown
+          className={cn("is-inspector-chevron size-3.5", open && "open")}
+        />
       </button>
       {open ? <div className="is-inspector-card-body">{children}</div> : null}
     </div>
@@ -238,7 +268,9 @@ export function ImageStudioWorkspace() {
     useState<ImageProductSelection | null>(null);
   const [productProductionContext, setProductProductionContext] =
     useState<ProductProductionContext | null>(null);
-  const [selectedProductLabel, setSelectedProductLabel] = useState<string | null>(null);
+  const [selectedProductLabel, setSelectedProductLabel] = useState<
+    string | null
+  >(null);
   const [showHandoffDebug, setShowHandoffDebug] = useState(false);
   const [brief, setBrief] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -259,10 +291,20 @@ export function ImageStudioWorkspace() {
     detailedError?: string;
   } | null>(null);
   const [result, setResult] = useState<ImageRunResult | null>(null);
-  const [productionAssets, setProductionAssets] = useState<ImageStudioAsset[]>([]);
-  const [selectedSlotId, setSelectedSlotId] = useState(MISSION_ASSET_SLOTS[0].id);
+  const [productionAssets, setProductionAssets] = useState<ImageStudioAsset[]>(
+    [],
+  );
+  const [selectedSlotId, setSelectedSlotId] = useState(
+    MISSION_ASSET_SLOTS[0].id,
+  );
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
-  const [openSections, setOpenSections] = useState<Record<InspectorSection, boolean>>({
+  const [contentMode, setContentMode] =
+    useState<ImageContentMode>("SOCIAL_CONTENT");
+  const [creativeDirection, setCreativeDirection] =
+    useState<SocialCreativeDirectionV1 | null>(null);
+  const [openSections, setOpenSections] = useState<
+    Record<InspectorSection, boolean>
+  >({
     queue: false,
     model: true,
     product: true,
@@ -280,10 +322,13 @@ export function ImageStudioWorkspace() {
   const [pipelineActive] = useState(false);
   const [paidJob, setPaidJob] = useState<ImageGenerationJobView | null>(null);
   const [paidJobBusy, setPaidJobBusy] = useState(false);
-  const [durableAssets, setDurableAssets] = useState<ImageProductionAssetView[]>([]);
+  const [durableAssets, setDurableAssets] = useState<
+    ImageProductionAssetView[]
+  >([]);
   const pipelineLockRef = useRef(false);
   const packageLockRef = useRef(false);
-  const [handoffLoadDebug, setHandoffLoadDebug] = useState<HandoffLoadDebug | null>(null);
+  const [handoffLoadDebug, setHandoffLoadDebug] =
+    useState<HandoffLoadDebug | null>(null);
   const [handoffSendDebug] = useState<HandoffSaveResult | null>(() =>
     typeof window === "undefined" ? null : loadHandoffSendDebug(),
   );
@@ -291,7 +336,9 @@ export function ImageStudioWorkspace() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setShowHandoffDebug(isImageStudioHandoffDebugEnabled(window.location.search));
+    setShowHandoffDebug(
+      isImageStudioHandoffDebugEnabled(window.location.search),
+    );
   }, []);
 
   // Durable recovery is independent of localStorage/window.name. Once the
@@ -338,18 +385,40 @@ export function ImageStudioWorkspace() {
     };
   }, []);
 
+  const paidJobId = paidJob?.id;
+  const paidJobStatus = paidJob?.status;
   useEffect(() => {
-    if (!paidJob || paidJob.status !== "running") return;
-    const timer = window.setInterval(() => {
-      void fetch(`/api/image/generation-jobs/${paidJob.id}`, { cache: "no-store" })
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { job?: ImageGenerationJobView } | null) => {
-          if (payload?.job) setPaidJob(payload.job);
-        })
-        .catch(() => undefined);
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [paidJob]);
+    if (!paidJobId || paidJobStatus !== "running") return;
+    let inFlight = false;
+    let cancelled = false;
+    const poll = async () => {
+      if (cancelled || inFlight || document.visibilityState === "hidden") return;
+      inFlight = true;
+      try {
+        const response = await fetch(`/api/image/generation-jobs/${paidJobId}`, {
+        cache: "no-store",
+        });
+        const payload = response.ok
+          ? ((await response.json()) as { job?: ImageGenerationJobView })
+          : null;
+        if (!cancelled && payload?.job) setPaidJob(payload.job);
+      } catch {
+        // Durable server state remains authoritative across transient refreshes.
+      } finally {
+        inFlight = false;
+      }
+    };
+    const timer = window.setInterval(() => void poll(), 3000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [paidJobId, paidJobStatus]);
 
   useEffect(() => {
     if (!paidJob || paidJob.status !== "succeeded") return;
@@ -377,21 +446,28 @@ export function ImageStudioWorkspace() {
           },
         );
         const payload = (await response.json()) as {
-          asset?: Omit<ImageProductionAssetView, "accessUrl" | "accessExpiresAt">;
+          asset?: Omit<
+            ImageProductionAssetView,
+            "accessUrl" | "accessExpiresAt"
+          >;
           error?: string;
         };
         if (!response.ok || !payload.asset) {
-          throw new Error(payload.error ?? "Die Ergebnisprüfung ist fehlgeschlagen.");
+          throw new Error(
+            payload.error ?? "Die Ergebnisprüfung ist fehlgeschlagen.",
+          );
         }
         setDurableAssets((current) =>
           current.map((asset) =>
-            asset.id === assetId
-              ? { ...asset, ...payload.asset }
-              : asset,
+            asset.id === assetId ? { ...asset, ...payload.asset } : asset,
           ),
         );
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Die Ergebnisprüfung ist fehlgeschlagen.");
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Die Ergebnisprüfung ist fehlgeschlagen.",
+        );
       } finally {
         setPaidJobBusy(false);
       }
@@ -430,25 +506,49 @@ export function ImageStudioWorkspace() {
     [brandModelSelection],
   );
 
-  const handleProductSelectionChange = useCallback((selection: ImageProductSelection | null) => {
-    if (!selection) {
-      setImageProductSelection(null);
-      setProductSelection(null);
-      setProductProductionContext(null);
-      setSelectedProductLabel(null);
-      return;
-    }
-    setImageProductSelection(selection);
-    setProductSelection(selection.selection);
-    setProductProductionContext(selection.productionContext);
-    const context = selection.productionContext;
-    setSelectedProductLabel(
-      `${context.productName} · ${context.color ?? "Variante"} · ${context.size ?? "Größe"}`,
-    );
-  }, []);
+  const handleProductSelectionChange = useCallback(
+    (selection: ImageProductSelection | null) => {
+      if (!selection) {
+        setImageProductSelection(null);
+        setProductSelection(null);
+        setProductProductionContext(null);
+        setSelectedProductLabel(null);
+        return;
+      }
+      setImageProductSelection(selection);
+      setProductSelection(selection.selection);
+      setProductProductionContext(selection.productionContext);
+      const context = selection.productionContext;
+      setSelectedProductLabel(
+        `${selection.garmentFamilyLabel ?? context.productName} · ${context.color ?? "Farbe"} · ${context.size ?? "Größe"}`,
+      );
+    },
+    [],
+  );
+
+  const handleArtworkLibrarySelection = useCallback(
+    (artwork: ApprovedMasterArtworkView) => {
+      const retainedContext = projectContextHandoff ?? handoff;
+      const nextHandoff = buildResolvedArtworkHandoff({
+        artwork,
+        retainedContext,
+      });
+
+      cachedAppliedArtworkHandoff = nextHandoff;
+      handoffBootstrapLock = true;
+      saveImageStudioHandoff(nextHandoff);
+      setHandoff(nextHandoff);
+      setBrief((current) => current.trim() || nextHandoff.brief);
+      setPaidJob(null);
+      setError(null);
+    },
+    [handoff, projectContextHandoff],
+  );
 
   const selectedSlot = useMemo(
-    () => MISSION_ASSET_SLOTS.find((s) => s.id === selectedSlotId) ?? MISSION_ASSET_SLOTS[0],
+    () =>
+      MISSION_ASSET_SLOTS.find((s) => s.id === selectedSlotId) ??
+      MISSION_ASSET_SLOTS[0],
     [selectedSlotId],
   );
 
@@ -460,12 +560,33 @@ export function ImageStudioWorkspace() {
     return map;
   }, [productionAssets]);
 
+  const selectableContentAssets = useMemo(() => {
+    const durableIds = new Set(productionAssets.map((asset) => asset.id));
+    return [
+      ...productionAssets,
+      ...immediateContentPlanningAssets().filter(
+        (asset) => !durableIds.has(asset.id),
+      ),
+    ];
+  }, [productionAssets]);
+
   const selectedAsset = useMemo(() => {
     if (selectedAssetId) {
-      return productionAssets.find((a) => a.id === selectedAssetId);
+      return selectableContentAssets.find((a) => a.id === selectedAssetId);
     }
     return missionSlotAssets.get(selectedSlotId);
-  }, [missionSlotAssets, productionAssets, selectedAssetId, selectedSlotId]);
+  }, [missionSlotAssets, selectableContentAssets, selectedAssetId, selectedSlotId]);
+
+  // A shot/mode change gets its complete default direction in the same render.
+  // This avoids the former post-paint effect gap where the guidance card and
+  // creative controls alternated and caused visible layout jumps.
+  const effectiveCreativeDirection = useMemo(() => {
+    return creativeDirectionForSelection({
+      direction: creativeDirection,
+      shotId: selectedAsset?.id ?? null,
+      contentMode,
+    });
+  }, [contentMode, creativeDirection, selectedAsset?.id]);
 
   useEffect(() => {
     if (!paidJob) return;
@@ -494,7 +615,8 @@ export function ImageStudioWorkspace() {
   );
 
   const effectiveBrief = useMemo(
-    () => resolveGenerationBrief(brief, handoff, projectContextHandoff, blueprint),
+    () =>
+      resolveGenerationBrief(brief, handoff, projectContextHandoff, blueprint),
     [brief, handoff, projectContextHandoff, blueprint],
   );
 
@@ -544,7 +666,9 @@ export function ImageStudioWorkspace() {
   const hasBlueprint = Boolean(blueprint?.imported || brief.trim());
   const hasResults = productionAssets.length > 0;
   const hasArtworkHandoff = Boolean(handoff);
-  const hasProjectContext = Boolean(projectContextHandoff || blueprint?.imported);
+  const hasProjectContext = Boolean(
+    projectContextHandoff || blueprint?.imported,
+  );
   const completedAssetCount = useMemo(
     () => countCompletedMissionAssets(productionAssets),
     [productionAssets],
@@ -578,12 +702,17 @@ export function ImageStudioWorkspace() {
     blueprint?.designName ??
     projectContextHandoff?.sourceTitle ??
     "Kein Projektkontext vorhanden";
-  const artworkVersionLabel = handoff?.durableMasterArtwork?.version ?? handoff?.masterArtworkVersion ?? "—";
+  const artworkVersionLabel =
+    handoff?.durableMasterArtwork?.version ??
+    handoff?.masterArtworkVersion ??
+    "—";
   const artworkStatusLabel = resolveDurableMasterArtworkReference(handoff)
     ? "Freigegeben"
     : "Nicht ausgewählt";
   const artworkOriginalFileName =
-    handoff?.artworkFileName ?? handoff?.durableMasterArtwork?.originalFileName ?? null;
+    handoff?.artworkFileName ??
+    handoff?.durableMasterArtwork?.originalFileName ??
+    null;
   const artworkSecondaryLine = hasArtworkHandoff
     ? formatArtworkSecondaryLine({
         version: artworkVersionLabel !== "—" ? artworkVersionLabel : null,
@@ -617,10 +746,20 @@ export function ImageStudioWorkspace() {
     if (allAssetsComplete) return 100;
     const base = 18;
     const span = 82;
-    return Math.round(base + (completedAssetCount / MISSION_ASSET_SLOTS.length) * span);
-  }, [allAssetsComplete, completedAssetCount, hasBlueprint, hasResults, isLoading]);
+    return Math.round(
+      base + (completedAssetCount / MISSION_ASSET_SLOTS.length) * span,
+    );
+  }, [
+    allAssetsComplete,
+    completedAssetCount,
+    hasBlueprint,
+    hasResults,
+    isLoading,
+  ]);
 
-  const commercialScore = blueprint?.commercialScore ?? (result ? Math.round((result.confidence ?? 0.82) * 100) : null);
+  const commercialScore =
+    blueprint?.commercialScore ??
+    (result ? Math.round((result.confidence ?? 0.82) * 100) : null);
 
   const getReviewState = useCallback(
     (assetId: string) => {
@@ -635,7 +774,9 @@ export function ImageStudioWorkspace() {
     async (briefText: string): Promise<ImageRunResult | null> => {
       const text = briefText.trim();
       if (!text) {
-        console.warn("[Image Studio] createProductionPackage skipped — empty brief");
+        console.warn(
+          "[Image Studio] createProductionPackage skipped — empty brief",
+        );
         return null;
       }
 
@@ -666,17 +807,22 @@ export function ImageStudioWorkspace() {
       }
 
       if (cachedProductionProject) {
-        console.info("[Image Studio] createProductionPackage using cached project", {
-          reportId: cachedProductionProject.reportId,
-          assetCount: cachedProductionProject.productionAssets?.length ?? 0,
-        });
+        console.info(
+          "[Image Studio] createProductionPackage using cached project",
+          {
+            reportId: cachedProductionProject.reportId,
+            assetCount: cachedProductionProject.productionAssets?.length ?? 0,
+          },
+        );
         setResult(cachedProductionProject);
         setProductionAssets(cachedProductionProject.productionAssets ?? []);
         return cachedProductionProject;
       }
 
       if (productionPackagePromise) {
-        console.info("[Image Studio] createProductionPackage awaiting in-flight request");
+        console.info(
+          "[Image Studio] createProductionPackage awaiting in-flight request",
+        );
         return productionPackagePromise;
       }
 
@@ -685,7 +831,9 @@ export function ImageStudioWorkspace() {
         setValidationDebug(null);
 
         try {
-          console.info("[Image Studio] creating production package", { briefLength: text.length });
+          console.info("[Image Studio] creating production package", {
+            briefLength: text.length,
+          });
           const res = await fetch("/api/image/run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -696,7 +844,7 @@ export function ImageStudioWorkspace() {
               color: projectContextHandoff?.mission?.colorway,
               material:
                 productProductionContext?.authoritative !== true
-                  ? productProductionContext?.material ?? undefined
+                  ? (productProductionContext?.material ?? undefined)
                   : undefined,
               ...(brandModelSelection
                 ? {
@@ -749,10 +897,15 @@ export function ImageStudioWorkspace() {
                 );
               }
               if (debug.detailedError) {
-                console.error("[Image Studio] detailed error:\n", debug.detailedError);
+                console.error(
+                  "[Image Studio] detailed error:\n",
+                  debug.detailedError,
+                );
               }
             }
-            throw new Error(data.error ?? data.detailedError ?? t("image.errors.unexpected"));
+            throw new Error(
+              data.error ?? data.detailedError ?? t("image.errors.unexpected"),
+            );
           }
 
           const project = data as ImageRunResult;
@@ -760,19 +913,26 @@ export function ImageStudioWorkspace() {
             project.productionAssets ?? [],
             handoff,
           );
-          const enrichedProject = { ...project, productionAssets: enrichedAssets };
+          const enrichedProject = {
+            ...project,
+            productionAssets: enrichedAssets,
+          };
           cachedProductionProject = enrichedProject;
           setResult(enrichedProject);
           setProductionAssets(enrichedAssets);
           console.info("[Image Studio] queue created", {
             reportId: project.reportId,
             assetCount: project.productionAssets?.length ?? 0,
-            queuedCount: queuedAssetsForPipeline(project.productionAssets ?? []).length,
+            queuedCount: queuedAssetsForPipeline(project.productionAssets ?? [])
+              .length,
           });
           return project;
         } catch (err) {
-          const message = err instanceof Error ? err.message : t("image.errors.unexpected");
-          console.error("[Image Studio] production package failed", { error: message });
+          const message =
+            err instanceof Error ? err.message : t("image.errors.unexpected");
+          console.error("[Image Studio] production package failed", {
+            error: message,
+          });
           setError(message);
           productionPackagePromise = null;
           return null;
@@ -783,7 +943,13 @@ export function ImageStudioWorkspace() {
 
       return productionPackagePromise;
     },
-    [brandModelSelection, handoff, projectContextHandoff, productProductionContext, t],
+    [
+      brandModelSelection,
+      handoff,
+      projectContextHandoff,
+      productProductionContext,
+      t,
+    ],
   );
 
   const releaseExecutionLocks = useCallback((reason: string) => {
@@ -831,14 +997,19 @@ export function ImageStudioWorkspace() {
       console.warn("[Image Studio] runImage early return: missing handoff", {
         abortReason: "missing handoff",
       });
-      setError("Produktion kann nicht starten: Die Design-Übergabe wurde nicht übernommen.");
+      setError(
+        "Produktion kann nicht starten: Die Design-Übergabe wurde nicht übernommen.",
+      );
       return null;
     }
 
     if (briefForRun !== brief.trim()) {
-      console.info("[Image Studio] runImage rebuilt brief from handoff sources", {
-        briefLength: briefForRun.length,
-      });
+      console.info(
+        "[Image Studio] runImage rebuilt brief from handoff sources",
+        {
+          briefLength: briefForRun.length,
+        },
+      );
       setBrief(briefForRun);
     }
 
@@ -850,9 +1021,12 @@ export function ImageStudioWorkspace() {
     }
 
     if (pipelineLockRef.current) {
-      console.warn("[Image Studio] runImage resetting stuck pipelineLockRef before package", {
-        abortReason: "pipelineLockRef.current is true",
-      });
+      console.warn(
+        "[Image Studio] runImage resetting stuck pipelineLockRef before package",
+        {
+          abortReason: "pipelineLockRef.current is true",
+        },
+      );
       pipelineLockRef.current = false;
     }
 
@@ -869,10 +1043,13 @@ export function ImageStudioWorkspace() {
       } catch (err) {
         const message =
           err instanceof Error ? err.message : t("image.errors.unexpected");
-        console.error("[Image Studio] runImage early return: production package failed", {
-          abortReason: "missing production package",
-          error: message,
-        });
+        console.error(
+          "[Image Studio] runImage early return: production package failed",
+          {
+            abortReason: "missing production package",
+            error: message,
+          },
+        );
         setError(message);
         releaseExecutionLocks("createProductionPackage-error");
         return null;
@@ -889,11 +1066,15 @@ export function ImageStudioWorkspace() {
     }
 
     if (!project) {
-      console.warn("[Image Studio] runImage early return: missing production package", {
-        abortReason: "missing production package",
-      });
-      setError((current) =>
-        current ??
+      console.warn(
+        "[Image Studio] runImage early return: missing production package",
+        {
+          abortReason: "missing production package",
+        },
+      );
+      setError(
+        (current) =>
+          current ??
           "Das Produktionspaket konnte nicht erstellt werden. Prüfe die Fehlermeldung oben.",
       );
       releaseExecutionLocks("missing-production-package");
@@ -906,7 +1087,9 @@ export function ImageStudioWorkspace() {
         abortReason: "empty assets",
         reportId: project.reportId,
       });
-      setError("Das Produktionspaket enthält keine Aufnahme für die Generierung.");
+      setError(
+        "Das Produktionspaket enthält keine Aufnahme für die Generierung.",
+      );
       return project;
     }
 
@@ -923,17 +1106,23 @@ export function ImageStudioWorkspace() {
     }
 
     if (pipelineLockRef.current) {
-      console.warn("[Image Studio] runImage resetting stuck pipelineLockRef before pipeline", {
-        abortReason: "pipelineLockRef.current is true",
-      });
+      console.warn(
+        "[Image Studio] runImage resetting stuck pipelineLockRef before pipeline",
+        {
+          abortReason: "pipelineLockRef.current is true",
+        },
+      );
       pipelineLockRef.current = false;
     }
 
     const assetToPrepare =
-      pendingAssets.find((asset) => asset.id === selectedAsset?.id) ?? pendingAssets[0];
+      pendingAssets.find((asset) => asset.id === selectedAsset?.id) ??
+      pendingAssets[0];
 
     if (!handoff?.masterArtworkApproved && !handoff?.durableMasterArtwork) {
-      setError("Vor der Vorbereitung ist ein freigegebenes Master Artwork erforderlich.");
+      setError(
+        "Vor der Vorbereitung ist ein freigegebenes Master Artwork erforderlich.",
+      );
       return project;
     }
     const prepareBlocker = resolvePrepareEstimateBlocker({
@@ -948,7 +1137,11 @@ export function ImageStudioWorkspace() {
       setError(prepareBlocker);
       return project;
     }
-    if (!productSelection || !productProductionContext || productProductionContext.authority !== "SHOPIFY_LIVE") {
+    if (
+      !productSelection ||
+      !productProductionContext ||
+      productProductionContext.authority !== "SHOPIFY_LIVE"
+    ) {
       setError(
         "Wähle vor der Kostenprüfung ein verifiziertes Shopify-Produkt. Design-Hinweise sind keine verbindliche Produktquelle.",
       );
@@ -963,13 +1156,18 @@ export function ImageStudioWorkspace() {
         selectedTrace,
       })
     ) {
-      console.info("[Image Studio] re-staging production package for selected Brand Model", {
-        reportId: project.reportId,
-      });
+      console.info(
+        "[Image Studio] re-staging production package for selected Brand Model",
+        {
+          reportId: project.reportId,
+        },
+      );
       clearCachedProductionProject();
       const restaged = await createProductionPackage(briefForRun);
       if (!restaged) {
-        setError("Das Produktionspaket konnte mit dem gewählten Markenmodel nicht neu vorbereitet werden.");
+        setError(
+          "Das Produktionspaket konnte mit dem gewählten Markenmodel nicht neu vorbereitet werden.",
+        );
         return null;
       }
       project = restaged;
@@ -993,7 +1191,9 @@ export function ImageStudioWorkspace() {
     });
     const durableReference = resolveDurableMasterArtworkReference(handoff);
     if (!trace || !durableReference) {
-      setError("Artwork-Freigabe oder Markenmodel-Herkunft konnten nicht eindeutig bestätigt werden.");
+      setError(
+        "Artwork-Freigabe oder Markenmodel-Herkunft konnten nicht eindeutig bestätigt werden.",
+      );
       return project;
     }
 
@@ -1022,7 +1222,9 @@ export function ImageStudioWorkspace() {
       if (!response.ok || !data.job) {
         const raw =
           data.error ??
-          (data.details ? JSON.stringify(data.details) : "Die Vorbereitung der Bildgenerierung ist fehlgeschlagen.");
+          (data.details
+            ? JSON.stringify(data.details)
+            : "Die Vorbereitung der Bildgenerierung ist fehlgeschlagen.");
         logPaidPrepareValidationError(raw, { status: response.status });
         throw new Error(formatPaidPrepareError(raw));
       }
@@ -1030,7 +1232,9 @@ export function ImageStudioWorkspace() {
       setError(null);
     } catch (cause) {
       const raw =
-        cause instanceof Error ? cause.message : "Die Vorbereitung der Bildgenerierung ist fehlgeschlagen.";
+        cause instanceof Error
+          ? cause.message
+          : "Die Vorbereitung der Bildgenerierung ist fehlgeschlagen.";
       logPaidPrepareValidationError(raw);
       setError(formatPaidPrepareError(raw));
     } finally {
@@ -1051,33 +1255,56 @@ export function ImageStudioWorkspace() {
     brandModelSelection,
     productProductionContext,
     productSelection,
+    projectContextHandoff,
     t,
   ]);
 
   const generateAssetsButtonLabel = paidJobBusy
     ? "Kosten werden geprüft…"
     : pipelineActive || generatingAssetId
-    ? "Bild wird erstellt…"
-    : isLoading
-      ? "Referenzen werden vorbereitet…"
-      : "Generative Vorschau · Kosten prüfen";
+      ? "Bild wird erstellt…"
+      : isLoading
+        ? "Referenzen werden vorbereitet…"
+        : "Generative Vorschau · Kosten prüfen";
 
-  const actOnPaidJob = useCallback(async (action: "confirm" | "execute" | "retry_known_failure" | "cancel") => {
-    if (!paidJob) return;
-    setPaidJobBusy(true);
-    try {
-      const response = await fetch(`/api/image/generation-jobs/${paidJob.id}`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, inputFingerprint: paidJob.inputFingerprint }),
-      });
-      const data = (await response.json()) as { job?: ImageGenerationJobView; error?: string };
-      if (!response.ok || !data.job) throw new Error(data.error ?? "Die Bildaktion ist fehlgeschlagen.");
-      setPaidJob(data.job);
-      setError(null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Die Bildaktion ist fehlgeschlagen.");
-    } finally { setPaidJobBusy(false); }
-  }, [paidJob]);
+  const actOnPaidJob = useCallback(
+    async (
+      action: "confirm" | "execute" | "retry_known_failure" | "cancel",
+    ) => {
+      if (!paidJob) return;
+      setPaidJobBusy(true);
+      try {
+        const response = await fetch(
+          `/api/image/generation-jobs/${paidJob.id}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action,
+              inputFingerprint: paidJob.inputFingerprint,
+            }),
+          },
+        );
+        const data = (await response.json()) as {
+          job?: ImageGenerationJobView;
+          error?: string;
+        };
+        if (!response.ok || !data.job)
+          throw new Error(data.error ?? "Die Bildaktion ist fehlgeschlagen.");
+        setPaidJob(data.job);
+        setError(null);
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Die Bildaktion ist fehlgeschlagen.",
+        );
+      } finally {
+        setPaidJobBusy(false);
+      }
+    },
+    [paidJob],
+  );
 
   const handleGenerateAssetsClick = useCallback(() => {
     console.info("[Image Studio] Generate Assets clicked", {
@@ -1093,7 +1320,9 @@ export function ImageStudioWorkspace() {
     void runImage().catch((err) => {
       const message =
         err instanceof Error ? err.message : t("image.errors.unexpected");
-      console.error("[Image Studio] runImage unhandled error", { error: message });
+      console.error("[Image Studio] runImage unhandled error", {
+        error: message,
+      });
       setError(message);
       releaseExecutionLocks("runImage-unhandled-error");
     });
@@ -1118,16 +1347,27 @@ export function ImageStudioWorkspace() {
   useLayoutEffect(() => {
     let cancelled = false;
     const retryTimers: ReturnType<typeof setTimeout>[] = [];
+    const locationSearch = window.location.search;
+    const requestedArtworkId = resolveRequestedArtworkId(locationSearch);
+    const hasRequestedArtworkId = hasRequestedArtworkPointer(locationSearch);
+
+    const matchesRequestedArtwork = (candidate: ImageStudioHandoff | null) =>
+      !requestedArtworkId ||
+      candidate?.durableMasterArtwork?.id === requestedArtworkId;
 
     const restoreCachedHandoff = () => {
       if (cachedProjectContextHandoff) {
         setProjectContextHandoff(cachedProjectContextHandoff);
       }
-      if (!cachedAppliedArtworkHandoff) return false;
+      if (
+        !cachedAppliedArtworkHandoff ||
+        !matchesRequestedArtwork(cachedAppliedArtworkHandoff)
+      ) {
+        return false;
+      }
       setHandoff(cachedAppliedArtworkHandoff);
       setBrief(
-        cachedProjectContextHandoff?.brief ??
-          cachedAppliedArtworkHandoff.brief,
+        cachedProjectContextHandoff?.brief ?? cachedAppliedArtworkHandoff.brief,
       );
       setHandoffStateApplied(true);
       return true;
@@ -1138,6 +1378,17 @@ export function ImageStudioWorkspace() {
 
       const { handoff: normalized, debug } = applyImageStudioHandoff();
       setHandoffLoadDebug(debug);
+
+      if (hasRequestedArtworkId && !requestedArtworkId) {
+        console.error("[Image Studio] invalid explicit Artwork pointer", {
+          operation: "authority_resolve",
+          code: "INVALID_ARTWORK_ID",
+        });
+        setHandoff(null);
+        setHandoffStateApplied(true);
+        setError(DESIGN_TO_IMAGE_HANDOFF_OWNER_ERROR);
+        return;
+      }
 
       if (handoffBootstrapLock && cachedAppliedArtworkHandoff) {
         const cachedArtworkKey =
@@ -1153,9 +1404,12 @@ export function ImageStudioWorkspace() {
           cachedArtworkKey &&
           freshArtworkKey !== cachedArtworkKey
         ) {
-          console.info("[Image Studio] replacing cached handoff with newer Design authority", {
-            attempt: attemptLabel,
-          });
+          console.info(
+            "[Image Studio] replacing cached handoff with newer Design authority",
+            {
+              attempt: attemptLabel,
+            },
+          );
           handoffBootstrapLock = false;
           clearCachedProductionProject();
           setResult(null);
@@ -1163,14 +1417,18 @@ export function ImageStudioWorkspace() {
           setPaidJob(null);
         } else {
           if (restoreCachedHandoff()) {
-            console.info("[Image Studio] handoff restored from cache", { attempt: attemptLabel });
+            console.info("[Image Studio] handoff restored from cache", {
+              attempt: attemptLabel,
+            });
           }
           hydrateCachedProductionPackage();
           return;
         }
       } else if (handoffBootstrapLock) {
         if (restoreCachedHandoff()) {
-          console.info("[Image Studio] handoff restored from cache", { attempt: attemptLabel });
+          console.info("[Image Studio] handoff restored from cache", {
+            attempt: attemptLabel,
+          });
         }
         hydrateCachedProductionPackage();
         return;
@@ -1185,8 +1443,27 @@ export function ImageStudioWorkspace() {
       });
 
       const bootstrapped = bootstrapImageStudioHandoff(normalized);
+      if (
+        requestedArtworkId &&
+        bootstrapped.artworkHandoff?.durableMasterArtwork?.id !== requestedArtworkId
+      ) {
+        console.info("[Image Studio] waiting for exact URL Artwork authority", {
+          requestedArtworkId,
+          storedArtworkId:
+            bootstrapped.artworkHandoff?.durableMasterArtwork?.id ?? null,
+          attempt: attemptLabel,
+        });
+        if (bootstrapped.projectContextHandoff) {
+          cachedProjectContextHandoff = bootstrapped.projectContextHandoff;
+          setProjectContextHandoff(bootstrapped.projectContextHandoff);
+        }
+        return;
+      }
       if (!normalized && !bootstrapped.projectContextHandoff) {
-        console.info("[Image Studio] handoff not present or invalid", debug.rejectReason);
+        console.info(
+          "[Image Studio] handoff not present or invalid",
+          debug.rejectReason,
+        );
         setHandoffStateApplied(true);
         return;
       }
@@ -1215,19 +1492,23 @@ export function ImageStudioWorkspace() {
           designId:
             bootstrapped.artworkHandoff.designId ??
             bootstrapped.artworkHandoff.durableMasterArtwork?.designId,
-          durableArtworkId: bootstrapped.artworkHandoff.durableMasterArtwork?.id,
+          durableArtworkId:
+            bootstrapped.artworkHandoff.durableMasterArtwork?.id,
           version: bootstrapped.artworkHandoff.durableMasterArtwork?.version,
           source: bootstrapped.artworkSource,
         });
       }
 
       if (bootstrapped.projectContextHandoff) {
-        console.info("[Image Studio] project context retained (non-authoritative)", {
-          title:
-            bootstrapped.projectContextHandoff.mission?.title ??
-            bootstrapped.projectContextHandoff.sourceTitle,
-          reportId: bootstrapped.projectContextHandoff.reportId,
-        });
+        console.info(
+          "[Image Studio] project context retained (non-authoritative)",
+          {
+            title:
+              bootstrapped.projectContextHandoff.mission?.title ??
+              bootstrapped.projectContextHandoff.sourceTitle,
+            reportId: bootstrapped.projectContextHandoff.reportId,
+          },
+        );
       }
 
       if (bootstrapped.shouldClearStorage) {
@@ -1246,6 +1527,80 @@ export function ImageStudioWorkspace() {
     };
   }, [hydrateCachedProductionPackage]);
 
+  // The URL contains only the immutable approved Artwork-version record ID.
+  // On refresh, resolve that exact authority again server-side instead of
+  // choosing a latest record or relying on transient browser storage.
+  useEffect(() => {
+    const locationSearch = window.location.search;
+    const requestedArtworkId = resolveRequestedArtworkId(locationSearch);
+    if (hasRequestedArtworkPointer(locationSearch) && !requestedArtworkId) {
+      setHandoff(null);
+      setHandoffStateApplied(true);
+      setError(DESIGN_TO_IMAGE_HANDOFF_OWNER_ERROR);
+      return;
+    }
+    if (!requestedArtworkId) return;
+    if (handoff?.durableMasterArtwork?.id === requestedArtworkId) {
+      setHandoffStateApplied(true);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const artwork = await resolveCanonicalArtworkForImageHandoff(
+          requestedArtworkId,
+        );
+        if (cancelled) return;
+
+        const nextHandoff = buildResolvedArtworkHandoff({
+          artwork,
+          retainedContext: projectContextHandoff ?? cachedProjectContextHandoff,
+        });
+        const saved = saveImageStudioHandoff(nextHandoff);
+        if (!saved.saved) {
+          console.warn("[Image Studio] exact Artwork resolved; browser cache unavailable", {
+            operation: "handoff_store",
+            artworkId: requestedArtworkId,
+            message: saved.error,
+          });
+        }
+
+        cachedAppliedArtworkHandoff = nextHandoff;
+        handoffBootstrapLock = true;
+        setHandoff(nextHandoff);
+        setBrief((current) => current.trim() || nextHandoff.brief);
+        setHandoffStateApplied(true);
+        setError(null);
+        console.info("[Image Studio] exact URL Artwork authority applied", {
+          operation: "authority_resolve",
+          artworkId: artwork.id,
+          designId: artwork.designId,
+          version: artwork.version,
+        });
+      } catch (cause) {
+        if (cancelled) return;
+        const diagnostic =
+          cause instanceof DesignToImageHandoffError
+            ? cause.diagnostic
+            : {
+                operation: "authority_resolve" as const,
+                artworkId: requestedArtworkId,
+                message:
+                  cause instanceof Error ? cause.message : "Unknown hydration error",
+              };
+        console.error("[Image Studio] exact URL Artwork hydration failed", diagnostic);
+        setHandoff(null);
+        setHandoffStateApplied(true);
+        setError(DESIGN_TO_IMAGE_HANDOFF_OWNER_ERROR);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [handoff?.durableMasterArtwork?.id, projectContextHandoff]);
+
   useEffect(() => {
     if (!handoffStateApplied || !handoff) return;
     if (cachedProductionProject || productionAssets.length > 0) return;
@@ -1257,9 +1612,12 @@ export function ImageStudioWorkspace() {
       blueprint,
     );
     if (!missionBrief.trim()) {
-      console.info("[Image Studio] handoff staging skipped — missing prompt/brief", {
-        abortReason: "missing brief",
-      });
+      console.info(
+        "[Image Studio] handoff staging skipped — missing prompt/brief",
+        {
+          abortReason: "missing brief",
+        },
+      );
       return;
     }
 
@@ -1274,9 +1632,11 @@ export function ImageStudioWorkspace() {
       missionKey,
       briefLength: missionBrief.length,
     });
-    handoffStagingInflight = createProductionPackage(missionBrief).finally(() => {
-      handoffStagingInflight = null;
-    });
+    handoffStagingInflight = createProductionPackage(missionBrief).finally(
+      () => {
+        handoffStagingInflight = null;
+      },
+    );
 
     void handoffStagingInflight;
   }, [
@@ -1293,7 +1653,9 @@ export function ImageStudioWorkspace() {
     async (asset: ImageStudioAsset) => {
       if (!result || generatingAssetId || pipelineActive) return;
       setSelectedAssetId(asset.id);
-      setError("Aufnahme ausgewählt. Prüfe sie und wähle anschließend „Vorbereiten & Kosten prüfen“.");
+      setError(
+        "Aufnahme ausgewählt. Prüfe sie und wähle anschließend „Vorbereiten & Kosten prüfen“.",
+      );
     },
     [generatingAssetId, pipelineActive, result],
   );
@@ -1315,8 +1677,9 @@ export function ImageStudioWorkspace() {
     brief;
 
   const printReadiness =
-    projectContextHandoff?.concept?.productionNotes?.printReadiness?.join(", ") ??
-    "Noch nicht geprüft";
+    projectContextHandoff?.concept?.productionNotes?.printReadiness?.join(
+      ", ",
+    ) ?? "Noch nicht geprüft";
 
   const versionTimeline = [
     {
@@ -1326,9 +1689,23 @@ export function ImageStudioWorkspace() {
         ? new Date(projectContextHandoff.handoffAt).toLocaleString("de-DE")
         : "—",
     },
-    ...(hasResults ? [{ version: "V1.0", label: "Produktionspaket erstellt", time: "Projekt vorbereitet" }] : []),
+    ...(hasResults
+      ? [
+          {
+            version: "V1.0",
+            label: "Produktionspaket erstellt",
+            time: "Projekt vorbereitet",
+          },
+        ]
+      : []),
     ...(selectedAsset?.createdAt
-      ? [{ version: assetVersionLabel(selectedAsset), label: ownerShotLabel(selectedAsset.title ?? "Ergebnis"), time: new Date(selectedAsset.createdAt).toLocaleString("de-DE") }]
+      ? [
+          {
+            version: assetVersionLabel(selectedAsset),
+            label: ownerShotLabel(selectedAsset.title ?? "Ergebnis"),
+            time: new Date(selectedAsset.createdAt).toLocaleString("de-DE"),
+          },
+        ]
       : []),
   ];
 
@@ -1340,7 +1717,9 @@ export function ImageStudioWorkspace() {
             <Home className="size-3.5" />
             NexHQ
           </Link>
-          <span className="is-crumb-sep" aria-hidden>›</span>
+          <span className="is-crumb-sep" aria-hidden>
+            ›
+          </span>
           <span className="is-crumb is-crumb-current">
             <Palette className="size-3.5" />
             Image Studio
@@ -1352,149 +1731,242 @@ export function ImageStudioWorkspace() {
         <div className="is-hero-mission-primary">
           <p className="nx-page-header__eyebrow">Bildproduktion</p>
           <h1 className="is-hero-title">Image Studio</h1>
-          <p className="is-hero-subtitle">Mockups und Kampagnenbilder aus Artwork, Produkt und Markenmodel erstellen.</p>
+          <p className="is-hero-subtitle">
+            Mockups und Kampagnenbilder aus Artwork, Produkt und Markenmodel
+            erstellen.
+          </p>
         </div>
-        <span className="nx-status nx-status--success">Deterministisches Mockup · Produktion</span>
+        <span className="nx-status nx-status--success">
+          Artwork geschützt · Einzelbild
+        </span>
       </header>
 
       <details className="is-project-context">
         <summary>Projektkontext und Design-Hinweise</summary>
         <div className="is-project-context__body">
-          <p><strong>Herkunft:</strong> {projectContextTitle}</p>
+          <p>
+            <strong>Herkunft:</strong> {projectContextTitle}
+          </p>
           <div className="is-hero-meta-row">
-          <HeroMeta
-            label="Produkt"
-            value={productHeader.value}
-            highlight={productHeader.authoritative ? "emerald" : undefined}
-          />
-          <HeroMeta label="Produktquelle" value={ownerAuthorityLabel(productHeader.authorityLabel)} />
-          <HeroMeta label="Artwork-Version" value={version} />
-          <HeroMeta label="Kommerzieller Status" value={commercialStatus} highlight="gold" />
-          <HeroMeta
-            label="Produktionsmodus"
-            value={ownerGenerationModeLabel}
-            highlight={isDraftGenerationMode ? "gold" : "emerald"}
-          />
-          <HeroMeta label="Produktionsstatus" value={generationStatus} highlight={pipelineActive || generatingAssetId ? "emerald" : hasResults ? "gold" : undefined} />
+            <HeroMeta
+              label="Produkt"
+              value={productHeader.value}
+              highlight={productHeader.authoritative ? "emerald" : undefined}
+            />
+            <HeroMeta
+              label="Produktquelle"
+              value={ownerAuthorityLabel(productHeader.authorityLabel)}
+            />
+            <HeroMeta label="Artwork-Version" value={version} />
+            <HeroMeta
+              label="Kommerzieller Status"
+              value={commercialStatus}
+              highlight="gold"
+            />
+            <HeroMeta
+              label="Produktionsmodus"
+              value={ownerGenerationModeLabel}
+              highlight={isDraftGenerationMode ? "gold" : "emerald"}
+            />
+            <HeroMeta
+              label="Produktionsstatus"
+              value={generationStatus}
+              highlight={
+                pipelineActive || generatingAssetId
+                  ? "emerald"
+                  : hasResults
+                    ? "gold"
+                    : undefined
+              }
+            />
           </div>
           {designMissionHints ? (
             <p className="is-hero-design-hints">
-              Nicht verbindliche Design-Hinweise: {designMissionHints.collection} ·{" "}
-              {designMissionHints.garment} · {designMissionHints.colorway}. Die echte Produktauswahl erfolgt unten.
+              Nicht verbindliche Design-Hinweise:{" "}
+              {designMissionHints.collection} · {designMissionHints.garment} ·{" "}
+              {designMissionHints.colorway}. Die echte Produktauswahl erfolgt
+              unten.
             </p>
           ) : null}
           {isResearchReportTitle(projectContextHandoff?.sourceTitle) ||
           isResearchReportTitle(projectContextHandoff?.mission?.title) ? (
-            <p className="is-hero-design-hints">{RESEARCH_ARTWORK_PROVENANCE}</p>
+            <p className="is-hero-design-hints">
+              {RESEARCH_ARTWORK_PROVENANCE}
+            </p>
           ) : null}
         </div>
       </details>
 
       <details className="is-v1-preview">
-        <summary>Generative Vorschau · Artwork kann verändert werden</summary>
+        <summary>Technische Details · Generative Vorschau</summary>
         <div className="is-v1-preview__body">
-          <p className="is-v1-preview__warning">Nur für kreative Entwürfe. Für artworkgetreue Produktion das deterministische Mockup verwenden.</p>
-        <div className="is-toolbar">
-        <button
-          type="button"
-          className="is-toolbar-primary"
-          onClick={handleGenerateAssetsClick}
-          disabled={isLoading || pipelineActive || !canPrepareEstimate}
-        >
-          <Sparkles className="size-4" />
-          {generateAssetsButtonLabel}
-        </button>
-        <div className="is-toolbar-divider" aria-hidden />
-        <div className="is-toolbar-secondary">
-          <ToolbarGhost disabled={!hasResults}>Varianten</ToolbarGhost>
-          <ToolbarGhost disabled={!hasResults}>Hero</ToolbarGhost>
-          <ToolbarGhost disabled={!hasResults}>Kampagne</ToolbarGhost>
-          <ToolbarGhost disabled={!selectedAsset?.imageUrl}>Vergrößern</ToolbarGhost>
-          <ToolbarGhost disabled={!hasResults}>Exportieren</ToolbarGhost>
-          <ToolbarGhost disabled={!hasResults}>
-            <Download className="size-3.5" />
-            ZIP
-          </ToolbarGhost>
-        </div>
-        <div className="is-toolbar-divider" aria-hidden />
-        <div className="is-toolbar-secondary is-toolbar-secondary--muted">
-          <ToolbarGhost disabled={!hasResults}>Kommerziell</ToolbarGhost>
-          <ToolbarGhost disabled={!hasResults}>Marketing</ToolbarGhost>
-          <ToolbarGhost disabled={!hasResults}>Shopify</ToolbarGhost>
-        </div>
-      </div>
+          <p className="is-v1-preview__warning">
+            Nur für kreative Entwürfe. Für artworkgetreue Produktion das
+            deterministische Mockup verwenden.
+          </p>
+          {prepareEstimateBlocker && hasArtworkHandoff ? (
+            <div className="nx-notice nx-notice--info" role="status">
+              <strong>Als Nächstes</strong>
+              <p>{prepareEstimateBlocker}</p>
+            </div>
+          ) : null}
+          <div className="is-toolbar">
+            <button
+              type="button"
+              className="is-toolbar-primary"
+              onClick={handleGenerateAssetsClick}
+              disabled={isLoading || pipelineActive || !canPrepareEstimate}
+            >
+              <Sparkles className="size-4" />
+              {generateAssetsButtonLabel}
+            </button>
+            <div className="is-toolbar-divider" aria-hidden />
+            <div className="is-toolbar-secondary">
+              <ToolbarGhost disabled={!hasResults}>Varianten</ToolbarGhost>
+              <ToolbarGhost disabled={!hasResults}>Hero</ToolbarGhost>
+              <ToolbarGhost disabled={!hasResults}>Kampagne</ToolbarGhost>
+              <ToolbarGhost disabled={!selectedAsset?.imageUrl}>
+                Vergrößern
+              </ToolbarGhost>
+              <ToolbarGhost disabled={!hasResults}>Exportieren</ToolbarGhost>
+              <ToolbarGhost disabled={!hasResults}>
+                <Download className="size-3.5" />
+                ZIP
+              </ToolbarGhost>
+            </div>
+            <div className="is-toolbar-divider" aria-hidden />
+            <div className="is-toolbar-secondary is-toolbar-secondary--muted">
+              <ToolbarGhost disabled={!hasResults}>Kommerziell</ToolbarGhost>
+              <ToolbarGhost disabled={!hasResults}>Marketing</ToolbarGhost>
+              <ToolbarGhost disabled={!hasResults}>Shopify</ToolbarGhost>
+            </div>
+          </div>
         </div>
       </details>
-
-      {prepareEstimateBlocker && hasArtworkHandoff ? (
-        <div className="is-error-banner is-error-banner--muted">
-          <p className="is-error-banner__summary">{prepareEstimateBlocker}</p>
-        </div>
-      ) : null}
 
       {error ? (
         <div className="is-error-banner">
           <p className="is-error-banner__summary">{error.split("\n\n")[0]}</p>
           {validationDebug ? (
-            <details className="nx-technical"><summary>Technische Details</summary><div className="is-error-banner__debug nx-technical__body">
-              {validationDebug.schemaName ? (
-                <p className="is-error-banner__schema">
-                  Schema: <code>{validationDebug.schemaName}</code>
-                </p>
-              ) : null}
-              {validationDebug.missingFields?.length ? (
-                <p className="is-error-banner__missing">
-                  Fehlende Felder: {validationDebug.missingFields.join(", ")}
-                </p>
-              ) : null}
-              {validationDebug.validationIssues?.length ? (
-                <ul className="is-error-banner__issues">
-                  {validationDebug.validationIssues.map((issue) => (
-                    <li key={`${issue.path}-${issue.message}`}>
-                      <span className="is-error-banner__issue-path">❌ {issue.path}</span>
-                      <dl className="is-error-banner__issue-detail">
-                        <div>
-                          <dt>Feld</dt>
-                          <dd>{issue.field}</dd>
-                        </div>
-                        <div>
-                          <dt>Erwartet</dt>
-                          <dd>{issue.expected}</dd>
-                        </div>
-                        <div>
-                          <dt>Erhalten</dt>
-                          <dd>
-                            {issue.receivedLabel ??
-                              (issue.received === undefined
-                                ? "undefined"
-                                : issue.received === null
-                                  ? "null"
-                                  : JSON.stringify(issue.received))}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Pfad</dt>
-                          <dd>{issue.path}</dd>
-                        </div>
-                      </dl>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div></details>
+            <details className="nx-technical">
+              <summary>Technische Details</summary>
+              <div className="is-error-banner__debug nx-technical__body">
+                {validationDebug.schemaName ? (
+                  <p className="is-error-banner__schema">
+                    Schema: <code>{validationDebug.schemaName}</code>
+                  </p>
+                ) : null}
+                {validationDebug.missingFields?.length ? (
+                  <p className="is-error-banner__missing">
+                    Fehlende Felder: {validationDebug.missingFields.join(", ")}
+                  </p>
+                ) : null}
+                {validationDebug.validationIssues?.length ? (
+                  <ul className="is-error-banner__issues">
+                    {validationDebug.validationIssues.map((issue) => (
+                      <li key={`${issue.path}-${issue.message}`}>
+                        <span className="is-error-banner__issue-path">
+                          ❌ {issue.path}
+                        </span>
+                        <dl className="is-error-banner__issue-detail">
+                          <div>
+                            <dt>Feld</dt>
+                            <dd>{issue.field}</dd>
+                          </div>
+                          <div>
+                            <dt>Erwartet</dt>
+                            <dd>{issue.expected}</dd>
+                          </div>
+                          <div>
+                            <dt>Erhalten</dt>
+                            <dd>
+                              {issue.receivedLabel ??
+                                (issue.received === undefined
+                                  ? "undefined"
+                                  : issue.received === null
+                                    ? "null"
+                                    : JSON.stringify(issue.received))}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>Pfad</dt>
+                            <dd>{issue.path}</dd>
+                          </div>
+                        </dl>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </details>
           ) : null}
         </div>
       ) : null}
 
       <section className="is-v2-inputs" aria-label="Produktionsauswahl">
         <div className="is-v2-input-card">
-          <span className="is-v2-input-number">01</span><div><p>Artwork</p><strong>{hasArtworkHandoff ? artworkIdentity.displayName : "Kein Artwork ausgewählt"}</strong><span>{artworkSecondaryLine}</span></div>
-          {!hasArtworkHandoff ? <Link href="/agents/design" className="nx-button">Artwork auswählen</Link> : null}
+          <span className="is-v2-input-number">01</span>
+          <div>
+            <p>Artwork</p>
+            <strong>
+              {hasArtworkHandoff
+                ? artworkIdentity.displayName
+                : "Kein Artwork ausgewählt"}
+            </strong>
+            <span>{artworkSecondaryLine}</span>
+          </div>
+          <ArtworkLibrarySelector
+            currentArtworkId={handoff?.durableMasterArtwork?.id ?? null}
+            currentLabel={artworkIdentity.displayName}
+            onSelect={handleArtworkLibrarySelection}
+          />
+          {!hasArtworkHandoff ? (
+            <Link href="/agents/design" className="is-owner-secondary-link">
+              Neues Artwork hochladen
+            </Link>
+          ) : null}
         </div>
-        <div className="is-v2-input-card is-v2-input-card--form"><span className="is-v2-input-number">02–03</span><ProductProductionSelector onSelectionChange={handleProductSelectionChange} /></div>
-        <div className="is-v2-input-card is-v2-input-card--form"><span className="is-v2-input-number">04</span><BrandModelSelector onSelectionChange={handleBrandModelSelection} /></div>
-        <div className="is-v2-input-card"><span className="is-v2-input-number">06</span><div><p>Aufnahme</p><strong>{ownerShotLabel(selectedAsset?.title ?? selectedSlot.label)}</strong><span>Genau eine Aufnahme ist für den nächsten Auftrag ausgewählt.</span></div></div>
+        <div className="is-v2-input-card is-v2-input-card--form">
+          <span className="is-v2-input-number">02–03</span>
+          <ProductProductionSelector
+            onSelectionChange={handleProductSelectionChange}
+          />
+        </div>
+        <div className="is-v2-input-card is-v2-input-card--form">
+          <span className="is-v2-input-number">04</span>
+          <BrandModelSelector onSelectionChange={handleBrandModelSelection} />
+        </div>
       </section>
+
+      <ContentPackSelector
+        assets={selectableContentAssets}
+        selectedAssetId={selectedAsset?.id ?? null}
+        productType={
+          imageProductSelection?.garmentFamilyLabel ??
+          productProductionContext?.productType ??
+          null
+        }
+        masterArtwork={resolveDurableMasterArtworkReference(handoff)}
+        productProfile={imageProductSelection?.productProfile ?? null}
+        brandModelTrace={brandModelSelection?.productionContext.trace ?? null}
+        contentMode={contentMode}
+        onContentModeChange={setContentMode}
+        onSelect={(asset) => {
+          setSelectedAssetId(asset.id);
+          const slot = MISSION_ASSET_SLOTS.find((candidate) =>
+            candidate.assetTypes.includes(asset.assetType),
+          );
+          if (slot) setSelectedSlotId(slot.id);
+          setError(null);
+        }}
+      />
+
+      <SocialCreativeDirectionSelector
+        shotId={selectedAsset?.id ?? null}
+        contentMode={contentMode}
+        direction={effectiveCreativeDirection}
+        onDirectionChange={setCreativeDirection}
+      />
 
       <DeterministicV2Panel
         reportRecordId={result?.reportRecordId ?? null}
@@ -1502,31 +1974,153 @@ export function ImageStudioWorkspace() {
         assetId={selectedAsset?.id ?? null}
         brandModelTrace={brandModelSelection?.productionContext.trace ?? null}
         masterArtwork={resolveDurableMasterArtworkReference(handoff)}
-        shopifyProductId={productSelection?.authority === "SHOPIFY_LIVE" ? productSelection.productId : null}
-        shopifyVariantId={productSelection?.authority === "SHOPIFY_LIVE" ? productSelection.variantId : null}
+        artworkLabel={artworkIdentity.displayName}
+        artworkOriginalFileName={
+          handoff?.artworkFileName ??
+          handoff?.durableMasterArtwork?.originalFileName ??
+          null
+        }
+        shopifyProductId={
+          productSelection?.authority === "SHOPIFY_LIVE"
+            ? productSelection.productId
+            : null
+        }
+        shopifyVariantId={
+          productSelection?.authority === "SHOPIFY_LIVE"
+            ? productSelection.variantId
+            : null
+        }
         productProfile={imageProductSelection?.productProfile ?? null}
+        reusablePrintSurfaces={
+          imageProductSelection?.reusablePrintSurfaces ?? []
+        }
+        productType={
+          productProductionContext?.productType ??
+          imageProductSelection?.garmentFamilyLabel ??
+          null
+        }
+        productName={productProductionContext?.productName ?? null}
+        productColor={productProductionContext?.color ?? null}
+        productSize={productProductionContext?.size ?? null}
+        brandModelLabel={
+          brandModelSelection?.productionContext.contract.displayName ?? null
+        }
+        shotLabel={selectedAsset?.title ?? selectedSlot.label}
+        shotDimensions={selectedAsset?.dimensions ?? null}
+        creativeDirection={effectiveCreativeDirection}
+        onShotSelectionChange={(assetId) => {
+          const asset = productionAssets.find(
+            (candidate) => candidate.id === assetId,
+          );
+          if (!asset) return;
+          setSelectedAssetId(asset.id);
+          const slot = MISSION_ASSET_SLOTS.find((candidate) =>
+            candidate.assetTypes.includes(asset.assetType),
+          );
+          if (slot) setSelectedSlotId(slot.id);
+          setError(null);
+        }}
       />
 
       {paidJob ? (
         <details className="is-v1-preview" aria-label="Generative Vorschau">
-          <summary>Gespeicherter generativer Entwurf · {ownerStatusLabel(paidJob.status)}</summary>
+          <summary>
+            Technische Details · Gespeicherter generativer Entwurf ·{" "}
+            {ownerStatusLabel(paidJob.status)}
+          </summary>
           <div className="is-v1-preview__body">
-            <h3 className="is-panel-heading">Generative Vorschau — Artwork kann verändert werden</h3>
-            <p>Dieser historische Modus kann Typografie, Logos, Farben oder Layout generativ verändern. Für freigegebene Artworks ausschließlich das deterministische Mockup verwenden.</p>
-            <p><strong>Markenmodel:</strong> {paidJob.inputSnapshot.brandModel.displayName}</p>
-            <p><strong>Artwork:</strong> {artworkIdentity.displayName} · Version {paidJob.inputSnapshot.masterArtwork.version}</p>
-            <p><strong>Produkt:</strong> {paidJob.inputSnapshot.product.productName} · {paidJob.inputSnapshot.product.color} · {ownerAuthorityLabel(paidJob.inputSnapshot.product.authority)}</p>
-            <p><strong>Aufnahme:</strong> {ownerShotLabel(paidJob.inputSnapshot.production.shotTitle)}</p>
-            <p><strong>Geschätztes Maximum:</strong> {paidJob.estimate.maximum.toFixed(4)} {paidJob.estimate.currency}</p>
-            <p><strong>Status:</strong> {ownerStatusLabel(paidJob.status)}</p>
-            <p><strong>Bestätigung gültig bis:</strong> {new Date(paidJob.confirmationExpiresAt).toLocaleString("de-DE")}</p>
-            {paidJob.status === "awaiting_confirmation" ? <p>Mit der Bestätigung autorisierst du genau diesen generativen Entwurfsversuch zum angezeigten Kostenmaximum.</p> : null}
+            <h3 className="is-panel-heading">
+              Generative Vorschau — Artwork kann verändert werden
+            </h3>
+            <p>
+              Dieser historische Modus kann Typografie, Logos, Farben oder
+              Layout generativ verändern. Für freigegebene Artworks
+              ausschließlich das deterministische Mockup verwenden.
+            </p>
+            <p>
+              <strong>Markenmodel:</strong>{" "}
+              {paidJob.inputSnapshot.brandModel.displayName}
+            </p>
+            <p>
+              <strong>Artwork:</strong> {artworkIdentity.displayName} · Version{" "}
+              {paidJob.inputSnapshot.masterArtwork.version}
+            </p>
+            <p>
+              <strong>Produkt:</strong>{" "}
+              {paidJob.inputSnapshot.product.productName} ·{" "}
+              {paidJob.inputSnapshot.product.color} ·{" "}
+              {ownerAuthorityLabel(paidJob.inputSnapshot.product.authority)}
+            </p>
+            <p>
+              <strong>Aufnahme:</strong>{" "}
+              {ownerShotLabel(paidJob.inputSnapshot.production.shotTitle)}
+            </p>
+            <p>
+              <strong>Geschätztes Maximum:</strong>{" "}
+              {paidJob.estimate.maximum.toFixed(4)} {paidJob.estimate.currency}
+            </p>
+            <p>
+              <strong>Status:</strong> {ownerStatusLabel(paidJob.status)}
+            </p>
+            <p>
+              <strong>Bestätigung gültig bis:</strong>{" "}
+              {new Date(paidJob.confirmationExpiresAt).toLocaleString("de-DE")}
+            </p>
+            {paidJob.status === "awaiting_confirmation" ? (
+              <p>
+                Mit der Bestätigung autorisierst du genau diesen generativen
+                Entwurfsversuch zum angezeigten Kostenmaximum.
+              </p>
+            ) : null}
             <div className="is-staging-actions">
-              {paidJob.status === "awaiting_confirmation" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("confirm")}>Generativen Entwurf bestätigen</button> : null}
-              {paidJob.status === "confirmed" ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("execute")}>Entwurf generieren</button> : null}
-              {paidJob.status === "failed" && paidJob.safeRetryAllowed ? <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void actOnPaidJob("retry_known_failure")}>Sicheren Versuch wiederholen</button> : null}
-              {["awaiting_confirmation", "confirmed", "failed"].includes(paidJob.status) ? <button type="button" className="is-btn" disabled={paidJobBusy} onClick={() => void actOnPaidJob("cancel")}>Abbrechen</button> : null}
-              {paidJob.status === "unknown_outcome" ? <p>Das Provider-Ergebnis ist unbekannt. Nicht erneut versuchen, bevor der Auftrag abgeglichen wurde.</p> : null}
+              {paidJob.status === "awaiting_confirmation" ? (
+                <button
+                  type="button"
+                  className="is-btn is-btn--primary"
+                  disabled={paidJobBusy}
+                  onClick={() => void actOnPaidJob("confirm")}
+                >
+                  Generativen Entwurf bestätigen
+                </button>
+              ) : null}
+              {paidJob.status === "confirmed" ? (
+                <button
+                  type="button"
+                  className="is-btn is-btn--primary"
+                  disabled={paidJobBusy}
+                  onClick={() => void actOnPaidJob("execute")}
+                >
+                  Entwurf generieren
+                </button>
+              ) : null}
+              {paidJob.status === "failed" && paidJob.safeRetryAllowed ? (
+                <button
+                  type="button"
+                  className="is-btn is-btn--primary"
+                  disabled={paidJobBusy}
+                  onClick={() => void actOnPaidJob("retry_known_failure")}
+                >
+                  Sicheren Versuch wiederholen
+                </button>
+              ) : null}
+              {["awaiting_confirmation", "confirmed", "failed"].includes(
+                paidJob.status,
+              ) ? (
+                <button
+                  type="button"
+                  className="is-btn"
+                  disabled={paidJobBusy}
+                  onClick={() => void actOnPaidJob("cancel")}
+                >
+                  Abbrechen
+                </button>
+              ) : null}
+              {paidJob.status === "unknown_outcome" ? (
+                <p>
+                  Das Provider-Ergebnis ist unbekannt. Nicht erneut versuchen,
+                  bevor der Auftrag abgeglichen wurde.
+                </p>
+              ) : null}
             </div>
             {durableAssets.length ? (
               <div>
@@ -1534,18 +2128,44 @@ export function ImageStudioWorkspace() {
                 {durableAssets.map((asset) => (
                   <div key={asset.id}>
                     <p>
-                      <strong>{ownerShotLabel(asset.shotId)}</strong> · {ownerStatusLabel(asset.reviewStatus)}
+                      <strong>{ownerShotLabel(asset.shotId)}</strong> ·{" "}
+                      {ownerStatusLabel(asset.reviewStatus)}
                     </p>
                     {asset.accessUrl ? (
-                      <a href={asset.accessUrl} target="_blank" rel="noreferrer">
+                      <a
+                        href={asset.accessUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         Private Vorschau öffnen
                       </a>
                     ) : (
-                      <p>Private Vorschau nicht verfügbar oder abgelaufen. Lade die Seite neu.</p>
+                      <p>
+                        Private Vorschau nicht verfügbar oder abgelaufen. Lade
+                        die Seite neu.
+                      </p>
                     )}
                     <div className="is-staging-actions">
-                      <button type="button" className="is-btn is-btn--primary" disabled={paidJobBusy} onClick={() => void reviewDurableAsset(asset.id, "APPROVED")}>Asset freigeben</button>
-                      <button type="button" className="is-btn" disabled={paidJobBusy} onClick={() => void reviewDurableAsset(asset.id, "REJECTED")}>Asset ablehnen</button>
+                      <button
+                        type="button"
+                        className="is-btn is-btn--primary"
+                        disabled={paidJobBusy}
+                        onClick={() =>
+                          void reviewDurableAsset(asset.id, "APPROVED")
+                        }
+                      >
+                        Asset freigeben
+                      </button>
+                      <button
+                        type="button"
+                        className="is-btn"
+                        disabled={paidJobBusy}
+                        onClick={() =>
+                          void reviewDurableAsset(asset.id, "REJECTED")
+                        }
+                      >
+                        Asset ablehnen
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1554,11 +2174,27 @@ export function ImageStudioWorkspace() {
             <details className="nx-technical">
               <summary>Technische Details</summary>
               <div className="nx-technical__body">
-                <p>Identity Lock: v{paidJob.inputSnapshot.brandModel.identityLockVersion}</p>
-                <p>Design-ID: <code>{paidJob.inputSnapshot.masterArtwork.designId}</code></p>
-                <p>Provider/Modell: <code>{paidJob.inputSnapshot.production.provider}/{paidJob.inputSnapshot.production.model}</code></p>
-                <p>Fingerprint: <code>{paidJob.inputFingerprint}</code></p>
-                <p>Interner Status: <code>{paidJob.status}</code></p>
+                <p>
+                  Identity Lock: v
+                  {paidJob.inputSnapshot.brandModel.identityLockVersion}
+                </p>
+                <p>
+                  Design-ID:{" "}
+                  <code>{paidJob.inputSnapshot.masterArtwork.designId}</code>
+                </p>
+                <p>
+                  Provider/Modell:{" "}
+                  <code>
+                    {paidJob.inputSnapshot.production.provider}/
+                    {paidJob.inputSnapshot.production.model}
+                  </code>
+                </p>
+                <p>
+                  Fingerprint: <code>{paidJob.inputFingerprint}</code>
+                </p>
+                <p>
+                  Interner Status: <code>{paidJob.status}</code>
+                </p>
               </div>
             </details>
           </div>
@@ -1566,341 +2202,545 @@ export function ImageStudioWorkspace() {
       ) : null}
 
       <details className="is-legacy-workspace">
-        <summary>Weitere Aufnahmen und ältere Werkzeuge</summary>
-      <div className="is-body">
-        <aside className="is-sidebar">
-          <div className="is-sidebar-header">
-            <h2 className="is-sidebar-title">Aufnahmen</h2>
-            <p className="is-sidebar-sub">Eine Aufnahme wählen · ein Auftrag erzeugt genau ein Ergebnis</p>
-          </div>
-          <ul className="is-asset-list">
-            {MISSION_ASSET_SLOTS.map((slot) => {
-              const asset = missionSlotAssets.get(slot.id);
-              return (
-              <MissionAssetCard
-                key={slot.id}
-                slot={slot}
-                asset={asset}
-                assets={productionAssets}
-                active={selectedSlotId === slot.id}
-                hasBlueprint={hasBlueprint}
-                generatingAssetId={generatingAssetId}
-                preparingAssetId={preparingAssetId}
-                elapsedMs={asset ? assetTimers[asset.id]?.elapsedMs : undefined}
-                elapsedRunning={asset ? assetTimers[asset.id]?.running : false}
-                reviewState={asset ? getReviewState(asset.id) : null}
-                onSelect={() => {
-                  setSelectedSlotId(slot.id);
-                  setSelectedAssetId(asset?.id ?? null);
-                }}
-                onGenerate={() => {
-                  if (asset) void generateSingleAsset(asset);
-                }}
-              />
-            );
-            })}
-          </ul>
-        </aside>
+        <summary>Technische Details · Ältere Werkzeuge</summary>
+        <div className="is-body">
+          <aside className="is-sidebar">
+            <div className="is-sidebar-header">
+              <h2 className="is-sidebar-title">Aufnahmen</h2>
+              <p className="is-sidebar-sub">
+                Eine Aufnahme wählen · ein Auftrag erzeugt genau ein Ergebnis
+              </p>
+            </div>
+            <ul className="is-asset-list">
+              {MISSION_ASSET_SLOTS.map((slot) => {
+                const asset = missionSlotAssets.get(slot.id);
+                return (
+                  <MissionAssetCard
+                    key={slot.id}
+                    slot={slot}
+                    asset={asset}
+                    assets={productionAssets}
+                    active={selectedSlotId === slot.id}
+                    hasBlueprint={hasBlueprint}
+                    generatingAssetId={generatingAssetId}
+                    preparingAssetId={preparingAssetId}
+                    elapsedMs={
+                      asset ? assetTimers[asset.id]?.elapsedMs : undefined
+                    }
+                    elapsedRunning={
+                      asset ? assetTimers[asset.id]?.running : false
+                    }
+                    reviewState={asset ? getReviewState(asset.id) : null}
+                    onSelect={() => {
+                      setSelectedSlotId(slot.id);
+                      setSelectedAssetId(asset?.id ?? null);
+                    }}
+                    onGenerate={() => {
+                      if (asset) void generateSingleAsset(asset);
+                    }}
+                  />
+                );
+              })}
+            </ul>
+          </aside>
 
-        <main className="is-canvas-column">
-          <div className={cn("is-canvas", hasBlueprint && !hasResults && "is-canvas--staged")}>
-            {hasResults ? (
-              <div className="is-canvas-production">
-                {(pipelineActive || generatingAssetId || preparingAssetId) && (
-                  <div className="is-production-overlay is-production-overlay--inline">
-                    <div className="is-production-overlay-content">
-                      <p className="is-production-phase">
-                        {FASHION_PRODUCTION_PIPELINE.find((s) => s.id === productionStep)?.label}
-                      </p>
-                      <FashionProductionPipeline activeStep={productionStep} />
-                    </div>
-                  </div>
-                )}
-                <ProductionGallery
-                assets={productionAssets}
-                reportId={result!.reportId}
-                reportRecordId={result!.reportRecordId}
-                selectedAssetId={selectedAssetId}
-                confidence={result?.confidence}
-                favorites={favorites}
-                approved={approved}
-                revisions={revisions}
-                compareMode={compareMode}
-                onSelectAsset={(asset) => {
-                  setSelectedAssetId(asset.id);
-                  const slot = MISSION_ASSET_SLOTS.find((s) =>
-                    s.assetTypes.includes(asset.assetType),
-                  );
-                  if (slot) setSelectedSlotId(slot.id);
-                }}
-                onUpdated={updateAsset}
-                onToggleFavorite={(id) =>
-                  setFavorites((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(id)) next.delete(id);
-                    else next.add(id);
-                    return next;
-                  })
-                }
-                onApprove={(id) => {
-                  setApproved((prev) => new Set(prev).add(id));
-                  setRevisions((prev) => {
-                    const next = new Set(prev);
-                    next.delete(id);
-                    return next;
-                  });
-                }}
-                onNeedsRevision={(id) => {
-                  setRevisions((prev) => new Set(prev).add(id));
-                  setApproved((prev) => {
-                    const next = new Set(prev);
-                    next.delete(id);
-                    return next;
-                  });
-                }}
-                onToggleCompare={() => setCompareMode((v) => !v)}
-              />
-              </div>
-            ) : (
-              <div className="is-staging-dashboard">
-                <CanvasPlaceholder
-                  hasBlueprint={hasBlueprint}
-                  garmentLabel={productHeader.authoritative ? productHeader.value : "Produkt noch nicht ausgewählt"}
-                />
-
-                <div className="is-staging-panel">
-                  {hasProjectContext && blueprint ? (
-                    <>
-                      <div className="is-handoff-checklist">
-                        <h3 className="is-panel-heading">Produktionsgrundlage</h3>
-                        <ul className="is-checklist">
-                          {HANDOFF_CHECKLIST.map((item) => {
-                            const done = item.check(handoffChecks);
-                            return (
-                              <li key={item.id} className={cn("is-checklist-item", done && "done")}>
-                                <Check className="size-3.5" />
-                                {item.label}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                      <BlueprintSummary blueprint={blueprint} />
-                      <div className="is-staging-actions">
-                        <button
-                          type="button"
-                          className="is-btn is-btn--primary"
-                          onClick={handleGenerateAssetsClick}
-                          disabled={isLoading || pipelineActive || !canPrepareEstimate}
-                        >
-                          <Sparkles className="size-4" />
-                          {generateAssetsButtonLabel}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="is-empty-state">
-                      <div className="is-empty-state-glass">
-                        <div className="is-empty-illustration-mark" aria-hidden>
-                          <Palette className="size-14" />
-                        </div>
-                        <h2 className="is-empty-headline">Produktionsgrundlage fehlt</h2>
-                        <p className="is-handoff-empty-text">
-                          Wähle ein freigegebenes Artwork aus der Artwork-Bibliothek, um die Bildproduktion zu beginnen.
+          <main className="is-canvas-column">
+            <div
+              className={cn(
+                "is-canvas",
+                hasBlueprint && !hasResults && "is-canvas--staged",
+              )}
+            >
+              {hasResults ? (
+                <div className="is-canvas-production">
+                  {(pipelineActive ||
+                    generatingAssetId ||
+                    preparingAssetId) && (
+                    <div className="is-production-overlay is-production-overlay--inline">
+                      <div className="is-production-overlay-content">
+                        <p className="is-production-phase">
+                          {
+                            FASHION_PRODUCTION_PIPELINE.find(
+                              (s) => s.id === productionStep,
+                            )?.label
+                          }
                         </p>
-                        <Link href="/agents/design" className="is-btn is-btn--primary is-btn--cta">
-                          Artwork im Design Studio wählen
-                        </Link>
+                        <FashionProductionPipeline
+                          activeStep={productionStep}
+                        />
                       </div>
                     </div>
                   )}
+                  <ProductionGallery
+                    assets={productionAssets}
+                    reportId={result!.reportId}
+                    reportRecordId={result!.reportRecordId}
+                    selectedAssetId={selectedAssetId}
+                    confidence={result?.confidence}
+                    favorites={favorites}
+                    approved={approved}
+                    revisions={revisions}
+                    compareMode={compareMode}
+                    onSelectAsset={(asset) => {
+                      setSelectedAssetId(asset.id);
+                      const slot = MISSION_ASSET_SLOTS.find((s) =>
+                        s.assetTypes.includes(asset.assetType),
+                      );
+                      if (slot) setSelectedSlotId(slot.id);
+                    }}
+                    onUpdated={updateAsset}
+                    onToggleFavorite={(id) =>
+                      setFavorites((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(id)) next.delete(id);
+                        else next.add(id);
+                        return next;
+                      })
+                    }
+                    onApprove={(id) => {
+                      setApproved((prev) => new Set(prev).add(id));
+                      setRevisions((prev) => {
+                        const next = new Set(prev);
+                        next.delete(id);
+                        return next;
+                      });
+                    }}
+                    onNeedsRevision={(id) => {
+                      setRevisions((prev) => new Set(prev).add(id));
+                      setApproved((prev) => {
+                        const next = new Set(prev);
+                        next.delete(id);
+                        return next;
+                      });
+                    }}
+                    onToggleCompare={() => setCompareMode((v) => !v)}
+                  />
                 </div>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="is-staging-dashboard">
+                  <CanvasPlaceholder
+                    hasBlueprint={hasBlueprint}
+                    garmentLabel={
+                      productHeader.authoritative
+                        ? productHeader.value
+                        : "Produkt noch nicht ausgewählt"
+                    }
+                  />
 
-          <ProductionTimeline currentStep="image-studio" hasResults={hasResults} />
-        </main>
-
-        <aside className="is-inspector">
-          <div className="is-inspector-header">
-            <h2 className="is-inspector-title">Produktion</h2>
-            <p className="is-inspector-asset">{ownerShotLabel(selectedAsset?.title ?? selectedSlot.label)}</p>
-          </div>
-
-          <div className="is-inspector-actions">
-            <button type="button" className="is-inspector-action is-inspector-action--primary" disabled={!selectedAsset?.imageUrl} onClick={() => selectedAsset && setApproved((p) => new Set(p).add(selectedAsset.id))}>
-              Freigeben
-            </button>
-            <button type="button" className="is-inspector-action" disabled={!selectedAsset} onClick={() => selectedAsset && void generateSingleAsset(selectedAsset)}>
-              Neu versuchen
-            </button>
-            <button type="button" className="is-inspector-action" disabled={!selectedAsset?.imageUrl}>Vergrößern</button>
-            <button type="button" className="is-inspector-action" disabled={!selectedAsset?.imageUrl}>Hintergrund entfernen</button>
-            <button type="button" className="is-inspector-action" disabled={!selectedAsset}>Varianten</button>
-          </div>
-
-          <div className="is-inspector-cards">
-            <InspectorCard
-              title="Aktive Aufnahme"
-              open={openSections.queue}
-              onToggle={() => toggleSection("queue")}
-            >
-              {MISSION_ASSET_SLOTS.map((slot) => {
-                const asset = missionSlotAssets.get(slot.id);
-                const status = deriveMissionStatus(slot, productionAssets, {
-                  hasBlueprint,
-                  generatingAssetId,
-                  preparingAssetId,
-                  reviewState: asset ? getReviewState(asset.id) : null,
-                });
-                return (
-                  <div
-                    key={slot.id}
-                    className={cn("is-queue-row", selectedSlotId === slot.id && "active")}
-                  >
-                    <span className={cn("is-queue-status-dot", `is-queue-status-dot--${PRODUCTION_QUEUE_DOT[status]}`)} />
-                    <span className="is-queue-name">{ownerShotLabel(slot.label)}</span>
-                    <span className="is-queue-status">{MISSION_STATUS_LABELS[status]}</span>
+                  <div className="is-staging-panel">
+                    {hasProjectContext && blueprint ? (
+                      <>
+                        <div className="is-handoff-checklist">
+                          <h3 className="is-panel-heading">
+                            Produktionsgrundlage
+                          </h3>
+                          <ul className="is-checklist">
+                            {HANDOFF_CHECKLIST.map((item) => {
+                              const done = item.check(handoffChecks);
+                              return (
+                                <li
+                                  key={item.id}
+                                  className={cn(
+                                    "is-checklist-item",
+                                    done && "done",
+                                  )}
+                                >
+                                  <Check className="size-3.5" />
+                                  {item.label}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                        <BlueprintSummary blueprint={blueprint} />
+                        <div className="is-staging-actions">
+                          <button
+                            type="button"
+                            className="is-btn is-btn--primary"
+                            onClick={handleGenerateAssetsClick}
+                            disabled={
+                              isLoading || pipelineActive || !canPrepareEstimate
+                            }
+                          >
+                            <Sparkles className="size-4" />
+                            {generateAssetsButtonLabel}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="is-empty-state">
+                        <div className="is-empty-state-glass">
+                          <div
+                            className="is-empty-illustration-mark"
+                            aria-hidden
+                          >
+                            <Palette className="size-14" />
+                          </div>
+                          <h2 className="is-empty-headline">
+                            Produktionsgrundlage fehlt
+                          </h2>
+                          <p className="is-handoff-empty-text">
+                            Wähle ein freigegebenes Artwork aus der
+                            Artwork-Bibliothek, um die Bildproduktion zu
+                            beginnen.
+                          </p>
+                          <Link
+                            href="/agents/design"
+                            className="is-btn is-btn--primary is-btn--cta"
+                          >
+                            Artwork im Design Studio wählen
+                          </Link>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-            </InspectorCard>
+                </div>
+              )}
+            </div>
 
-            <InspectorCard
-              title="Produkt & Variante"
-              open={openSections.product}
-              onToggle={() => toggleSection("product")}
-            >
-              <p>{productSelection ? `${selectedProductLabel ?? "Produkt"} · genaue Variante gewählt` : "Noch kein Produkt ausgewählt."}</p>
-            </InspectorCard>
+            <ProductionTimeline
+              currentStep="image-studio"
+              hasResults={hasResults}
+            />
+          </main>
 
-            <InspectorCard
-              title="Markenmodel"
-              open={openSections.model}
-              onToggle={() => toggleSection("model")}
-            >
-              <p>{brandModelSelection ? `${brandModelSelection.productionContext.contract.displayName} · für Bilder freigegeben` : "Noch kein Markenmodel ausgewählt."}</p>
-              {brandModelSelection ? (
+          <aside className="is-inspector">
+            <div className="is-inspector-header">
+              <h2 className="is-inspector-title">Produktion</h2>
+              <p className="is-inspector-asset">
+                {ownerShotLabel(selectedAsset?.title ?? selectedSlot.label)}
+              </p>
+            </div>
+
+            <div className="is-inspector-actions">
+              <button
+                type="button"
+                className="is-inspector-action is-inspector-action--primary"
+                disabled={!selectedAsset?.imageUrl}
+                onClick={() =>
+                  selectedAsset &&
+                  setApproved((p) => new Set(p).add(selectedAsset.id))
+                }
+              >
+                Freigeben
+              </button>
+              <button
+                type="button"
+                className="is-inspector-action"
+                disabled={!selectedAsset}
+                onClick={() =>
+                  selectedAsset && void generateSingleAsset(selectedAsset)
+                }
+              >
+                Neu versuchen
+              </button>
+              <button
+                type="button"
+                className="is-inspector-action"
+                disabled={!selectedAsset?.imageUrl}
+              >
+                Vergrößern
+              </button>
+              <button
+                type="button"
+                className="is-inspector-action"
+                disabled={!selectedAsset?.imageUrl}
+              >
+                Hintergrund entfernen
+              </button>
+              <button
+                type="button"
+                className="is-inspector-action"
+                disabled={!selectedAsset}
+              >
+                Varianten
+              </button>
+            </div>
+
+            <div className="is-inspector-cards">
+              <InspectorCard
+                title="Aktive Aufnahme"
+                open={openSections.queue}
+                onToggle={() => toggleSection("queue")}
+              >
+                {MISSION_ASSET_SLOTS.map((slot) => {
+                  const asset = missionSlotAssets.get(slot.id);
+                  const status = deriveMissionStatus(slot, productionAssets, {
+                    hasBlueprint,
+                    generatingAssetId,
+                    preparingAssetId,
+                    reviewState: asset ? getReviewState(asset.id) : null,
+                  });
+                  return (
+                    <div
+                      key={slot.id}
+                      className={cn(
+                        "is-queue-row",
+                        selectedSlotId === slot.id && "active",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "is-queue-status-dot",
+                          `is-queue-status-dot--${PRODUCTION_QUEUE_DOT[status]}`,
+                        )}
+                      />
+                      <span className="is-queue-name">
+                        {ownerShotLabel(slot.label)}
+                      </span>
+                      <span className="is-queue-status">
+                        {MISSION_STATUS_LABELS[status]}
+                      </span>
+                    </div>
+                  );
+                })}
+              </InspectorCard>
+
+              <InspectorCard
+                title="Produkt & Variante"
+                open={openSections.product}
+                onToggle={() => toggleSection("product")}
+              >
+                <p>
+                  {productSelection
+                    ? `${selectedProductLabel ?? "Produkt"} · genaue Variante gewählt`
+                    : "Noch kein Produkt ausgewählt."}
+                </p>
+              </InspectorCard>
+
+              <InspectorCard
+                title="Markenmodel"
+                open={openSections.model}
+                onToggle={() => toggleSection("model")}
+              >
+                <p>
+                  {brandModelSelection
+                    ? `${brandModelSelection.productionContext.contract.displayName} · für Bilder freigegeben`
+                    : "Noch kein Markenmodel ausgewählt."}
+                </p>
+                {brandModelSelection ? (
+                  <InspectorField
+                    label="Identität"
+                    value={`v${brandModelSelection.productionContext.trace.identityLockVersion} · ${brandModelSelection.productionContext.trace.identityLockSnapshotId.slice(0, 8)}`}
+                    mono
+                  />
+                ) : null}
+                <div className="is-model-badge">
+                  <span className="is-model-badge-provider">
+                    OpenAI Bildmodell
+                  </span>
+                  <span className="is-model-badge-model">
+                    Details unter „Technische Details“
+                  </span>
+                </div>
                 <InspectorField
-                  label="Identität"
-                  value={`v${brandModelSelection.productionContext.trace.identityLockVersion} · ${brandModelSelection.productionContext.trace.identityLockSnapshotId.slice(0, 8)}`}
+                  label="Produktionsmodus"
+                  value={ownerGenerationModeLabel}
+                />
+                <InspectorField
+                  label="Auflösung"
+                  value={selectedAsset?.dimensions ?? "1024 × 1024"}
+                />
+                <InspectorField
+                  label="Seed"
+                  value={selectedAsset?.id?.slice(0, 10) ?? "—"}
                   mono
                 />
-              ) : null}
-              <div className="is-model-badge">
-                <span className="is-model-badge-provider">OpenAI Bildmodell</span>
-                <span className="is-model-badge-model">Details unter „Technische Details“</span>
-              </div>
-              <InspectorField label="Produktionsmodus" value={ownerGenerationModeLabel} />
-              <InspectorField label="Auflösung" value={selectedAsset?.dimensions ?? "1024 × 1024"} />
-              <InspectorField label="Seed" value={selectedAsset?.id?.slice(0, 10) ?? "—"} mono />
-              <InspectorField
-                label="Erstellungsdauer"
-                value={
-                  selectedAsset
-                    ? formatAssetElapsedTime(assetTimers[selectedAsset.id]?.elapsedMs)
-                    : "—"
-                }
-              />
-            </InspectorCard>
-
-            <InspectorCard
-              title="Technische Details · Prompt"
-              open={openSections.prompt}
-              onToggle={() => toggleSection("prompt")}
-            >
-              <div className="is-code-block">
-                <span className="is-code-label">prompt</span>
-                <pre className="is-code-pre">{activePrompt || "—"}</pre>
-              </div>
-              <div className="is-code-block">
-                <span className="is-code-label">negative</span>
-                <pre className="is-code-pre">low quality, blurry, watermark, distorted anatomy</pre>
-              </div>
-            </InspectorCard>
-
-            <InspectorCard
-              title="Produktionsfortschritt"
-              open={openSections.progress}
-              onToggle={() => toggleSection("progress")}
-            >
-              <FashionProductionPipeline activeStep={productionStep} />
-              <div className="is-progress-bar">
-                <div
-                  className="is-progress-fill"
-                  style={{ width: `${productionProgressPercent}%` }}
+                <InspectorField
+                  label="Erstellungsdauer"
+                  value={
+                    selectedAsset
+                      ? formatAssetElapsedTime(
+                          assetTimers[selectedAsset.id]?.elapsedMs,
+                        )
+                      : "—"
+                  }
                 />
-              </div>
-            </InspectorCard>
+              </InspectorCard>
 
-            <InspectorCard
-              title="Kommerzielle Prüfung"
-              open={openSections.review}
-              onToggle={() => toggleSection("review")}
-            >
-              <div className="is-score-cards">
-                <ScoreCard label="Kommerziell" value={commercialScore ?? "—"} unit={commercialScore != null ? "%" : ""} accent="emerald" />
-                <ScoreCard label="Markenwirkung" value={commercialScore != null ? Math.min(99, commercialScore + 2) : "—"} unit={commercialScore != null ? "%" : ""} accent="gold" />
-                <ScoreCard label="Produktionsbereit" value={hasResults ? "Vorbereitet" : "Ausstehend"} accent="muted" />
-              </div>
-              <InspectorField label="Produktionsreife" value={printReadiness} />
-              <InspectorField label="Prüfung der Design-Hinweise" value={blueprint?.blueprintReview ?? "—"} />
-            </InspectorCard>
+              <InspectorCard
+                title="Technische Details · Prompt"
+                open={openSections.prompt}
+                onToggle={() => toggleSection("prompt")}
+              >
+                <div className="is-code-block">
+                  <span className="is-code-label">prompt</span>
+                  <pre className="is-code-pre">{activePrompt || "—"}</pre>
+                </div>
+                <div className="is-code-block">
+                  <span className="is-code-label">negative</span>
+                  <pre className="is-code-pre">
+                    low quality, blurry, watermark, distorted anatomy
+                  </pre>
+                </div>
+              </InspectorCard>
 
-            <InspectorCard
-              title="Versionsverlauf"
-              open={openSections.history}
-              onToggle={() => toggleSection("history")}
-            >
-              <div className="is-version-timeline">
-                {versionTimeline.map((entry, i) => (
-                  <div key={`${entry.version}-${i}`} className="is-version-entry">
-                    <span className="is-version-marker" data-first={i === 0} />
-                    <div className="is-version-content">
-                      <span className="is-version-id">{entry.version}</span>
-                      <span className="is-version-label">{entry.label}</span>
-                      <span className="is-version-time">{entry.time}</span>
+              <InspectorCard
+                title="Produktionsfortschritt"
+                open={openSections.progress}
+                onToggle={() => toggleSection("progress")}
+              >
+                <FashionProductionPipeline activeStep={productionStep} />
+                <div className="is-progress-bar">
+                  <div
+                    className="is-progress-fill"
+                    style={{ width: `${productionProgressPercent}%` }}
+                  />
+                </div>
+              </InspectorCard>
+
+              <InspectorCard
+                title="Kommerzielle Prüfung"
+                open={openSections.review}
+                onToggle={() => toggleSection("review")}
+              >
+                <div className="is-score-cards">
+                  <ScoreCard
+                    label="Kommerziell"
+                    value={commercialScore ?? "—"}
+                    unit={commercialScore != null ? "%" : ""}
+                    accent="emerald"
+                  />
+                  <ScoreCard
+                    label="Markenwirkung"
+                    value={
+                      commercialScore != null
+                        ? Math.min(99, commercialScore + 2)
+                        : "—"
+                    }
+                    unit={commercialScore != null ? "%" : ""}
+                    accent="gold"
+                  />
+                  <ScoreCard
+                    label="Produktionsbereit"
+                    value={hasResults ? "Vorbereitet" : "Ausstehend"}
+                    accent="muted"
+                  />
+                </div>
+                <InspectorField
+                  label="Produktionsreife"
+                  value={printReadiness}
+                />
+                <InspectorField
+                  label="Prüfung der Design-Hinweise"
+                  value={blueprint?.blueprintReview ?? "—"}
+                />
+              </InspectorCard>
+
+              <InspectorCard
+                title="Versionsverlauf"
+                open={openSections.history}
+                onToggle={() => toggleSection("history")}
+              >
+                <div className="is-version-timeline">
+                  {versionTimeline.map((entry, i) => (
+                    <div
+                      key={`${entry.version}-${i}`}
+                      className="is-version-entry"
+                    >
+                      <span
+                        className="is-version-marker"
+                        data-first={i === 0}
+                      />
+                      <div className="is-version-content">
+                        <span className="is-version-id">{entry.version}</span>
+                        <span className="is-version-label">{entry.label}</span>
+                        <span className="is-version-time">{entry.time}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </InspectorCard>
-          </div>
-        </aside>
-      </div>
+                  ))}
+                </div>
+              </InspectorCard>
+            </div>
+          </aside>
+        </div>
       </details>
 
       {showHandoffDebug ? (
         <HandoffDebugOverlay
           title="Image Studio — Handoff Receive"
           rows={[
-          { label: "raw handoff found", value: handoffLoadDebug?.rawFound ? "yes" : "no" },
-          { label: "storage key", value: handoffLoadDebug?.storageKey ?? "nexhq-image-studio-handoff" },
-          { label: "source", value: handoffLoadDebug?.source ?? "pending" },
-          { label: "parsed", value: handoffLoadDebug?.parsed ? "yes" : "no" },
-          { label: "state applied", value: handoffStateApplied ? "yes" : "no" },
-          { label: "title", value: handoffLoadDebug?.title ?? handoff?.mission?.title ?? "—" },
-          { label: "collection", value: handoffLoadDebug?.collection ?? blueprint?.collection ?? "—" },
-          { label: "garment", value: handoffLoadDebug?.garment ?? blueprint?.garment ?? "—" },
-          { label: "colorway", value: handoffLoadDebug?.colorway ?? blueprint?.colorway ?? "—" },
-          { label: "brief length", value: String(handoffLoadDebug?.briefLength ?? brief.length) },
-          { label: "master artwork", value: handoff?.masterArtworkApproved ? "approved" : "—" },
-          { label: "master source", value: handoff?.masterArtworkSourceType ?? "—" },
-          { label: "master version", value: handoff?.masterArtworkVersion ?? "—" },
-          { label: "master dpi", value: handoff?.masterArtworkDpi != null ? String(handoff.masterArtworkDpi) : "—" },
-          ...(handoffLoadDebug?.rejectReason
-            ? [{ label: "reason if rejected", value: handoffLoadDebug.rejectReason }]
-            : []),
-          ...(handoffSendDebug
-            ? [
-                { label: "— send debug —", value: "" },
-                { label: "design saved", value: handoffSendDebug.saved ? "yes" : "no" },
-                { label: "design localStorage", value: handoffSendDebug.localStorage ? "yes" : "no" },
-                { label: "design sessionStorage", value: handoffSendDebug.sessionStorage ? "yes" : "no" },
-              ]
-            : []),
-        ]}
+            {
+              label: "raw handoff found",
+              value: handoffLoadDebug?.rawFound ? "yes" : "no",
+            },
+            {
+              label: "storage key",
+              value:
+                handoffLoadDebug?.storageKey ?? "nexhq-image-studio-handoff",
+            },
+            { label: "source", value: handoffLoadDebug?.source ?? "pending" },
+            { label: "parsed", value: handoffLoadDebug?.parsed ? "yes" : "no" },
+            {
+              label: "state applied",
+              value: handoffStateApplied ? "yes" : "no",
+            },
+            {
+              label: "title",
+              value: handoffLoadDebug?.title ?? handoff?.mission?.title ?? "—",
+            },
+            {
+              label: "collection",
+              value:
+                handoffLoadDebug?.collection ?? blueprint?.collection ?? "—",
+            },
+            {
+              label: "garment",
+              value: handoffLoadDebug?.garment ?? blueprint?.garment ?? "—",
+            },
+            {
+              label: "colorway",
+              value: handoffLoadDebug?.colorway ?? blueprint?.colorway ?? "—",
+            },
+            {
+              label: "brief length",
+              value: String(handoffLoadDebug?.briefLength ?? brief.length),
+            },
+            {
+              label: "master artwork",
+              value: handoff?.masterArtworkApproved ? "approved" : "—",
+            },
+            {
+              label: "master source",
+              value: handoff?.masterArtworkSourceType ?? "—",
+            },
+            {
+              label: "master version",
+              value: handoff?.masterArtworkVersion ?? "—",
+            },
+            {
+              label: "master dpi",
+              value:
+                handoff?.masterArtworkDpi != null
+                  ? String(handoff.masterArtworkDpi)
+                  : "—",
+            },
+            ...(handoffLoadDebug?.rejectReason
+              ? [
+                  {
+                    label: "reason if rejected",
+                    value: handoffLoadDebug.rejectReason,
+                  },
+                ]
+              : []),
+            ...(handoffSendDebug
+              ? [
+                  { label: "— send debug —", value: "" },
+                  {
+                    label: "design saved",
+                    value: handoffSendDebug.saved ? "yes" : "no",
+                  },
+                  {
+                    label: "design localStorage",
+                    value: handoffSendDebug.localStorage ? "yes" : "no",
+                  },
+                  {
+                    label: "design sessionStorage",
+                    value: handoffSendDebug.sessionStorage ? "yes" : "no",
+                  },
+                ]
+              : []),
+          ]}
         />
       ) : null}
     </div>
@@ -1948,27 +2788,45 @@ function ToolbarGhost({
   );
 }
 
-function InspectorField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function InspectorField({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="is-field">
       <span className="is-field-label">{label}</span>
-      <span className={cn("is-field-value", mono && "is-field-value--mono")}>{value}</span>
+      <span className={cn("is-field-value", mono && "is-field-value--mono")}>
+        {value}
+      </span>
     </div>
   );
 }
 
-function BlueprintSummary({ blueprint }: { blueprint: import("@/lib/image/image-studio-mission").ImportedCreativeBlueprint }) {
+function BlueprintSummary({
+  blueprint,
+}: {
+  blueprint: import("@/lib/image/image-studio-mission").ImportedCreativeBlueprint;
+}) {
   return (
     <div className="is-blueprint-summary">
       <div className="is-blueprint-summary-row">
-        <span className="is-blueprint-summary-label">Design-Hinweise (nicht verbindlich)</span>
+        <span className="is-blueprint-summary-label">
+          Design-Hinweise (nicht verbindlich)
+        </span>
         <p className="is-blueprint-summary-text">
           {blueprint.collection} · {blueprint.garment} · {blueprint.colorway}
         </p>
       </div>
       <div className="is-blueprint-summary-row">
         <span className="is-blueprint-summary-label">Kreative Richtung</span>
-        <p className="is-blueprint-summary-text">{blueprint.creativeDirection}</p>
+        <p className="is-blueprint-summary-text">
+          {blueprint.creativeDirection}
+        </p>
       </div>
       <div className="is-blueprint-summary-grid">
         <div>
@@ -1980,7 +2838,9 @@ function BlueprintSummary({ blueprint }: { blueprint: import("@/lib/image/image-
           <p>{blueprint.fashionLanguage}</p>
         </div>
         <div>
-          <span className="is-blueprint-summary-label">Kommerzielle Absicht</span>
+          <span className="is-blueprint-summary-label">
+            Kommerzielle Absicht
+          </span>
           <p>{blueprint.commercialIntent}</p>
         </div>
       </div>
@@ -2051,8 +2911,13 @@ function MissionAssetCard({
       : status === "waiting"
         ? "—"
         : "";
-  const canGenerate =
-    Boolean(asset && !asset.imageUrl && !generatingAssetId && !preparingAssetId && asset.status !== "completed");
+  const canGenerate = Boolean(
+    asset &&
+    !asset.imageUrl &&
+    !generatingAssetId &&
+    !preparingAssetId &&
+    asset.status !== "completed",
+  );
 
   return (
     <li>
@@ -2066,32 +2931,67 @@ function MissionAssetCard({
           imageUrl={asset?.imageUrl}
           active={active}
         />
-        <ProgressRing status={status} progress={progress} size={30} active={active} />
+        <ProgressRing
+          status={status}
+          progress={progress}
+          size={30}
+          active={active}
+        />
         <span className="is-asset-card-body">
           <span className="is-asset-card-top">
-            <span className="is-asset-card-label">{ownerShotLabel(slot.label)}</span>
-            {slot.commercial ? <span className="is-commercial-badge">COM</span> : null}
+            <span className="is-asset-card-label">
+              {ownerShotLabel(slot.label)}
+            </span>
+            {slot.commercial ? (
+              <span className="is-commercial-badge">COM</span>
+            ) : null}
           </span>
           <span className="is-asset-card-meta">
-            <span className={cn("is-asset-card-status", `is-asset-card-status--${status}`)}>
-              <span className={cn("is-production-dot", `is-production-dot--${PRODUCTION_QUEUE_DOT[status]}`)} />
+            <span
+              className={cn(
+                "is-asset-card-status",
+                `is-asset-card-status--${status}`,
+              )}
+            >
+              <span
+                className={cn(
+                  "is-production-dot",
+                  `is-production-dot--${PRODUCTION_QUEUE_DOT[status]}`,
+                )}
+              />
               {MISSION_STATUS_LABELS[status]}
-              {status === "ready" ? <span className="is-asset-card-ready-tag">Bereit</span> : null}
+              {status === "ready" ? (
+                <span className="is-asset-card-ready-tag">Bereit</span>
+              ) : null}
             </span>
             <span className="is-asset-card-version">{version}</span>
           </span>
           <span className="is-asset-card-footer">
-            <span className={cn("is-asset-card-eta", elapsedRunning && "is-asset-card-eta--live")}>
+            <span
+              className={cn(
+                "is-asset-card-eta",
+                elapsedRunning && "is-asset-card-eta--live",
+              )}
+            >
               {timeLabel}
             </span>
-            <span className={cn("is-priority-badge", `is-priority-badge--${slot.priority}`)}>
+            <span
+              className={cn(
+                "is-priority-badge",
+                `is-priority-badge--${slot.priority}`,
+              )}
+            >
               {ASSET_PRIORITY_LABELS[slot.priority]}
             </span>
           </span>
         </span>
       </button>
       {canGenerate ? (
-        <button type="button" className="is-asset-generate" onClick={onGenerate}>
+        <button
+          type="button"
+          className="is-asset-generate"
+          onClick={onGenerate}
+        >
           Generieren
         </button>
       ) : null}

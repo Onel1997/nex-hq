@@ -287,7 +287,7 @@ export function ResearchStudioResult({
           {resultLabels.newResearch}
         </button>
 
-        <Link href="/facility/reports" className="rs3-btn rs3-btn-secondary">
+        <Link href="/agents/research" className="rs3-btn rs3-btn-secondary">
           <ExternalLink className="size-3.5" />
           {resultLabels.openReportsCenter}
         </Link>

@@ -155,6 +155,20 @@ function mapPersona(
     video_use_approved_at:
       row.video_use_approved_at == null ? null : String(row.video_use_approved_at),
     video_use_approved_by: nullableStr(row.video_use_approved_by),
+    video_use_approval_review_id: nullableStr(row.video_use_approval_review_id),
+    video_use_approval_lock_snapshot_id: nullableStr(
+      row.video_use_approval_lock_snapshot_id,
+    ),
+    video_use_approval_lock_version:
+      row.video_use_approval_lock_version == null
+        ? null
+        : num(row.video_use_approval_lock_version),
+    video_use_approval_identity_fingerprint: nullableStr(
+      row.video_use_approval_identity_fingerprint,
+    ),
+    video_use_approval_reference_package_fingerprint: nullableStr(
+      row.video_use_approval_reference_package_fingerprint,
+    ),
     brand_cast_approved: bool(row.brand_cast_approved, false),
     brand_cast_approved_at:
       row.brand_cast_approved_at == null
@@ -184,6 +198,25 @@ function mapPersona(
     default_styling: str(row.default_styling),
     image_identity_ready: bool(row.image_identity_ready, false),
     video_identity_ready: bool(row.video_identity_ready, false),
+    video_identity_review_id: nullableStr(row.video_identity_review_id),
+    video_identity_ready_at:
+      row.video_identity_ready_at == null
+        ? null
+        : String(row.video_identity_ready_at),
+    video_identity_ready_by: nullableStr(row.video_identity_ready_by),
+    video_identity_ready_lock_snapshot_id: nullableStr(
+      row.video_identity_ready_lock_snapshot_id,
+    ),
+    video_identity_ready_lock_version:
+      row.video_identity_ready_lock_version == null
+        ? null
+        : num(row.video_identity_ready_lock_version),
+    video_identity_ready_identity_fingerprint: nullableStr(
+      row.video_identity_ready_identity_fingerprint,
+    ),
+    video_identity_ready_reference_package_fingerprint: nullableStr(
+      row.video_identity_ready_reference_package_fingerprint,
+    ),
     intended_usage: (str(row.intended_usage, "image_and_video") ||
       "image_and_video") as Persona["intended_usage"],
     preferred_location_ids: preferred.preferred_location_ids,
@@ -345,6 +378,11 @@ function personaRowPayload(
     "video_use_approved",
     "video_use_approved_at",
     "video_use_approved_by",
+    "video_use_approval_review_id",
+    "video_use_approval_lock_snapshot_id",
+    "video_use_approval_lock_version",
+    "video_use_approval_identity_fingerprint",
+    "video_use_approval_reference_package_fingerprint",
     "brand_cast_approved",
     "brand_cast_approved_at",
     "brand_cast_approved_by",
@@ -370,6 +408,13 @@ function personaRowPayload(
     "default_styling",
     "image_identity_ready",
     "video_identity_ready",
+    "video_identity_review_id",
+    "video_identity_ready_at",
+    "video_identity_ready_by",
+    "video_identity_ready_lock_snapshot_id",
+    "video_identity_ready_lock_version",
+    "video_identity_ready_identity_fingerprint",
+    "video_identity_ready_reference_package_fingerprint",
     "intended_usage",
     "created_by",
   ] as const;

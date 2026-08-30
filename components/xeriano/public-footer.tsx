@@ -1,0 +1,2 @@
+import Link from "next/link";
+export function XerianoPublicFooter() { return <footer className="xeriano-public-footer"><div><Link href="/" className="xeriano-wordmark">Xeriamo</Link><p>Design, Bild und Video in einem Workflow.</p></div><nav><Link href="/pricing">Pricing</Link><Link href="/login">Anmelden</Link><Link href="/datenschutz">Datenschutz</Link><Link href="/impressum">Impressum</Link><Link href="/terms">Terms</Link></nav><small>© {new Date().getFullYear()} Xeriamo</small></footer>; }

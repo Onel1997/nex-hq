@@ -834,9 +834,9 @@ describe("Phase 2.3D.9 deterministic mirror salvage", () => {
       join(ROOT, "components/persona/persona-studio.tsx"),
       "utf8",
     );
-    assert.match(studio, /Create mirrored version/);
+    assert.match(studio, /Gespiegelte Version erstellen/);
     assert.match(studio, /create_mirrored_version/);
-    assert.match(studio, /DERIVED MIRROR/);
+    assert.match(studio, /ABGELEITETE SPIEGELUNG/);
     const novelty = readFileSync(
       join(ROOT, "lib/persona/face-novelty-memory/similarity-threshold.ts"),
       "utf8",

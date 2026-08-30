@@ -37,3 +37,31 @@ export async function createImageProductionAssetAccess(
     ).toISOString(),
   };
 }
+
+export async function createImageProductionAssetAccessBatch(
+  workspaceId: string,
+  storagePaths: readonly string[],
+): Promise<Map<string, { accessUrl: string; expiresAt: string }>> {
+  const uniquePaths = [...new Set(storagePaths)];
+  uniquePaths.forEach((path) => assertImageProductionAssetPath(workspaceId, path));
+  if (!uniquePaths.length) return new Map();
+  const { data, error } = await createAdminClient().storage
+    .from(IMAGE_PRODUCTION_ASSETS_BUCKET)
+    .createSignedUrls(uniquePaths, IMAGE_PRODUCTION_ASSET_ACCESS_SECONDS);
+  if (error) {
+    throw new PersonaDomainError(
+      `Private Image asset batch access failed: ${error.message}`,
+      "STORAGE_UPLOAD_FAILED",
+    );
+  }
+  const expiresAt = new Date(
+    Date.now() + IMAGE_PRODUCTION_ASSET_ACCESS_SECONDS * 1000,
+  ).toISOString();
+  return new Map(
+    (data ?? []).flatMap((entry) =>
+      entry.path && entry.signedUrl
+        ? [[entry.path, { accessUrl: entry.signedUrl, expiresAt }] as const]
+        : [],
+    ),
+  );
+}

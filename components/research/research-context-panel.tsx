@@ -1,7 +1,7 @@
 "use client";
 
-import type { LabInspectorData } from "@/lib/facility/types";
-import { extractResearchIntelligence } from "@/lib/facility/lab-intelligence";
+import type { LabInspectorData } from "@/lib/workspace/inspector-types";
+import { extractResearchIntelligence } from "@/lib/workspace/lab-intelligence";
 import { useResearchBrain } from "@/components/research/use-research-brain";
 import { useT } from "@/lib/i18n";
 import { Loader2 } from "lucide-react";

@@ -234,3 +234,15 @@ The already-applied `product_profiles` table and private `product-profile-refere
 - `persona_personas` RLS remains enabled; no new permissive policies; existing table grants unchanged.
 - North African Street Premium: `video_identity_ready=false`, `video_use_approved=false`, lock v3, Image/Brand Cast approvals unchanged — no auto-approval.
 - 1244 tests pass; TypeScript clean; production build clean. No provider calls; no human Video review performed; `.env.local` untouched.
+
+## Artwork display name migration — APPLIED 2026-08-19
+
+`20260818220000_artwork_display_name_v1.sql` is additive and **APPLIED** on 2026-08-19 to project `lggogmvpktedkimbpzix`. Pre-apply verification confirmed linked ref, 32 prior migrations synchronized, exactly one file pending, and a clean `db push --dry-run` proposing only this file. The SQL is entirely additive: no DROP/TRUNCATE/DELETE/destructive ALTER/business-row rewrite/automatic rename. Post-apply verification confirmed:
+
+- `20260818220000` recorded in remote history; no pending migrations; local/remote synchronized; subsequent dry-run reports the remote database is up to date.
+- Live columns on `design_master_artworks`: `display_name text` nullable; `original_file_name text` nullable.
+- Checks: `display_name` null or trimmed 1–120 chars; `original_file_name` null or trimmed 1–255 chars; stored value must equal `btrim(...)`.
+- RLS remains enabled; zero policies (deny-by-default for direct clients). No `anon`/`authenticated`/`public` table grants.
+- Column ACL adds `service_role` UPDATE on `display_name` only. Application rename writes only that column, scoped by `workspace_id` + `id`, after `requirePersonaScope()`.
+- Existing Artwork `b19042f7-40f9-4f27-b53a-30329fbbe0ad` unchanged: design ID, version `V1`, checksum `598e37836ab6d48798f771cab575a25e9593df8456d2a209f0587d36a5da2c41`, status `APPROVED`, storage path unchanged; both new name fields `NULL`.
+- No provider calls; `.env.local` untouched; no automatic name assigned. Ready for a manual owner rename test.

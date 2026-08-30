@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import type { ArtworkPreviewSource } from "../types";
 import type { ArtworkDisplayName } from "@/lib/design/artwork-display-name";
+import type { DesignArtworkTransferDiagnostic } from "@/lib/design/design-to-image-handoff";
 
 interface ArtworkInspectorProps {
   collapsed: boolean;
@@ -46,10 +47,13 @@ interface ArtworkInspectorProps {
   missionView?: MasterArtworkViewModel | null;
   canApprove: boolean;
   isApproved: boolean;
-  onApprove: () => void;
+  onApprove: () => void | Promise<void>;
+  approvalBusy?: boolean;
+  approvalError?: string | null;
   canContinueToImageStudio?: boolean;
   handoffBusy?: boolean;
   handoffError?: string | null;
+  transferDiagnostic?: DesignArtworkTransferDiagnostic | null;
   onContinueToImageStudio?: () => void;
 }
 
@@ -80,9 +84,12 @@ export function ArtworkInspector({
   canApprove,
   isApproved,
   onApprove,
+  approvalBusy = false,
+  approvalError = null,
   canContinueToImageStudio = false,
   handoffBusy = false,
   handoffError = null,
+  transferDiagnostic = null,
   onContinueToImageStudio,
 }: ArtworkInspectorProps) {
   const state = missionView?.state;
@@ -272,6 +279,9 @@ export function ArtworkInspector({
                       {handoffError}
                     </p>
                   ) : null}
+                  {handoffError && transferDiagnostic && process.env.NODE_ENV !== "production" ? (
+                    <TransferDiagnosticDetails diagnostic={transferDiagnostic} />
+                  ) : null}
                 </>
               ) : (
                 <>
@@ -289,11 +299,19 @@ export function ArtworkInspector({
                   <button
                     type="button"
                     className="dsv2-approve-btn"
-                    disabled={!canApprove}
-                    onClick={onApprove}
+                    disabled={!canApprove || approvalBusy}
+                    onClick={() => void onApprove()}
                   >
-                    Artwork freigeben
+                    {approvalBusy ? "Freigabe wird gespeichert…" : "Artwork freigeben"}
                   </button>
+                  {approvalError ? (
+                    <p className="dsv2-workflow-error" role="alert">
+                      {approvalError}
+                    </p>
+                  ) : null}
+                  {approvalError && transferDiagnostic && process.env.NODE_ENV !== "production" ? (
+                    <TransferDiagnosticDetails diagnostic={transferDiagnostic} />
+                  ) : null}
                 </>
               )}
             </div>
@@ -301,6 +319,30 @@ export function ArtworkInspector({
         </div>
       ) : null}
     </aside>
+  );
+}
+
+function TransferDiagnosticDetails({
+  diagnostic,
+}: {
+  diagnostic: DesignArtworkTransferDiagnostic;
+}) {
+  return (
+    <details className="dsv2-technical-error">
+      <summary>Technische Fehlerdetails</summary>
+      <dl>
+        <InfoRow label="Vorgang" value={diagnostic.operation} />
+        <InfoRow label="Status" value={diagnostic.status} />
+        <InfoRow label="Code" value={diagnostic.code} />
+        <InfoRow label="Request-ID" value={diagnostic.requestId} />
+        <InfoRow label="Artwork-ID" value={diagnostic.artworkId} />
+        <InfoRow label="Design-ID" value={diagnostic.designId} />
+        <InfoRow label="Version" value={diagnostic.version} />
+        <InfoRow label="Erwartete Bytes" value={diagnostic.expectedByteLength} />
+        <InfoRow label="Empfangene Bytes" value={diagnostic.receivedByteLength} />
+        <InfoRow label="Ursache" value={diagnostic.message} />
+      </dl>
+    </details>
   );
 }
 

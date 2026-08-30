@@ -259,6 +259,23 @@ async function finalizePersonaLockFields(
     identity_lock_version: snapshot.identity_lock_version,
     identity_locked_at: snapshot.identity_locked_at,
     image_identity_ready: true,
+    // Video authority never carries across an Identity Lock version.
+    video_identity_ready: false,
+    video_identity_review_id: null,
+    video_identity_ready_at: null,
+    video_identity_ready_by: null,
+    video_identity_ready_lock_snapshot_id: null,
+    video_identity_ready_lock_version: null,
+    video_identity_ready_identity_fingerprint: null,
+    video_identity_ready_reference_package_fingerprint: null,
+    video_use_approved: false,
+    video_use_approved_at: null,
+    video_use_approved_by: null,
+    video_use_approval_review_id: null,
+    video_use_approval_lock_snapshot_id: null,
+    video_use_approval_lock_version: null,
+    video_use_approval_identity_fingerprint: null,
+    video_use_approval_reference_package_fingerprint: null,
   });
 }
 

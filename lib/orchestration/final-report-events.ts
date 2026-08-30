@@ -1,5 +1,5 @@
 import { getBrainClient } from "@/brain/client";
-import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { resolveWorkspace } from "@/brain/seed";
 import type { BrainActor } from "@/brain/types";
 
 export type CeoFinalReportEventType =
@@ -17,7 +17,7 @@ export async function logCeoFinalReportEvent(params: {
   eventType: CeoFinalReportEventType;
   payload: Record<string, unknown>;
 }): Promise<string> {
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const brain = getBrainClient();
 
   return brain.logCeoFinalReportEvent({

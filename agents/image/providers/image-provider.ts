@@ -4,6 +4,10 @@ import type {
   ImageProviderIdentityStrategy,
 } from "@/lib/image/image-generation-identity-contract";
 import type { ProductProductionContext } from "@/lib/image/product-production-context";
+import type { ProductProductionBindingV2 } from "@/lib/product-library/types";
+import type { ProductVisualInput } from "@/lib/product-library/product-reference-package";
+import type { PrintSurface } from "@/lib/image/print-surface/types";
+import type { SocialCreativeDirectionV1 } from "@/lib/image/social-creative-direction";
 
 /** Server-resolved Persona identity material. Never accepted from the browser. */
 export interface ImageProviderIdentityInput {
@@ -24,6 +28,7 @@ export interface ImageProviderIdentityInput {
     assetId: string;
     checksum: string;
     mimeType: string;
+    bytes: Buffer;
   }>;
   constraints: ImageIdentityConstraints;
 }
@@ -42,7 +47,18 @@ export interface ImageProviderArtworkInput {
 
 /** Provider-neutral WHAT/PRODUCT/HOW context, separate from Persona identity. */
 export interface ImageProviderProductionInput {
-  product: ProductProductionContext;
+  product: ProductProductionContext | ProductProductionBindingV2;
+  productVisualInput?: ProductVisualInput;
+  printSurface?: PrintSurface;
+  /** Structured owner creative direction. It never carries Artwork pixels. */
+  creativeDirection?: SocialCreativeDirectionV1;
+  /** Server-resolved product references. Never Persona or Artwork references. */
+  productReferences?: Array<{
+    referenceId: string;
+    role: string;
+    mimeType: string;
+    bytes: Buffer;
+  }>;
   shot: {
     scene: string;
     lighting: string;

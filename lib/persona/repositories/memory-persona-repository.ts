@@ -178,6 +178,15 @@ export class MemoryPersonaRepository implements PersonaRepository {
       video_use_approved: input.video_use_approved ?? false,
       video_use_approved_at: input.video_use_approved_at ?? null,
       video_use_approved_by: input.video_use_approved_by ?? null,
+      video_use_approval_review_id: input.video_use_approval_review_id ?? null,
+      video_use_approval_lock_snapshot_id:
+        input.video_use_approval_lock_snapshot_id ?? null,
+      video_use_approval_lock_version:
+        input.video_use_approval_lock_version ?? null,
+      video_use_approval_identity_fingerprint:
+        input.video_use_approval_identity_fingerprint ?? null,
+      video_use_approval_reference_package_fingerprint:
+        input.video_use_approval_reference_package_fingerprint ?? null,
       brand_cast_approved: input.brand_cast_approved ?? false,
       brand_cast_approved_at: input.brand_cast_approved_at ?? null,
       brand_cast_approved_by: input.brand_cast_approved_by ?? null,
@@ -203,6 +212,17 @@ export class MemoryPersonaRepository implements PersonaRepository {
       default_styling: input.default_styling ?? "",
       image_identity_ready: input.image_identity_ready ?? false,
       video_identity_ready: input.video_identity_ready ?? false,
+      video_identity_review_id: input.video_identity_review_id ?? null,
+      video_identity_ready_at: input.video_identity_ready_at ?? null,
+      video_identity_ready_by: input.video_identity_ready_by ?? null,
+      video_identity_ready_lock_snapshot_id:
+        input.video_identity_ready_lock_snapshot_id ?? null,
+      video_identity_ready_lock_version:
+        input.video_identity_ready_lock_version ?? null,
+      video_identity_ready_identity_fingerprint:
+        input.video_identity_ready_identity_fingerprint ?? null,
+      video_identity_ready_reference_package_fingerprint:
+        input.video_identity_ready_reference_package_fingerprint ?? null,
       intended_usage: input.intended_usage ?? "image_and_video",
       preferred_location_ids: [...new Set(input.preferred_location_ids ?? [])],
       preferred_camera_preset_ids: [...new Set(input.preferred_camera_preset_ids ?? [])],

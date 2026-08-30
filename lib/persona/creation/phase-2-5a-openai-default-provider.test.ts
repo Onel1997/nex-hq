@@ -112,13 +112,13 @@ describe("Phase 2.5A — Official Brand Face OpenAI default", () => {
       "utf8",
     );
     assert.match(ui, /<dd>OpenAI<\/dd>/);
-    assert.match(ui, /Generate 4 discovery faces with OpenAI/);
+    assert.match(ui, /4 Entdeckungsgesichter mit OpenAI erstellen/);
     assert.match(ui, /confirmCost/);
     assert.match(ui, /preparePaidConfirmation/);
     assert.match(ui, /canStartPaidCandidateGeneration/);
     // Generate path still requires confirmation token + checkbox.
     assert.match(ui, /Bitte Kosten explizit bestätigen/);
-    assert.doesNotMatch(ui, /Generate 4 discovery faces with FLUX/);
+    assert.doesNotMatch(ui, /4 Entdeckungsgesichter mit FLUX erstellen/);
   });
 
   it("7–8. completed Brand Model / Identity Lock / approvals untouched by this phase", () => {

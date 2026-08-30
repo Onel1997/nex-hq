@@ -8,9 +8,9 @@ body:has(.cw-studio-app) {
   min-height: 100dvh;
 }
 
-.facility-app-layout:has(.cw-studio-app),
-.facility-app-main:has(.cw-studio-app),
-.facility-app-main:has(.cw-studio-app) .facility-app-transition {
+.hq-app-layout:has(.cw-studio-app),
+.hq-app-main:has(.cw-studio-app),
+.hq-app-main:has(.cw-studio-app) .hq-app-content {
   height: auto;
   min-height: 100dvh;
   overflow-x: hidden;
@@ -1515,7 +1515,7 @@ body:has(.cw-studio-app) {
 
 .cs-presentation-panel-title {
   margin: 0.5rem 0 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: clamp(1.75rem, 3.5vw, 2.25rem);
   font-weight: 500;
   letter-spacing: -0.02em;
@@ -1663,7 +1663,7 @@ body:has(.cw-studio-app) {
 
 .cs-presentation-presenting-label {
   margin: 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 1.35rem;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -1933,7 +1933,7 @@ body:has(.cw-studio-app) {
 
 .cs-directions-intro h3 {
   margin: 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 1.65rem;
   font-weight: 500;
   color: rgb(244 241 235 / 0.95);
@@ -2494,7 +2494,7 @@ body:has(.cw-studio-app) {
 
 .cs-directions-stage-head h2 {
   margin: 0.1rem 0 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 1.35rem;
   font-weight: 500;
   letter-spacing: 0.01em;
@@ -3741,7 +3741,7 @@ body:has(.cw-studio-app) {
 }
 
 .cs-pitch-hero-empty-label {
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 0.78rem;
   font-weight: 400;
   font-style: italic;
@@ -3808,7 +3808,7 @@ body:has(.cw-studio-app) {
 
 .cs-pitch-card-head h3 {
   margin: 0;
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 1.72rem;
   font-weight: 600;
   letter-spacing: 0.028em;
@@ -4366,7 +4366,7 @@ body:has(.cw-studio-app) {
 }
 
 .cs-dir-nav-title {
-  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 0.72rem;
   font-weight: 500;
   line-height: 1.3;

@@ -1,7 +1,7 @@
 import { getBrainClient } from "@/brain/client";
 import type { BrainReportContent } from "@/brain/domains/reports";
 import type { BrainRecord } from "@/brain/types";
-import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { resolveWorkspace } from "@/brain/seed";
 import { brainReportRecordToListItem } from "@/lib/reports/from-brain";
 import type { ReportListItem } from "@/lib/mock/reports";
 
@@ -21,7 +21,7 @@ export interface TaskLinkedReport {
 export async function getReportsForTask(
   taskId: string,
 ): Promise<TaskLinkedReport[]> {
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const brain = getBrainClient();
 
   const result = await brain.searchRecords({
@@ -60,7 +60,7 @@ export async function getReportsForTasks(
     return new Map();
   }
 
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const brain = getBrainClient();
   const taskIdSet = new Set(taskIds);
 

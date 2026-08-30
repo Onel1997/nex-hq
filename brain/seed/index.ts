@@ -3,7 +3,7 @@ import { HQ_INDUSTRY_PACKS } from "@/brain/platform/industries";
 import type { BrainWorkspacesRow } from "@/brain/schema";
 import { getWorkspaceConfig } from "@/brain/workspaces";
 import type { WorkspaceDefinition } from "@/brain/workspaces/types";
-import { isRecoverableFacilityError } from "@/lib/facility/provider-errors";
+import { isRecoverableWorkspaceError } from "@/lib/providers/provider-errors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getActiveWorkspaceSlug } from "@/lib/workspace/active";
 
@@ -11,6 +11,13 @@ export interface WorkspaceContext {
   workspace: BrainWorkspacesRow;
   seeded: boolean;
 }
+
+const WORKSPACE_CACHE_TTL_MS = 60_000;
+const workspaceCache = new Map<
+  string,
+  { expiresAt: number; promise: Promise<BrainWorkspacesRow> }
+>();
+const seedPromises = new Map<string, Promise<WorkspaceContext>>();
 
 function buildLocalWorkspaceRow(config: WorkspaceDefinition): BrainWorkspacesRow {
   const industryPack = HQ_INDUSTRY_PACKS[config.industryId];
@@ -78,7 +85,7 @@ export async function getOrCreateWorkspace(
       .single();
 
     if (error) {
-      if (isRecoverableFacilityError(error)) {
+      if (isRecoverableWorkspaceError(error)) {
         console.warn(
           `[Brain] Using local workspace fallback for "${config.slug}": ${error.message}`,
         );
@@ -89,7 +96,7 @@ export async function getOrCreateWorkspace(
 
     return created as BrainWorkspacesRow;
   } catch (error) {
-    if (isRecoverableFacilityError(error)) {
+    if (isRecoverableWorkspaceError(error)) {
       console.warn(
         `[Brain] Using local workspace fallback for "${config.slug}":`,
         error,
@@ -101,6 +108,29 @@ export async function getOrCreateWorkspace(
 }
 
 /**
+ * Resolve the configured workspace without inspecting or writing seed records.
+ * Concurrent requests share one bounded promise; failures are never cached.
+ */
+export async function resolveWorkspace(slug?: string): Promise<BrainWorkspacesRow> {
+  const workspaceSlug = slug ?? getActiveWorkspaceSlug();
+  const now = Date.now();
+  const cached = workspaceCache.get(workspaceSlug);
+  if (cached && cached.expiresAt > now) return cached.promise;
+
+  const promise = getOrCreateWorkspace(workspaceSlug).catch((error) => {
+    if (workspaceCache.get(workspaceSlug)?.promise === promise) {
+      workspaceCache.delete(workspaceSlug);
+    }
+    throw error;
+  });
+  workspaceCache.set(workspaceSlug, {
+    expiresAt: now + WORKSPACE_CACHE_TTL_MS,
+    promise,
+  });
+  return promise;
+}
+
+/**
  * Seed starter Brain records for a workspace if they don't exist.
  * Idempotent — skips records that already exist by slug.
  */
@@ -108,8 +138,22 @@ export async function ensureWorkspaceBrainSeeded(
   slug?: string,
 ): Promise<WorkspaceContext> {
   const workspaceSlug = slug ?? getActiveWorkspaceSlug();
+  const inFlightOrComplete = seedPromises.get(workspaceSlug);
+  if (inFlightOrComplete) return inFlightOrComplete;
+
+  const promise = seedWorkspaceBrain(workspaceSlug).catch((error) => {
+    if (seedPromises.get(workspaceSlug) === promise) {
+      seedPromises.delete(workspaceSlug);
+    }
+    throw error;
+  });
+  seedPromises.set(workspaceSlug, promise);
+  return promise;
+}
+
+async function seedWorkspaceBrain(workspaceSlug: string): Promise<WorkspaceContext> {
   const config = getWorkspaceConfig(workspaceSlug);
-  const workspace = await getOrCreateWorkspace(workspaceSlug);
+  const workspace = await resolveWorkspace(workspaceSlug);
 
   if (isLocalWorkspace(workspace)) {
     return { workspace, seeded: false };
@@ -120,7 +164,7 @@ export async function ensureWorkspaceBrainSeeded(
 
   for (const seed of config.seedRecords) {
     try {
-      const existing = await brain.getRecordBySlug(
+      const existing = await brain.recordExistsBySlug(
         workspace.id,
         seed.domain,
         seed.slug,
@@ -144,7 +188,7 @@ export async function ensureWorkspaceBrainSeeded(
 
       seeded = true;
     } catch (error) {
-      if (isRecoverableFacilityError(error)) {
+      if (isRecoverableWorkspaceError(error)) {
         console.warn(
           `[Brain] Skipping seed record "${seed.slug}" in local fallback mode`,
         );
@@ -162,4 +206,10 @@ export async function provisionWorkspace(
   config: WorkspaceDefinition,
 ): Promise<BrainWorkspacesRow> {
   return getOrCreateWorkspace(config.slug);
+}
+
+/** Test-only cache reset; no production request calls this. */
+export function clearWorkspaceResolutionCacheForTests(): void {
+  workspaceCache.clear();
+  seedPromises.clear();
 }

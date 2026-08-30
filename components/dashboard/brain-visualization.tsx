@@ -26,7 +26,7 @@ export function BrainVisualization() {
         description={dashboard.brainViz.description}
         action={
           <Link
-            href="/facility/knowledge"
+            href="/agents/research"
             className="flex items-center gap-2 text-base text-muted-foreground transition-colors hover:text-primary"
           >
             {dashboard.brainViz.exploreBrain}

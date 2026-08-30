@@ -108,9 +108,9 @@ export function resolveImportedBlueprint(
 
 export function resolveCommercialStatus(blueprint: ImportedCreativeBlueprint | null): string {
   if (!blueprint) return "—";
-  if (blueprint.commercialApproved) return "Approved";
-  if (blueprint.commercialScore != null) return `Scored ${blueprint.commercialScore}%`;
-  return "Pending";
+  if (blueprint.commercialApproved) return "Freigegeben";
+  if (blueprint.commercialScore != null) return `Bewertet mit ${blueprint.commercialScore}%`;
+  return "Ausstehend";
 }
 
 export function resolveGenerationStatus(input: {
@@ -121,10 +121,10 @@ export function resolveGenerationStatus(input: {
   preparingAssetId?: string | null;
   generatingAssetId?: string | null;
 }): string {
-  if (input.generatingAssetId || input.pipelineActive) return "In Production";
-  if (input.preparingAssetId) return "Preparing";
-  if (input.allAssetsComplete) return "Production Complete";
-  if (input.hasResults) return "Assets Staged";
-  if (input.hasBlueprint) return "Ready to Generate";
-  return "Standby";
+  if (input.generatingAssetId || input.pipelineActive) return "Wird erstellt";
+  if (input.preparingAssetId) return "Wird vorbereitet";
+  if (input.allAssetsComplete) return "Produktion abgeschlossen";
+  if (input.hasResults) return "Ergebnisse vorbereitet";
+  if (input.hasBlueprint) return "Bereit zur Generierung";
+  return "Bereit zum Start";
 }

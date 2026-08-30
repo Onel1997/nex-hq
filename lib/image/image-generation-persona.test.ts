@@ -269,9 +269,16 @@ describe("Image generation consumes canonical Persona identity", () => {
       {
         downloadMasterBytes: async (request) => {
           assert.equal(request.workspaceId, WS);
-          assert.equal(request.storagePath, fixture.master.storage_path);
-          assert.equal(request.expectedChecksum, fixture.master.checksum);
-          return masterBytes;
+          if (request.storagePath === fixture.master.storage_path) {
+            assert.equal(request.expectedChecksum, fixture.master.checksum);
+            return masterBytes;
+          }
+          const support = fixture.supporting.find(
+            (entry) => entry.reference.storage_path === request.storagePath,
+          );
+          assert.ok(support);
+          assert.equal(request.expectedChecksum, support.reference.checksum);
+          return Buffer.from(`support:${support.slot}`);
         },
       },
     );
@@ -280,6 +287,10 @@ describe("Image generation consumes canonical Persona identity", () => {
     assert.deepEqual(
       resolved.supportingReferences.map((entry) => entry.assetId),
       fixture.supporting.map((entry) => entry.reference.id),
+    );
+    assert.equal(
+      resolved.supportingReferences.every((entry) => entry.bytes.length > 0),
+      true,
     );
     assert.equal(resolved.trace.brandModel.identityLockSnapshotId, fixture.locked.id);
     assert.equal(
@@ -411,7 +422,7 @@ describe("Image generation consumes canonical Persona identity", () => {
     );
   });
 
-  it("OpenAI uses only Master bytes as authoritative high-fidelity identity input", async () => {
+  it("OpenAI uses Master plus the exact locked support package as identity input", async () => {
     const fixture = await seedEligibleImageModel();
     const identity = await resolveBrandModelGenerationIdentity(
       scope,
@@ -435,7 +446,7 @@ describe("Image generation consumes canonical Persona identity", () => {
             providerId: "openai",
             imageBytes: Buffer.from("fake-output"),
             providerRequestId: "fake-provider-request",
-            path: "openai.images.edit(gpt-image-1, image=master, input_fidelity=high)",
+            path: "openai.images.edit(gpt-image-1, image=[persona-master,persona-supporting,product-references], input_fidelity=high)",
             inputFidelity: "high",
           };
         },
@@ -444,9 +455,10 @@ describe("Image generation consumes canonical Persona identity", () => {
     assert.equal(editInputs.length, 1);
     const editInput = editInputs[0]!;
     assert.equal(editInput.referenceImageBytes.toString(), "master-only");
-    assert.match(editInput.prompt, /first and only identity reference/i);
+    assert.match(editInput.prompt, /exact locked supporting identity package/i);
     assert.match(editInput.prompt, /same person/i);
     assert.equal(identity.supportingReferences.length, 5);
+    assert.equal(editInput.supportingIdentityReferences?.length, 5);
     assert.equal(result.identityStrategy, "openai_master_image_edit_high_fidelity");
     assert.equal(result.providerRequestId, "fake-provider-request");
   });

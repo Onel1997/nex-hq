@@ -36,6 +36,8 @@ export type PersonaAuditEventType =
   | "persona.legacy_identity_reconciled"
   | "persona.image_use_approved"
   | "persona.video_use_approved"
+  | "persona.video_identity_review_approved"
+  | "persona.video_identity_review_rejected"
   | "persona.brand_cast_approved"
   | "face_novelty.historical_protection_promoted";
 

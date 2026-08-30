@@ -1,34 +1,49 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { resolveServerNexhqAuthentication } from "@/lib/auth/server";
+
+import { XerianoAuthShell } from "@/components/xeriano/auth-shell";
+import {
+  hasXerianoOwnerAuthority,
+  resolveXerianoAccess,
+} from "@/lib/xeriano/auth";
+import {
+  getXerianoPlanIntentPresentation,
+  withXerianoPlanIntent,
+} from "@/lib/xeriano/plan-intent";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
-  title: "Sign in",
+  title: "Anmelden · Xeriamo",
 };
 
-export default async function LoginPage() {
-  const authentication = await resolveServerNexhqAuthentication();
-  if (authentication.authenticated) redirect("/");
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plan?: string }>;
+}) {
+  const query = await searchParams;
+  const plan = getXerianoPlanIntentPresentation(query.plan);
+  const access = await resolveXerianoAccess();
+  if (access.status === "AUTHENTICATED") {
+    const customerDestination = plan
+      ? withXerianoPlanIntent("/app/credits", plan.productCode)
+      : "/app";
+    redirect(
+      hasXerianoOwnerAuthority(access.context)
+        ? "/hq"
+        : customerDestination,
+    );
+  }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
-      <section className="w-full max-w-sm rounded-2xl border border-border/60 bg-card/70 p-7 shadow-2xl shadow-black/20 backdrop-blur">
-        <div className="mb-7">
-          <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 font-display text-lg font-semibold text-foreground">
-            N
-          </div>
-          <h1 className="font-display text-2xl font-medium tracking-tight">
-            NexHQ
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Private owner access
-          </p>
-        </div>
-
-        <LoginForm />
-      </section>
-    </main>
+    <XerianoAuthShell
+      title="Willkommen zurück"
+      description="Melde dich bei Xeriamo an."
+      plan={plan}
+      footer={<>Noch kein Konto? <Link href={withXerianoPlanIntent("/register", plan?.productCode)}>Konto erstellen</Link></>}
+    >
+      <LoginForm planIntent={plan?.productCode ?? null} />
+    </XerianoAuthShell>
   );
 }
-

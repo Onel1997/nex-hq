@@ -6,6 +6,7 @@ import {
   approveDurableMasterArtworkFromRequest,
   renameApprovedMasterArtworkDisplayName,
 } from "./service";
+import { integrityMeta, VALID_TEST_PNG } from "./test-image-fixtures";
 
 const WS = randomUUID();
 const ACTOR = randomUUID();
@@ -20,10 +21,11 @@ function request(overrides: Record<string, unknown> = {}) {
     placement: "center chest",
     printMethod: "screen print",
     mimeType: "image/png" as const,
-    contentBase64: Buffer.from("owner-final-artwork").toString("base64"),
+    contentBase64: VALID_TEST_PNG.toString("base64"),
     approvalAttestation: true as const,
     provenance: "Owner uploaded and explicitly approved final artwork",
     originalFileName: "Monkey.png",
+    ...integrityMeta(VALID_TEST_PNG),
     ...overrides,
   };
 }

@@ -456,7 +456,7 @@ export function DesignLabEmptyState() {
         <h1>No design selected</h1>
         <p>
           Send a concept from{" "}
-          <Link href="/facility/reports">Reports Center</Link> to begin creating.
+          <Link href="/agents/research">Reports Center</Link> to begin creating.
         </p>
       </div>
     </section>
@@ -845,7 +845,7 @@ function DesignLabGeneration({
         <GenButton icon={Download} label="Export SVG" onClick={onExportSvg} />
         <GenButton icon={Save} label="Save Draft" onClick={onSaveDraft} />
         <Link
-          href={`/facility/reports?report=${reportId}`}
+          href={`/agents/research?report=${reportId}`}
           className="design-lab-gen-btn design-lab-gen-btn-link"
         >
           <ArrowLeft className="size-4" />

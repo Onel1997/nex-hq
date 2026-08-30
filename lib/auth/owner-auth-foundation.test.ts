@@ -50,10 +50,10 @@ describe("NexHQ private-owner authentication foundation", () => {
     );
   });
 
-  it("redirects an unauthenticated dashboard request to login", () => {
+  it("keeps the Xeriano landing public and redirects an unauthenticated dashboard request", () => {
     assert.deepEqual(
       decideNexhqAuthRouting({ pathname: "/", authenticated: false }),
-      { kind: "redirect", location: "/login" },
+      { kind: "allow" },
     );
     assert.deepEqual(
       decideNexhqAuthRouting({
@@ -117,14 +117,14 @@ describe("NexHQ private-owner authentication foundation", () => {
     assert.equal(login.status, 200);
   });
 
-  it("prevents a login redirect loop", () => {
+  it("keeps login public without creating a redirect loop", () => {
     assert.deepEqual(
       decideNexhqAuthRouting({ pathname: "/login", authenticated: false }),
       { kind: "allow" },
     );
     assert.deepEqual(
       decideNexhqAuthRouting({ pathname: "/login", authenticated: true }),
-      { kind: "redirect", location: "/" },
+      { kind: "allow" },
     );
   });
 
@@ -157,13 +157,8 @@ describe("NexHQ private-owner authentication foundation", () => {
     });
 
     assert.equal(sessionActive, false);
-    assert.deepEqual(
-      decideNexhqAuthRouting({
-        pathname: "/",
-        authenticated: sessionActive,
-      }),
-      { kind: "redirect", location: "/login" },
-    );
+    assert.deepEqual(decideNexhqAuthRouting({ pathname: "/", authenticated: sessionActive }), { kind: "allow" });
+    assert.deepEqual(decideNexhqAuthRouting({ pathname: "/agents/persona", authenticated: sessionActive }), { kind: "redirect", location: "/login" });
   });
 
   it("keeps Persona authorization stronger than general authentication", () => {

@@ -287,7 +287,7 @@ describe("Phase 2.3D.2 reference package coverage refresh", () => {
     );
     assert.match(studio, /referenceRevision/);
     assert.match(studio, /personaId, referenceRevision/);
-    assert.match(studio, /Rejected/);
+    assert.match(studio, /Abgelehnt/);
   });
 
   it("novelty threshold unchanged; no provider path in coverage", () => {

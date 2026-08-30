@@ -36,10 +36,10 @@ export {
   formatSupplierIntelligencePrompt,
   formatSupplierStatusMessage,
   formatSupplierUnavailableMessage,
-  getFacilitySupplierSections,
+  getAgentSupplierSections,
   getOperationsBusinessMeta,
   resolveSupplierAvailabilityStatus,
-  type FacilitySupplierSection,
+  type AgentSupplierSection,
   type SupplierAvailabilityStatus,
   type SupplierIntelligence,
 } from "./supplier-intelligence";

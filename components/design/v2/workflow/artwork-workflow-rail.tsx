@@ -30,7 +30,7 @@ export function ArtworkWorkflowRail({
     activeStep === "image-studio" && canContinueToImageStudio && onContinueToImageStudio;
 
   return (
-    <footer className={cn("dsv2-workflow", className)} aria-label="Production workflow">
+    <footer className={cn("dsv2-workflow", className)} aria-label="Produktionsablauf">
       <div className="dsv2-workflow-track">
         <div
           className="dsv2-workflow-progress"

@@ -15,6 +15,7 @@ export async function GET(request: Request) {
         productionProjectId: params.get("productionProjectId") ?? undefined,
         reportRecordId: params.get("reportRecordId") ?? undefined,
         assetId: params.get("assetId") ?? undefined,
+        limit: Math.min(Math.max(Number(params.get("limit")) || 50, 1), 100),
       },
     );
     return jsonOk({ success: true, jobs: jobs.map(toImageGenerationJobView) });

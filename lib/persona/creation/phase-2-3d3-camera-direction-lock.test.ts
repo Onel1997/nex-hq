@@ -476,8 +476,8 @@ describe("Phase 2.3D.3 camera direction lock + slot-only regen", () => {
       join(ROOT, "components/persona/persona-studio.tsx"),
       "utf8",
     );
-    assert.match(studio, /Attempt \{idx \+ 1\}/);
-    assert.match(studio, /Confirm & regenerate/);
-    assert.match(studio, /subject-perspective direction lock/);
+    assert.match(studio, /Versuch \{idx \+ 1\}/);
+    assert.match(studio, /Bestätigen & neu generieren/);
+    assert.match(studio, /feste Subjektperspektive/);
   });
 });

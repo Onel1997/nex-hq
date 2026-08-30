@@ -531,9 +531,9 @@ describe("Phase 2.3D Controlled Reference Package", () => {
       join(ROOT, "components/persona/persona-studio.tsx"),
       "utf8",
     );
-    assert.match(studio, /REFERENCE PACKAGE/);
-    assert.match(studio, /Regenerate this angle/);
-    assert.match(studio, /Maximum authorized spend/);
+    assert.match(studio, /REFERENZPAKET/);
+    assert.match(studio, /Diesen Winkel neu erstellen/);
+    assert.match(studio, /Maximal autorisierte Kosten/);
     assert.match(studio, /reference-package-panel/);
   });
 });

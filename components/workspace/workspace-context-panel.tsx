@@ -1,8 +1,8 @@
 "use client";
 
-import { AgentTimeline } from "@/components/facility/inspector/agent-timeline";
+import { AgentTimeline } from "@/components/workspace/agent-timeline";
 import type { AgentId } from "@/lib/constants/agents";
-import type { LabInspectorData } from "@/lib/facility/types";
+import type { LabInspectorData } from "@/lib/workspace/inspector-types";
 import { cn } from "@/lib/utils";
 import { ChevronRight, Loader2, Radio } from "lucide-react";
 import { useState } from "react";

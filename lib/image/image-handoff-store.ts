@@ -13,6 +13,7 @@ import {
   DESIGN_IMAGE_HANDOFF_MAX_SERIALIZED_BYTES,
   stripHandoffTransportPayload,
 } from "@/lib/image/handoff-payload-slim";
+import { sanitizeOptionalProjectContextString } from "@/lib/image/optional-project-context";
 
 export const IMAGE_STUDIO_HANDOFF_KEY = "nexhq-image-studio-handoff";
 export const IMAGE_STUDIO_HANDOFF_KEY_V2 = "nexhq-image-studio-handoff-v2";
@@ -233,13 +234,29 @@ export function normalizeImageStudioHandoff(
 
   const concept = raw.concept;
   const durableMasterArtwork = raw.durableMasterArtwork;
-  const mission =
+  const missionInput =
     raw.mission ??
     buildMissionSnapshot({
       sourceTitle: raw.sourceTitle,
       designId: raw.designId ?? durableMasterArtwork?.designId,
       concept,
     });
+  const mission: ImageStudioHandoffMission = {
+    title:
+      sanitizeOptionalProjectContextString(missionInput.title, {
+        minLength: 1,
+      }) ?? "Design Mission",
+    collection:
+      sanitizeOptionalProjectContextString(missionInput.collection) ?? "",
+    garment:
+      sanitizeOptionalProjectContextString(missionInput.garment) ?? "",
+    colorway:
+      sanitizeOptionalProjectContextString(missionInput.colorway) ?? "",
+    version:
+      sanitizeOptionalProjectContextString(missionInput.version, {
+        minLength: 1,
+      }) ?? "V1",
+  };
 
   const imagePromptPrimary =
     trim(raw.imagePromptPrimary) ||

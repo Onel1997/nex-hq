@@ -13,6 +13,7 @@ const CATALOG_PAGE_QUERY = `
           id
           title
           handle
+          vendor
           status
           productType
           updatedAt
@@ -93,6 +94,7 @@ interface RawProductNode {
   id: string;
   title: string;
   handle: string;
+  vendor: string | null;
   status: string;
   productType: string;
   updatedAt: string;
@@ -179,6 +181,7 @@ function mapProductNode(node: RawProductNode): ShopifyCatalogProduct {
     id: node.id,
     title: node.title,
     handle: node.handle,
+    vendor: node.vendor?.trim() || null,
     status: node.status,
     productType: node.productType?.trim() || "Uncategorized",
     tags: node.tags ?? [],

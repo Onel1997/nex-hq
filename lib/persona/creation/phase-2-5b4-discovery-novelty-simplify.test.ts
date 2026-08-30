@@ -220,12 +220,12 @@ describe("Phase 2.5B.4 — discovery novelty PASS / WARNING / HARD_DUPLICATE", (
     assert.equal(FACE_SIMILARITY_EUCLIDEAN_DUPLICATE_THRESHOLD, 0.45);
   });
 
-  it("11. UI shows Similarity warning affordance for WARNING candidates", () => {
+  it("11. UI shows the German similarity-warning affordance for WARNING candidates", () => {
     const board = readFileSync(
       join(ROOT, "components/persona/candidate-board.tsx"),
       "utf8",
     );
-    assert.match(board, /Similarity warning/);
+    assert.match(board, /Ähnlichkeit prüfen/);
     assert.match(board, /discoveryNovelty/);
   });
 

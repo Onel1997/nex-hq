@@ -86,9 +86,9 @@
 }
 
 .ps-health-badge.ps-health-degraded {
-  border-color: rgb(180 140 60 / 0.5);
+  border-color: rgb(52 136 255 / 0.5);
   color: #d4b06a;
-  background: rgb(180 140 60 / 0.12);
+  background: rgb(52 136 255 / 0.12);
 }
 
 .ps-health-badge.ps-health-unavailable {
@@ -104,7 +104,7 @@
 }
 
 .ps-health-banner.ps-health-degraded {
-  background: rgb(180 140 60 / 0.1);
+  background: rgb(52 136 255 / 0.1);
   color: #d4b06a;
 }
 
@@ -214,7 +214,7 @@
 .ps-panel-header h1,
 .ps-detail h2 {
   margin: 0;
-  font-family: var(--font-display), Georgia, serif;
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-weight: 500;
   font-size: 1.85rem;
   letter-spacing: -0.02em;
@@ -265,7 +265,7 @@
 }
 
 .ps-dash-value {
-  font-family: var(--font-display), Georgia, serif;
+  font-family: var(--font-geist-sans, system-ui, sans-serif);
   font-size: 2rem;
   font-weight: 500;
   line-height: 1;
@@ -632,6 +632,139 @@
 
 .ps-completeness li.is-ok {
   color: #8fbf9a;
+}
+
+.ps-section-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.ps-section-heading-row h3,
+.ps-section-heading-row p {
+  margin-top: 0;
+}
+
+.ps-video-review {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: clamp(0.85rem, 2vw, 1.25rem);
+  border: 1px solid var(--studio-border, rgb(80 150 255 / 0.24));
+  border-radius: var(--studio-radius-lg, 16px);
+  background: rgb(4 13 28 / 0.72);
+}
+
+.ps-video-review-references {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(0, 2fr);
+  gap: 0.75rem;
+}
+
+.ps-video-review figure {
+  min-width: 0;
+  margin: 0;
+}
+
+.ps-video-review figure img,
+.ps-ref-empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border: 1px solid var(--ps-line);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.25);
+}
+
+.ps-ref-empty {
+  display: grid;
+  place-items: center;
+  padding: 0.75rem;
+  color: var(--ps-muted);
+  text-align: center;
+}
+
+.ps-video-review figcaption {
+  margin-top: 0.35rem;
+  color: var(--ps-muted);
+  font-size: 0.75rem;
+}
+
+.ps-video-reference-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(90px, 1fr));
+  gap: 0.55rem;
+}
+
+.ps-video-review-checklist {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ps-video-review-checklist legend {
+  margin-bottom: 0.6rem;
+  font-weight: 650;
+}
+
+.ps-video-review-checklist label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-height: 32px;
+  color: var(--ps-ink);
+  cursor: pointer;
+}
+
+.ps-video-review-checklist input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: var(--studio-primary, #2583ff);
+}
+
+.ps-video-review .ps-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.ps-video-review textarea {
+  min-height: 88px;
+  resize: vertical;
+  border: 1px solid var(--ps-line);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.24);
+  color: var(--ps-ink);
+  padding: 0.65rem;
+}
+
+@media (max-width: 1100px) {
+  .ps-video-review-references {
+    grid-template-columns: 1fr;
+  }
+
+  .ps-video-master-reference {
+    max-width: 260px;
+  }
+
+  .ps-video-reference-grid {
+    grid-template-columns: repeat(3, minmax(100px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .ps-section-heading-row {
+    flex-direction: column;
+  }
+
+  .ps-video-reference-grid {
+    grid-template-columns: repeat(2, minmax(100px, 1fr));
+  }
 }
 
 .ps-ref-thumb {
@@ -1411,9 +1544,9 @@
 }
 
 .ps-status-chip--review {
-  border-color: rgb(180 140 60 / 0.5);
+  border-color: rgb(52 136 255 / 0.5);
   color: #d4b06a;
-  background: rgb(180 140 60 / 0.12);
+  background: rgb(52 136 255 / 0.12);
 }
 
 .ps-status-chip--muted {
@@ -2697,7 +2830,7 @@
   padding: 0.28rem 0.5rem;
   border-radius: 4px;
   background: rgb(18 16 12 / 0.88);
-  color: #f0d9a8;
+  color: #9ac7ff;
   border: 1px solid rgb(196 165 116 / 0.55);
   pointer-events: none;
   max-width: calc(100% - 5.5rem);
@@ -2815,7 +2948,7 @@
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: #f0d9a8;
+  color: #9ac7ff;
 }
 
 .ps-ci-hero {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getBrainClient } from "@/brain/client";
-import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { resolveWorkspace } from "@/brain/seed";
 import { brainReportRecordsToListItems } from "@/lib/reports/from-brain";
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
@@ -17,7 +17,7 @@ export async function GET() {
       );
     }
 
-    const { workspace } = await ensureWorkspaceBrainSeeded();
+    const workspace = await resolveWorkspace();
     const brain = getBrainClient();
 
     const result = await brain.searchRecords({

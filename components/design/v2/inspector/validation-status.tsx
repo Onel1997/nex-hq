@@ -43,7 +43,7 @@ interface ValidationIssuesListProps {
 
 export function ValidationIssuesList({ issues, className }: ValidationIssuesListProps) {
   if (issues.length === 0) {
-    return <p className="dsv2-inspector-placeholder">No issues detected.</p>;
+    return <p className="dsv2-inspector-placeholder">Keine Probleme erkannt.</p>;
   }
 
   return (
@@ -78,11 +78,11 @@ export function ValidationSummary({ validation }: ValidationSummaryProps) {
       ) : validation.status === "warning" ? (
         <ValidationIssuesList issues={validation.issues} />
       ) : validation.status === "valid" ? (
-        <p className="dsv2-validation-ok">Artwork passed basic production checks.</p>
+        <p className="dsv2-validation-ok">Artwork hat die grundlegenden Produktionsprüfungen bestanden.</p>
       ) : validation.status === "checking" ? (
-        <p className="dsv2-inspector-placeholder">Running file validation…</p>
+        <p className="dsv2-inspector-placeholder">Datei wird geprüft…</p>
       ) : (
-        <p className="dsv2-inspector-placeholder">Upload artwork to begin validation.</p>
+        <p className="dsv2-inspector-placeholder">Lade ein Artwork hoch, um die Prüfung zu starten.</p>
       )}
     </div>
   );

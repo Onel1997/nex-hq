@@ -1,4 +1,5 @@
 import { isResearchReportTitle } from "@/lib/design/artwork-display-name";
+import type { ApprovedMasterArtworkView } from "@/lib/design/master-artwork-authority/types";
 import type { ImageStudioHandoff } from "@/lib/image/image-handoff-store";
 import {
   IMAGE_STUDIO_HANDOFF_KEY,
@@ -14,6 +15,55 @@ const HANDOFF_STORAGE_KEYS = [
   IMAGE_STUDIO_HANDOFF_KEY_V2,
   IMAGE_STUDIO_HANDOFF_KEY,
 ] as const;
+
+const DURABLE_ARTWORK_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Exact durable Artwork-version pointer carried by the Design Studio URL.
+ * Invalid or ambiguous values are rejected; callers must never fall back to
+ * "latest Artwork" when an explicit pointer was supplied.
+ */
+export function resolveRequestedArtworkId(search: string): string | null {
+  const value = new URLSearchParams(search).get("artworkId")?.trim() ?? "";
+  return DURABLE_ARTWORK_ID_PATTERN.test(value) ? value : null;
+}
+
+export function hasRequestedArtworkPointer(search: string): boolean {
+  return new URLSearchParams(search).has("artworkId");
+}
+
+/** Builds the canonical explicit handoff after server-side authority resolution. */
+export function buildResolvedArtworkHandoff(input: {
+  artwork: ApprovedMasterArtworkView;
+  retainedContext?: ImageStudioHandoff | null;
+  handoffAt?: string;
+}): ImageStudioHandoff {
+  const { artwork } = input;
+  const retainedContext = input.retainedContext ?? null;
+  const label =
+    artwork.displayName?.trim() ||
+    artwork.originalFileName?.trim() ||
+    artwork.designId;
+
+  return {
+    ...(retainedContext ?? {}),
+    brief:
+      retainedContext?.brief?.trim() ||
+      `Freigegebenes Artwork „${label}“ für eine neue Bildproduktion.`,
+    sourceTitle: retainedContext?.sourceTitle ?? label,
+    artworkFileName: artwork.originalFileName ?? undefined,
+    designId: artwork.designId,
+    handoffAt: input.handoffAt ?? new Date().toISOString(),
+    durableMasterArtwork: artwork,
+    explicitArtworkHandoff: true,
+    masterArtworkApproved: true,
+    masterArtworkVersion: artwork.version,
+    masterArtworkSourceType: artwork.sourceType,
+    masterArtworkPlacement: artwork.placement ?? undefined,
+    masterArtworkPrintMethod: artwork.printMethod ?? undefined,
+  };
+}
 
 export type ImageStudioHandoffBootstrapResult = {
   artworkHandoff: ImageStudioHandoff | null;

@@ -1,12 +1,14 @@
 import { MILAENE_WORKSPACE } from "./milaene";
 import { NEXAGENCY_WORKSPACE } from "./nex-agency";
 import { NEXTRENDS_WORKSPACE } from "./nex-trends";
+import { XERIAMO_STAGING_WORKSPACE } from "./xeriamo-staging";
 import type { WorkspaceDefinition } from "./types";
 
 export const WORKSPACE_REGISTRY: Record<string, WorkspaceDefinition> = {
   [MILAENE_WORKSPACE.slug]: MILAENE_WORKSPACE,
   [NEXTRENDS_WORKSPACE.slug]: NEXTRENDS_WORKSPACE,
   [NEXAGENCY_WORKSPACE.slug]: NEXAGENCY_WORKSPACE,
+  [XERIAMO_STAGING_WORKSPACE.slug]: XERIAMO_STAGING_WORKSPACE,
 };
 
 export function getWorkspaceConfig(slug: string): WorkspaceDefinition {

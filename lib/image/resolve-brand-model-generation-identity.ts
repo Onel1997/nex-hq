@@ -49,6 +49,7 @@ export type ResolvedImageIdentityInput = {
     assetId: string;
     checksum: string;
     mimeType: string;
+    bytes: Buffer;
   }>;
   constraints: ImageIdentityConstraints;
 };
@@ -252,18 +253,57 @@ export async function resolveBrandModelGenerationIdentity(
   );
   assertLockedAssetsMatchSnapshot(afterDownload, snapshotAfterDownload);
 
-  const supportingReferences = locked.canonicalReferences.map((entry) => ({
+  const supportingReferenceMetadata = locked.canonicalReferences.map((entry) => ({
     role: entry.slot,
     assetId: entry.reference.id,
     checksum: entry.reference.checksum,
     mimeType: entry.reference.mime_type,
   }));
+  const supportingReferences = await Promise.all(
+    locked.canonicalReferences.map(async (entry) => ({
+      role: entry.slot,
+      assetId: entry.reference.id,
+      checksum: entry.reference.checksum,
+      mimeType: entry.reference.mime_type,
+      bytes: await download({
+        workspaceId: scope.workspaceId,
+        storagePath: entry.reference.storage_path,
+        mimeType: entry.reference.mime_type,
+        expectedChecksum: entry.reference.checksum,
+      }),
+    })),
+  );
+  const afterPackageDownload = await resolveLockedBrandIdentity(
+    scope,
+    selectedTrace.personaId,
+  );
+  if (
+    !afterPackageDownload ||
+    afterPackageDownload.identityLockSnapshotId !==
+      selectedTrace.identityLockSnapshotId ||
+    afterPackageDownload.lockVersion !== selectedTrace.identityLockVersion ||
+    afterPackageDownload.identityFingerprint !==
+      selectedTrace.identityFingerprint ||
+    afterPackageDownload.referencePackageVersion !==
+      selectedTrace.referencePackageVersion ||
+    afterPackageDownload.referencePackageFingerprint !==
+      selectedTrace.referencePackageFingerprint
+  ) {
+    throw new PersonaDomainError(
+      "The Brand Model lock changed while the full reference package was being prepared. Refresh and re-plan.",
+      "BRAND_MODEL_VERSION_MISMATCH",
+    );
+  }
+  assertLockedAssetsMatchSnapshot(
+    afterPackageDownload,
+    await getIdentityLockSnapshot(scope, selectedTrace.personaId),
+  );
   const trace = imageGenerationIdentityTraceSchema.parse({
     brandModel: selectedTrace,
     referencePackageVersion: locked.referencePackageVersion,
     masterIdentityAssetId: master.id,
     masterIdentityChecksum: master.checksum,
-    supportingReferences,
+    supportingReferences: supportingReferenceMetadata,
   });
   const constraints = handoff.contract.identity.constraints;
 

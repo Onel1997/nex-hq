@@ -594,11 +594,11 @@ Important limits:
 - Security deployment: protected Persona APIs are hardened in code and both Foundation migrations plus live RLS/grants are verified, but the environment allowlist is not durable workspace membership/RBAC and health/version reporting remains stale.
 - Reference Boards are seed-only with disabled actions.
 - Image downstream integration reaches a controlled exact-lock generation/provider seam and persists safe lineage; durable paid-job/idempotency controls, live-provider verification, and full operational durability remain incomplete.
-- Video consumes the canonical contract through a fake-only Studio foundation; real provider execution remains absent and its migration is unapplied.
+- Video consumes the canonical contract through a durable fake-only Studio foundation; its migration is applied, while real provider execution remains absent.
 
 ### VIDEO DOWNSTREAM STATUS
 
-- German Video Studio UI, fake orchestration and durable repository contracts exist; no real provider or generated Video is implemented, and live persistence awaits its unapplied migration.
+- German Video Studio UI, fake orchestration and durable repository contracts exist with applied live persistence; no real provider or generated Video is implemented.
 
 ### PLANNED / NOT FOUND
 
@@ -636,7 +636,7 @@ Discovery should remain provider-agnostic. Identity Lock should remain provider-
 ## 28. Known Gaps / Technical Debt
 
 1. **Runtime rollout remains partial:** the Foundation migrations/security posture, reconciled lock version 3, and owner-completed audited rights confirmation are established; the owner reports the Image selector handoff working. The identity-conditioned generation path is fake-tested only, and manual live-provider/E2E verification remains pending.
-2. **Downstream execution remains partial:** contract/list/full handoffs and a controlled Image exact-lock provider-reference seam exist, but paid Image execution has durable job/confirmation/idempotency code but an unapplied migration and no live-provider verification; Video production is absent.
+2. **Downstream execution remains partial:** contract/list/full handoffs and a controlled Image exact-lock provider-reference seam exist, and paid Image execution has durable applied job/confirmation/idempotency persistence; Video has durable fake-only production but no real-provider verification.
 3. **No Identity Revision workflow:** locked assets are protected, but deliberate revision/version advance is not operationally complete.
 4. **Video readiness remains manual:** image and video readiness are now independent, but no automated video validation pipeline exists.
 5. **Reference Package paid safety is weaker than Discovery:** it lacks the paid master-switch check, TTL, attestation, user timestamp, token uniqueness, and inspected atomic consumption.
@@ -800,7 +800,7 @@ Persona Studio is **not DONE** as of this verification. Done requires all of the
 
 ## 2026-08-17 Image Paid-Input Boundary
 
-Persona remains the sole WHO authority. Image and Video preparation freeze the exact `brand-model-v1` trace and re-resolve canonical consumer eligibility. Image/Design/deterministic migrations are applied; Video migration `20260818003000` is not. Video approval remains irrelevant to Image eligibility, Image approval never grants Video eligibility, and no provider was called by the Video foundation work.
+Persona remains the sole WHO authority. Image and Video preparation freeze the exact `brand-model-v1` trace and re-resolve canonical consumer eligibility. Image/Design/deterministic and Video migration `20260818003000` are applied. Video approval remains irrelevant to Image eligibility, Image approval never grants Video eligibility, and no provider was called by the Video foundation work.
 
 ## Owner UX — 2026-08-17
 
@@ -825,6 +825,12 @@ The new boundary separates two human decisions:
 
 Image approval, Identity Lock and Brand Cast membership never substitute for either decision. A new lock, changed package, revoked rights or rejected review makes current Video eligibility fail closed; historical evidence remains in `brain_events` and historical Video jobs remain unchanged. Generic Persona CRUD rejects all new authority fields.
 
-The additive migration `20260818160000_persona_video_readiness_v1.sql` adds only lock/review binding metadata to `persona_personas`; it is **created and intentionally UNAPPLIED**. Until it is separately preflighted/applied, the live Persona remains not Video-ready and not Video-approved, and the new manual workflow is migration-blocked.
+The additive migration `20260818160000_persona_video_readiness_v1.sql` adds only lock/review binding metadata to `persona_personas`; it is **APPLIED and verified**. The live Persona remains not Video-ready and not Video-approved until the owner performs the real manual review and approval actions.
 
 For Video V1, the existing Master plus frontal, left/right three-quarter and left/right profile package is the required locked facial identity package. This is sufficient only for the current approved-Image-to-Video identity source strategy. It is not a claim that general text-to-video or full-body motion references are complete.
+
+## Image Stage A reference consumption — 2026-08-20
+
+The real deterministic Image Stage A path now resolves the selected Brand Model again at execution and downloads the authoritative Master plus all five exact locked, rights-confirmed supporting reference bytes from private Persona storage. OpenAI receives these as explicitly separated identity inputs; Product reference inputs follow and may not redefine identity. Browser metadata IDs or Image approval alone never substitute for the current lock/package check.
+
+The provider prompt now treats the Master (input image 1) as the highest-priority human-subject constraint and explicitly protects face geometry, skin, hair, apparent age and body/frame characteristics. Supporting views reinforce the same person; scene, location, mood and Product references may not recast or culturally reinterpret the Markenmodel. This strengthens downstream consumption only and does not change Persona approval, rights, lock, or eligibility authority.

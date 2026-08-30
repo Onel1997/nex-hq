@@ -631,6 +631,7 @@ export function createNoveltyReplacementPollController(input: {
   intervalMs: number;
   timeoutMs: number;
   now?: () => number;
+  isPollingAllowed?: () => boolean;
   poll: () => Promise<{ terminal: boolean; serverState?: string | null }>;
   reconcile: () => Promise<{ serverState?: string | null }>;
   onTimeoutMessage: (serverState: string) => void;
@@ -665,10 +666,21 @@ export function createNoveltyReplacementPollController(input: {
       running = true;
       stopped = false;
       const startedAt = now();
-      const deadline = startedAt + input.timeoutMs;
+      let deadline = startedAt + input.timeoutMs;
 
       try {
         while (!stopped && now() < deadline) {
+          if (input.isPollingAllowed && !input.isPollingAllowed()) {
+            const pausedAt = now();
+            await new Promise<void>((resolve) => {
+              timer = setTimeout(() => {
+                timer = null;
+                resolve();
+              }, input.intervalMs);
+            });
+            deadline += Math.max(0, now() - pausedAt);
+            continue;
+          }
           const result = await input.poll();
           if (stopped) break;
           if (result.terminal) {

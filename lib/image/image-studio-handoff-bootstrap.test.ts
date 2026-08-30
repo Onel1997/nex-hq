@@ -9,10 +9,13 @@ import {
 } from "@/lib/image/image-handoff-store";
 import {
   bootstrapImageStudioHandoff,
+  buildResolvedArtworkHandoff,
   extractProjectContextHandoff,
+  hasRequestedArtworkPointer,
   isLegacyResearchArtworkHandoff,
   isResearchDerivedDesignId,
   resolveArtworkAuthorityHandoff,
+  resolveRequestedArtworkId,
 } from "@/lib/image/image-studio-handoff-bootstrap";
 
 function durableArtwork(
@@ -113,6 +116,28 @@ function installBrowserStorageStub(initial?: Record<string, string>) {
 }
 
 describe("Image Studio handoff bootstrap artwork authority", () => {
+  it("parses only an exact durable Artwork ID from the navigation URL", () => {
+    const id = durableArtwork().id;
+    assert.equal(resolveRequestedArtworkId(`?artworkId=${id}`), id);
+    assert.equal(resolveRequestedArtworkId("?artworkId=not-an-id"), null);
+    assert.equal(resolveRequestedArtworkId(""), null);
+    assert.equal(hasRequestedArtworkPointer("?artworkId=not-an-id"), true);
+    assert.equal(hasRequestedArtworkPointer(""), false);
+  });
+
+  it("rebuilds the exact approved Artwork handoff after a refresh", () => {
+    const selected = durableArtwork();
+    const refreshed = buildResolvedArtworkHandoff({
+      artwork: selected,
+      handoffAt: "2026-08-23T12:00:00.000Z",
+    });
+    assert.equal(refreshed.durableMasterArtwork?.id, selected.id);
+    assert.equal(refreshed.durableMasterArtwork?.version, selected.version);
+    assert.equal(refreshed.durableMasterArtwork?.checksum, selected.checksum);
+    assert.equal(refreshed.explicitArtworkHandoff, true);
+    assert.equal(refreshed.masterArtworkApproved, true);
+  });
+
   it("detects research-derived design IDs", () => {
     assert.equal(
       isResearchDerivedDesignId(
@@ -155,6 +180,27 @@ describe("Image Studio handoff bootstrap artwork authority", () => {
     );
     assert.equal(bootstrapped.artworkHandoff?.artworkFileName, "quiet-ascent.png");
     assert.equal(bootstrapped.artworkRejectReason, undefined);
+  });
+
+  it("removes legacy optional mission placeholders without affecting Artwork authority", () => {
+    const normalized = normalizeImageStudioHandoff({
+      ...explicitDesignHandoff(),
+      mission: {
+        title: "Quiet Ascent",
+        collection: "—",
+        garment: "—",
+        colorway: "—",
+        version: "V1",
+      },
+    });
+    assert.ok(normalized);
+    assert.equal(normalized?.mission?.collection, "");
+    assert.equal(normalized?.mission?.garment, "");
+    assert.equal(normalized?.mission?.colorway, "");
+    assert.equal(
+      resolveArtworkAuthorityHandoff(normalized)?.durableMasterArtwork?.id,
+      durableArtwork().id,
+    );
   });
 
   it("keeps Research provenance available but non-authoritative", () => {

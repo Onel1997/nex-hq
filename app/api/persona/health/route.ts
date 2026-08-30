@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkPersonaStudioHealth } from "@/lib/persona/services/health";
+import { getCachedPersonaStudioHealth } from "@/lib/persona/services/health";
 
 /**
  * GET /api/persona/health
@@ -7,7 +7,15 @@ import { checkPersonaStudioHealth } from "@/lib/persona/services/health";
  */
 export async function GET() {
   try {
-    const health = await checkPersonaStudioHealth();
+    const startedAt = performance.now();
+    const cached = getCachedPersonaStudioHealth();
+    const health = await cached.report;
+    if (process.env.NODE_ENV === "development") {
+      console.info("[Performance] Persona health", {
+        durationMs: Math.round(performance.now() - startedAt),
+        cache: cached.cacheStatus,
+      });
+    }
     const httpStatus =
       health.status === "healthy" ? 200 : health.status === "degraded" ? 503 : 503;
     return NextResponse.json(health, { status: httpStatus });

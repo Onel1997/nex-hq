@@ -34,8 +34,27 @@ Generated provenance records project/shot/job/fingerprint, provider/model/reques
 
 ## Paid Execution Safety
 
-**IMPLEMENTED IN CODE / REQUIRES TWO UNAPPLIED MIGRATIONS AND CONTROLLED RUNTIME VERIFICATION.**
+**V1 PAID SAFETY IS LIVE; DETERMINISTIC V2 PERSISTENCE AND NO-PROVIDER RUNTIME ARE VERIFIED. REAL V2 STAGE A IS NOT AUTHORIZED OR WIRED.**
 
 The durable job flow provides exact-input SHA-256 fingerprinting, conservative cost estimate, 30-minute owner confirmation, atomic database claim, duplicate suppression, known-safe pre-provider retry, `UNKNOWN_OUTCOME` quarantine, provider request IDs, cancellation of unexecuted jobs, and reload listing/polling. Execution also requires `NEXHQ_IMAGE_PAID_GENERATION_ENABLED=true`; that flag alone grants nothing.
 
-No paid provider was called and the paid flag was not enabled during this mission.
+The 2026-08-17 first live v1 attempt proved claim/confirmation/provider/storage mechanics, but also proved that high-fidelity generative edit cannot guarantee exact Artwork. V1 remains readable as historical/draft-generative behavior.
+
+For `DETERMINISTIC_COMPOSITE`, the provider's Stage A representation is now Persona Master + Product references/metadata + shot/print-surface requirement. The OpenAI adapter supports Product reference images as a separate role and receives no Master Artwork field on this path. Stage B is local deterministic compositing and makes no provider call. Product reference URLs are resolved/frozen server-side and are never confused with Persona or Artwork inputs.
+
+The V2 executor used by this milestone accepts only the local deterministic synthetic base provider and is server-blocked when `NODE_ENV=production`. It passes through the same durable Stage A output seam, then invokes the local compositor. No provider was called, no real AI image was generated, and no paid-generation/environment flag was changed during the runtime milestone.
+
+## Video provider status — 2026-08-18
+
+A provider-neutral `VideoProvider` seam now exists with capability discovery, estimate, generate, status and reconciliation. The repository-verified matrix contains only the deterministic no-network fake. No real Video provider/model/duration/control capability is asserted; current external capabilities require a later primary-documentation verification before adapter implementation or cost configuration.
+# fal SAM 3 garment segmentation — 2026-08-21
+
+- Hosted model: `fal-ai/sam-3/image`
+- Required server credential: `FAL_KEY`
+- Optional selection/configuration: `NEXHQ_SAM3_PROVIDER`, `NEXHQ_SAM3_MODEL`, `NEXHQ_SAM3_COST_MAX_USD`
+- Default maximum: USD 0.005 per exact Stage-A Base request
+- Input: private Base data URI plus garment-only prompt; never Artwork
+- Output: up to three private mask candidates normalized and validated locally
+- Browser exposure: none
+
+The previous custom HTTPS SAM adapter remains available only with explicit `generic-http` selection or complete legacy configuration.

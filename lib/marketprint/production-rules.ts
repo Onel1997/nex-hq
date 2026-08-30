@@ -205,13 +205,13 @@ export function formatMarketPrintCatalogIntelligence(
   return lines.join("\n");
 }
 
-export type FacilityMarketPrintSection = {
+export type AgentMarketPrintSection = {
   title: string;
   lines: string[];
 };
 
-export function getFacilityMarketPrintSections(): Partial<
-  Record<AgentId, FacilityMarketPrintSection[]>
+export function getAgentMarketPrintSections(): Partial<
+  Record<AgentId, AgentMarketPrintSection[]>
 > {
   const premium = getPremiumProducts().map((p) => p.name);
   const embroidery = getEmbroideryProducts().map((p) => p.name);

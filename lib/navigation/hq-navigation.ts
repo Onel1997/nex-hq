@@ -1,5 +1,6 @@
 import {
   getHqSidebarSections,
+  getCustomerSidebarSections,
   HQ_SIDEBAR_SECTION_DEFAULTS,
   isSidebarNavItemActive,
   resolveActiveSidebarItem,
@@ -28,12 +29,22 @@ export interface HqSidebarSection {
 
 export {
   getHqSidebarSections,
+  getCustomerSidebarSections,
   HQ_SIDEBAR_SECTION_DEFAULTS,
   isSidebarNavItemActive,
   resolveActiveSidebarItem,
   resolveActiveSidebarSection,
   resolveAgentNavActiveId,
 };
+
+export function getStudioSidebarSections(
+  locale: Parameters<typeof getHqSidebarSections>[0],
+  audience: "OWNER" | "CUSTOMER",
+): HqSidebarSection[] {
+  return audience === "CUSTOMER"
+    ? getCustomerSidebarSections(locale)
+    : getHqSidebarSections(locale);
+}
 
 /** @deprecated Use getHqSidebarSections(locale) */
 export const HQ_SIDEBAR_SECTIONS: HqSidebarSection[] =
@@ -42,7 +53,6 @@ export const HQ_SIDEBAR_SECTIONS: HqSidebarSection[] =
 /** @deprecated Use HqSidebarSectionId */
 export type HqSectionId =
   | HqSidebarSectionId
-  | "facility"
   | "agents"
   | "missions"
   | "reports"

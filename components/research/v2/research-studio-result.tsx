@@ -251,7 +251,7 @@ export function ResearchStudioResult({
         </button>
 
         <Link
-          href="/facility/reports"
+          href="/agents/research"
           className="research-studio-btn research-studio-btn-secondary"
         >
           <ExternalLink className="size-4" />

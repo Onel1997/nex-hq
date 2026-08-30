@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import type { DesignMissionState } from "@/lib/design/design-mission-store";
 import type { ArtworkValidationResult } from "@/lib/design/artwork-validation";
@@ -7,13 +8,19 @@ import {
   assertCanContinueToImageStudio,
   assertExactDurableArtworkIdentity,
   assertHandoffSafeForBrowserPersistence,
+  buildApproveMasterArtworkBinaryFetch,
   buildApproveMasterArtworkRequest,
   buildDesignStudioHandoffInput,
+  buildDesignToImageHandoffRoute,
+  checksumArtworkBytesForHandoff,
+  DESIGN_TO_IMAGE_HANDOFF_OWNER_ERROR,
   DESIGN_IMAGE_HANDOFF_MAX_SERIALIZED_BYTES,
   DESIGN_TO_IMAGE_HANDOFF_ROUTE,
   DesignToImageHandoffError,
+  isExactDurableArtworkForUpload,
   measureHandoffSerializedBytes,
   parseDurableMasterArtworkResponse,
+  resolveCanonicalArtworkForImageHandoff,
   resolveDurableHandoffMimeType,
   resolveHandoffVersion,
   stripHandoffTransportPayload,
@@ -98,7 +105,9 @@ function validValidation(): ArtworkValidationResult {
   };
 }
 
-function durableArtwork(): ApprovedMasterArtworkView {
+function durableArtwork(
+  overrides: Partial<ApprovedMasterArtworkView> = {},
+): ApprovedMasterArtworkView {
   return {
     contractVersion: "design-master-artwork-v1",
     id: "11111111-1111-4111-8111-111111111111",
@@ -124,6 +133,7 @@ function durableArtwork(): ApprovedMasterArtworkView {
     approvedBy: "owner",
     approvedAt: "2026-08-17T00:00:00.000Z",
     createdAt: "2026-08-17T00:00:00.000Z",
+    ...overrides,
   };
 }
 
@@ -160,6 +170,26 @@ function installBrowserStorageStub() {
 }
 
 describe("Design Studio approved artwork → Image Studio handoff", () => {
+  it("reports approval only after durable server persistence and keeps handoff ID-only", () => {
+    const hook = readFileSync(
+      "components/design/v2/use-artwork-workspace.ts",
+      "utf8",
+    );
+    const approvalStart = hook.indexOf("const approveArtwork");
+    const handoffStart = hook.indexOf("const continueToImageStudio");
+    const approvalBody = hook.slice(approvalStart, handoffStart);
+    const handoffBody = hook.slice(handoffStart, hook.indexOf("useEffect", handoffStart));
+    assert.ok(approvalBody.indexOf("await fetch") >= 0);
+    assert.ok(
+      approvalBody.indexOf("await fetch") < approvalBody.indexOf("setIsApproved(true)"),
+    );
+    assert.match(approvalBody, /buildApproveMasterArtworkBinaryFetch/);
+    assert.doesNotMatch(approvalBody, /new FormData|buildApproveMasterArtworkFormData/);
+    assert.match(handoffBody, /resolveCanonicalArtworkForImageHandoff/);
+    assert.doesNotMatch(handoffBody, /readArtworkBytesForHandoff|buildApproveMasterArtwork/);
+    assert.match(hook, /if \(localUploadRef\.current\) return;/);
+  });
+
   it("blocks handoff before approval", () => {
     assert.throws(
       () =>
@@ -188,20 +218,171 @@ describe("Design Studio approved artwork → Image Studio handoff", () => {
     );
   });
 
-  it("builds durable approval payload with exact design/version metadata", () => {
+  it("builds durable approval payload with exact design/version metadata", async () => {
+    const payloadBytes = Buffer.from("approved-artwork");
     const request = buildApproveMasterArtworkRequest({
       designId: "design-owner-upload",
       version: "V2",
       reportId: "report-1",
       mimeType: "image/png",
-      contentBase64: Buffer.from("approved-artwork").toString("base64"),
+      contentBase64: payloadBytes.toString("base64"),
       placement: "center chest",
       printMethod: "screen print",
+      expectedByteLength: payloadBytes.length,
+      expectedChecksumSha256: await checksumArtworkBytesForHandoff(payloadBytes),
     });
     assert.equal(request.designId, "design-owner-upload");
     assert.equal(request.version, "V2");
     assert.equal(request.mimeType, "image/png");
     assert.equal(request.approvalAttestation, true);
+  });
+
+  it("uses raw binary transport only for first persistence and retains owner naming", async () => {
+    const bytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47]);
+    const binary = await buildApproveMasterArtworkBinaryFetch({
+      bytes,
+      designId: "design-owner-upload",
+      version: "V2",
+      reportId: "report-1",
+      mimeType: "image/png",
+      displayName: "  Timeless Kopie  ",
+      originalFileName: "timeless.png",
+    });
+    assert.equal(binary.url, "/api/design/master-artworks");
+    assert.equal(binary.init.method, "POST");
+    assert.equal(
+      new Headers(binary.init.headers).get("content-type"),
+      "image/png",
+    );
+    assert.ok(
+      new Headers(binary.init.headers).get("x-nexhq-artwork-meta"),
+    );
+    assert.equal(binary.init.body instanceof FormData, false);
+    assert.deepEqual(
+      new Uint8Array(await (binary.init.body as Blob).arrayBuffer()),
+      bytes,
+    );
+
+    const payloadBytes = Buffer.from("approved-artwork");
+    const request = buildApproveMasterArtworkRequest({
+      designId: "design-owner-upload",
+      version: "V2",
+      reportId: "report-1",
+      mimeType: "image/png",
+      contentBase64: payloadBytes.toString("base64"),
+      displayName: "  Timeless Kopie  ",
+      originalFileName: "timeless.png",
+      expectedByteLength: payloadBytes.length,
+      expectedChecksumSha256: await checksumArtworkBytesForHandoff(payloadBytes),
+    });
+    assert.equal(request.displayName, "Timeless Kopie");
+    assert.equal(request.originalFileName, "timeless.png");
+    assert.equal("file" in request, false);
+  });
+
+  it("recognizes an exact already-persisted upload without re-uploading bytes", async () => {
+    const bytes = Buffer.from("owner-final-artwork");
+    const checksum = await checksumArtworkBytesForHandoff(bytes);
+    const artwork = durableArtwork();
+    const exact = {
+      ...artwork,
+      checksum,
+      byteLength: bytes.byteLength,
+    };
+    assert.equal(
+      isExactDurableArtworkForUpload({
+        artwork: exact,
+        designId: exact.designId,
+        version: exact.version,
+        checksum,
+        mimeType: exact.mimeType,
+        byteLength: bytes.byteLength,
+      }),
+      true,
+    );
+    assert.equal(
+      isExactDurableArtworkForUpload({
+        artwork: exact,
+        designId: exact.designId,
+        version: exact.version,
+        checksum: "b".repeat(64),
+        mimeType: exact.mimeType,
+        byteLength: bytes.byteLength,
+      }),
+      false,
+    );
+  });
+
+  it("resolves the canonical handoff with JSON identity only", async () => {
+    const artwork = durableArtwork();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    const resolved = await resolveCanonicalArtworkForImageHandoff(
+      artwork.id,
+      (async (url: URL | RequestInfo, init?: RequestInit) => {
+        requests.push({ url: String(url), init });
+        return Response.json({ success: true, artwork });
+      }) as typeof fetch,
+    );
+
+    assert.equal(resolved.id, artwork.id);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.url, "/api/design/master-artworks/handoff");
+    assert.equal(requests[0]?.init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(requests[0]?.init?.body)), {
+      artworkId: artwork.id,
+    });
+    assert.equal(requests[0]?.init?.body instanceof FormData, false);
+    assert.equal(
+      new Headers(requests[0]?.init?.headers).get("content-type"),
+      "application/json",
+    );
+    assert.doesNotMatch(String(requests[0]?.init?.body), /storage|checksum|base64|data:image/i);
+    assert.equal(
+      buildDesignToImageHandoffRoute(artwork.id),
+      `/agents/image?artworkId=${artwork.id}`,
+    );
+  });
+
+  it("resolves the selected Artwork rather than another available Artwork", async () => {
+    const selected = durableArtwork();
+    const other = durableArtwork({
+      id: "33333333-3333-4333-8333-333333333333",
+      designId: "other-design",
+      checksum: "b".repeat(64),
+    });
+    const records = new Map([
+      [selected.id, selected],
+      [other.id, other],
+    ]);
+    const resolved = await resolveCanonicalArtworkForImageHandoff(
+      selected.id,
+      (async (_url: URL | RequestInfo, init?: RequestInit) => {
+        const { artworkId } = JSON.parse(String(init?.body)) as { artworkId: string };
+        return Response.json({ success: true, artwork: records.get(artworkId) });
+      }) as typeof fetch,
+    );
+    assert.equal(resolved.id, selected.id);
+    assert.notEqual(resolved.id, other.id);
+    assert.equal(resolved.version, selected.version);
+  });
+
+  it("does not expose raw FormData parser failures in the owner handoff", async () => {
+    await assert.rejects(
+      () =>
+        resolveCanonicalArtworkForImageHandoff(
+          durableArtwork().id,
+          (async () =>
+            Response.json(
+              { error: "Failed to parse body as FormData." },
+              { status: 400 },
+            )) as typeof fetch,
+        ),
+      (error: unknown) =>
+        error instanceof DesignToImageHandoffError &&
+        error.message === DESIGN_TO_IMAGE_HANDOFF_OWNER_ERROR &&
+        !/FormData/i.test(error.message) &&
+        error.diagnostic?.message === "Failed to parse body as FormData.",
+    );
   });
 
   it("preserves exact durable artwork identity in the browser handoff payload", () => {

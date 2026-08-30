@@ -15,6 +15,7 @@ export type IdentityReviewQualityGate = {
   review: PersonaIdentityReview | null;
   identityLockPassed: boolean;
   imageIdentityReady: boolean;
+  /** Legacy/pre-lock suitability signal only; never grants Video authority. */
   videoIdentityReady: boolean;
   blockingReasons: string[];
 };
@@ -63,6 +64,9 @@ export function evaluateIdentityReviewQualityGate(
     identityLockPassed,
     imageIdentityReady:
       identityLockPassed && review?.checklist.suitable_for_image_generation === true,
+    // Retained for historical review diagnostics. The Persona projection and
+    // Video eligibility ignore this signal until a separate lock-bound human
+    // Video review is approved.
     videoIdentityReady:
       identityLockPassed && review?.checklist.suitable_for_video_generation === true,
     blockingReasons,

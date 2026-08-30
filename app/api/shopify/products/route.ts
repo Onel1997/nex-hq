@@ -29,6 +29,7 @@ export async function GET() {
     const products = knowledge.products.map((p) => ({
       id: p.id,
       title: p.title,
+      vendor: p.vendor,
       status: p.status,
       inventory: p.inventory,
       imageUrl: p.imageUrl ?? null,

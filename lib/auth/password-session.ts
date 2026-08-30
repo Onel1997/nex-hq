@@ -1,4 +1,4 @@
-export const GENERIC_LOGIN_ERROR = "Email or password is invalid." as const;
+export const GENERIC_LOGIN_ERROR = "E-Mail oder Passwort ist ungültig." as const;
 
 export type PasswordLoginResult =
   | { ok: true }
@@ -41,4 +41,3 @@ export async function endNexhqSession(signOut: SignOut): Promise<void> {
     // Redirecting to the public login surface remains the safe local outcome.
   }
 }
-

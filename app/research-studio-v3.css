@@ -8,15 +8,15 @@ body:has(.rs3) {
   height: auto;
 }
 
-.facility-app-layout:has(.rs3) {
+.hq-app-layout:has(.rs3) {
   height: auto;
   min-height: 100dvh;
   overflow-x: hidden;
   overflow-y: visible;
 }
 
-.facility-app-main:has(.rs3),
-.facility-app-main:has(.rs3) .facility-app-transition {
+.hq-app-main:has(.rs3),
+.hq-app-main:has(.rs3) .hq-app-content {
   height: auto;
   min-height: 0;
   overflow-x: hidden;

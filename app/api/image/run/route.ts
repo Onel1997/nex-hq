@@ -15,23 +15,33 @@ import {
 import { PersonaDomainError } from "@/lib/persona/domain/errors";
 import { jsonError, requirePersonaScope } from "@/app/api/persona/_utils";
 import { createDeterministicImageProductionPlan } from "@/lib/image/deterministic-production-plan";
+import { sanitizeOptionalProjectContextString } from "@/lib/image/optional-project-context";
+import { logImageStudioTimings, timeImageStudioPhase, type ImageStudioTiming } from "@/lib/image/performance-diagnostics";
 
 const dict = getDictionary(DEFAULT_LOCALE);
+
+const optionalProjectHintSchema = (maxLength: number) =>
+  z.preprocess(
+    (value) =>
+      sanitizeOptionalProjectContextString(value, { maxLength }),
+    z.string().min(2).max(maxLength).optional(),
+  );
 
 const imageRequestSchema = z
   .object({
     brief: z.string().min(3).max(4000),
     taskId: z.string().uuid().optional(),
     brandModelSelection: brandModelTraceSchema.optional(),
-    productName: z.string().min(1).max(300).optional(),
-    collectionName: z.string().min(1).max(300).optional(),
-    color: z.string().min(1).max(200).optional(),
-    material: z.string().min(1).max(200).optional(),
+    productName: optionalProjectHintSchema(300),
+    collectionName: optionalProjectHintSchema(300),
+    color: optionalProjectHintSchema(200),
+    material: optionalProjectHintSchema(200),
   })
   .strict();
 
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID().slice(0, 8);
+  const timings: ImageStudioTiming[] = [];
 
   try {
     console.info(`[Image Run ${requestId}] Incoming request`);
@@ -56,27 +66,35 @@ export async function POST(request: Request) {
       );
     }
 
-    const gated = await requirePersonaScope();
+    const gated = await timeImageStudioPhase("owner-auth", requirePersonaScope, timings);
     if (!gated.ok) return gated.response;
     let brandModelContext: ImageBrandModelProductionContext | undefined;
     if (parsed.data.brandModelSelection) {
       const selection = parsed.data.brandModelSelection;
-      const handoff = await buildImageStudioPersonaHandoff(
-        gated.scope,
-        selection.personaId,
-        {
-          expectedIdentity: {
-            identityLockSnapshotId: selection.identityLockSnapshotId,
-            identityLockVersion: selection.identityLockVersion,
-            identityFingerprint: selection.identityFingerprint,
+      const handoff = await timeImageStudioPhase(
+        "brand-model-authority",
+        () => buildImageStudioPersonaHandoff(
+          gated.scope,
+          selection.personaId,
+          {
+            expectedIdentity: {
+              identityLockSnapshotId: selection.identityLockSnapshotId,
+              identityLockVersion: selection.identityLockVersion,
+              identityFingerprint: selection.identityFingerprint,
+            },
+            resolveAssetAccess: false,
           },
-          resolveAssetAccess: false,
-        },
+        ),
+        timings,
       );
       brandModelContext = createImageBrandModelProductionContext(handoff);
     }
 
-    const { workspace } = await ensureWorkspaceBrainSeeded();
+    const { workspace } = await timeImageStudioPhase(
+      "workspace-brain",
+      ensureWorkspaceBrainSeeded,
+      timings,
+    );
     if (
       brandModelContext &&
       brandModelContext.contract.workspaceId !== workspace.id
@@ -86,7 +104,11 @@ export async function POST(request: Request) {
         "UNAUTHORIZED_WORKSPACE",
       );
     }
-    const originTaskId = await resolveOriginTaskId(parsed.data.taskId);
+    const originTaskId = await timeImageStudioPhase(
+      "origin-task",
+      () => resolveOriginTaskId(parsed.data.taskId),
+      timings,
+    );
 
     const output = createDeterministicImageProductionPlan({
       brief: parsed.data.brief,
@@ -97,13 +119,17 @@ export async function POST(request: Request) {
       material: parsed.data.material,
       brandModelContext,
     });
-    const saved = await saveImageToBrain({
-      workspaceId: workspace.id,
-      brief: parsed.data.brief,
-      output,
-      originTaskId,
-      brandModelContext,
-    });
+    const saved = await timeImageStudioPhase(
+      "persist-production-plan",
+      () => saveImageToBrain({
+        workspaceId: workspace.id,
+        brief: parsed.data.brief,
+        output,
+        originTaskId,
+        brandModelContext,
+      }),
+      timings,
+    );
     const result = {
       ...saved,
       ...output,
@@ -121,6 +147,7 @@ export async function POST(request: Request) {
       reportId: result.reportId,
       contextRecordCount: result.contextRecordCount,
     });
+    logImageStudioTimings("image-production-plan", timings);
 
     return NextResponse.json({
       ...result,
@@ -130,6 +157,19 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof PersonaDomainError) return jsonError(error);
+
+    if (error instanceof z.ZodError) {
+      console.error(`[Image Run ${requestId}] Planning validation failed`, {
+        issues: error.issues,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "Die Bildplanung konnte nicht vollständig vorbereitet werden. Bitte prüfe die aktuelle Auswahl.",
+        },
+        { status: 422 },
+      );
+    }
 
     const message =
       error instanceof Error ? error.message : dict.image.errors.unexpected;

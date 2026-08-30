@@ -1,7 +1,7 @@
 import { getBrainClient } from "@/brain/client";
 import { slugify } from "@/brain/client/utils";
 import type { BrainTaskContent } from "@/brain/domains/tasks";
-import { ensureWorkspaceBrainSeeded } from "@/brain/seed";
+import { resolveWorkspace } from "@/brain/seed";
 import type { BrainActor, BrainRecord } from "@/brain/types";
 import { brainTaskRecordToTask } from "@/lib/tasks/from-brain";
 import type {
@@ -176,7 +176,7 @@ export async function listTasks(): Promise<{
   workspaceId: string;
   workspaceName: string;
 }> {
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const brain = getBrainClient();
 
   const result = await brain.searchRecords({
@@ -199,13 +199,13 @@ export async function listTasks(): Promise<{
 }
 
 export async function getTask(brainRecordId: string): Promise<Task> {
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const record = await getTaskRecord(brainRecordId, workspace.id);
   return brainTaskRecordToTask(record);
 }
 
 export async function getTaskByTaskId(taskId: string): Promise<Task | null> {
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const brain = getBrainClient();
 
   const result = await brain.searchRecords({
@@ -229,7 +229,7 @@ export async function createTask(
   input: CreateTaskInput,
   actor?: BrainActor,
 ): Promise<{ task: TaskListItem; eventIds: string[] }> {
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const brain = getBrainClient();
   const resolvedActor = resolveActor(actor);
   const taskId = crypto.randomUUID();
@@ -290,7 +290,7 @@ export async function updateTask(
   patch: UpdateTaskInput,
   actor?: BrainActor,
 ): Promise<{ task: TaskListItem; eventIds: string[] }> {
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const brain = getBrainClient();
   const resolvedActor = resolveActor(actor);
   const existing = await getTaskRecord(brainRecordId, workspace.id);
@@ -376,7 +376,7 @@ export async function deleteTask(
   brainRecordId: string,
   actor?: BrainActor,
 ): Promise<{ success: true; eventId: string }> {
-  const { workspace } = await ensureWorkspaceBrainSeeded();
+  const workspace = await resolveWorkspace();
   const brain = getBrainClient();
   const resolvedActor = resolveActor(actor);
   const existing = await getTaskRecord(brainRecordId, workspace.id);

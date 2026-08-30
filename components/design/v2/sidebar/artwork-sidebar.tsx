@@ -19,12 +19,12 @@ const SECTIONS: Array<{
   icon: typeof Image;
   disabled?: boolean;
 }> = [
-  { id: "master-artwork", label: "Master Artwork", icon: Image },
-  { id: "versions", label: "Versions", icon: Layers },
-  { id: "collections", label: "Collections", icon: FolderOpen },
-  { id: "brand-library", label: "Brand Library", icon: BookOpen, disabled: true },
-  { id: "history", label: "History", icon: History },
-  { id: "recent-uploads", label: "Recent Uploads", icon: Upload },
+  { id: "master-artwork", label: "Artwork", icon: Image },
+  { id: "versions", label: "Versionen", icon: Layers },
+  { id: "collections", label: "Kollektionen", icon: FolderOpen },
+  { id: "brand-library", label: "Markenbibliothek", icon: BookOpen, disabled: true },
+  { id: "history", label: "Verlauf", icon: History },
+  { id: "recent-uploads", label: "Letzte Uploads", icon: Upload },
 ];
 
 interface ArtworkSidebarProps {
@@ -49,15 +49,15 @@ export function ArtworkSidebar({
   return (
     <aside
       className={cn("dsv2-sidebar", collapsed && "is-collapsed")}
-      aria-label="Design Studio navigation"
+      aria-label="Navigation der Artwork-Bibliothek"
     >
       <div className="dsv2-sidebar-head">
-        {!collapsed ? <span className="dsv2-sidebar-label">Workspace</span> : null}
+        {!collapsed ? <span className="dsv2-sidebar-label">Bibliothek</span> : null}
         <button
           type="button"
           className="dsv2-sidebar-collapse"
           onClick={() => onCollapsedChange(!collapsed)}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? "Navigation öffnen" : "Navigation einklappen"}
         >
           <ChevronLeft className={cn("size-4", collapsed && "is-flipped")} />
         </button>
@@ -88,7 +88,7 @@ export function ArtworkSidebar({
                   {count != null && count > 0 ? (
                     <span className="dsv2-sidebar-badge">{count}</span>
                   ) : null}
-                  {disabled ? <span className="dsv2-sidebar-soon">Soon</span> : null}
+                  {disabled ? <span className="dsv2-sidebar-soon">Später</span> : null}
                 </>
               ) : null}
             </button>
@@ -117,7 +117,7 @@ export function SidebarSectionPanel({
   if (section === "versions") {
     return (
       <div className="dsv2-sidebar-content">
-        <p className="dsv2-sidebar-content-title">Versions</p>
+        <p className="dsv2-sidebar-content-title">Versionen</p>
         {versionHistory.length > 0 ? (
           <ul className="dsv2-sidebar-list">
             {versionHistory.slice(0, 6).map((entry) => (
@@ -130,7 +130,7 @@ export function SidebarSectionPanel({
             ))}
           </ul>
         ) : (
-          <p className="dsv2-sidebar-empty">No versions yet</p>
+          <p className="dsv2-sidebar-empty">Noch keine Versionen vorhanden.</p>
         )}
       </div>
     );
@@ -139,7 +139,7 @@ export function SidebarSectionPanel({
   if (section === "recent-uploads") {
     return (
       <div className="dsv2-sidebar-content">
-        <p className="dsv2-sidebar-content-title">Recent Uploads</p>
+        <p className="dsv2-sidebar-content-title">Letzte Uploads</p>
         {recentUploads.length > 0 ? (
           <ul className="dsv2-sidebar-list">
             {recentUploads.map((upload) => (
@@ -159,7 +159,7 @@ export function SidebarSectionPanel({
             ))}
           </ul>
         ) : (
-          <p className="dsv2-sidebar-empty">No uploads yet</p>
+          <p className="dsv2-sidebar-empty">Noch keine Uploads vorhanden.</p>
         )}
       </div>
     );
@@ -168,8 +168,8 @@ export function SidebarSectionPanel({
   if (section === "history") {
     return (
       <div className="dsv2-sidebar-content">
-        <p className="dsv2-sidebar-content-title">History</p>
-        <p className="dsv2-sidebar-empty">Activity history will appear here after analysis.</p>
+        <p className="dsv2-sidebar-content-title">Verlauf</p>
+        <p className="dsv2-sidebar-empty">Nach der Analyse erscheint hier der Aktivitätsverlauf.</p>
       </div>
     );
   }
@@ -177,8 +177,8 @@ export function SidebarSectionPanel({
   if (section === "collections") {
     return (
       <div className="dsv2-sidebar-content">
-        <p className="dsv2-sidebar-content-title">Collections</p>
-        <p className="dsv2-sidebar-empty">Link artwork to a collection after upload.</p>
+        <p className="dsv2-sidebar-content-title">Kollektionen</p>
+        <p className="dsv2-sidebar-empty">Nach dem Upload kannst du das Artwork einer Kollektion zuordnen.</p>
       </div>
     );
   }

@@ -87,6 +87,6 @@ GET /api/commerce/intelligence?department=commerce-lab
 ## Governance
 
 1. New commerce features extend `ShopifyOperationsCommerce` or the baseline loader.
-2. Facility labs and inspector panels link **into** this system, not around it.
+2. Active studios and workspace inspector panels link **into** this system, not around it.
 3. Agent pipelines pull commerce context via `loadMilaeneCommerceBaseline()` or department formatters.
 4. Commerce Lab remains the analytics wing — it reads the same baseline, it does not replace the catalog UI.

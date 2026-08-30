@@ -43,7 +43,7 @@ export function CommerceLabCenter() {
           <nav className="commerce-lab-breadcrumbs" aria-label="Breadcrumb">
             <Link href="/" className="commerce-lab-crumb">
               <Home className="size-3.5" />
-              Facility
+              NexHQ
             </Link>
             <ChevronRight className="size-3.5 opacity-40" />
             <span className="commerce-lab-crumb commerce-lab-crumb-current">

@@ -473,11 +473,11 @@ describe("Phase 2.3D.8 explicit human identity override", () => {
       join(ROOT, "components/persona/persona-studio.tsx"),
       "utf8",
     );
-    assert.match(studio, /Approve with identity override/);
-    assert.match(studio, /Confirm human identity override/);
-    assert.match(studio, /Compare with Master/);
+    assert.match(studio, /Mit Identitätsfreigabe bestätigen/);
+    assert.match(studio, /Menschliche Identitätsfreigabe bestätigen/);
+    assert.match(studio, /Mit Master vergleichen/);
     assert.match(studio, /identity-override-confirm/);
-    assert.match(studio, /HUMAN IDENTITY OVERRIDE/);
+    assert.match(studio, /MENSCHLICHE IDENTITÄTSFREIGABE/);
   });
 
   it("explicit human rejection blocks override until reopened", () => {

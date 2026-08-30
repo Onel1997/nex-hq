@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { PersonaDomainError } from "@/lib/persona/domain/errors";
 import type { DeterministicImageJob } from "@/lib/image/deterministic-runtime/types";
+import { COMPOSITOR_VERSION_V3 } from "@/lib/image/artwork-compositing/types";
 
 export interface ArtworkFidelityValidation {
   contractVersion: "deterministic-artwork-fidelity-validation-v1";
@@ -31,6 +32,8 @@ export function validateArtworkFidelityInput(input: {
   if (!snapshot.printSurface.quad || snapshot.printSurface.geometryStatus === "REQUIRES_CALIBRATION") {
     throw new PersonaDomainError("PrintSurface is not calibrated.", "WORKFLOW");
   }
+  const fabricAware =
+    snapshot.compositing.compositorVersion === COMPOSITOR_VERSION_V3;
   return {
     contractVersion: "deterministic-artwork-fidelity-validation-v1",
     artworkId: snapshot.masterArtwork.artworkId,
@@ -41,7 +44,23 @@ export function validateArtworkFidelityInput(input: {
     printSurfaceId: snapshot.printSurface.printSurfaceId,
     printSurfaceVersion: snapshot.printSurface.version,
     targetRegion: snapshot.printSurface.region,
-    allowedTransforms: ["SCALING", "PERSPECTIVE_WARP", "CLIPPING", "ALPHA_BLEND"],
+    allowedTransforms: fabricAware
+      ? [
+          "TRANSLATION",
+          "UNIFORM_SCALING",
+          "BOUNDED_PHYSICAL_DISPLACEMENT",
+          "LOCAL_PHYSICAL_SHADING",
+          "ALPHA_BLEND",
+        ]
+      : snapshot.compositing.artworkPlacementMode ===
+          "CONTAIN_UNIFORM_ASPECT_LOCKED"
+        ? [
+            "TRANSLATION",
+            "UNIFORM_SCALING",
+            "UNIFORM_PHYSICAL_SHADING",
+            "ALPHA_BLEND",
+          ]
+        : ["SCALING", "PERSPECTIVE_WARP", "CLIPPING", "ALPHA_BLEND"],
     substituteArtworkDetected: false,
   };
 }

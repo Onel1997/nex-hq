@@ -5,6 +5,7 @@ import {
 } from "@/lib/image/product-production-context";
 import { fetchShopifyCatalog } from "@/lib/shopify/fetch-catalog";
 import { jsonError, jsonOk, requirePersonaScope } from "@/app/api/persona/_utils";
+import { logImageStudioTimings, timeImageStudioPhase, type ImageStudioTiming } from "@/lib/image/performance-diagnostics";
 
 const resolveRequestSchema = z
   .object({
@@ -14,10 +15,12 @@ const resolveRequestSchema = z
 
 /** Server-verified, read-only Shopify selector data. No publishing or mutation. */
 export async function GET() {
-  const gated = await requirePersonaScope();
+  const timings: ImageStudioTiming[] = [];
+  const gated = await timeImageStudioPhase("owner-auth", requirePersonaScope, timings);
   if (!gated.ok) return gated.response;
   try {
-    const catalog = await fetchShopifyCatalog();
+    const catalog = await timeImageStudioPhase("shopify-catalog", fetchShopifyCatalog, timings);
+    logImageStudioTimings("image-product-context", timings);
     return jsonOk({
       success: true,
       authority: "SHOPIFY_LIVE",
@@ -26,10 +29,14 @@ export async function GET() {
         id: product.id,
         title: product.title,
         productType: product.productType,
+        vendor: product.vendor ?? null,
+        tags: product.tags,
         status: product.status,
         active: product.status.toUpperCase() === "ACTIVE",
         collections: product.collections,
         updatedAt: product.updatedAt,
+        variantColors: product.variantColors,
+        variantSizes: product.variantSizes,
         variants: product.variants.map((variant) => ({
           id: variant.id,
           title: variant.title,

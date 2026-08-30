@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 export const DESIGN_MASTER_ARTWORK_VERSION = "design-master-artwork-v1" as const;
+export const DESIGN_MASTER_ARTWORK_BINARY_META_HEADER =
+  "x-nexhq-artwork-meta" as const;
+export const DESIGN_ARTWORK_INCOMPLETE_OWNER_ERROR =
+  "Artwork konnte nicht vollständig hochgeladen werden. Bitte erneut versuchen." as const;
 export const DESIGN_MASTER_ARTWORK_SOURCE_TYPES = [
   "uploaded",
   "vector-artwork",
@@ -68,6 +72,8 @@ export const approveMasterArtworkMetaSchema = z
     provenance: z.string().min(1),
     displayName: z.string().min(1).max(120).nullable().optional(),
     originalFileName: z.string().min(1).max(255).nullable().optional(),
+    expectedByteLength: z.number().int().positive().max(20_971_520),
+    expectedChecksumSha256: z.string().regex(/^[a-f0-9]{64}$/),
   })
   .strict();
 
@@ -91,3 +97,17 @@ export const masterArtworkReferenceSchema = z
   .strict();
 
 export type MasterArtworkReference = z.infer<typeof masterArtworkReferenceSchema>;
+
+/**
+ * Browser-safe handoff request. The server resolves every other authority field
+ * from the workspace-scoped durable Artwork record.
+ */
+export const masterArtworkHandoffRequestSchema = z
+  .object({
+    artworkId: z.string().uuid(),
+  })
+  .strict();
+
+export type MasterArtworkHandoffRequest = z.infer<
+  typeof masterArtworkHandoffRequestSchema
+>;

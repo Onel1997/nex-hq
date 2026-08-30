@@ -2,7 +2,6 @@ import { agents } from "./agents";
 import { brain } from "./brain";
 import { ceo } from "./ceo";
 import { content } from "./content";
-import { facility } from "./facility";
 import { intelligence } from "./intelligence";
 import { hqNavigation } from "./hq-navigation";
 import { image } from "./image";
@@ -31,7 +30,6 @@ export const de = {
   reports,
   research,
   settings,
-  facility,
   intelligence,
   ceo,
   content,
