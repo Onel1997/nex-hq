@@ -1,4 +1,5 @@
 import {
+  CREATIVE_GENERATION_HTTP_MAX_BYTES,
   creativeRunSchema,
   type CreativeGenerationSetup,
   type CreativeReferenceImage,
@@ -9,6 +10,26 @@ import {
   xerianoClientCreditReceiptSchema,
   type XerianoClientCreditReceipt,
 } from "@/lib/xeriano/client-contracts";
+
+const CREATIVE_MULTIPART_SAFETY_BYTES = 64 * 1024;
+
+export function estimateCreativeGenerationRequestBytes(input: {
+  jobId: string;
+  setup: CreativeGenerationSetup;
+  references: CreativeReferenceImage[];
+  referenceSnapshot?: CreativeReferenceSnapshot;
+}): number {
+  const encoder = new TextEncoder();
+  return (
+    input.references.reduce((total, reference) => total + reference.file.size, 0) +
+    encoder.encode(input.jobId).byteLength +
+    encoder.encode(JSON.stringify(input.setup)).byteLength +
+    (input.referenceSnapshot
+      ? encoder.encode(JSON.stringify(input.referenceSnapshot)).byteLength
+      : 0) +
+    CREATIVE_MULTIPART_SAFETY_BYTES
+  );
+}
 
 export class CreativeGenerationClientError extends Error {
   constructor(
@@ -29,6 +50,12 @@ export async function submitCreativeGeneration(input: {
   fetcher?: typeof fetch;
   onCredit?: (receipt: XerianoClientCreditReceipt) => void;
 }): Promise<CreativeRun> {
+  if (estimateCreativeGenerationRequestBytes(input) > CREATIVE_GENERATION_HTTP_MAX_BYTES) {
+    throw new CreativeGenerationClientError(
+      "Die Übertragung der ausgewählten Referenzen ist zu groß. Bitte verwende kleinere Dateien oder weniger Referenzen.",
+      "REQUEST_PAYLOAD_TOO_LARGE",
+    );
+  }
   const formData = new FormData();
   formData.append("jobId", input.jobId);
   formData.append("setup", JSON.stringify(input.setup));
@@ -56,11 +83,18 @@ export async function submitCreativeGeneration(input: {
     credit?: unknown;
   } | null;
   if (!response.ok || !payload?.run) {
+    const payloadTooLarge = response.status === 413;
     throw new CreativeGenerationClientError(
-      typeof payload?.error === "string"
+      payloadTooLarge
+        ? "Die Übertragung der ausgewählten Referenzen ist zu groß. Bitte verwende kleinere Dateien oder weniger Referenzen."
+        : typeof payload?.error === "string"
         ? payload.error
         : "Das Bild konnte nicht erstellt werden.",
-      typeof payload?.code === "string" ? payload.code : "NETWORK_ERROR",
+      payloadTooLarge
+        ? "REQUEST_PAYLOAD_TOO_LARGE"
+        : typeof payload?.code === "string"
+          ? payload.code
+          : "NETWORK_ERROR",
       typeof payload?.technicalDetails === "string"
         ? payload.technicalDetails
         : null,

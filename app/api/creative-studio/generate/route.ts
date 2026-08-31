@@ -19,6 +19,7 @@ import {
   type XerianoGenerationAuthority,
 } from "@/lib/xeriano/customer-generation";
 import {
+  CREATIVE_GENERATION_HTTP_MAX_BYTES,
   creativeGenerationSetupSchema,
   creativeReferenceSnapshotSchema,
   type CreativeReferenceMetadata,
@@ -27,6 +28,7 @@ import {
   CreativeGenerationError,
   generateCreativeJob,
 } from "@/lib/creative-studio/generation-service";
+import { logCreativeProviderDiagnostic } from "@/lib/creative-studio/provider-diagnostics";
 import { CreativeCostCapError } from "@/lib/creative-studio/nano-banana-config";
 import type { CreativeProviderReference } from "@/lib/creative-studio/provider";
 import {
@@ -84,6 +86,18 @@ export async function POST(request: Request) {
   let creativeRunObserved = false;
 
   try {
+    const declaredRequestBytes = Number(request.headers.get("content-length") ?? 0);
+    if (
+      Number.isFinite(declaredRequestBytes) &&
+      declaredRequestBytes > CREATIVE_GENERATION_HTTP_MAX_BYTES
+    ) {
+      return errorResponse({
+        error:
+          "Die Übertragung der ausgewählten Referenzen ist zu groß. Bitte verwende kleinere Dateien oder weniger Referenzen.",
+        code: "REQUEST_PAYLOAD_TOO_LARGE",
+        status: 413,
+      });
+    }
     const formData = await request.formData();
     const jobId = formData.get("jobId");
     const setupJson = formData.get("setup");
@@ -154,6 +168,20 @@ export async function POST(request: Request) {
       });
     }
 
+    logCreativeProviderDiagnostic("submission_started", {
+      stage: "generation_service",
+      modelCode: setup.modelId,
+      financialMode: ownerUnlimited
+        ? "OWNER"
+        : customer
+          ? "CUSTOMER"
+          : "INTERNAL",
+      providerAccepted: false,
+      requestIdPresent: false,
+      normalizedErrorCode: null,
+      providerStatus: null,
+      jobId,
+    });
     const run = await generateCreativeJob({
       scope: {
         workspaceId: access.context.workspaceKey,
@@ -162,7 +190,16 @@ export async function POST(request: Request) {
       jobId,
       setup,
       references,
-    }, ownerUnlimited ? { costLimitPolicy: "OWNER_ESTIMATE_ONLY" } : undefined);
+    }, {
+      ...(ownerUnlimited
+        ? { costLimitPolicy: "OWNER_ESTIMATE_ONLY" as const }
+        : {}),
+      financialMode: ownerUnlimited
+        ? "OWNER"
+        : customer
+          ? "CUSTOMER"
+          : "INTERNAL",
+    });
     creativeRunObserved = true;
     if (customer) {
       customerAuthority = await reconcileCustomerGenerationFromRun({

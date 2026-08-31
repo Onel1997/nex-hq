@@ -208,6 +208,7 @@ export function CreativeStudioWorkspace(props: {
   const initialLibraryAssetLoadedRef = useRef(false);
   const initialCreationLoadedRef = useRef(false);
   const creationSyncAttemptedRef = useRef(new Set<string>());
+  const providerRecoveryAttemptedRef = useRef(new Set<string>());
   referencesRef.current = references;
 
   useEffect(() => {
@@ -262,7 +263,19 @@ export function CreativeStudioWorkspace(props: {
   }, [persist, props.customerMode]);
 
   useEffect(() => {
-    if (!props.customerMode || activeRun?.status !== "RUNNING") return;
+    if (
+      !productMode ||
+      !activeRun ||
+      (activeRun.status !== "RUNNING" &&
+        !(activeRun.status === "UNKNOWN_OUTCOME" && activeRun.providerRequestId))
+    ) return;
+    if (
+      activeRun.status === "UNKNOWN_OUTCOME" &&
+      providerRecoveryAttemptedRef.current.has(activeRun.id)
+    ) return;
+    if (activeRun.status === "UNKNOWN_OUTCOME") {
+      providerRecoveryAttemptedRef.current.add(activeRun.id);
+    }
     let cancelled = false;
     const observe = async () => {
       try {
@@ -281,13 +294,16 @@ export function CreativeStudioWorkspace(props: {
         // A status read never resubmits the paid job. Try again while RUNNING.
       }
     };
-    const interval = window.setInterval(() => void observe(), 5_000);
+    const interval =
+      activeRun.status === "RUNNING"
+        ? window.setInterval(() => void observe(), 5_000)
+        : null;
     void observe();
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      if (interval !== null) window.clearInterval(interval);
     };
-  }, [activeRun, persistRun, props.customerMode]);
+  }, [activeRun, persistRun, productMode, props.customerMode]);
 
   useEffect(() => {
     if (
@@ -659,6 +675,7 @@ export function CreativeStudioWorkspace(props: {
           "INVALID_REQUEST",
           "REFERENCE_LIMIT_EXCEEDED",
           "REFERENCE_INVALID",
+          "REQUEST_PAYLOAD_TOO_LARGE",
           "PROVIDER_NOT_CONFIGURED",
           "CREATIVE_COST_CAP_NOT_CONFIGURED",
           "IDEMPOTENCY_CONFLICT",

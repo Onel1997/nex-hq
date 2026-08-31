@@ -8,7 +8,10 @@ import {
   creativeGenerationSetupSchema,
   type CreativeGenerationSetup,
 } from "@/lib/creative-studio/contracts";
-import { generateCreativeJob } from "@/lib/creative-studio/generation-service";
+import {
+  generateCreativeJob,
+  reconcileCreativeJob,
+} from "@/lib/creative-studio/generation-service";
 import {
   assertNanoBananaCostAllowed,
   CreativeCostCapError,
@@ -20,9 +23,11 @@ import {
 import {
   FalNanoBananaProvider,
   FalNanoBananaUnknownOutcomeError,
+  extractFalQueueRequestId,
   type FalNanoBananaTransport,
   type NanoBananaProviderInput,
 } from "@/lib/creative-studio/providers/fal-nano-banana";
+import { logCreativeProviderDiagnostic } from "@/lib/creative-studio/provider-diagnostics";
 import type { CreativeImageProvider } from "@/lib/creative-studio/provider";
 import type { CreativeJobManifest } from "@/lib/creative-studio/server-contracts";
 import type {
@@ -162,6 +167,130 @@ test("Nano Banana Pro uses the text endpoint only when no reference is supplied"
     references: [],
   });
   assert.equal(endpoint, NANO_BANANA_PRO_TEXT_MODEL_ID);
+});
+
+test("fal acceptance parser supports installed and safe alternate request-id shapes", () => {
+  assert.equal(extractFalQueueRequestId({ request_id: "installed-shape" }), "installed-shape");
+  assert.equal(extractFalQueueRequestId({ requestId: "alternate-shape" }), "alternate-shape");
+  assert.equal(
+    extractFalQueueRequestId({ queue: { request_id: "nested-shape" } }),
+    "nested-shape",
+  );
+  assert.equal(extractFalQueueRequestId({ status: "IN_QUEUE" }), null);
+});
+
+test("network ambiguity during queue submission is UNKNOWN_OUTCOME without inventing acceptance", async () => {
+  const provider = new FalNanoBananaProvider(undefined, {
+    async uploadReference() {
+      return "https://fal.media/reference.png";
+    },
+    async submit() {
+      throw new TypeError("fetch failed");
+    },
+    async wait() {},
+    async result() {
+      throw new Error("must not read a result");
+    },
+  });
+  await assert.rejects(
+    provider.generate({
+      clientRequestId: "77777777-7777-4777-8777-777777777777",
+      setup: setup({ batchSize: 1 }),
+      references: references(),
+    }),
+    (error: unknown) => {
+      assert.equal(error instanceof FalNanoBananaUnknownOutcomeError, true);
+      assert.equal(
+        (error as FalNanoBananaUnknownOutcomeError).providerRequestId,
+        null,
+      );
+      return true;
+    },
+  );
+});
+
+test("definite provider validation rejection remains a pre-acceptance failure", async () => {
+  const rejection = Object.assign(new Error("validation failed"), { status: 422 });
+  const provider = new FalNanoBananaProvider(undefined, {
+    async uploadReference() {
+      return "https://fal.media/reference.png";
+    },
+    async submit() {
+      throw rejection;
+    },
+    async wait() {},
+    async result() {
+      throw new Error("must not read a result");
+    },
+  });
+  await assert.rejects(
+    provider.generate({
+      clientRequestId: "88888888-8888-4888-8888-888888888888",
+      setup: setup({ batchSize: 1 }),
+      references: references(),
+    }),
+    (error: unknown) => error === rejection,
+  );
+});
+
+test("existing fal request id resumes polling without another submission", async () => {
+  let submits = 0;
+  let waits = 0;
+  const provider = new FalNanoBananaProvider(undefined, {
+    async uploadReference() {
+      throw new Error("recovery must not upload");
+    },
+    async submit() {
+      submits += 1;
+      return { request_id: "unexpected" };
+    },
+    async wait(_endpoint, requestId) {
+      waits += 1;
+      assert.equal(requestId, "fal-existing-1");
+    },
+    async result() {
+      return {
+        requestId: "fal-existing-1",
+        data: {
+          description: "done",
+          images: [{ url: "https://fal.media/recovered.png" }],
+        },
+      };
+    },
+  });
+  const response = await provider.recover!({
+    clientRequestId: "99999999-9999-4999-8999-999999999999",
+    setup: setup({ batchSize: 1 }),
+    providerRequestId: "fal-existing-1",
+    providerPrompt: "frozen prompt",
+    referenceOrder: ["ref-model", "ref-design"],
+  });
+  assert.equal(submits, 0);
+  assert.equal(waits, 1);
+  assert.equal(response.results.length, 1);
+});
+
+test("safe Creative diagnostics cannot contain provider payloads or secrets", () => {
+  const original = console.info;
+  const captured: unknown[][] = [];
+  console.info = (...values: unknown[]) => captured.push(values);
+  try {
+    logCreativeProviderDiagnostic("acceptance_unconfirmed", {
+      stage: "queue_submit",
+      modelCode: "nano-banana-pro",
+      financialMode: "OWNER",
+      providerAccepted: false,
+      requestIdPresent: false,
+      normalizedErrorCode: "PROVIDER_SUBMISSION_AMBIGUOUS",
+      providerStatus: null,
+      jobId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    });
+  } finally {
+    console.info = original;
+  }
+  const serialized = JSON.stringify(captured);
+  assert.match(serialized, /acceptance_unconfirmed/);
+  assert.doesNotMatch(serialized, /FAL_KEY|signed|https:\/\/|prompt|reference/i);
 });
 
 test("published quality pricing and the legacy internal cost cap remain enforced", () => {
@@ -399,6 +528,103 @@ test("ambiguous provider completion becomes UNKNOWN_OUTCOME and is not resubmitt
   assert.equal(calls, 1);
 });
 
+test("manifest persistence failure after acceptance stays UNKNOWN_OUTCOME", async () => {
+  class OneAcceptanceWriteFailureStore extends MemoryCreativeStore {
+    failed = false;
+    override async writeManifest(manifest: CreativeJobManifest) {
+      if (manifest.providerRequestId && !this.failed) {
+        this.failed = true;
+        throw new Error("storage unavailable after acceptance");
+      }
+      return super.writeManifest(manifest);
+    }
+  }
+  const store = new OneAcceptanceWriteFailureStore();
+  const run = await generateCreativeJob(
+    {
+      scope: { workspaceId: "owner", actorId: "owner-1" },
+      jobId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      setup: setup(),
+      references: references(),
+    },
+    {
+      store,
+      provider: successfulProvider({ value: 0 }),
+      configuredCostCapUsd: 2,
+    },
+  );
+  assert.equal(run.status, "UNKNOWN_OUTCOME");
+  assert.equal(run.providerRequestId, "fal-paid-request-1");
+});
+
+test("persisted request id is reconciled and persisted without provider resubmission", async () => {
+  const store = new MemoryCreativeStore();
+  const scope = { workspaceId: "owner", actorId: "owner-1" };
+  const jobId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const initialProvider: CreativeImageProvider = {
+    providerId: "fal",
+    isConfigured: () => true,
+    async generate(request) {
+      await request.onProviderRequestId?.("fal-recoverable-1");
+      throw new FalNanoBananaUnknownOutcomeError(
+        "fal-recoverable-1",
+        "connection_closed",
+      );
+    },
+  };
+  const initial = await generateCreativeJob(
+    { scope, jobId, setup: setup({ batchSize: 1 }), references: references() },
+    { store, provider: initialProvider, configuredCostCapUsd: 2 },
+  );
+  assert.equal(initial.status, "UNKNOWN_OUTCOME");
+
+  let generateCalls = 0;
+  let recoveryCalls = 0;
+  const recoveryProvider: CreativeImageProvider = {
+    providerId: "fal",
+    isConfigured: () => true,
+    async generate() {
+      generateCalls += 1;
+      throw new Error("recovery must not submit");
+    },
+    async recover(request) {
+      recoveryCalls += 1;
+      return {
+        provider: "fal",
+        providerModel: NANO_BANANA_PRO_EDIT_MODEL_ID,
+        providerRequestId: request.providerRequestId,
+        providerPrompt: request.providerPrompt,
+        referenceOrder: request.referenceOrder,
+        results: [{
+          id: "remote-recovered",
+          url: "https://fal.media/recovered.png",
+          downloadUrl: null,
+          mimeType: "image/png",
+          width: 2048,
+          height: 2560,
+          favorite: false,
+        }],
+      };
+    },
+  };
+  const recovered = await reconcileCreativeJob(
+    { scope, jobId },
+    {
+      store,
+      provider: recoveryProvider,
+      fetcher: async () =>
+        new Response(Uint8Array.from(PNG_BYTES), {
+          status: 200,
+          headers: { "content-type": "image/png" },
+        }),
+    },
+  );
+  assert.equal(generateCalls, 0);
+  assert.equal(recoveryCalls, 1);
+  assert.equal(recovered?.status, "SUCCEEDED");
+  assert.equal(recovered?.results.length, 1);
+});
+
 test("Creative live route keeps credentials server-only and has no Image Studio dependency", () => {
   const route = readFileSync(
     "app/api/creative-studio/generate/route.ts",
@@ -414,7 +640,8 @@ test("Creative live route keeps credentials server-only and has no Image Studio 
   );
   assert.match(route, /resolveXerianoAccess/);
   assert.match(route, /authorizeXerianoGeneration/);
-  assert.match(route, /ownerUnlimited \? \{ costLimitPolicy: "OWNER_ESTIMATE_ONLY" \}/);
+  assert.match(route, /costLimitPolicy: "OWNER_ESTIMATE_ONLY"/);
+  assert.match(route, /financialMode: ownerUnlimited/);
   assert.match(adapter, /process\.env\.FAL_KEY/);
   assert.doesNotMatch(workspace, /process\.env|SUPABASE_SERVICE_ROLE_KEY/);
   assert.doesNotMatch(

@@ -35,7 +35,9 @@ import {
 import type {
   CreativeImageProvider,
   CreativeProviderReference,
+  CreativeProviderResponse,
 } from "@/lib/creative-studio/provider";
+import { logCreativeProviderDiagnostic } from "@/lib/creative-studio/provider-diagnostics";
 
 const MAX_PROVIDER_RESULT_BYTES = 40 * 1024 * 1024;
 const ALLOWED_PROVIDER_RESULT_MIME_TYPES = new Set([
@@ -219,8 +221,189 @@ export type GenerateCreativeJobDependencies = {
   fetcher?: typeof fetch;
   configuredCostCapUsd?: number | null;
   costLimitPolicy?: "REQUIRE_CONFIGURED_CAP" | "OWNER_ESTIMATE_ONLY";
+  financialMode?: "OWNER" | "CUSTOMER" | "INTERNAL";
   now?: () => string;
 };
+
+async function persistCreativeProviderResponse(input: {
+  manifest: CreativeJobManifest;
+  providerResponse: CreativeProviderResponse;
+  scope: CreativeJobScope;
+  store: CreativeJobStore;
+  fetcher: typeof fetch;
+  now: () => string;
+  financialMode: "OWNER" | "CUSTOMER" | "INTERNAL";
+}): Promise<CreativeJobManifest> {
+  const { providerResponse, store } = input;
+  let manifest = creativeJobManifestSchema.parse({
+    ...input.manifest,
+    provider: providerResponse.provider,
+    providerModel: providerResponse.providerModel,
+    providerRequestId: providerResponse.providerRequestId,
+    providerPrompt: providerResponse.providerPrompt,
+    updatedAt: input.now(),
+  });
+  await store.writeManifest(manifest);
+
+  const persisted: CreativeJobManifest["results"] = [];
+  const providerResults = providerResponse.results.slice(
+    0,
+    manifest.setup.batchSize,
+  );
+  for (const providerResult of providerResults) {
+    try {
+      const downloaded = await downloadProviderResult(
+        providerResult.url,
+        providerResult.mimeType,
+        input.fetcher,
+      );
+      const resultId = randomUUID();
+      const storagePath = await store.persistResult({
+        scope: input.scope,
+        jobId: manifest.jobId,
+        resultId,
+        bytes: downloaded.bytes,
+        mimeType: downloaded.mimeType,
+      });
+      const publicUrl = toPublicResultUrl(manifest.jobId, resultId);
+      const publicView: CreativeResult = {
+        ...providerResult,
+        id: resultId,
+        url: publicUrl,
+        downloadUrl: `${publicUrl}?download=1`,
+        mimeType: downloaded.mimeType,
+        providerModel: providerResponse.providerModel,
+      };
+      persisted.push({
+        publicView,
+        storagePath,
+        byteLength: downloaded.bytes.byteLength,
+        sha256: sha256Hex(downloaded.bytes),
+      });
+    } catch {
+      logCreativeProviderDiagnostic("reconciliation_result", {
+        stage: "result_persistence_failed",
+        modelCode: providerResponse.providerModel,
+        financialMode: input.financialMode,
+        providerAccepted: true,
+        requestIdPresent: Boolean(providerResponse.providerRequestId),
+        normalizedErrorCode: "RESULT_PERSISTENCE_FAILED",
+        providerStatus: null,
+        jobId: manifest.jobId,
+      });
+    }
+  }
+  const complete =
+    providerResponse.results.length === manifest.setup.batchSize &&
+    persisted.length === manifest.setup.batchSize;
+  const status = complete
+    ? "SUCCEEDED"
+    : persisted.length
+      ? "PARTIALLY_SUCCEEDED"
+      : "FAILED";
+  manifest = creativeJobManifestSchema.parse({
+    ...manifest,
+    status,
+    results: persisted,
+    updatedAt: input.now(),
+    message: complete
+      ? manifest.setup.batchSize === 1
+        ? "Das Bild wurde erfolgreich erstellt."
+        : `${manifest.setup.batchSize} Bilder wurden erfolgreich erstellt.`
+      : persisted.length
+        ? "Der Anbieter hat nur einen Teil der Ergebnisse dauerhaft bereitgestellt."
+        : "Das Bild wurde erstellt, konnte aber nicht dauerhaft gespeichert werden.",
+    technicalError: complete
+      ? null
+      : `providerResults=${providerResponse.results.length};persistedResults=${persisted.length};expectedResults=${manifest.setup.batchSize}`,
+  });
+  await store.writeManifest(manifest);
+  return manifest;
+}
+
+export const CREATIVE_PROVIDER_RECONCILIATION_STALE_MS = 6 * 60 * 1_000;
+
+export async function reconcileCreativeJob(
+  input: {
+    scope: CreativeJobScope;
+    jobId: string;
+    nowMs?: number;
+  },
+  dependencies: Pick<
+    GenerateCreativeJobDependencies,
+    "store" | "provider" | "fetcher" | "now" | "financialMode"
+  > = {},
+): Promise<CreativeRun | null> {
+  const store = dependencies.store ?? new SupabaseCreativeJobStore();
+  let manifest = await store.readManifest(input.scope, input.jobId);
+  if (!manifest) return null;
+  const updatedAtMs = Date.parse(manifest.updatedAt);
+  const staleRunning =
+    manifest.status === "RUNNING" &&
+    Number.isFinite(updatedAtMs) &&
+    (input.nowMs ?? Date.now()) - updatedAtMs >=
+      CREATIVE_PROVIDER_RECONCILIATION_STALE_MS;
+  if (
+    !manifest.providerRequestId ||
+    (manifest.status !== "UNKNOWN_OUTCOME" && !staleRunning)
+  ) {
+    return creativeManifestToRun(manifest);
+  }
+  const provider = dependencies.provider ?? new FalNanoBananaProvider(process.env.FAL_KEY);
+  if (!provider.isConfigured() || !provider.recover) {
+    return creativeManifestToRun(manifest);
+  }
+  logCreativeProviderDiagnostic("reconciliation_started", {
+    stage: "provider_status",
+    modelCode: manifest.providerModel,
+    financialMode: dependencies.financialMode ?? "INTERNAL",
+    providerAccepted: true,
+    requestIdPresent: true,
+    normalizedErrorCode: null,
+    providerStatus: null,
+    jobId: manifest.jobId,
+  });
+  try {
+    const providerResponse = await provider.recover({
+      clientRequestId: manifest.jobId,
+      financialMode: dependencies.financialMode ?? "INTERNAL",
+      setup: manifest.setup,
+      providerRequestId: manifest.providerRequestId,
+      providerPrompt:
+        manifest.providerPrompt ?? buildFallbackProviderPrompt(manifest),
+      referenceOrder: manifest.referenceAuthority
+        .sort((a, b) => a.order - b.order)
+        .map((reference) => reference.id),
+    });
+    manifest = await persistCreativeProviderResponse({
+      manifest,
+      providerResponse,
+      scope: input.scope,
+      store,
+      fetcher: dependencies.fetcher ?? fetch,
+      now: dependencies.now ?? (() => new Date().toISOString()),
+      financialMode: dependencies.financialMode ?? "INTERNAL",
+    });
+    logCreativeProviderDiagnostic("reconciliation_result", {
+      stage: "provider_status",
+      modelCode: manifest.providerModel,
+      financialMode: dependencies.financialMode ?? "INTERNAL",
+      providerAccepted: true,
+      requestIdPresent: true,
+      normalizedErrorCode: null,
+      providerStatus: null,
+      jobId: manifest.jobId,
+    });
+  } catch {
+    // Keep the quarantined state and request id. Recovery never resubmits.
+    return creativeManifestToRun(manifest);
+  }
+  return creativeManifestToRun(manifest);
+}
+
+function buildFallbackProviderPrompt(manifest: CreativeJobManifest): string {
+  return manifest.originalPrompt;
+}
 
 export async function generateCreativeJob(
   input: {
@@ -333,10 +516,29 @@ export async function generateCreativeJob(
     technicalError: null,
   });
   await store.writeManifest(manifest);
+  logCreativeProviderDiagnostic("job_persisted", {
+    stage: "initial_manifest",
+    modelCode: manifest.providerModel,
+    financialMode:
+      dependencies.financialMode ??
+      (dependencies.costLimitPolicy === "OWNER_ESTIMATE_ONLY"
+        ? "OWNER"
+        : "INTERNAL"),
+    providerAccepted: false,
+    requestIdPresent: false,
+    normalizedErrorCode: null,
+    providerStatus: null,
+    jobId: input.jobId,
+  });
 
   try {
     const providerResponse = await provider.generate({
       clientRequestId: input.jobId,
+      financialMode:
+        dependencies.financialMode ??
+        (dependencies.costLimitPolicy === "OWNER_ESTIMATE_ONLY"
+          ? "OWNER"
+          : "INTERNAL"),
       setup,
       references: input.references,
       onProviderRequestId: async (providerRequestId) => {
@@ -346,92 +548,47 @@ export async function generateCreativeJob(
           updatedAt: now(),
         });
         await store.writeManifest(manifest);
+        logCreativeProviderDiagnostic("job_persisted", {
+          stage: "provider_acceptance",
+          modelCode: manifest.providerModel,
+          financialMode:
+            dependencies.financialMode ??
+            (dependencies.costLimitPolicy === "OWNER_ESTIMATE_ONLY"
+              ? "OWNER"
+              : "INTERNAL"),
+          providerAccepted: true,
+          requestIdPresent: true,
+          normalizedErrorCode: null,
+          providerStatus: null,
+          jobId: input.jobId,
+        });
       },
     });
-    manifest = creativeJobManifestSchema.parse({
-      ...manifest,
-      provider: providerResponse.provider,
-      providerModel: providerResponse.providerModel,
-      providerRequestId: providerResponse.providerRequestId,
-      providerPrompt: providerResponse.providerPrompt,
-      updatedAt: now(),
+    manifest = await persistCreativeProviderResponse({
+      manifest,
+      providerResponse,
+      scope: input.scope,
+      store,
+      fetcher,
+      now,
+      financialMode:
+        dependencies.financialMode ??
+        (dependencies.costLimitPolicy === "OWNER_ESTIMATE_ONLY"
+          ? "OWNER"
+          : "INTERNAL"),
     });
-    await store.writeManifest(manifest);
-
-    const persisted: CreativeJobManifest["results"] = [];
-    const providerResults = providerResponse.results.slice(0, setup.batchSize);
-    for (const providerResult of providerResults) {
-      try {
-        const downloaded = await downloadProviderResult(
-          providerResult.url,
-          providerResult.mimeType,
-          fetcher,
-        );
-        const resultId = randomUUID();
-        const storagePath = await store.persistResult({
-          scope: input.scope,
-          jobId: input.jobId,
-          resultId,
-          bytes: downloaded.bytes,
-          mimeType: downloaded.mimeType,
-        });
-        const publicUrl = toPublicResultUrl(input.jobId, resultId);
-        const publicView: CreativeResult = {
-          ...providerResult,
-          id: resultId,
-          url: publicUrl,
-          downloadUrl: `${publicUrl}?download=1`,
-          mimeType: downloaded.mimeType,
-          providerModel: providerResponse.providerModel,
-        };
-        persisted.push({
-          publicView,
-          storagePath,
-          byteLength: downloaded.bytes.byteLength,
-          sha256: sha256Hex(downloaded.bytes),
-        });
-      } catch (error) {
-        console.error("[Creative Studio] Result persistence failed", {
-          jobId: input.jobId,
-          providerRequestId: providerResponse.providerRequestId,
-          message: error instanceof Error ? error.message : "unknown",
-        });
-      }
-    }
-    const complete =
-      providerResponse.results.length === setup.batchSize &&
-      persisted.length === setup.batchSize;
-    const status = complete
-      ? "SUCCEEDED"
-      : persisted.length
-        ? "PARTIALLY_SUCCEEDED"
-        : "FAILED";
-    manifest = creativeJobManifestSchema.parse({
-      ...manifest,
-      status,
-      results: persisted,
-      updatedAt: now(),
-      message: complete
-        ? setup.batchSize === 1
-          ? "Das Bild wurde erfolgreich erstellt."
-          : `${setup.batchSize} Bilder wurden erfolgreich erstellt.`
-        : persisted.length
-          ? "Der Anbieter hat nur einen Teil der Ergebnisse dauerhaft bereitgestellt."
-          : "Das Bild wurde erstellt, konnte aber nicht dauerhaft gespeichert werden.",
-      technicalError: complete
-        ? null
-        : `providerResults=${providerResponse.results.length};persistedResults=${persisted.length};expectedResults=${setup.batchSize}`,
-    });
-    await store.writeManifest(manifest);
     return creativeManifestToRun(manifest);
   } catch (error) {
-    const unknown = error instanceof FalNanoBananaUnknownOutcomeError;
+    const unknown =
+      error instanceof FalNanoBananaUnknownOutcomeError ||
+      Boolean(manifest.providerRequestId);
     manifest = creativeJobManifestSchema.parse({
       ...manifest,
       status: unknown ? "UNKNOWN_OUTCOME" : "FAILED",
-      providerRequestId: unknown
-        ? error.providerRequestId
-        : manifest.providerRequestId,
+      providerRequestId:
+        error instanceof FalNanoBananaUnknownOutcomeError
+          ? error.providerRequestId ?? manifest.providerRequestId
+          : manifest.providerRequestId,
       updatedAt: now(),
       message: unknown
         ? "Der Anbieter hat den Auftrag nicht eindeutig abgeschlossen. Es wurde kein neuer Versuch gestartet."

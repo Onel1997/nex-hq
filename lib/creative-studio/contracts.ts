@@ -21,6 +21,12 @@ export const CREATIVE_BATCH_SIZES = [1, 2, 3, 4] as const;
 export const CREATIVE_GLOBAL_REFERENCE_LIMIT = 14 as const;
 export const CREATIVE_REFERENCE_MAX_BYTES = 8 * 1024 * 1024;
 export const CREATIVE_REFERENCE_TOTAL_MAX_BYTES = 18 * 1024 * 1024;
+/**
+ * Vercel Functions reject request bodies above 4.5 MB before Next.js invokes
+ * the route. Keep a conservative envelope for multipart headers and setup
+ * JSON so an oversized Creative request is truthfully rejected pre-provider.
+ */
+export const CREATIVE_GENERATION_HTTP_MAX_BYTES = 4 * 1024 * 1024;
 export const CREATIVE_REFERENCE_MIME_TYPES = [
   "image/png",
   "image/jpeg",

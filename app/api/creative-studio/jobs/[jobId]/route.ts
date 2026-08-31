@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { CreativeRun } from "@/lib/creative-studio/contracts";
+import { reconcileCreativeJob } from "@/lib/creative-studio/generation-service";
 import { SupabaseCreativeJobStore } from "@/lib/creative-studio/server-storage";
 import { resolveXerianoAccess } from "@/lib/xeriano/auth";
 import { authorizeXerianoGeneration } from "@/lib/xeriano/credit-guard";
@@ -47,7 +48,8 @@ export async function GET(
         { status: 404 },
       );
     }
-    const manifest = await new SupabaseCreativeJobStore().readManifest(
+    const store = new SupabaseCreativeJobStore();
+    let manifest = await store.readManifest(
       scope,
       jobId,
     );
@@ -64,6 +66,26 @@ export async function GET(
         );
       }
       return NextResponse.json({ success: false, code: "JOB_NOT_FOUND", error: "Der Auftrag wurde nicht gefunden." }, { status: 404 });
+    }
+    if (
+      manifest.providerRequestId &&
+      (manifest.status === "RUNNING" || manifest.status === "UNKNOWN_OUTCOME")
+    ) {
+      const reconciled = await reconcileCreativeJob(
+        { scope, jobId },
+        {
+          store,
+          financialMode:
+            authorization.bypass === "OWNER_UNLIMITED"
+              ? "OWNER"
+              : authorization.bypass === null
+                ? "CUSTOMER"
+                : "INTERNAL",
+        },
+      );
+      if (reconciled) {
+        manifest = await store.readManifest(scope, jobId) ?? manifest;
+      }
     }
     const run: CreativeRun = {
       id: manifest.jobId,

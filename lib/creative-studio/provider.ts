@@ -14,6 +14,7 @@ export type CreativeProviderReference = {
 
 export type CreativeProviderRequest = {
   clientRequestId: string;
+  financialMode?: "OWNER" | "CUSTOMER" | "INTERNAL";
   setup: CreativeGenerationSetup;
   references: CreativeProviderReference[];
   onProviderRequestId?: (providerRequestId: string) => Promise<void> | void;
@@ -28,10 +29,22 @@ export type CreativeProviderResponse = {
   results: CreativeResult[];
 };
 
+export type CreativeProviderRecoveryRequest = {
+  clientRequestId: string;
+  financialMode?: "OWNER" | "CUSTOMER" | "INTERNAL";
+  setup: CreativeGenerationSetup;
+  providerRequestId: string;
+  providerPrompt: string;
+  referenceOrder: string[];
+};
+
 export interface CreativeImageProvider {
   readonly providerId: string;
   isConfigured(): boolean;
   generate(request: CreativeProviderRequest): Promise<CreativeProviderResponse>;
+  recover?(
+    request: CreativeProviderRecoveryRequest,
+  ): Promise<CreativeProviderResponse>;
 }
 
 export class CreativeProviderNotConnectedError extends Error {
