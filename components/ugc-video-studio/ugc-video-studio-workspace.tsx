@@ -880,7 +880,7 @@ export function UgcVideoStudioWorkspace(props: {
   }, [activeRun]);
 
   return (
-    <main className="ugc-video-studio-shell">
+    <main className={`ugc-video-studio-shell${props.ownerMode ? " is-owner-product-mode" : ""}`}>
       <header className="uv-topbar">
         <div className="uv-brand"><span><Video size={19} /></span><div><strong>UGC Video Studio</strong><small>Flexible UGC-Videos mit Referenzen und Prompt</small></div></div>
         <nav aria-label="UGC Video Studio Bereiche">
@@ -941,7 +941,7 @@ export function UgcVideoStudioWorkspace(props: {
                     onBitrate={setBitrate}
                   />
                 )}
-                <div className="uv-cost"><div><span>{props.ownerMode?"Owner Plan":props.customerMode?"Credit-Preis":"Geschätzte Maximalkosten"}</span><strong>{props.ownerMode?"Unlimited":props.customerMode?(customerCredits!==null?`${customerCredits} Credits`:selectedModel.settingsKind === "KLING_MOTION_CONTROL"?"Videolänge wählen":"Für Kunden nicht verfügbar"):estimatedMaximumCostUsd === null ? "Nicht verfügbar" : `${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`}</strong></div><p>{props.ownerMode?"Keine Credit-Abbuchung · Provider-Kostenlimit bleibt aktiv.":props.customerMode?`${availableCredits.toLocaleString("de-DE")} Credits verfügbar.`:selectedModel.settingsKind === "KLING_MOTION_CONTROL" ? `Konservatives fal-Maximum für ${duration} Sekunden Ausgabe.` : references.some((reference) => reference.mediaType === "VIDEO") ? "Konservatives Maximum inklusive dokumentiertem Video-Referenzbudget." : "Tokenbasierte fal-Schätzung für Dauer, Format und Qualität."}</p>{!productMode&&props.providerConfig?<p>V1-Speicherlimit: {Math.round(props.providerConfig.resultStorageLimitBytes / 1024 / 1024)} MB pro Ergebnis.</p>:null}</div>
+                {props.ownerMode ? <div className="uv-owner-plan"><strong>Owner · Unlimited</strong></div> : <div className="uv-cost"><div><span>{props.customerMode?"Credit-Preis":"Geschätzte Maximalkosten"}</span><strong>{props.customerMode?(customerCredits!==null?`${customerCredits} Credits`:selectedModel.settingsKind === "KLING_MOTION_CONTROL"?"Videolänge wählen":"Für Kunden nicht verfügbar"):estimatedMaximumCostUsd === null ? "Nicht verfügbar" : `${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`}</strong></div><p>{props.customerMode?`${availableCredits.toLocaleString("de-DE")} Credits verfügbar.`:selectedModel.settingsKind === "KLING_MOTION_CONTROL" ? `Konservatives fal-Maximum für ${duration} Sekunden Ausgabe.` : references.some((reference) => reference.mediaType === "VIDEO") ? "Konservatives Maximum inklusive dokumentiertem Video-Referenzbudget." : "Tokenbasierte fal-Schätzung für Dauer, Format und Qualität."}</p>{!productMode&&props.providerConfig?<p>V1-Speicherlimit: {Math.round(props.providerConfig.resultStorageLimitBytes / 1024 / 1024)} MB pro Ergebnis.</p>:null}</div>}
               </section>
             </div>
 

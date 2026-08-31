@@ -47,7 +47,7 @@ export default function OwnerHomePage() {
         </div>
         <div className="xeriano-credit-pill" aria-label="Owner Plan">
           <span>Owner Unlimited</span>
-          <small>Keine Credit-Abbuchung</small>
+          <small>Owner Workspace</small>
         </div>
       </header>
 

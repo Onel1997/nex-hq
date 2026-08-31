@@ -1,5 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { CreativeGenerationSetup, CreativeRun } from "@/lib/creative-studio/contracts";
+import type { DesignGenerationSetup } from "@/lib/design-studio/contracts";
+import { DESIGN_PRICING_VERSION } from "@/lib/design-studio/pricing-config";
+import {
+  DESIGN_UTILITY_PRICING_VERSION,
+  type DesignUtilityOperation,
+  resolveDesignUtilityConfig,
+} from "@/lib/design-studio/utility-config";
 import {
   NANO_BANANA_PRO_EDIT_MODEL_ID,
   NANO_BANANA_PRO_TEXT_MODEL_ID,
@@ -25,7 +32,7 @@ import {
   pricingEvaluationSnapshot,
 } from "@/lib/xeriano/pricing-engine";
 
-export type XerianoCustomerStudio = "CREATIVE_STUDIO" | "UGC_VIDEO_STUDIO";
+export type XerianoCustomerStudio = "CREATIVE_STUDIO" | "UGC_VIDEO_STUDIO" | "DESIGN_STUDIO";
 export type XerianoCustomerOperation = "IMAGE" | "VIDEO";
 export type XerianoGenerationAuthorityState =
   | "RESERVED"
@@ -37,8 +44,8 @@ export type XerianoGenerationAuthorityState =
 
 export type XerianoCustomerCreditQuote = {
   credits: number;
-  pricingVersion: typeof XERIANO_CREDIT_PRICING_VERSION;
-  modelId: "nano-banana-pro" | "kling-v3-pro-motion-control";
+  pricingVersion: string;
+  modelId: "nano-banana-pro" | "kling-v3-pro-motion-control" | "ideogram-4" | "recraft-4" | "design-background-remove" | "design-upscale";
   operation: XerianoCustomerOperation;
   studio: XerianoCustomerStudio;
   pricingSnapshot: Record<string, unknown>;
@@ -242,6 +249,99 @@ export function quoteUgcCustomerGeneration(
       characterOrientation: setup.klingMotion.characterOrientation,
       credits,
       pricingVersion: XERIANO_CREDIT_PRICING_VERSION,
+      economics: pricingEvaluationSnapshot(economics),
+    },
+  };
+}
+
+export function quoteDesignCustomerGeneration(
+  setup: DesignGenerationSetup,
+): XerianoCustomerCreditQuote {
+  const quoteInput = {
+    modelId: setup.model === "IDEOGRAM_4" ? "ideogram-4" as const : "recraft-4" as const,
+    designModel: setup.model,
+    quality: setup.quality,
+    outputMode: setup.outputMode,
+    aspectRatio: setup.aspectRatio,
+    resolution: setup.resolution,
+    count: setup.count,
+    hasReference: setup.reference !== null,
+  };
+  // The shared safety engine derives the target recommendation from current
+  // commercial net-credit economics and the versioned provider-cost rule.
+  const recommendation = evaluateGenerationPricing({
+    quote: quoteInput,
+    configuredCredits: 1,
+    pricingVersionOverride: DESIGN_PRICING_VERSION,
+    pricingRuleIdOverride: "design-generation-v1",
+  });
+  const credits = recommendation.targetRoundedCredits;
+  const economics = evaluateGenerationPricing({
+    quote: quoteInput,
+    configuredCredits: credits,
+    pricingVersionOverride: DESIGN_PRICING_VERSION,
+    pricingRuleIdOverride: "design-generation-v1",
+  });
+  assertPricingActivationAllowed(economics);
+  return {
+    credits,
+    pricingVersion: DESIGN_PRICING_VERSION,
+    modelId: quoteInput.modelId,
+    operation: "IMAGE",
+    studio: "DESIGN_STUDIO",
+    pricingSnapshot: {
+      modelId: quoteInput.modelId,
+      generationType: "DESIGN_GENERATION",
+      designModel: setup.model,
+      outputMode: setup.outputMode,
+      quality: setup.quality,
+      count: setup.count,
+      aspectRatio: setup.aspectRatio,
+      resolution: setup.outputMode === "RASTER" ? setup.resolution : null,
+      hasReference: setup.reference !== null,
+      credits,
+      pricingVersion: DESIGN_PRICING_VERSION,
+      economics: pricingEvaluationSnapshot(economics),
+    },
+  };
+}
+
+export function quoteDesignUtilityGeneration(
+  operation: DesignUtilityOperation,
+): XerianoCustomerCreditQuote {
+  const config = resolveDesignUtilityConfig(operation);
+  const quoteInput = {
+    modelId: operation === "BACKGROUND_REMOVE"
+      ? "design-background-remove" as const
+      : "design-upscale" as const,
+    count: 1 as const,
+  };
+  const recommendation = evaluateGenerationPricing({
+    quote: quoteInput,
+    configuredCredits: 1,
+    pricingVersionOverride: DESIGN_UTILITY_PRICING_VERSION,
+    pricingRuleIdOverride: config.pricingRuleId,
+  });
+  const credits = recommendation.targetRoundedCredits;
+  const economics = evaluateGenerationPricing({
+    quote: quoteInput,
+    configuredCredits: credits,
+    pricingVersionOverride: DESIGN_UTILITY_PRICING_VERSION,
+    pricingRuleIdOverride: config.pricingRuleId,
+  });
+  assertPricingActivationAllowed(economics);
+  return {
+    credits,
+    pricingVersion: DESIGN_UTILITY_PRICING_VERSION,
+    modelId: quoteInput.modelId,
+    operation: "IMAGE",
+    studio: "DESIGN_STUDIO",
+    pricingSnapshot: {
+      modelId: quoteInput.modelId,
+      generationType: "DESIGN_UTILITY",
+      utilityOperation: operation,
+      credits,
+      pricingVersion: DESIGN_UTILITY_PRICING_VERSION,
       economics: pricingEvaluationSnapshot(economics),
     },
   };

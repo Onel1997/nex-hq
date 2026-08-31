@@ -410,4 +410,6 @@ body:has(.ugc-video-studio-shell) {
   .ugc-video-studio-shell *::before,
   .ugc-video-studio-shell *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
-.uv-owner-unlimited{display:block;margin-top:7px;color:#b9a8f5;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-align:center}
+.ugc-video-studio-shell.is-owner-product-mode .uv-owner-plan{margin-top:12px;padding-top:12px;border-top:1px solid var(--uv-border);color:#b9a8f5;font-size:10px;font-weight:750;letter-spacing:.035em}
+.ugc-video-studio-shell.is-owner-product-mode .uv-generate-bar{align-items:center;flex-direction:column;gap:6px}
+.ugc-video-studio-shell.is-owner-product-mode .uv-owner-unlimited{display:block;margin:0;color:#b9a8f5;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-align:center}

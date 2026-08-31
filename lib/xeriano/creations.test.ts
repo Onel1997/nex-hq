@@ -154,7 +154,7 @@ test("Creation detail and reference bytes are server-account-scoped", () => {
 test("Library is visual, paginated and opens generated assets as Creation details", () => {
   const route = read("app/api/xeriano/library/route.ts");
   assert.match(route, /\["DESIGN",\s*"IMAGE",\s*"VIDEO",\s*"REFERENCE"\]/);
-  assert.match(route, /query=query\.eq\("asset_type",type\)/);
+  assert.match(route, /query\s*=\s*query\.eq\("asset_type",\s*type\)/);
   assert.match(route, /XERIANO_LIBRARY_SCHEMA_UNAVAILABLE/);
   assert.match(route, /SCHEMA_MIGRATION_UNAVAILABLE/);
   assert.match(route, /error: "Die Bibliothek ist gerade nicht verfügbar\."/);

@@ -754,17 +754,22 @@ export function CreativeStudioWorkspace(props: {
       try {
         const response = await fetch(`/api/xeriano/library/${encodeURIComponent(props.initialLibraryAssetId!)}/content`, { credentials: "same-origin" });
         if (!response.ok) throw new Error("library_asset_unavailable");
-        const blob = await response.blob();
+        let blob = await response.blob();
+        const vectorSource = blob.type === "image/svg+xml";
+        if (vectorSource) {
+          const raster = await fetch(`/api/xeriano/library/${encodeURIComponent(props.initialLibraryAssetId!)}/content?format=png`, { credentials: "same-origin" });
+          if (!raster.ok) throw new Error("library_vector_preview_unavailable");
+          blob = await raster.blob();
+        }
         const extension = blob.type === "image/jpeg" ? "jpg" : blob.type.split("/")[1] ?? "png";
         addReferenceEntries([
           {
             file: new File([blob], `xeriano-design.${extension}`, {
               type: blob.type,
             }),
-            source: {
-              kind: "LIBRARY_REFERENCE",
-              libraryAssetId: props.initialLibraryAssetId!,
-            },
+            source: vectorSource
+              ? { kind: "LOCAL_FILE_REFERENCE" }
+              : { kind: "LIBRARY_REFERENCE", libraryAssetId: props.initialLibraryAssetId! },
             role: "DESIGN",
           },
         ]);
@@ -1034,7 +1039,7 @@ export function CreativeStudioWorkspace(props: {
   const openCreate = () => setView("CREATE");
 
   return (
-    <div className="creative-studio-shell">
+    <div className={`creative-studio-shell${props.ownerMode ? " is-owner-product-mode" : ""}`}>
       <header className="cs-topbar">
         <div className="cs-brand">
           <span>
@@ -1213,7 +1218,7 @@ export function CreativeStudioWorkspace(props: {
                 />
                 {selectedModel.availability === "LIVE" ? (
                   <p className="cs-inline-cost">
-                    {props.ownerMode ? "Owner Unlimited · keine Credit-Abbuchung" : props.customerMode ? `Credit-Preis: ${customerCredits} Credits · Verfügbar: ${availableCredits.toLocaleString("de-DE")}` : <>Geschätzte Maximalkosten: {estimatedMaximumCostUsd.toLocaleString("de-DE", {
+                    {props.ownerMode ? "Owner · Unlimited" : props.customerMode ? `Credit-Preis: ${customerCredits} Credits · Verfügbar: ${availableCredits.toLocaleString("de-DE")}` : <>Geschätzte Maximalkosten: {estimatedMaximumCostUsd.toLocaleString("de-DE", {
                       style: "currency",
                       currency: "USD",
                     })}</>}
@@ -1265,7 +1270,7 @@ export function CreativeStudioWorkspace(props: {
                     ? props.customerConfig?.ready
                     : props.providerConfig?.ready)
                     ? props.ownerMode
-                      ? "Owner Unlimited · Provider-Kostenlimit aktiv"
+                      ? "Owner · Unlimited"
                       : props.customerMode
                       ? `${customerCredits} Credits · ${availableCredits.toLocaleString("de-DE")} verfügbar`
                       : `Live verbunden · geschätzte Maximalkosten ${estimatedMaximumCostUsd.toLocaleString("de-DE", { style: "currency", currency: "USD" })}`

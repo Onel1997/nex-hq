@@ -28,7 +28,7 @@ export const xerianoCreationSchema = z.object({
   id: z.string().uuid(),
   assetId: z.string().uuid(),
   creationType: xerianoCreationTypeSchema,
-  sourceStudio: z.enum(["CREATIVE_STUDIO", "UGC_VIDEO_STUDIO"]),
+  sourceStudio: z.enum(["DESIGN_STUDIO", "CREATIVE_STUDIO", "UGC_VIDEO_STUDIO"]),
   sourceJobId: z.string().min(1).max(160),
   sourceResultId: z.string().min(1).max(160),
   title: z.string().min(1).max(160),

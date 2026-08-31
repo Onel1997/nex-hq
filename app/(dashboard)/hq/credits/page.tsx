@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CircleDollarSign, Infinity as InfinityIcon, ShieldCheck } from "lucide-react";
+import { Infinity as InfinityIcon, ShieldCheck, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = { title: "Credits & Plan" };
 
@@ -19,15 +19,15 @@ export default function OwnerCreditsPage() {
         <div>
           <span className="xeriano-section-label">Dein aktueller Plan</span>
           <h2>Owner Unlimited</h2>
-          <p>Creative Studio und UGC Video Studio benötigen für exakte Owner-Autorität keine Credit-Reservierung.</p>
+          <p>Die vollständige Xeriamo Produktsuite für deinen Owner Workspace.</p>
         </div>
         <span className="xeriano-owner-unlimited-status"><ShieldCheck aria-hidden="true" /> Unbegrenzt</span>
       </section>
 
       <section className="xeriano-history-placeholder">
-        <CircleDollarSign aria-hidden="true" />
-        <h2>Interne Kosten bleiben messbar</h2>
-        <p>Owner Unlimited entfernt ausschließlich die Kunden-Abbuchung. Provider-Kostenlimits und interne Laufdaten bleiben aktiv.</p>
+        <Sparkles aria-hidden="true" />
+        <h2>Bereit zum Erstellen</h2>
+        <p>Design Studio, Creative Studio und UGC Video Studio stehen dir ohne sichtbare Credit-Verwaltung zur Verfügung.</p>
       </section>
     </main>
   );

@@ -21,7 +21,7 @@ test("staging runtime makes Staging-ENV authoritative without editing env files"
 test("Library failures retain a simple customer message and safe server evidence", () => {
   const route = read("app/api/xeriano/library/route.ts");
   assert.match(route, /\[xeriano-library\] server operation failed/);
-  assert.match(route, /const\{data,error,count,status\}=await query/);
+  assert.match(route, /const\s*\{\s*data,\s*error,\s*count,\s*status\s*\}\s*=\s*await query/);
   assert.match(route, /REDACTED_SUPABASE_KEY/);
   assert.match(route, /REDACTED_JWT/);
   assert.match(route, /Die Bibliothek ist gerade nicht verfügbar\./);

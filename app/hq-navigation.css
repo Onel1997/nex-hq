@@ -339,6 +339,54 @@
   overflow: hidden;
 }
 
+/* Normal Xeriamo product routes keep Owner navigation and authority while
+   using the same content geometry as .xeriano-customer-main. Admin and
+   internal Studio routes intentionally remain on the dashboard canvas. */
+.hq-app-layout.is-owner-product {
+  min-height: 100dvh;
+  height: auto;
+  overflow: visible;
+  background: var(--xe-bg, #08090c);
+}
+
+.hq-app-layout.is-owner-product > .hq-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+}
+
+.hq-app-layout.is-owner-product .hq-app-main,
+.hq-app-layout.is-owner-product .hq-app-content {
+  min-height: 100dvh;
+  height: auto;
+  overflow: visible;
+}
+
+.xeriamo-owner-product {
+  min-width: 0;
+  padding: 42px clamp(20px, 4vw, 58px) 100px;
+  color: var(--xe-text, #f4f4f5);
+  background: var(--xe-bg, #08090c);
+}
+
+/* Customer embeds carry a 230px customer-sidebar offset. Rebind fixed Studio
+   actions to the canonical Owner rail without changing the customer rule. */
+.hq-app-layout.is-owner-product .xeriano-embedded-studio:has(.creative-studio-shell) {
+  --cs-sidebar-offset: 15rem;
+}
+
+.hq-app-layout.is-owner-product .xeriano-embedded-studio:has(.ugc-video-studio-shell) {
+  --uv-sidebar-offset: 15rem;
+}
+
+.hq-app-layout.is-owner-product:has(.hq-sidebar.is-collapsed) .xeriano-embedded-studio:has(.creative-studio-shell) {
+  --cs-sidebar-offset: 4.25rem;
+}
+
+.hq-app-layout.is-owner-product:has(.hq-sidebar.is-collapsed) .xeriano-embedded-studio:has(.ugc-video-studio-shell) {
+  --uv-sidebar-offset: 4.25rem;
+}
+
 .settings-page {
   min-height: 100%;
   overflow-y: auto;
@@ -1147,6 +1195,31 @@
   .hq-app-content {
     min-height: 100%;
     overflow: visible;
+  }
+
+  .hq-app-layout.is-owner-product {
+    min-height: 100dvh;
+    height: auto;
+    overflow: visible;
+  }
+
+  .hq-app-layout.is-owner-product .hq-app-main,
+  .hq-app-layout.is-owner-product .hq-app-content {
+    min-height: 0;
+    height: auto;
+    overflow: visible;
+  }
+
+  .xeriamo-owner-product {
+    padding: 28px 16px 100px;
+  }
+
+  .hq-app-layout.is-owner-product .xeriano-embedded-studio:has(.creative-studio-shell) {
+    --cs-sidebar-offset: 0px;
+  }
+
+  .hq-app-layout.is-owner-product .xeriano-embedded-studio:has(.ugc-video-studio-shell) {
+    --uv-sidebar-offset: 0px;
   }
 }
 

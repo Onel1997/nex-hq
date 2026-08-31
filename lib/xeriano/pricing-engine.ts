@@ -10,6 +10,8 @@ import {
   KLING_V3_PRO_MOTION_PRICING_SOURCE,
   KLING_V3_PRO_MOTION_PRICING_VERSION,
 } from "@/lib/ugc-video-studio/kling-motion-config";
+import { resolveDesignProviderCost } from "@/lib/design-studio/pricing-config";
+import { DESIGN_UTILITY_PRICING_VERSION, resolveDesignUtilityConfig } from "@/lib/design-studio/utility-config";
 import {
   XERIANO_COMMERCIAL_CATALOG_VERSION,
   XERIANO_PLAN_VERSIONS,
@@ -286,6 +288,50 @@ export function resolveProviderCost(
   providerModelOverride?: string,
 ): ProviderCostQuote | null {
   const fx = XERIANO_ECONOMIC_POLICY.fx.USD_EUR;
+  if (input.modelId === "design-background-remove" || input.modelId === "design-upscale") {
+    const utility = resolveDesignUtilityConfig(
+      input.modelId === "design-background-remove" ? "BACKGROUND_REMOVE" : "UPSCALE",
+    );
+    return {
+      provider: "fal",
+      providerModel: providerModelOverride ?? utility.endpoint,
+      operation: "IMAGE",
+      billingUnit: "PER_IMAGE",
+      originalCurrency: "USD",
+      originalCostMicros: utility.providerCostUsdMicros,
+      convertedCostEurMicros: Math.ceil(utility.providerCostUsdMicros * fx.numerator / fx.denominator),
+      costVersion: DESIGN_UTILITY_PRICING_VERSION,
+      source: utility.providerCostSource,
+      verified: true,
+      fxVersion: fx.version,
+    };
+  }
+  if (input.modelId === "ideogram-4" || input.modelId === "recraft-4") {
+    const design = resolveDesignProviderCost({
+      model: input.designModel,
+      quality: input.quality,
+      outputMode: input.outputMode,
+      aspectRatio: input.aspectRatio,
+      resolution: input.resolution,
+      count: input.count,
+      reference: input.hasReference
+        ? { name: "reference", mimeType: "image/png", byteLength: 1 }
+        : null,
+    });
+    return {
+      provider: "fal",
+      providerModel: providerModelOverride ?? design.providerModel,
+      operation: "IMAGE",
+      billingUnit: "PER_IMAGE",
+      originalCurrency: "USD",
+      originalCostMicros: design.totalCostMicros,
+      convertedCostEurMicros: Math.ceil(design.totalCostMicros * fx.numerator / fx.denominator),
+      costVersion: design.version,
+      source: design.source,
+      verified: true,
+      fxVersion: fx.version,
+    };
+  }
   if (input.modelId === "nano-banana-pro") {
     const unitMicros = decimalStringToMicros(nanoBananaUnitPriceUsd(input.quality).toString());
     const originalCostMicros = unitMicros * (input.count ?? 1);
@@ -307,6 +353,7 @@ export function resolveProviderCost(
       fxVersion: fx.version,
     };
   }
+  if (input.modelId !== "kling-v3-pro-motion-control") return null;
   if (!Number.isInteger(input.durationSeconds) || input.durationSeconds <= 0) return null;
   const unitMicros = decimalStringToMicros(
     KLING_V3_PRO_MOTION_PRICE_PER_SECOND_USD.toString(),
@@ -351,6 +398,8 @@ export function evaluateGenerationPricing(input: {
   providerModelOverride?: string;
   taxBasisPoints?: number | null;
   evaluatedAt?: string;
+  pricingVersionOverride?: string;
+  pricingRuleIdOverride?: string;
 }): PricingEvaluation {
   const configuredCredits = input.configuredCredits ?? quoteXerianoCredits(input.quote);
   if (!Number.isInteger(configuredCredits) || configuredCredits <= 0) {
@@ -389,14 +438,21 @@ export function evaluateGenerationPricing(input: {
     economicsVerified: true,
     marginBasisPoints,
   });
-  const priceRule =
+  const priceRule = input.pricingRuleIdOverride ?? (
     input.quote.modelId === "nano-banana-pro"
       ? "nano-banana-pro-quality-v2"
-      : "kling-v3-motion-per-second-v2";
+      : input.quote.modelId === "kling-v3-pro-motion-control"
+        ? "kling-v3-motion-per-second-v2"
+        : input.quote.modelId === "design-background-remove"
+          ? "design-background-remove-v1"
+          : input.quote.modelId === "design-upscale"
+            ? "design-upscale-2x-v1"
+            : "design-generation-v1"
+  );
   return {
     configuredCredits,
     pricingRuleId: priceRule,
-    pricingVersion: XERIANO_CREDIT_PRICING_VERSION,
+    pricingVersion: input.pricingVersionOverride ?? XERIANO_CREDIT_PRICING_VERSION,
     commercialCatalogVersion: XERIANO_COMMERCIAL_CATALOG_VERSION,
     economicPolicyVersion: XERIANO_ECONOMIC_POLICY.version,
     taxBasisPoints,

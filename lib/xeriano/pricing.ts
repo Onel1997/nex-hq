@@ -4,7 +4,18 @@ export const XERIANO_CREDIT_PRICING_EFFECTIVE_DATE = "2026-08-30" as const;
 
 export type XerianoCreditQuoteInput =
   | { modelId: "nano-banana-pro"; quality: "1K" | "2K" | "4K"; count?: 1 | 2 | 3 | 4 }
-  | { modelId: "kling-v3-pro-motion-control"; durationSeconds: number };
+  | { modelId: "kling-v3-pro-motion-control"; durationSeconds: number }
+  | {
+      modelId: "ideogram-4" | "recraft-4";
+      designModel: "IDEOGRAM_4" | "RECRAFT_4";
+      quality: "FAST" | "STANDARD" | "HIGH";
+      outputMode: "RASTER" | "VECTOR";
+      aspectRatio: "1:1" | "4:5" | "3:4" | "2:3";
+      resolution: "2K" | "4K";
+      count: 1 | 2 | 4;
+      hasReference: boolean;
+    }
+  | { modelId: "design-background-remove" | "design-upscale"; count: 1 };
 
 /**
  * Customer-safe published sell-price authority. Internal provider costs and
@@ -69,6 +80,13 @@ export function quoteXerianoCredits(input: XerianoCreditQuoteInput): number {
       throw new Error("CUSTOMER_PRICING_UNAVAILABLE");
     }
     return rule.creditsByQuality[input.quality] * (input.count ?? 1);
+  }
+  if (input.modelId === "ideogram-4" || input.modelId === "recraft-4"
+    || input.modelId === "design-background-remove" || input.modelId === "design-upscale") {
+    throw new Error("DESIGN_PRICE_REQUIRES_SAFETY_ENGINE");
+  }
+  if (input.modelId !== "kling-v3-pro-motion-control") {
+    throw new Error("CUSTOMER_PRICING_UNAVAILABLE");
   }
   const rule = XERIANO_CREDIT_PRICE_REGISTRY[input.modelId];
   if (!rule.active || !rule.pricingComplete || !rule.customerAvailable) {

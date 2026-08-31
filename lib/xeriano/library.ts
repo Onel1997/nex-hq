@@ -19,13 +19,42 @@ export const xerianoLibraryAssetSchema = z.object({
   sourceStudio: z.enum(["DESIGN_STUDIO", "CREATIVE_STUDIO", "UGC_VIDEO_STUDIO", "UPLOAD"]),
   mimeType: z.string().min(1),
   byteLength: z.number().int().positive().max(50 * 1024 * 1024),
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
   favorite: z.boolean(),
   tags: z.array(z.string().min(1).max(40)).max(20),
   createdAt: z.string(),
   updatedAt: z.string(),
   creationId: z.string().uuid().nullable().optional(),
+  design: z.object({
+    operation: z.enum(["BACKGROUND_REMOVE", "UPSCALE", "SVG_TO_PNG"]).nullable(),
+    derivedFromAssetId: z.string().uuid().nullable(),
+    transparentPreview: z.boolean(),
+    canBackgroundRemove: z.boolean(),
+    canUpscale: z.boolean(),
+    canCreatePng: z.boolean(),
+    setup: z.unknown().nullable(),
+  }).nullable().optional(),
 });
 export type XerianoLibraryAsset = z.infer<typeof xerianoLibraryAssetSchema>;
+
+export function deriveDesignAssetCapabilities(input: {
+  assetType: string;
+  mimeType: string;
+  width: number | null;
+  height: number | null;
+  operation: "BACKGROUND_REMOVE" | "UPSCALE" | "SVG_TO_PNG" | null;
+}) {
+  if (input.assetType !== "DESIGN") return null;
+  const raster = ["image/png", "image/jpeg", "image/webp"].includes(input.mimeType);
+  return {
+    transparentPreview: input.operation === "BACKGROUND_REMOVE" || input.operation === "SVG_TO_PNG",
+    canBackgroundRemove: raster && input.operation !== "BACKGROUND_REMOVE",
+    canUpscale: raster && input.width !== null && input.height !== null
+      && Math.max(input.width, input.height) <= 2_560,
+    canCreatePng: input.mimeType === "image/svg+xml",
+  };
+}
 
 export const xerianoStudioHandoffSchema = z.object({
   version: z.literal("xeriano-studio-handoff-v1"),
