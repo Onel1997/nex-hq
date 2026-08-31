@@ -15,7 +15,11 @@ type AssetDraft = {
   tags: string;
 };
 
-export function CustomerDesignStudio() {
+export function CustomerDesignStudio({
+  audience = "CUSTOMER",
+}: {
+  audience?: "CUSTOMER" | "OWNER";
+} = {}) {
   const [assets, setAssets] = useState<XerianoLibraryAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
@@ -123,7 +127,7 @@ export function CustomerDesignStudio() {
         </div>
         <div className="xeriano-asset-body"><span>Design · {new Date(asset.createdAt).toLocaleDateString("de-DE")}</span><h2>{asset.title}</h2>{asset.description ? <p>{asset.description}</p> : null}{asset.tags.length ? <p>{asset.tags.join(" · ")}</p> : null}</div>
         <footer>
-          <Link href={handoffHref(asset.id, "CREATIVE_STUDIO")}><Plus/>Im Creative Studio verwenden</Link>
+          <Link href={handoffHref(asset.id, "CREATIVE_STUDIO", audience)}><Plus/>Im Creative Studio verwenden</Link>
           <details><summary aria-label="Weitere Aktionen"><MoreHorizontal/></summary><div>
             <a href={`/api/xeriano/library/${asset.id}/content`} target="_blank" rel="noreferrer">Öffnen</a>
             <button onClick={() => edit(asset)}>Details bearbeiten</button>

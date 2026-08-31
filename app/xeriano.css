@@ -160,3 +160,15 @@
   .xeriano-auth-plan{grid-template-columns:1fr}.xeriano-auth-plan>strong{grid-column:1;grid-row:auto}.xeriano-auth-plan>small{margin-top:2px}
   .xeriano-plan-intent-notice{align-items:stretch;flex-direction:column}.xeriano-plan-intent-notice>a{width:100%}
 }
+/* Owner premium Xeriamo product surfaces */
+.xeriano-owner-home-actions{display:flex!important;gap:9px!important;flex-wrap:wrap}
+.xeriano-owner-home-actions a{min-height:44px;padding:0 14px;display:inline-flex;align-items:center;gap:7px;border:1px solid var(--xe-line);border-radius:11px;color:#e8e4f3;text-decoration:none;background:#171820}
+.xeriano-owner-home-actions svg{width:15px;height:15px}
+.xeriano-owner-unlimited-card{padding:24px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:18px;border:1px solid rgba(167,139,250,.32);border-radius:22px;background:radial-gradient(circle at 0 0,rgba(124,92,255,.18),transparent 38%),linear-gradient(135deg,#181721,#101116)}
+.xeriano-owner-unlimited-icon{width:52px;height:52px;display:grid;place-items:center;border-radius:16px;color:#c7b8ff;background:rgba(167,139,250,.12)}
+.xeriano-owner-unlimited-icon svg{width:26px;height:26px}
+.xeriano-owner-unlimited-card h2{margin:5px 0;font-size:1.75rem;letter-spacing:-.04em}
+.xeriano-owner-unlimited-card p{margin:0;color:var(--xe-muted)}
+.xeriano-owner-unlimited-status{min-height:40px;padding:0 13px;display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(167,139,250,.25);border-radius:999px;color:#e6deff;background:rgba(167,139,250,.09);font-size:.82rem;font-weight:700;white-space:nowrap}
+.xeriano-owner-unlimited-status svg{width:16px;height:16px}
+@media(max-width:700px){.xeriano-owner-unlimited-card{grid-template-columns:auto minmax(0,1fr);padding:19px}.xeriano-owner-unlimited-status{grid-column:1/-1;justify-self:stretch;justify-content:center}.xeriano-owner-home-actions{width:100%}.xeriano-owner-home-actions a{flex:1;justify-content:center}}

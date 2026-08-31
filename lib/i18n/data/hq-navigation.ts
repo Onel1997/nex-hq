@@ -52,36 +52,47 @@ const OWNER_STUDIO_NAV: Array<{
 }> = [
   {
     id: "designer",
-    href: AGENT_WORKSPACE_ROUTES.designer,
+    href: "/hq/design-studio",
     group: "primary",
+    labelKey: "designer",
+    icon: Palette,
+    accent: NEXHQ_BLUE,
+    isActive: (pathname) =>
+      pathname === "/hq/design-studio" ||
+      pathname.startsWith("/hq/design-studio/"),
+  },
+  {
+    id: "creative",
+    href: "/hq/creative-studio",
+    group: "primary",
+    labelKey: "creative",
+    icon: Sparkles,
+    accent: "#a78bfa",
+    isActive: (pathname) =>
+      pathname === "/hq/creative-studio" ||
+      pathname.startsWith("/hq/creative-studio/"),
+  },
+  {
+    id: "ugc-video",
+    href: "/hq/ugc-video-studio",
+    group: "primary",
+    labelKey: "ugcVideo",
+    icon: Clapperboard,
+    accent: "#7dd3fc",
+    isActive: (pathname) =>
+      pathname === "/hq/ugc-video-studio" ||
+      pathname.startsWith("/hq/ugc-video-studio/"),
+  },
+  {
+    id: "designer-internal",
+    href: AGENT_WORKSPACE_ROUTES.designer,
+    group: "more",
     labelKey: "designer",
     icon: Palette,
     accent: NEXHQ_BLUE,
     isActive: (pathname) =>
       pathname === AGENT_WORKSPACE_ROUTES.designer ||
       pathname.startsWith(`${AGENT_WORKSPACE_ROUTES.designer}/`),
-  },
-  {
-    id: "creative",
-    href: "/creative-studio",
-    group: "primary",
-    labelKey: "creative",
-    icon: Sparkles,
-    accent: "#a78bfa",
-    isActive: (pathname) =>
-      pathname === "/creative-studio" ||
-      pathname.startsWith("/creative-studio/"),
-  },
-  {
-    id: "ugc-video",
-    href: "/ugc-video-studio",
-    group: "primary",
-    labelKey: "ugcVideo",
-    icon: Clapperboard,
-    accent: "#7dd3fc",
-    isActive: (pathname) =>
-      pathname === "/ugc-video-studio" ||
-      pathname.startsWith("/ugc-video-studio/"),
   },
   {
     id: "persona",
@@ -136,7 +147,9 @@ const OWNER_STUDIO_NAV: Array<{
 ];
 
 export const HQ_SIDEBAR_SECTION_DEFAULTS: Record<HqSidebarSectionId, boolean> = {
+  home: true,
   studios: true,
+  xeriamo: true,
   moreStudios: true,
   management: true,
   settings: true,
@@ -160,11 +173,33 @@ export function getHqSidebarSections(locale: Locale): HqSidebarSection[] {
     ...OWNER_STUDIO_NAV.filter((item) => item.group === group).map((item) => ({
       id: item.id,
       href: item.href,
-      label: studioLabels[item.labelKey],
+      label:
+        item.id === "designer-internal"
+          ? "Design Studio Intern"
+          : studioLabels[item.labelKey],
       icon: item.icon,
       accent: item.accent,
       isActive: item.isActive,
     })),
+  ];
+
+  const xeriamoItems: SidebarNavItem[] = [
+    {
+      id: "library",
+      href: "/hq/library",
+      label: "Bibliothek",
+      icon: Library,
+      accent: "#84aef8",
+      isActive: (pathname: string) => pathname.startsWith("/hq/library"),
+    },
+    {
+      id: "credits",
+      href: "/hq/credits",
+      label: "Credits / Plan",
+      icon: CircleDollarSign,
+      accent: "#d7b66f",
+      isActive: (pathname: string) => pathname.startsWith("/hq/credits"),
+    },
   ];
 
   const settingsItems: SidebarNavItem[] = [
@@ -186,7 +221,22 @@ export function getHqSidebarSections(locale: Locale): HqSidebarSection[] {
   ];
 
   return [
+    {
+      id: "home",
+      label: "Home",
+      items: [
+        {
+          id: "home",
+          href: "/hq/home",
+          label: "Home",
+          icon: Home,
+          accent: "#b7becb",
+          isActive: (pathname: string) => pathname === "/hq/home",
+        },
+      ],
+    },
     { id: "studios", label: hqNavigation.studios, items: studioItems("primary") },
+    { id: "xeriamo", label: "Xeriamo", items: xeriamoItems },
     { id: "moreStudios", label: "Weitere Studios", items: studioItems("more") },
     { id: "management", label: "Verwaltung", items: settingsItems },
   ];

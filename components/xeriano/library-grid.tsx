@@ -17,15 +17,19 @@ const filters = [
 
 type Filter = (typeof filters)[number][0];
 
-function assetHref(asset: XerianoLibraryAsset) {
+function assetHref(asset: XerianoLibraryAsset, basePath: string) {
   return asset.creationId
-    ? `/app/library/${encodeURIComponent(asset.creationId)}`
+    ? `${basePath}/${encodeURIComponent(asset.creationId)}`
     : asset.assetType === "DESIGN"
-      ? `/app/design-studio?asset=${encodeURIComponent(asset.id)}`
+      ? `${basePath === "/hq/library" ? "/hq" : "/app"}/design-studio?asset=${encodeURIComponent(asset.id)}`
       : `/api/xeriano/library/${encodeURIComponent(asset.id)}/content`;
 }
 
-export function XerianoLibraryGrid() {
+export function XerianoLibraryGrid({
+  basePath = "/app/library",
+}: {
+  basePath?: "/app/library" | "/hq/library";
+} = {}) {
   const [filter, setFilter] = useState<Filter>("ALL");
   const [assets, setAssets] = useState<XerianoLibraryAsset[]>([]);
   const [total, setTotal] = useState(0);
@@ -113,7 +117,7 @@ export function XerianoLibraryGrid() {
           <div className="xeriano-creation-grid">
             {assets.map((asset) => (
               <article className="xeriano-creation-tile" key={asset.id}>
-                <Link href={assetHref(asset)} aria-label={`${asset.title} öffnen`}>
+                <Link href={assetHref(asset, basePath)} aria-label={`${asset.title} öffnen`}>
                   {asset.mimeType.startsWith("image/") ? (
                     <Image
                       src={`/api/xeriano/library/${asset.id}/content`}

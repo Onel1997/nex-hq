@@ -1,5 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { XerianoAccountContext } from "@/lib/xeriano/auth";
+import {
+  hasXerianoOwnerAuthority,
+  type XerianoAccountContext,
+} from "@/lib/xeriano/access-policy";
 import { redactCreativeRunForCustomer } from "@/lib/xeriano/customer-generation";
 import { creativeManifestToRun } from "@/lib/creative-studio/generation-service";
 import {
@@ -130,7 +133,7 @@ export async function resolveCreativeAccountJobScope(
   authority: CreativeHistoryAuthorityRepository =
     new SupabaseCreativeHistoryAuthorityRepository(),
 ): Promise<CreativeJobScope | null> {
-  if (input.context.role === "OWNER") {
+  if (hasXerianoOwnerAuthority(input.context)) {
     return {
       workspaceId: input.context.workspaceKey,
       actorId: input.context.userId,

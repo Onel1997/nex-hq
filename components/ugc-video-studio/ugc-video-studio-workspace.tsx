@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   UgcAdvancedPanel,
+  UgcKlingDurationSelector,
   UgcKlingMotionControls,
   UgcModelSelector,
   UgcPromptSaveDialog,
@@ -134,9 +135,11 @@ export function UgcVideoStudioWorkspace(props: {
   customerConfig?: XerianoUgcCustomerConfig;
   customerStatus?: XerianoCustomerStudioStatus;
   customerMode?: boolean;
+  ownerMode?: boolean;
   initialModelId?: string;
   initialLibraryAssetId?: string;
 }) {
+  const productMode = Boolean(props.customerMode || props.ownerMode);
   const [view, setView] = useState<StudioView>("CREATE");
   const [persisted, setPersisted] = useState<UgcVideoPersistedState>({
     version: 1,
@@ -280,16 +283,28 @@ export function UgcVideoStudioWorkspace(props: {
     klingMotion,
   });
   const ownerSeedanceEstimateKey = `${quality}|${aspectRatio}|${duration}|${references.some((reference) => reference.mediaType === "VIDEO") ? "video" : "image"}`;
-  const ownerKlingSeconds =
-    klingResolution.motionVideo?.durationSeconds &&
-    klingResolution.motionVideo.durationSeconds > 0
-      ? Math.min(
-          klingResolution.motionVideo.durationSeconds,
-          klingMotion.characterOrientation === "IMAGE" ? 10 : 30,
-        )
-      : klingMotion.characterOrientation === "IMAGE"
-        ? 10
-        : 30;
+  const selectedKlingSeconds = Number(duration);
+  const selectedMotionSourceSeconds =
+    klingResolution.motionVideo?.durationSeconds ?? null;
+  const klingDurationAllowed =
+    selectedModel.id !== "kling-v3-pro-motion-control" ||
+    (selectedKlingSeconds <=
+      (klingMotion.characterOrientation === "IMAGE" ? 10 : 30) &&
+      (selectedMotionSourceSeconds === null ||
+        selectedKlingSeconds <= selectedMotionSourceSeconds + 0.05));
+  useEffect(() => {
+    if (
+      selectedModel.id === "kling-v3-pro-motion-control" &&
+      selectedKlingSeconds >
+        (klingMotion.characterOrientation === "IMAGE" ? 10 : 30)
+    ) {
+      setDuration("5");
+    }
+  }, [
+    klingMotion.characterOrientation,
+    selectedKlingSeconds,
+    selectedModel.id,
+  ]);
   const estimatedMaximumCostUsd = props.customerMode
     ? null
     : selectedModel.id === "seedance-2.5"
@@ -299,23 +314,14 @@ export function UgcVideoStudioWorkspace(props: {
       : selectedModel.id === "kling-v3-pro-motion-control"
         ? Number(
             (
-              ownerKlingSeconds *
+              selectedKlingSeconds *
               (props.providerConfig?.ownerPricing.klingPerSecondUsd ?? 0)
             ).toFixed(2),
           )
         : null;
   const customerBillableSeconds =
-    selectedModel.id === "kling-v3-pro-motion-control" &&
-    klingResolution.motionVideo?.durationSeconds
-      ? Math.max(
-          1,
-          Math.ceil(
-            Math.min(
-              klingResolution.motionVideo.durationSeconds,
-              klingMotion.characterOrientation === "IMAGE" ? 10 : 30,
-            ),
-          ),
-        )
+    selectedModel.id === "kling-v3-pro-motion-control"
+      ? selectedKlingSeconds
       : null;
   const customerCredits = customerBillableSeconds
     ? quoteXerianoCredits({
@@ -612,6 +618,13 @@ export function UgcVideoStudioWorkspace(props: {
       });
       return;
     }
+    if (!klingDurationAllowed) {
+      setNotice({
+        kind: "ERROR",
+        text: "Das Bewegungs-Referenzvideo ist kürzer als die gewählte Videolänge.",
+      });
+      return;
+    }
     if (props.customerMode && insufficientCustomerCredits) {
       setNotice({ kind: "ERROR", text: "Nicht genügend Credits." });
       return;
@@ -718,6 +731,7 @@ export function UgcVideoStudioWorkspace(props: {
           "CONCURRENCY_LIMIT_REACHED",
           "CUSTOMER_MODEL_UNAVAILABLE",
           "VIDEO_DURATION_REQUIRED",
+          "VIDEO_DURATION_INVALID",
           "ACCOUNT_NOT_ACTIVE",
           "XERIANO_CREDIT_AUTHORITY_UNAVAILABLE",
           "GENERATION_ALREADY_STARTED",
@@ -769,6 +783,7 @@ export function UgcVideoStudioWorkspace(props: {
     customerCredits,
     insufficientCustomerCredits,
     customerConcurrencyReached,
+    klingDurationAllowed,
   ]);
 
   const addResultAsReference = useCallback(
@@ -903,11 +918,19 @@ export function UgcVideoStudioWorkspace(props: {
               <section className="uv-card uv-settings-card">
                 <div className="uv-section-heading uv-section-heading--compact"><div><span>03</span><div><h2>Videoeinstellungen</h2><p>Schnell wählen und weiter.</p></div></div></div>
                 {selectedModel.settingsKind === "KLING_MOTION_CONTROL" ? (
-                  <UgcKlingMotionControls
-                    references={references}
-                    settings={klingMotion}
-                    onChange={setKlingMotion}
-                  />
+                  <>
+                    <UgcKlingMotionControls
+                      references={references}
+                      settings={klingMotion}
+                      onChange={setKlingMotion}
+                    />
+                    <UgcKlingDurationSelector
+                      duration={duration}
+                      characterOrientation={klingMotion.characterOrientation}
+                      sourceDurationSeconds={selectedMotionSourceSeconds}
+                      onChange={setDuration}
+                    />
+                  </>
                 ) : (
                   <UgcQuickControls
                     setup={{ duration, aspectRatio, quality, bitrate }}
@@ -918,7 +941,7 @@ export function UgcVideoStudioWorkspace(props: {
                     onBitrate={setBitrate}
                   />
                 )}
-                <div className="uv-cost"><div><span>{props.customerMode?"Credit-Preis":"Geschätzte Maximalkosten"}</span><strong>{props.customerMode?(customerCredits!==null?`${customerCredits} Credits`:selectedModel.settingsKind === "KLING_MOTION_CONTROL"?"Videodauer wird ermittelt":"Für Kunden nicht verfügbar"):estimatedMaximumCostUsd === null ? "Nicht verfügbar" : `${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`}</strong></div><p>{props.customerMode?`${availableCredits.toLocaleString("de-DE")} Credits verfügbar.`:selectedModel.settingsKind === "KLING_MOTION_CONTROL" ? `Konservatives fal-Maximum für bis zu ${klingMotion.characterOrientation === "IMAGE" ? "10" : "30"} Sekunden Referenzbewegung.` : references.some((reference) => reference.mediaType === "VIDEO") ? "Konservatives Maximum inklusive dokumentiertem Video-Referenzbudget." : "Tokenbasierte fal-Schätzung für Dauer, Format und Qualität."}</p>{!props.customerMode&&props.providerConfig?<p>V1-Speicherlimit: {Math.round(props.providerConfig.resultStorageLimitBytes / 1024 / 1024)} MB pro Ergebnis.</p>:null}</div>
+                <div className="uv-cost"><div><span>{props.ownerMode?"Owner Plan":props.customerMode?"Credit-Preis":"Geschätzte Maximalkosten"}</span><strong>{props.ownerMode?"Unlimited":props.customerMode?(customerCredits!==null?`${customerCredits} Credits`:selectedModel.settingsKind === "KLING_MOTION_CONTROL"?"Videolänge wählen":"Für Kunden nicht verfügbar"):estimatedMaximumCostUsd === null ? "Nicht verfügbar" : `${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`}</strong></div><p>{props.ownerMode?"Keine Credit-Abbuchung · Provider-Kostenlimit bleibt aktiv.":props.customerMode?`${availableCredits.toLocaleString("de-DE")} Credits verfügbar.`:selectedModel.settingsKind === "KLING_MOTION_CONTROL" ? `Konservatives fal-Maximum für ${duration} Sekunden Ausgabe.` : references.some((reference) => reference.mediaType === "VIDEO") ? "Konservatives Maximum inklusive dokumentiertem Video-Referenzbudget." : "Tokenbasierte fal-Schätzung für Dauer, Format und Qualität."}</p>{!productMode&&props.providerConfig?<p>V1-Speicherlimit: {Math.round(props.providerConfig.resultStorageLimitBytes / 1024 / 1024)} MB pro Ergebnis.</p>:null}</div>
               </section>
             </div>
 
@@ -943,7 +966,7 @@ export function UgcVideoStudioWorkspace(props: {
                     <a href={result.downloadUrl}><Download size={15} /> Herunterladen</a>
                     <button type="button" onClick={() => setLargeResult(result)}><Maximize2 size={15} /> Vergrößern</button>
                     <button type="button" onClick={() => addResultAsReference(result)}><PlusReferenceIcon /> Als Referenz</button>
-                    {props.customerMode ? <button type="button" onClick={() => void saveResultToLibrary(result.id)}><Bookmark size={15} /> In Bibliothek speichern</button> : null}
+                    {productMode ? <button type="button" onClick={() => void saveResultToLibrary(result.id)}><Bookmark size={15} /> In Bibliothek speichern</button> : null}
                     <button type="button" onClick={() => toggleResultFavorite(result)} aria-label="Favorit"><Heart size={15} fill={result.favorite ? "currentColor" : "none"} /></button>
                     <button type="button" onClick={() => navigator.clipboard.writeText(activeRun.setup.prompt)}><Clipboard size={15} /> Prompt kopieren</button>
                     <button type="button" onClick={() => loadSetup(activeRun.setup)}><RotateCcw size={15} /> Neu erstellen</button>
@@ -962,7 +985,7 @@ export function UgcVideoStudioWorkspace(props: {
             )}
           </section>
 
-          <div className="uv-generate-bar"><button type="button" className="uv-generate" disabled={generating || activeRun?.status === "RUNNING" || !prompt.trim() || Boolean(props.customerMode&&(customerModelUnavailable||customerCredits===null||insufficientCustomerCredits||customerConcurrencyReached))} onClick={generate}>{generating || activeRun?.status === "RUNNING" ? <><Loader2 className="is-spinning" size={19} /> Video wird erstellt …</> : <><Sparkles size={19} /> {props.customerMode&&customerCredits!==null?`Generieren · ${customerCredits} Credits`:"Generieren"}</>}</button></div>
+          <div className="uv-generate-bar"><button type="button" className="uv-generate" disabled={generating || activeRun?.status === "RUNNING" || !prompt.trim() || !klingDurationAllowed || Boolean(props.customerMode&&(customerModelUnavailable||customerCredits===null||insufficientCustomerCredits||customerConcurrencyReached))} onClick={generate}>{generating || activeRun?.status === "RUNNING" ? <><Loader2 className="is-spinning" size={19} /> Video wird erstellt …</> : <><Sparkles size={19} /> {props.customerMode&&customerCredits!==null?`Generieren · ${customerCredits} Credits`:"Generieren"}</>}</button>{props.ownerMode?<small className="uv-owner-unlimited">Owner · Unlimited</small>:null}</div>
         </div>
       ) : view === "PROMPTS" ? (
         <UgcPromptLibrary

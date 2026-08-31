@@ -132,7 +132,8 @@ test("credit tables are read-only to customers and credit functions are service-
 
 test("customer authority cannot use an ADMIN or request-supplied workspace bypass", () => {
   const guard = read("lib/xeriano/credit-guard.ts");
-  assert.match(guard, /context\.role === "OWNER"/);
+  assert.match(guard, /resolveXerianoGenerationAuthority/);
+  assert.match(guard, /OWNER_UNLIMITED/);
   assert.doesNotMatch(guard, /context\.role === "ADMIN"|"OWNER" \| "ADMIN"/);
   for (const route of [
     "app/api/ugc-video-studio/assets/[jobId]/[resultId]/route.ts",

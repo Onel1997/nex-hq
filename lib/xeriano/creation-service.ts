@@ -298,7 +298,8 @@ export async function finalizeCreativeCreations(input: {
   context: XerianoAccountContext;
   scope: CreativeJobScope;
   run: CreativeRun;
-  authority: XerianoGenerationAuthority;
+  authority?: XerianoGenerationAuthority;
+  ownerUnlimitedPricingVersion?: string;
 }): Promise<FinalizedCreativeCreation[]> {
   if (
     input.run.status !== "SUCCEEDED" &&
@@ -360,8 +361,9 @@ export async function finalizeCreativeCreations(input: {
           width: result.width,
           height: result.height,
         },
-        credit_cost: input.authority.quotedCredits,
-        credit_pricing_version: input.authority.pricingVersion,
+        credit_cost: input.authority?.quotedCredits ?? 0,
+        credit_pricing_version:
+          input.authority?.pricingVersion ?? input.ownerUnlimitedPricingVersion ?? null,
         favorite: false,
         status:
           input.run.status === "PARTIALLY_SUCCEEDED" ? "PARTIAL" : "SUCCEEDED",

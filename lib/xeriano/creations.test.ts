@@ -161,7 +161,8 @@ test("Library is visual, paginated and opens generated assets as Creation detail
   const grid = read("components/xeriano/library-grid.tsx");
   assert.match(grid, /\["IMAGE", "Bilder"\]/);
   assert.match(grid, /xeriano-creation-grid/);
-  assert.match(grid, /\/app\/library\/\$\{encodeURIComponent\(asset\.creationId\)\}/);
+  assert.match(grid, /\$\{basePath\}\/\$\{encodeURIComponent\(asset\.creationId\)\}/);
+  assert.match(grid, /basePath = "\/app\/library"/);
   assert.match(grid, /Mehr anzeigen/);
   assert.match(grid, /offset: String\(offset\)/);
   assert.doesNotMatch(grid, /setInterval|EventSource/);

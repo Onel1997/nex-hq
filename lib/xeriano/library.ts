@@ -45,8 +45,13 @@ export const xerianoResultLibraryImportSchema = z.object({
 });
 export type XerianoResultLibraryImport = z.infer<typeof xerianoResultLibraryImportSchema>;
 
-export function handoffHref(assetId: string, target: "CREATIVE_STUDIO" | "UGC_VIDEO_STUDIO") {
-  const route = target === "CREATIVE_STUDIO" ? "/app/creative-studio" : "/app/ugc-video-studio";
+export function handoffHref(
+  assetId: string,
+  target: "CREATIVE_STUDIO" | "UGC_VIDEO_STUDIO",
+  audience: "CUSTOMER" | "OWNER" = "CUSTOMER",
+) {
+  const root = audience === "OWNER" ? "/hq" : "/app";
+  const route = target === "CREATIVE_STUDIO" ? `${root}/creative-studio` : `${root}/ugc-video-studio`;
   return `${route}?libraryAsset=${encodeURIComponent(assetId)}`;
 }
 

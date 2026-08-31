@@ -55,10 +55,16 @@ export type XerianoCreationOpenMode = "edit" | "recreate";
 export function creationStudioHref(
   creationId: string,
   mode: XerianoCreationOpenMode,
+  audience: "CUSTOMER" | "OWNER" = "CUSTOMER",
 ) {
-  return `/app/creative-studio?creation=${encodeURIComponent(creationId)}&mode=${mode}`;
+  const root = audience === "OWNER" ? "/hq" : "/app";
+  return `${root}/creative-studio?creation=${encodeURIComponent(creationId)}&mode=${mode}`;
 }
 
-export function creationVideoHref(assetId: string) {
-  return `/app/ugc-video-studio?libraryAsset=${encodeURIComponent(assetId)}`;
+export function creationVideoHref(
+  assetId: string,
+  audience: "CUSTOMER" | "OWNER" = "CUSTOMER",
+) {
+  const root = audience === "OWNER" ? "/hq" : "/app";
+  return `${root}/ugc-video-studio?libraryAsset=${encodeURIComponent(assetId)}`;
 }

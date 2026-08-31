@@ -26,6 +26,7 @@ import {
 import type { UgcVideoProviderReference } from "@/lib/ugc-video-studio/provider";
 import { UgcVideoCostCapError } from "@/lib/ugc-video-studio/seedance-config";
 import { resolveKlingMotionReferences } from "@/lib/ugc-video-studio/kling-motion-config";
+import { prepareKlingMotionMedia } from "@/lib/ugc-video-studio/kling-motion-media";
 import { requireTrustedCustomerMotionDuration } from "@/lib/xeriano/video-duration";
 
 export const runtime = "nodejs";
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
   if (!authorization.allowed) {
     return errorResponse({ error: authorization.message, code: authorization.code, status: authorization.status });
   }
-  const customer = access.context.role === "CUSTOMER";
+  const customer = authorization.allowed && authorization.bypass === null;
   let customerAuthority: XerianoGenerationAuthority | null = null;
   let customerQuote: XerianoCustomerCreditQuote | null = null;
   let customerJobId: string | null = null;
@@ -81,8 +82,9 @@ export async function POST(request: Request) {
       );
     }
     const setup = ugcVideoGenerationSetupSchema.parse(JSON.parse(setupJson));
+    let providerSetup = setup;
     const files = formData.getAll("reference");
-    const references: UgcVideoProviderReference[] = [];
+    let references: UgcVideoProviderReference[] = [];
     for (let index = 0; index < setup.references.length; index += 1) {
       const file = files[index];
       const metadata: UgcVideoReferenceMetadata = setup.references[index]!;
@@ -111,18 +113,19 @@ export async function POST(request: Request) {
       );
     }
 
-    if (customer) {
+    if (setup.modelId === "kling-v3-pro-motion-control") {
       const motion = resolveKlingMotionReferences(setup).motionVideo;
       const motionReference = motion
         ? references.find((reference) => reference.metadata.id === motion.id)
         : null;
-      if (!motionReference) {
+      if (!motion || !motionReference) {
         throw new XerianoCustomerGenerationError(
           "VIDEO_DURATION_REQUIRED",
           "Die Dauer des Bewegungs-Referenzvideos konnte nicht bestimmt werden.",
           400,
         );
       }
+      const motionId = motion.id;
       let trustedDuration: number;
       try {
         trustedDuration = requireTrustedCustomerMotionDuration({
@@ -136,7 +139,39 @@ export async function POST(request: Request) {
           400,
         );
       }
-      customerQuote = quoteUgcCustomerGeneration(setup, trustedDuration);
+      const trustedSetup = {
+        ...setup,
+        references: setup.references.map((reference) =>
+          reference.id === motionId
+            ? { ...reference, durationSeconds: trustedDuration }
+            : reference,
+        ),
+      };
+      if (customer) {
+        customerQuote = quoteUgcCustomerGeneration(trustedSetup, trustedDuration);
+      }
+      let prepared;
+      try {
+        prepared = prepareKlingMotionMedia({
+          setup: trustedSetup,
+          references,
+          trustedSourceDurationSeconds: trustedDuration,
+        });
+      } catch {
+        throw new XerianoCustomerGenerationError(
+          "VIDEO_DURATION_INVALID",
+          "Das Bewegungs-Referenzvideo konnte nicht sicher auf die gewählte Länge vorbereitet werden.",
+          400,
+        );
+      }
+      providerSetup = prepared.setup;
+      references = prepared.references;
+    }
+
+    if (customer) {
+      if (!customerQuote) {
+        customerQuote = quoteUgcCustomerGeneration(providerSetup);
+      }
       customerJobId = jobId;
       customerAuthority = await reserveCustomerGeneration({
         context: access.context,
@@ -151,7 +186,7 @@ export async function POST(request: Request) {
         actorId: access.context.userId,
       },
       jobId,
-      setup,
+      setup: providerSetup,
       references,
     });
     if (customer) {

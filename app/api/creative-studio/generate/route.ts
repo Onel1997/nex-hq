@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
-import { resolveXerianoAccess } from "@/lib/xeriano/auth";
+import {
+  hasXerianoAccountMembership,
+  resolveXerianoAccess,
+} from "@/lib/xeriano/auth";
 import { authorizeXerianoGeneration } from "@/lib/xeriano/credit-guard";
 import {
   customerCreditReceipt,
@@ -69,7 +72,12 @@ export async function POST(request: Request) {
   if (!authorization.allowed) {
     return errorResponse({ error: authorization.message, code: authorization.code, status: authorization.status });
   }
-  const customer = access.context.role === "CUSTOMER";
+  const customer = authorization.allowed && authorization.bypass === null;
+  const ownerUnlimited =
+    authorization.allowed && authorization.bypass === "OWNER_UNLIMITED";
+  const accountCreationMode =
+    hasXerianoAccountMembership(access.context) &&
+    (customer || ownerUnlimited);
   let customerAuthority: XerianoGenerationAuthority | null = null;
   let customerQuote: XerianoCustomerCreditQuote | null = null;
   let customerJobId: string | null = null;
@@ -89,7 +97,7 @@ export async function POST(request: Request) {
     const setup = creativeGenerationSetupSchema.parse(JSON.parse(setupJson));
     const rawReferenceSnapshot = formData.get("referenceSnapshot");
     const referenceSnapshot =
-      customer && typeof rawReferenceSnapshot === "string"
+      accountCreationMode && typeof rawReferenceSnapshot === "string"
         ? creativeReferenceSnapshotSchema.parse(JSON.parse(rawReferenceSnapshot))
         : null;
     const files = formData.getAll("reference");
@@ -122,15 +130,18 @@ export async function POST(request: Request) {
       );
     }
 
-    if (customer) {
-      customerQuote = quoteCreativeCustomerGeneration(setup);
+    if (accountCreationMode) {
+      const canonicalQuote = quoteCreativeCustomerGeneration(setup);
+      if (customer) customerQuote = canonicalQuote;
       customerJobId = jobId;
       await assertXerianoCreationAuthorityReady();
-      customerAuthority = await reserveCustomerGeneration({
-        context: access.context,
-        jobId,
-        quote: customerQuote,
-      });
+      if (customer) {
+        customerAuthority = await reserveCustomerGeneration({
+          context: access.context,
+          jobId,
+          quote: canonicalQuote,
+        });
+      }
       await prepareCreativeCreationReferences({
         context: access.context,
         scope: {
@@ -162,8 +173,8 @@ export async function POST(request: Request) {
     }
     let creationSyncPending = false;
     if (
-      customer &&
-      customerAuthority &&
+      accountCreationMode &&
+      (customerAuthority || ownerUnlimited) &&
       (run.status === "SUCCEEDED" || run.status === "PARTIALLY_SUCCEEDED")
     ) {
       try {
@@ -174,7 +185,10 @@ export async function POST(request: Request) {
             actorId: access.context.userId,
           },
           run,
-          authority: customerAuthority,
+          ...(customerAuthority ? { authority: customerAuthority } : {}),
+          ...(ownerUnlimited
+            ? { ownerUnlimitedPricingVersion: quoteCreativeCustomerGeneration(run.setup).pricingVersion }
+            : {}),
         });
         const byResult = new Map(
           creations.map((creation) => [creation.resultId, creation]),

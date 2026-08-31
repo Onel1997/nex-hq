@@ -32,7 +32,15 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-export function XerianoCreationDetail({ creationId }: { creationId: string }) {
+export function XerianoCreationDetail({
+  creationId,
+  customerActions = true,
+  ownerMode = false,
+}: {
+  creationId: string;
+  customerActions?: boolean;
+  ownerMode?: boolean;
+}) {
   const [creation, setCreation] = useState<XerianoCreation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -114,15 +122,15 @@ export function XerianoCreationDetail({ creationId }: { creationId: string }) {
       </div>
 
       <div className="xeriano-creation-detail__actions">
-        {creation.creationType === "IMAGE" ? (
+        {creation.creationType === "IMAGE" && customerActions ? (
           <>
-            <Link className="is-primary" href={creationStudioHref(creation.id, "edit")}>
+            <Link className="is-primary" href={creationStudioHref(creation.id, "edit", ownerMode ? "OWNER" : "CUSTOMER")}>
               <Pencil size={18} /> Bild bearbeiten
             </Link>
-            <Link href={creationStudioHref(creation.id, "recreate")}>
+            <Link href={creationStudioHref(creation.id, "recreate", ownerMode ? "OWNER" : "CUSTOMER")}>
               <RotateCcw size={18} /> Neu erstellen
             </Link>
-            <Link href={creationVideoHref(creation.assetId)}>
+            <Link href={creationVideoHref(creation.assetId, ownerMode ? "OWNER" : "CUSTOMER")}>
               <Video size={18} /> Video erstellen
             </Link>
           </>
@@ -190,7 +198,7 @@ export function XerianoCreationDetail({ creationId }: { creationId: string }) {
             <div><dt>Größe</dt><dd>{width} × {height}</dd></div>
           ) : null}
           <div><dt>Erstellt</dt><dd>{formatDate(creation.createdAt)}</dd></div>
-          <div><dt>Credits</dt><dd>{creation.creditCost}</dd></div>
+          <div><dt>{ownerMode ? "Plan" : "Credits"}</dt><dd>{ownerMode ? "Owner Unlimited" : creation.creditCost}</dd></div>
         </dl>
       </details>
     </article>

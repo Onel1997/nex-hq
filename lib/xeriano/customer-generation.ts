@@ -4,7 +4,11 @@ import {
   NANO_BANANA_PRO_EDIT_MODEL_ID,
   NANO_BANANA_PRO_TEXT_MODEL_ID,
 } from "@/lib/creative-studio/nano-banana-config";
-import type { UgcVideoGenerationSetup, UgcVideoRun } from "@/lib/ugc-video-studio/contracts";
+import {
+  KLING_MOTION_DURATION_CHOICES,
+  type UgcVideoGenerationSetup,
+  type UgcVideoRun,
+} from "@/lib/ugc-video-studio/contracts";
 import {
   assertKlingMotionReferences,
   KLING_MOTION_MAX_SECONDS,
@@ -111,6 +115,7 @@ export class XerianoCustomerGenerationError extends Error {
       | "CUSTOMER_ACCOUNT_REQUIRED"
       | "CUSTOMER_MODEL_UNAVAILABLE"
       | "VIDEO_DURATION_REQUIRED"
+      | "VIDEO_DURATION_INVALID"
       | "INSUFFICIENT_CREDITS"
       | "CONCURRENCY_LIMIT_REACHED"
       | "GENERATION_ALREADY_STARTED"
@@ -189,7 +194,29 @@ export function quoteUgcCustomerGeneration(
     );
   }
   const maximum = KLING_MOTION_MAX_SECONDS[setup.klingMotion.characterOrientation];
-  const billableSeconds = Math.max(1, Math.ceil(Math.min(detectedSeconds, maximum)));
+  const selectedSeconds = Number(setup.duration);
+  if (!(KLING_MOTION_DURATION_CHOICES as readonly string[]).includes(setup.duration)) {
+    throw new XerianoCustomerGenerationError(
+      "VIDEO_DURATION_INVALID",
+      "Wähle eine unterstützte Videolänge.",
+      400,
+    );
+  }
+  if (selectedSeconds > maximum) {
+    throw new XerianoCustomerGenerationError(
+      "VIDEO_DURATION_INVALID",
+      `Bei dieser Ausrichtung sind maximal ${maximum} Sekunden möglich.`,
+      400,
+    );
+  }
+  if (selectedSeconds > detectedSeconds + 0.05) {
+    throw new XerianoCustomerGenerationError(
+      "VIDEO_DURATION_INVALID",
+      "Das Bewegungs-Referenzvideo ist kürzer als die gewählte Videolänge.",
+      400,
+    );
+  }
+  const billableSeconds = selectedSeconds;
   const quoteInput = {
     modelId: "kling-v3-pro-motion-control" as const,
     durationSeconds: billableSeconds,
@@ -210,6 +237,7 @@ export function quoteUgcCustomerGeneration(
     pricingSnapshot: {
       modelId: "kling-v3-pro-motion-control",
       billableSeconds,
+      selectedDurationSeconds: selectedSeconds,
       detectedReferenceSeconds: Number(detectedSeconds.toFixed(3)),
       characterOrientation: setup.klingMotion.characterOrientation,
       credits,

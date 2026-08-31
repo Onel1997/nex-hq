@@ -126,9 +126,13 @@ test("Owner navigation has one canonical route authority and exact active routes
   assert.deepEqual(
     owner.map((item) => item.label),
     [
+      "Home",
       "Design Studio",
       "Creative Studio",
       "UGC Video Studio",
+      "Bibliothek",
+      "Credits / Plan",
+      "Design Studio Intern",
       "Persona Studio",
       "Image Studio",
       "Video Studio",
@@ -139,44 +143,72 @@ test("Owner navigation has one canonical route authority and exact active routes
     ],
   );
   const customers = owner.find((item) => item.href === "/hq/customers");
-  const creative = owner.find((item) => item.href === "/creative-studio");
-  const ugc = owner.find((item) => item.href === "/ugc-video-studio");
+  const library = owner.find((item) => item.href === "/hq/library");
+  const creative = owner.find((item) => item.href === "/hq/creative-studio");
+  const ugc = owner.find((item) => item.href === "/hq/ugc-video-studio");
   const video = owner.find((item) => item.id === "video");
-  assert.ok(customers && creative && ugc && video);
+  assert.ok(customers && library && creative && ugc && video);
+  assert.equal(isSidebarNavItemActive("/hq/library/creation-id", library), true);
   assert.equal(isSidebarNavItemActive("/hq/customers/customer-id", customers), true);
-  assert.equal(isSidebarNavItemActive("/creative-studio", creative), true);
-  assert.equal(isSidebarNavItemActive("/ugc-video-studio", ugc), true);
+  assert.equal(isSidebarNavItemActive("/hq/creative-studio", creative), true);
+  assert.equal(isSidebarNavItemActive("/hq/ugc-video-studio", ugc), true);
   assert.equal(isSidebarNavItemActive(video.href, video), true);
 });
 
 test("Owner navigation groups the active Studios, unfinished Studios and administration", () => {
   const sections = getStudioSidebarSections("de", "OWNER");
   assert.deepEqual(sections.map((section) => section.label), [
+    "Home",
     "Studios",
+    "Xeriamo",
     "Weitere Studios",
     "Verwaltung",
   ]);
-  assert.deepEqual(sections[0]?.items.map((item) => item.label), [
+  assert.deepEqual(sections[0]?.items.map((item) => item.label), ["Home"]);
+  assert.deepEqual(sections[1]?.items.map((item) => item.label), [
     "Design Studio",
     "Creative Studio",
     "UGC Video Studio",
   ]);
-  assert.deepEqual(sections[1]?.items.map((item) => item.label), [
+  assert.deepEqual(sections[2]?.items.map((item) => item.label), [
+    "Bibliothek",
+    "Credits / Plan",
+  ]);
+  assert.deepEqual(sections[3]?.items.map((item) => item.label), [
+    "Design Studio Intern",
     "Persona Studio",
     "Image Studio",
     "Video Studio",
     "Produktbibliothek",
     "Shopify Studio",
   ]);
-  assert.deepEqual(sections[2]?.items.map((item) => item.label), [
+  assert.deepEqual(sections[4]?.items.map((item) => item.label), [
     "Kunden",
     "Einstellungen",
   ]);
 });
 
-test("retired CEO and Research surfaces and the Owner root lead to Customer Center", () => {
+test("Owner Library reuses account-scoped Xeriamo Library inside DashboardShell", () => {
+  const ownerLibrary = readFileSync("app/(dashboard)/hq/library/page.tsx", "utf8");
+  const ownerCreation = readFileSync(
+    "app/(dashboard)/hq/library/[creationId]/page.tsx",
+    "utf8",
+  );
+  const grid = readFileSync("components/xeriano/library-grid.tsx", "utf8");
+  const api = readFileSync("app/api/xeriano/library/route.ts", "utf8");
+  assert.match(ownerLibrary, /hasXerianoAccountMembership\(access\.context\)/);
+  assert.match(ownerLibrary, /XerianoLibraryGrid basePath="\/hq\/library"/);
+  assert.match(ownerCreation, /XerianoCreationDetail/);
+  assert.match(ownerCreation, /ownerMode/);
+  assert.doesNotMatch(ownerLibrary + ownerCreation, /StudioMobileNavigation|CustomerNav/);
+  assert.match(grid, /basePath = "\/app\/library"/);
+  assert.match(api, /requireXerianoAccount\(\)/);
+  assert.match(api, /\.eq\("account_id",context\.accountId\)/);
+});
+
+test("retired CEO and Research surfaces stay retired and the Owner root leads Home", () => {
+  assert.match(readFileSync("app/(dashboard)/hq/page.tsx", "utf8"), /redirect\("\/hq\/home"\)/);
   for (const file of [
-    "app/(dashboard)/hq/page.tsx",
     "app/(dashboard)/agents/ceo/page.tsx",
     "app/(dashboard)/agents/research/page.tsx",
   ]) {

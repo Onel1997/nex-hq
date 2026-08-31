@@ -189,6 +189,9 @@ test("route, German owner UI, compact controls and Generate-only sticky action a
   assert.match(workspace, /kling-v3-pro-motion-control/);
   assert.match(controls, /Gesicht stärker beibehalten/);
   assert.match(controls, /Originalton übernehmen/);
+  assert.match(controls, /Videolänge/);
+  assert.match(controls, /Die Credits richten sich nach der gewählten Videolänge/);
+  assert.match(controls, /KLING_MOTION_DURATION_CHOICES/);
   assert.match(workspace, /className="uv-generate-bar"/);
   assert.match(workspace, /Generieren/);
   const stickyMarkup = workspace.match(
@@ -200,6 +203,8 @@ test("route, German owner UI, compact controls and Generate-only sticky action a
   assert.match(controls, /aria-expanded/);
   assert.match(css, /overflow-y:\s*auto/);
   assert.match(css, /safe-area-inset-bottom/);
+  assert.match(css, /\.uv-kling-duration button \{[^}]*min-height: 44px/);
+  assert.match(css, /\.uv-kling-duration > div \{[^}]*flex-wrap: wrap/);
   assert.match(css, /@media \(max-width:\s*900px\)/);
 });
 
@@ -222,6 +227,6 @@ test("UGC Studio stays isolated from Image Studio and the existing Video runtime
 
 test("central navigation contains the separate UGC route", () => {
   const navigation = readFileSync("lib/i18n/data/hq-navigation.ts", "utf8");
-  assert.match(navigation, /href: "\/ugc-video-studio"/);
+  assert.match(navigation, /href: "\/hq\/ugc-video-studio"/);
   assert.match(navigation, /ugcVideo: "UGC Video Studio"/);
 });

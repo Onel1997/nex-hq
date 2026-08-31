@@ -69,3 +69,17 @@ export function hasXerianoOwnerAuthority(context: XerianoAccountContext): boolea
 export function hasXerianoAccountMembership(context: XerianoAccountContext): boolean {
   return context.source === "XERIANO_MEMBERSHIP";
 }
+
+/**
+ * Server-authoritative billing mode for generation. Internal OWNER authority
+ * is independent from account membership; ADMIN never inherits it.
+ */
+export function resolveXerianoGenerationAuthority(
+  context: XerianoAccountContext,
+): "OWNER_UNLIMITED" | "CUSTOMER_CREDITS" | null {
+  if (hasXerianoOwnerAuthority(context)) return "OWNER_UNLIMITED";
+  if (context.role === "CUSTOMER" && hasXerianoAccountMembership(context)) {
+    return "CUSTOMER_CREDITS";
+  }
+  return null;
+}

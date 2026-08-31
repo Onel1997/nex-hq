@@ -154,10 +154,13 @@ export function CreativeStudioWorkspace(props: {
   customerConfig?: XerianoCreativeCustomerConfig;
   customerStatus?: XerianoCustomerStudioStatus;
   customerMode?: boolean;
+  ownerMode?: boolean;
   initialLibraryAssetId?: string;
   initialCreationId?: string;
   initialCreationMode?: "edit" | "recreate";
 }) {
+  const productMode = Boolean(props.customerMode || props.ownerMode);
+  const productRoot = props.ownerMode ? "/hq" : "/app";
   const [view, setView] = useState<StudioView>("CREATE");
   const [persisted, setPersisted] = useState<CreativeStudioPersistedState>({
     version: 1,
@@ -392,7 +395,7 @@ export function CreativeStudioWorkspace(props: {
     async (run: CreativeRun) => {
       loadSetup(run.setup);
       let snapshot = run.referenceSnapshot ?? fallbackSnapshotFromRun(run);
-      if (props.customerMode) {
+      if (productMode) {
         try {
           snapshot =
             (await fetchCreativeReferenceSnapshot({ jobId: run.id })) ??
@@ -456,7 +459,7 @@ export function CreativeStudioWorkspace(props: {
         });
       }
     },
-    [loadSetup, props.customerMode],
+    [loadSetup, productMode],
   );
 
   const savePrompt = useCallback(
@@ -600,7 +603,7 @@ export function CreativeStudioWorkspace(props: {
     persistRun(provisional);
     setActiveRun(provisional);
     try {
-      if (props.customerMode) {
+      if (productMode) {
         try {
           const durableSnapshot = await saveCreativeReferenceSnapshot({
             snapshot: referenceSnapshot,
@@ -617,7 +620,7 @@ export function CreativeStudioWorkspace(props: {
         jobId,
         setup,
         references,
-        ...(props.customerMode ? { referenceSnapshot } : {}),
+        ...(productMode ? { referenceSnapshot } : {}),
         ...(props.customerMode
           ? { onCredit: (receipt) => setAvailableCredits(receipt.availableCredits) }
           : {}),
@@ -682,6 +685,7 @@ export function CreativeStudioWorkspace(props: {
     props.providerConfig,
     props.customerConfig,
     props.customerMode,
+    productMode,
     references,
     insufficientCustomerCredits,
     customerConcurrencyReached,
@@ -771,7 +775,7 @@ export function CreativeStudioWorkspace(props: {
 
   useEffect(() => {
     if (
-      !props.customerMode ||
+      !productMode ||
       !props.initialCreationId ||
       !props.initialCreationMode ||
       initialCreationLoadedRef.current
@@ -864,7 +868,7 @@ export function CreativeStudioWorkspace(props: {
   }, [
     addReferenceEntries,
     loadSetup,
-    props.customerMode,
+    productMode,
     props.initialCreationId,
     props.initialCreationMode,
   ]);
@@ -988,7 +992,7 @@ export function CreativeStudioWorkspace(props: {
     async (resultId: string) => {
       if (!activeRun) return;
       const result = activeRun.results.find((candidate) => candidate.id === resultId);
-      if (props.customerMode && result?.creationId) {
+      if (productMode && result?.creationId) {
         const response = await fetch(`/api/xeriano/creations/${result.creationId}`, {
           method: "PATCH",
           credentials: "same-origin",
@@ -1012,7 +1016,7 @@ export function CreativeStudioWorkspace(props: {
       setActiveRun(updated);
       persistRun(updated);
     },
-    [activeRun, persistRun, props.customerMode],
+    [activeRun, persistRun, productMode],
   );
 
   const changeModel = (nextModelId: string) => {
@@ -1209,7 +1213,7 @@ export function CreativeStudioWorkspace(props: {
                 />
                 {selectedModel.availability === "LIVE" ? (
                   <p className="cs-inline-cost">
-                    {props.customerMode ? `Credit-Preis: ${customerCredits} Credits · Verfügbar: ${availableCredits.toLocaleString("de-DE")}` : <>Geschätzte Maximalkosten: {estimatedMaximumCostUsd.toLocaleString("de-DE", {
+                    {props.ownerMode ? "Owner Unlimited · keine Credit-Abbuchung" : props.customerMode ? `Credit-Preis: ${customerCredits} Credits · Verfügbar: ${availableCredits.toLocaleString("de-DE")}` : <>Geschätzte Maximalkosten: {estimatedMaximumCostUsd.toLocaleString("de-DE", {
                       style: "currency",
                       currency: "USD",
                     })}</>}
@@ -1260,7 +1264,9 @@ export function CreativeStudioWorkspace(props: {
                   (props.customerMode
                     ? props.customerConfig?.ready
                     : props.providerConfig?.ready)
-                    ? props.customerMode
+                    ? props.ownerMode
+                      ? "Owner Unlimited · Provider-Kostenlimit aktiv"
+                      : props.customerMode
                       ? `${customerCredits} Credits · ${availableCredits.toLocaleString("de-DE")} verfügbar`
                       : `Live verbunden · geschätzte Maximalkosten ${estimatedMaximumCostUsd.toLocaleString("de-DE", { style: "currency", currency: "USD" })}`
                     : selectedModel.availability === "LIVE"
@@ -1310,7 +1316,7 @@ export function CreativeStudioWorkspace(props: {
               </div>
               {activeRun?.results.length ? (
                 <div className="cs-results__actions">
-                  {!props.customerMode ? (
+                  {!productMode ? (
                     <button
                       type="button"
                       className="cs-text-button"
@@ -1346,12 +1352,12 @@ export function CreativeStudioWorkspace(props: {
                         unoptimized
                       />
                     </div>
-                    {props.customerMode ? (
+                    {productMode ? (
                       <footer className="cs-result-actions cs-result-actions--customer">
                         {result.creationId ? (
                           <Link
                             className="cs-result-library"
-                            href={`/app/creative-studio?creation=${encodeURIComponent(result.creationId)}&mode=edit`}
+                            href={`${productRoot}/creative-studio?creation=${encodeURIComponent(result.creationId)}&mode=edit`}
                           >
                             <WandSparkles size={16} /> Bild bearbeiten
                           </Link>
@@ -1366,7 +1372,7 @@ export function CreativeStudioWorkspace(props: {
                         )}
                         <div className="cs-result-secondary-actions">
                           {result.creationId ? (
-                            <Link href={`/app/creative-studio?creation=${encodeURIComponent(result.creationId)}&mode=recreate`}>
+                            <Link href={`${productRoot}/creative-studio?creation=${encodeURIComponent(result.creationId)}&mode=recreate`}>
                               <RotateCcw size={15} /> Neu erstellen
                             </Link>
                           ) : (
@@ -1375,7 +1381,7 @@ export function CreativeStudioWorkspace(props: {
                             </button>
                           )}
                           {result.libraryAssetId ? (
-                            <Link href={`/app/ugc-video-studio?libraryAsset=${encodeURIComponent(result.libraryAssetId)}`}>
+                            <Link href={`${productRoot}/ugc-video-studio?libraryAsset=${encodeURIComponent(result.libraryAssetId)}`}>
                               <Zap size={15} /> Video erstellen
                             </Link>
                           ) : null}
@@ -1496,6 +1502,7 @@ export function CreativeStudioWorkspace(props: {
               )}
               <span>{generating ? "Wird vorbereitet …" : props.customerMode ? `Generieren · ${customerCredits} Credits` : "Generieren"}</span>
             </button>
+            {props.ownerMode ? <small className="cs-owner-unlimited">Owner · Unlimited</small> : null}
           </div>
         </main>
       ) : view === "PROMPTS" ? (

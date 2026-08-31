@@ -56,19 +56,22 @@ function creativeSetup(quality: "1K" | "2K" | "4K" = "2K", batchSize: 1 | 2 | 3 
   };
 }
 
-function klingSetup(seconds = 5): UgcVideoGenerationSetup {
+function klingSetup(
+  sourceSeconds = 5,
+  selectedSeconds: "5" | "10" | "15" | "20" | "30" = "5",
+): UgcVideoGenerationSetup {
   return {
     contractVersion: UGC_VIDEO_STUDIO_CONTRACT_VERSION,
     prompt: "Ein Testvideo",
     modelId: "kling-v3-pro-motion-control",
-    duration: "5",
+    duration: selectedSeconds,
     aspectRatio: "9:16",
     quality: "720p",
     bitrate: "STANDARD",
     videoType: "UGC",
     references: [
       { id: "image", name: "model.png", mimeType: "image/png", mediaType: "IMAGE", byteLength: 100, durationSeconds: null, role: "MODEL", order: 0 },
-      { id: "video", name: "motion.mp4", mimeType: "video/mp4", mediaType: "VIDEO", byteLength: 200, durationSeconds: seconds, role: "MOTION", order: 1 },
+      { id: "video", name: "motion.mp4", mimeType: "video/mp4", mediaType: "VIDEO", byteLength: 200, durationSeconds: sourceSeconds, role: "MOTION", order: 1 },
     ],
     advanced: { ...DEFAULT_UGC_VIDEO_ADVANCED_SETTINGS },
     klingMotion: { ...DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS },
@@ -114,6 +117,28 @@ test("server quote authority prices Nano quality/count and Kling reference durat
   const kling = quoteUgcCustomerGeneration(klingSetup(5));
   assert.equal(kling.credits, 125);
   assert.equal(kling.pricingSnapshot.billableSeconds, 5);
+  const tenSeconds = quoteUgcCustomerGeneration(klingSetup(12, "10"), 12);
+  assert.equal(tenSeconds.credits, 250);
+  assert.equal(tenSeconds.pricingSnapshot.billableSeconds, 10);
+  assert.notDeepEqual(tenSeconds, kling, "duration changes the authoritative quote snapshot");
+  assert.throws(
+    () => quoteUgcCustomerGeneration(klingSetup(8, "10"), 8),
+    /kürzer als die gewählte Videolänge/,
+  );
+  assert.throws(
+    () =>
+      quoteUgcCustomerGeneration(
+        {
+          ...klingSetup(26, "15"),
+          klingMotion: {
+            ...DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS,
+            characterOrientation: "IMAGE",
+          },
+        },
+        26,
+      ),
+    /maximal 10 Sekunden/,
+  );
   assert.throws(() => quoteUgcCustomerGeneration({ ...klingSetup(), modelId: "seedance-2.5" }));
 });
 
@@ -255,12 +280,18 @@ test("customer routes reserve before frozen execution and status never reserves"
   const status = read("app/api/ugc-video-studio/jobs/[jobId]/route.ts");
   assert.ok(creative.indexOf("reserveCustomerGeneration") < creative.indexOf("generateCreativeJob({"));
   assert.ok(ugc.indexOf("reserveCustomerGeneration") < ugc.indexOf("generateUgcVideoJob({"));
+  assert.ok(
+    ugc.indexOf("prepareKlingMotionMedia({") <
+      ugc.indexOf("reserveCustomerGeneration({"),
+    "the trusted media clip is prepared before credits are reserved",
+  );
   assert.doesNotMatch(status, /reserveCustomerGeneration/);
   assert.match(status, /reconcileCustomerGenerationFromRun/);
   assert.match(creative, /authorizeXerianoGeneration/);
   assert.match(ugc, /authorizeXerianoGeneration/);
-  assert.match(creative, /access\.context\.role === "CUSTOMER"/);
-  assert.match(ugc, /access\.context\.role === "CUSTOMER"/);
+  assert.match(creative, /authorization\.bypass === null/);
+  assert.match(ugc, /authorization\.bypass === null/);
+  assert.match(creative, /OWNER_UNLIMITED/);
   assert.match(ugc, /requireTrustedCustomerMotionDuration/);
 });
 

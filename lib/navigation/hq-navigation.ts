@@ -11,7 +11,9 @@ import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import type { LucideIcon } from "lucide-react";
 
 export type HqSidebarSectionId =
+  | "home"
   | "studios"
+  | "xeriamo"
   | "moreStudios"
   | "management"
   | "settings";

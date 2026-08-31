@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { CreativeRun } from "@/lib/creative-studio/contracts";
 import { SupabaseCreativeJobStore } from "@/lib/creative-studio/server-storage";
 import { resolveXerianoAccess } from "@/lib/xeriano/auth";
+import { authorizeXerianoGeneration } from "@/lib/xeriano/credit-guard";
 import {
   customerCreditReceipt,
   loadCustomerAvailableCredits,
@@ -27,7 +28,8 @@ export async function GET(
   if (access.status !== "AUTHENTICATED") {
     return NextResponse.json({ success: false, code: "XERIANO_FOUNDATION_UNAVAILABLE", error: "Xeriamo-Konto nicht verfügbar." }, { status: 503 });
   }
-  if (access.context.role !== "OWNER" && access.context.role !== "CUSTOMER") {
+  const authorization = authorizeXerianoGeneration(access.context);
+  if (!authorization.allowed) {
     return NextResponse.json({ success: false, code: "CUSTOMER_ACCOUNT_REQUIRED", error: "Dieser Bereich ist für dein Konto nicht freigegeben." }, { status: 403 });
   }
   const { jobId } = await context.params;
@@ -50,7 +52,7 @@ export async function GET(
       jobId,
     );
     if (!manifest) {
-      if (access.context.role === "CUSTOMER") {
+      if (authorization.bypass === null) {
         await quarantineCustomerGeneration({ context: access.context, jobId });
         return NextResponse.json(
           {
@@ -77,7 +79,7 @@ export async function GET(
       ...(manifest.providerPrompt ? { providerPrompt: manifest.providerPrompt } : {}),
       estimatedMaximumCostUsd: manifest.estimatedMaximumCostUsd,
     };
-    if (access.context.role === "CUSTOMER") {
+    if (authorization.bypass === null) {
       const authority = await reconcileCustomerGenerationFromRun({ context: access.context, jobId, run });
       if (run.status === "SUCCEEDED" || run.status === "PARTIALLY_SUCCEEDED") {
         const creations = await finalizeCreativeCreations({

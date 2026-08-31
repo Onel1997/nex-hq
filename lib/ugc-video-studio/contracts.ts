@@ -56,6 +56,7 @@ export const UGC_VIDEO_DURATIONS = [
   "29",
   "30",
 ] as const;
+export const KLING_MOTION_DURATION_CHOICES = ["5", "10", "15", "20", "30"] as const;
 export const UGC_VIDEO_ASPECT_RATIOS = [
   "AUTO",
   "21:9",

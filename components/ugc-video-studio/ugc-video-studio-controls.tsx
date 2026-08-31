@@ -33,6 +33,7 @@ import {
   UGC_VIDEO_BITRATES,
   UGC_VIDEO_BITRATE_LABELS,
   UGC_VIDEO_DURATIONS,
+  KLING_MOTION_DURATION_CHOICES,
   UGC_VIDEO_QUALITIES,
   UGC_VIDEO_REFERENCE_ROLE_LABELS,
   UGC_VIDEO_REFERENCE_ROLES,
@@ -469,6 +470,42 @@ function referenceOptionLabel(reference: UgcVideoReferenceMedia): string {
   return `${reference.order + 1}. ${reference.name}${reference.role === "NONE" ? "" : ` · ${role}`}`;
 }
 
+export function UgcKlingDurationSelector(props: {
+  duration: UgcVideoGenerationSetup["duration"];
+  characterOrientation: UgcVideoKlingMotionSettings["characterOrientation"];
+  sourceDurationSeconds: number | null;
+  onChange: (duration: UgcVideoGenerationSetup["duration"]) => void;
+}) {
+  const orientationMaximum = props.characterOrientation === "IMAGE" ? 10 : 30;
+  return (
+    <fieldset className="uv-kling-duration">
+      <legend>Videolänge</legend>
+      <div>
+        {KLING_MOTION_DURATION_CHOICES.map((value) => {
+          const seconds = Number(value);
+          const unavailable =
+            seconds > orientationMaximum ||
+            (props.sourceDurationSeconds !== null &&
+              seconds > props.sourceDurationSeconds + 0.05);
+          return (
+            <button
+              type="button"
+              key={value}
+              disabled={unavailable}
+              className={props.duration === value ? "is-active" : ""}
+              aria-pressed={props.duration === value}
+              onClick={() => props.onChange(value)}
+            >
+              {value} Sek.
+            </button>
+          );
+        })}
+      </div>
+      <p>Die Credits richten sich nach der gewählten Videolänge.</p>
+    </fieldset>
+  );
+}
+
 export function UgcKlingMotionControls(props: {
   references: UgcVideoReferenceMedia[];
   settings: UgcVideoKlingMotionSettings;
@@ -658,8 +695,8 @@ export function UgcKlingMotionControls(props: {
       ) : null}
       <p className="uv-kling-duration-note">
         {props.settings.characterOrientation === "IMAGE"
-          ? "Bild folgen: Das Referenzvideo darf maximal 10 Sekunden lang sein."
-          : "Bewegung folgen: Das Referenzvideo darf maximal 30 Sekunden lang sein."}
+          ? "Bild folgen: maximal 10 Sekunden Ausgabe."
+          : "Bewegung folgen: maximal 30 Sekunden Ausgabe."}
       </p>
     </div>
   );

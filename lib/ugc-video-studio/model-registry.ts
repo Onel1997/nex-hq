@@ -1,6 +1,7 @@
-import type {
-  UgcVideoGenerationSetup,
-  UgcVideoReferenceType,
+import {
+  KLING_MOTION_DURATION_CHOICES,
+  type UgcVideoGenerationSetup,
+  type UgcVideoReferenceType,
 } from "@/lib/ugc-video-studio/contracts";
 
 export type UgcVideoModelAvailability = "LIVE" | "READY_TO_CONNECT" | "PLANNED";
@@ -65,7 +66,7 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       availability: "LIVE",
       maximumReferences: 3,
       supportedReferenceTypes: ["IMAGE", "VIDEO"],
-      supportedDurations: ALL_DURATIONS.filter((duration) => Number(duration) <= 30),
+      supportedDurations: KLING_MOTION_DURATION_CHOICES,
       supportedAspectRatios: [],
       supportedQualities: [],
       supportedBitrates: [],

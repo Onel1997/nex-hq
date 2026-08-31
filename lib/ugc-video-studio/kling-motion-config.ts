@@ -1,6 +1,7 @@
-import type {
-  UgcVideoGenerationSetup,
-  UgcVideoReferenceMetadata,
+import {
+  KLING_MOTION_DURATION_CHOICES,
+  type UgcVideoGenerationSetup,
+  type UgcVideoReferenceMetadata,
 } from "@/lib/ugc-video-studio/contracts";
 import {
   UgcVideoCostCapError,
@@ -139,7 +140,9 @@ export class KlingMotionReferenceError extends Error {
       | "MOTION_VIDEO_AMBIGUOUS"
       | "IDENTITY_ELEMENT_AMBIGUOUS"
       | "IDENTITY_ELEMENT_REQUIRES_VIDEO_ORIENTATION"
-      | "MOTION_VIDEO_TOO_LONG",
+      | "DURATION_UNSUPPORTED"
+      | "DURATION_EXCEEDS_ORIENTATION"
+      | "DURATION_EXCEEDS_SOURCE",
   ) {
     super(message);
     this.name = "KlingMotionReferenceError";
@@ -190,12 +193,25 @@ export function assertKlingMotionReferences(
       "IDENTITY_ELEMENT_REQUIRES_VIDEO_ORIENTATION",
     );
   }
-  const duration = resolution.motionVideo.durationSeconds;
+  const selectedDuration = Number(setup.duration);
   const maximum = KLING_MOTION_MAX_SECONDS[setup.klingMotion.characterOrientation];
-  if (duration !== null && duration > maximum + 0.2) {
+  if (!(KLING_MOTION_DURATION_CHOICES as readonly string[]).includes(setup.duration)) {
     throw new KlingMotionReferenceError(
-      `Das Bewegungs-Referenzvideo darf bei dieser Ausrichtung maximal ${maximum} Sekunden lang sein.`,
-      "MOTION_VIDEO_TOO_LONG",
+      "Wähle eine unterstützte Videolänge.",
+      "DURATION_UNSUPPORTED",
+    );
+  }
+  if (selectedDuration > maximum) {
+    throw new KlingMotionReferenceError(
+      `Bei dieser Ausrichtung sind maximal ${maximum} Sekunden möglich.`,
+      "DURATION_EXCEEDS_ORIENTATION",
+    );
+  }
+  const sourceDuration = resolution.motionVideo.durationSeconds;
+  if (sourceDuration !== null && selectedDuration > sourceDuration + 0.05) {
+    throw new KlingMotionReferenceError(
+      "Das Bewegungs-Referenzvideo ist kürzer als die gewählte Videolänge.",
+      "DURATION_EXCEEDS_SOURCE",
     );
   }
   return resolution;
@@ -203,12 +219,12 @@ export function assertKlingMotionReferences(
 
 export function estimateKlingMotionMaximumCostUsd(input: {
   characterOrientation: UgcVideoGenerationSetup["klingMotion"]["characterOrientation"];
-  motionDurationSeconds?: number | null;
+  selectedDurationSeconds?: number | null;
 }): number {
   const maximum = KLING_MOTION_MAX_SECONDS[input.characterOrientation];
   const billableSeconds =
-    input.motionDurationSeconds && input.motionDurationSeconds > 0
-      ? Math.min(input.motionDurationSeconds, maximum)
+    input.selectedDurationSeconds && input.selectedDurationSeconds > 0
+      ? Math.min(input.selectedDurationSeconds, maximum)
       : maximum;
   return Number(
     (billableSeconds * KLING_V3_PRO_MOTION_PRICE_PER_SECOND_USD).toFixed(2),
@@ -219,10 +235,10 @@ export function assertKlingMotionCostAllowed(input: {
   setup: UgcVideoGenerationSetup;
   configuredCostCapUsd: number | null;
 }): number {
-  const resolution = assertKlingMotionReferences(input.setup);
+  assertKlingMotionReferences(input.setup);
   const estimatedMaximumCostUsd = estimateKlingMotionMaximumCostUsd({
     characterOrientation: input.setup.klingMotion.characterOrientation,
-    motionDurationSeconds: resolution.motionVideo?.durationSeconds,
+    selectedDurationSeconds: Number(input.setup.duration),
   });
   if (
     input.configuredCostCapUsd === null ||

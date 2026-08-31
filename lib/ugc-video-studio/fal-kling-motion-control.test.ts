@@ -138,7 +138,7 @@ test("exactly one image and video auto-map without forced roles", () => {
   const active = setup({
     references: [
       reference({ id: "image", name: "a.png", mediaType: "IMAGE", role: "NONE", order: 0 }),
-      reference({ id: "video", name: "b.mp4", mediaType: "VIDEO", role: "NONE", order: 1, durationSeconds: 4 }),
+      reference({ id: "video", name: "b.mp4", mediaType: "VIDEO", role: "NONE", order: 1, durationSeconds: 5 }),
     ],
   });
   const resolved = assertKlingMotionReferences(active);
@@ -228,8 +228,9 @@ test("face binding is one @Element1 image and only applies to video orientation"
 
 test("orientation-specific motion duration limits stay fail-closed", () => {
   const image = setup({
+    duration: "15",
     references: setup().references.map((item) =>
-      item.id === "motion" ? { ...item, durationSeconds: 10.3 } : item,
+      item.id === "motion" ? { ...item, durationSeconds: 26 } : item,
     ),
     klingMotion: {
       ...DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS,
@@ -239,23 +240,36 @@ test("orientation-specific motion duration limits stay fail-closed", () => {
   });
   assert.throws(() => assertKlingMotionReferences(image), (error) => {
     assert.ok(error instanceof KlingMotionReferenceError);
-    assert.equal(error.reason, "MOTION_VIDEO_TOO_LONG");
+    assert.equal(error.reason, "DURATION_EXCEEDS_ORIENTATION");
     return true;
   });
 
   const video = setup({
+    duration: "30",
     references: setup().references.map((item) =>
       item.id === "motion" ? { ...item, durationSeconds: 30 } : item,
     ),
   });
   assert.equal(assertKlingMotionReferences(video).motionVideo?.durationSeconds, 30);
+
+  const shortSource = setup({
+    duration: "10",
+    references: setup().references.map((item) =>
+      item.id === "motion" ? { ...item, durationSeconds: 8 } : item,
+    ),
+  });
+  assert.throws(() => assertKlingMotionReferences(shortSource), (error) => {
+    assert.ok(error instanceof KlingMotionReferenceError);
+    assert.equal(error.reason, "DURATION_EXCEEDS_SOURCE");
+    return true;
+  });
 });
 
 test("per-second pricing estimate and dedicated cost cap are enforced", () => {
   assert.equal(
     estimateKlingMotionMaximumCostUsd({
       characterOrientation: "VIDEO",
-      motionDurationSeconds: 5,
+      selectedDurationSeconds: 5,
     }),
     0.84,
   );

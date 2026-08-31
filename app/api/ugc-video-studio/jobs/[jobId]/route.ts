@@ -5,6 +5,7 @@ import {
   UgcVideoGenerationError,
 } from "@/lib/ugc-video-studio/generation-service";
 import { resolveXerianoAccess } from "@/lib/xeriano/auth";
+import { authorizeXerianoGeneration } from "@/lib/xeriano/credit-guard";
 import {
   customerCreditReceipt,
   loadCustomerAvailableCredits,
@@ -35,13 +36,14 @@ export async function GET(
       { status: 503 },
     );
   }
-  if (access.context.role !== "OWNER" && access.context.role !== "CUSTOMER") {
+  const authorization = authorizeXerianoGeneration(access.context);
+  if (!authorization.allowed) {
     return NextResponse.json(
       { success: false, code: "CUSTOMER_ACCOUNT_REQUIRED", error: "Dieser Bereich ist für dein Konto nicht freigegeben." },
       { status: 403 },
     );
   }
-  const customer = access.context.role === "CUSTOMER";
+  const customer = authorization.bypass === null;
   const { jobId } = await context.params;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(jobId)) {
     return NextResponse.json(
