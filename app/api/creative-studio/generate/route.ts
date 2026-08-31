@@ -162,7 +162,7 @@ export async function POST(request: Request) {
       jobId,
       setup,
       references,
-    });
+    }, ownerUnlimited ? { costLimitPolicy: "OWNER_ESTIMATE_ONLY" } : undefined);
     creativeRunObserved = true;
     if (customer) {
       customerAuthority = await reconcileCustomerGenerationFromRun({

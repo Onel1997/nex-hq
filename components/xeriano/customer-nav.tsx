@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { CSSProperties } from "react";
 
 import { StudioMobileNavigation } from "@/components/navigation/studio-mobile-navigation";
+import { XeriamoBrandIdentity } from "@/components/xeriano/brand-identity";
 import { useLocale } from "@/lib/i18n";
 import {
   getStudioSidebarSections,
@@ -43,11 +44,11 @@ export function XerianoCustomerNav() {
   return (
     <>
       <aside className="xeriano-customer-sidebar">
-        <Link className="xeriano-wordmark" href="/app">Xeriamo</Link>
+        <Link className="xeriano-wordmark" href="/app" aria-label="Xeriamo Home"><XeriamoBrandIdentity role="LOGO" /></Link>
         <nav aria-label="Xeriamo Studios">{navigation}</nav>
       </aside>
       <header className="xeriano-customer-mobile-header">
-        <Link className="xeriano-wordmark" href="/app">Xeriamo</Link>
+        <Link className="xeriano-wordmark" href="/app" aria-label="Xeriamo Home"><XeriamoBrandIdentity role="ICON" showName /></Link>
         <StudioMobileNavigation audience="CUSTOMER" />
       </header>
     </>

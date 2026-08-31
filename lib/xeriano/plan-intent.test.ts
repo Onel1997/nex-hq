@@ -64,7 +64,10 @@ test("all auth views share the Xeriamo shell and prospectively show 30 Free cred
   for (const source of [register, login, reset]) assert.match(source, /XerianoAuthShell/);
   assert.match(register, /resolveActiveXerianoPlan\("FREE"\)/);
   assert.doesNotMatch(register + login + reset, /40 Credits/);
-  assert.match(read("components/xeriano/auth-shell.tsx"), />Xeriamo</);
+  assert.match(
+    read("components/xeriano/auth-shell.tsx"),
+    /XeriamoBrandIdentity role="LOGO"/,
+  );
 });
 
 test("auth and plan-intent navigation have zero credit or Stripe effects", () => {

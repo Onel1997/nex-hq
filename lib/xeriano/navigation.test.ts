@@ -73,7 +73,9 @@ test("customer and Owner shells each mount the one shared drawer at shell level"
   assert.equal((dashboardShell.match(/StudioMobileNavigation audience="OWNER"/g) ?? []).length, 1);
   assert.doesNotMatch(customerNav, /useState\(false\)|xeriano-mobile-drawer|const items=/);
   assert.match(shared, /const brand = "Xeriamo"/);
-  assert.match(shared, /audience === "CUSTOMER" \? "Creator Suite" : "Owner Workspace"/);
+  assert.match(shared, /const brandSubtitle = "Creator Suite"/);
+  assert.match(shared, /audience === "CUSTOMER" \? <span>\{brandSubtitle\}<\/span> : null/);
+  assert.doesNotMatch(shared, /Owner Workspace/i);
   assert.match(shared, /is-\$\{audience\.toLowerCase\(\)\}/);
   assert.match(shared, /data-audience=\{audience\}/);
   assert.match(shared, /getStudioSidebarSections\(locale, audience\)/);
@@ -224,8 +226,10 @@ test("Owner shell and both canonical navigation surfaces use Xeriamo branding", 
   const locale = readFileSync("lib/i18n/locales/de/hq-navigation.ts", "utf8");
   const activeOwnerNavigation = dashboardShell + desktop + mobile + locale;
   assert.match(activeOwnerNavigation, /Xeriamo/);
-  assert.match(dashboardShell, /Owner Workspace/);
-  assert.match(desktop, /hq-sidebar-logo-mark">X/);
+  assert.doesNotMatch(dashboardShell, /Owner Workspace/i);
+  assert.match(dashboardShell, /XeriamoBrandIdentity role="LOGO"/);
+  assert.match(desktop, /XeriamoBrandIdentity role="ICON"/);
+  assert.match(desktop, /XeriamoBrandIdentity role="LOGO"/);
   assert.doesNotMatch(activeOwnerNavigation, /NexHQ/);
 });
 

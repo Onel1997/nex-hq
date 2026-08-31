@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DEFAULT_LOCALE } from "@/lib/i18n";
-import { getDictionary } from "@/lib/i18n/get-dictionary";
 import "./globals.css";
 import "./workspace.css";
 import "./hq-navigation.css";
@@ -17,8 +16,7 @@ import "./persona-studio.css";
 import "./nexhq-studio-system.css";
 import "./xeriano.css";
 import { getXerianoAppUrl } from "@/lib/xeriano/config";
-
-const dict = getDictionary(DEFAULT_LOCALE);
+import { XeriamoBrandingProvider } from "@/components/xeriano/branding-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +38,10 @@ export const metadata: Metadata = {
   applicationName: "Xeriamo",
   openGraph: { type: "website", locale: "de_DE", siteName: "Xeriamo" },
   twitter: { card: "summary_large_image" },
+  icons: {
+    icon: "/api/public/branding/favicon",
+    apple: "/api/public/branding/apple-touch-icon",
+  },
 };
 
 export default function RootLayout({
@@ -53,7 +55,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
       <body className="min-h-full font-sans">
-        <TooltipProvider>{children}</TooltipProvider>
+        <TooltipProvider>
+          <XeriamoBrandingProvider>{children}</XeriamoBrandingProvider>
+        </TooltipProvider>
       </body>
     </html>
   );

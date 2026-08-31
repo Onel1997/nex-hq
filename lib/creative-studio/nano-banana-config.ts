@@ -38,11 +38,32 @@ export type CreativeProviderPublicConfig = {
   credentialConfigured: boolean;
   costCapConfigured: boolean;
   storageConfigured: boolean;
+  /** Exact OWNER readiness: provider + durable storage, independent of the legacy cap. */
+  ownerReady: boolean;
   ready: boolean;
   costCapUsd: number | null;
   pricingVersion: typeof NANO_BANANA_PRO_PRICING_VERSION;
-  pricesUsd: { standard: number; fourK: number };
+  estimatedCostsUsd: Record<
+    CreativeGenerationSetup["quality"],
+    Record<CreativeGenerationSetup["batchSize"], number>
+  >;
 };
+
+function creativeCostEstimatesUsd(): CreativeProviderPublicConfig["estimatedCostsUsd"] {
+  const qualities = ["1K", "2K", "4K"] as const;
+  const batchSizes = [1, 2, 3, 4] as const;
+  return Object.fromEntries(
+    qualities.map((quality) => [
+      quality,
+      Object.fromEntries(
+        batchSizes.map((batchSize) => [
+          batchSize,
+          estimateNanoBananaMaximumCostUsd(quality, batchSize),
+        ]),
+      ),
+    ]),
+  ) as CreativeProviderPublicConfig["estimatedCostsUsd"];
+}
 
 export function getCreativeProviderPublicConfig(
   environment: NodeJS.ProcessEnv = process.env,
@@ -62,10 +83,11 @@ export function getCreativeProviderPublicConfig(
     credentialConfigured,
     costCapConfigured: costCapUsd !== null,
     storageConfigured,
+    ownerReady: credentialConfigured && storageConfigured,
     ready: credentialConfigured && costCapUsd !== null && storageConfigured,
     costCapUsd,
     pricingVersion: NANO_BANANA_PRO_PRICING_VERSION,
-    pricesUsd: { standard: 0.15, fourK: 0.3 },
+    estimatedCostsUsd: creativeCostEstimatesUsd(),
   };
 }
 

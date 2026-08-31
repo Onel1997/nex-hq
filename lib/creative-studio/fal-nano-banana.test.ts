@@ -13,6 +13,7 @@ import {
   assertNanoBananaCostAllowed,
   CreativeCostCapError,
   estimateNanoBananaMaximumCostUsd,
+  getCreativeProviderPublicConfig,
   NANO_BANANA_PRO_EDIT_MODEL_ID,
   NANO_BANANA_PRO_TEXT_MODEL_ID,
 } from "@/lib/creative-studio/nano-banana-config";
@@ -163,7 +164,7 @@ test("Nano Banana Pro uses the text endpoint only when no reference is supplied"
   assert.equal(endpoint, NANO_BANANA_PRO_TEXT_MODEL_ID);
 });
 
-test("published quality pricing and owner cost cap are enforced before execution", () => {
+test("published quality pricing and the legacy internal cost cap remain enforced", () => {
   assert.equal(estimateNanoBananaMaximumCostUsd("1K", 4), 0.6);
   assert.equal(estimateNanoBananaMaximumCostUsd("2K", 2), 0.3);
   assert.equal(estimateNanoBananaMaximumCostUsd("4K", 4), 1.2);
@@ -184,6 +185,21 @@ test("published quality pricing and owner cost cap are enforced before execution
       }),
     CreativeCostCapError,
   );
+});
+
+test("Owner readiness and monetary estimates do not depend on the legacy cap", () => {
+  const config = getCreativeProviderPublicConfig({
+    NODE_ENV: "test",
+    FAL_KEY: "configured-for-test",
+    NEXT_PUBLIC_SUPABASE_URL: "https://project.supabase.co",
+    SUPABASE_SERVICE_ROLE_KEY: "configured-for-test",
+  } as NodeJS.ProcessEnv);
+  assert.equal(config.costCapConfigured, false);
+  assert.equal(config.ready, false);
+  assert.equal(config.ownerReady, true);
+  assert.equal(config.estimatedCostsUsd["2K"][1], 0.15);
+  assert.equal(config.estimatedCostsUsd["2K"][2], 0.3);
+  assert.equal(config.estimatedCostsUsd["4K"][4], 1.2);
 });
 
 class MemoryCreativeStore implements CreativeJobStore {
@@ -303,6 +319,56 @@ test("durable job persistence normalizes results and duplicate request never pay
   assert.equal(manifest?.results.length, 2);
 });
 
+test("trusted Owner estimate-only policy runs without a configured legacy cap", async () => {
+  const store = new MemoryCreativeStore();
+  const calls = { value: 0 };
+  const scope = { workspaceId: "owner-workspace", actorId: "owner-1" };
+  const fetcher: typeof fetch = async () =>
+    new Response(Uint8Array.from(PNG_BYTES), {
+      status: 200,
+      headers: { "content-type": "image/png" },
+    });
+  const run = await generateCreativeJob(
+    {
+      scope,
+      jobId: "55555555-5555-4555-8555-555555555555",
+      setup: setup({ quality: "4K", batchSize: 2 }),
+      references: references(),
+    },
+    {
+      store,
+      provider: successfulProvider(calls),
+      fetcher,
+      configuredCostCapUsd: null,
+      costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+    },
+  );
+  assert.equal(run.status, "SUCCEEDED");
+  assert.equal(run.estimatedMaximumCostUsd, 0.6);
+  assert.equal(calls.value, 1);
+});
+
+test("missing legacy cap still fails closed without trusted Owner policy", async () => {
+  const calls = { value: 0 };
+  await assert.rejects(
+    generateCreativeJob(
+      {
+        scope: { workspaceId: "customer-workspace", actorId: "customer-1" },
+        jobId: "66666666-6666-4666-8666-666666666666",
+        setup: setup(),
+        references: references(),
+      },
+      {
+        store: new MemoryCreativeStore(),
+        provider: successfulProvider(calls),
+        configuredCostCapUsd: null,
+      },
+    ),
+    CreativeCostCapError,
+  );
+  assert.equal(calls.value, 0);
+});
+
 test("ambiguous provider completion becomes UNKNOWN_OUTCOME and is not resubmitted", async () => {
   const store = new MemoryCreativeStore();
   let calls = 0;
@@ -348,6 +414,7 @@ test("Creative live route keeps credentials server-only and has no Image Studio 
   );
   assert.match(route, /resolveXerianoAccess/);
   assert.match(route, /authorizeXerianoGeneration/);
+  assert.match(route, /ownerUnlimited \? \{ costLimitPolicy: "OWNER_ESTIMATE_ONLY" \}/);
   assert.match(adapter, /process\.env\.FAL_KEY/);
   assert.doesNotMatch(workspace, /process\.env|SUPABASE_SERVICE_ROLE_KEY/);
   assert.doesNotMatch(
@@ -370,7 +437,8 @@ test("live German UX exposes cost, loading, history and use-as-reference states"
   assert.match(workspace, /Als Referenz/);
   assert.match(workspace, /Wird vorbereitet/);
   assert.match(workspace, /geschätzte Maximalkosten/);
-  assert.match(workspace, /Kostenlimit für dieses Modell/);
+  assert.match(workspace, /Geschätzte Kosten · ca\./);
+  assert.doesNotMatch(workspace, /NEXHQ_CREATIVE_NANO_BANANA_COST_MAX_USD/);
   assert.match(history, /Teilweise erfolgreich/);
   assert.match(history, /Unbekannter Provider-Status/);
   assert.match(css, /safe-area-inset-bottom/);

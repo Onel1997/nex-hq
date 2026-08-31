@@ -3,13 +3,13 @@ import {
   Check,
   CreditCard,
   Database,
-  ImageIcon,
   LogOut,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
 
 import { logoutOwner } from "@/app/auth-actions";
+import { BrandingManager } from "@/components/settings/branding-manager";
 import type {
   OwnerIntegrationPresentation,
   OwnerSettingsPresentation,
@@ -61,12 +61,9 @@ export function SettingsPanels({ presentation }: { presentation: OwnerSettingsPr
         <div className="owner-settings-section-heading">
           <p>Branding</p>
           <h2 id="owner-settings-branding">Brand Assets</h2>
+          <span>Logo, Icon und Favicon verwalten – sicher versioniert und ohne Deployment.</span>
         </div>
-        <article className="owner-settings-brand-card">
-          <div className="owner-settings-card-icon" aria-hidden="true"><ImageIcon size={20} /></div>
-          <div><h3>Logo, Icon und Favicon verwalten</h3><p>Eine zentrale Brand-Assets-Verwaltung folgt nach der Private Beta.</p></div>
-          <span>Demnächst</span>
-        </article>
+        <BrandingManager />
       </section>
 
       <section className="owner-settings-section" aria-labelledby="owner-settings-integrations">

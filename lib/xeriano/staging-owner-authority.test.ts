@@ -8,7 +8,7 @@ import {
   hasXerianoOwnerAuthority,
   selectXerianoAccountContext,
 } from "@/lib/xeriano/access-policy";
-import { isTrustedXeriamoApplicationOrigin } from "@/lib/xeriano/request-origin";
+import { assessTrustedXeriamoApplicationOrigin, isTrustedXeriamoApplicationOrigin } from "@/lib/xeriano/request-origin";
 import { getActiveWorkspace } from "@/lib/workspace/active";
 
 const read = (path: string) => readFileSync(path, "utf8");
@@ -32,6 +32,28 @@ describe("Xeriamo staging OWNER and account authority", () => {
     assert.ok(context);
     assert.equal(context.role, "CUSTOMER");
     assert.equal(context.source, "XERIANO_MEMBERSHIP");
+    assert.equal(hasXerianoAccountMembership(context), true);
+    assert.equal(hasXerianoOwnerAuthority(context), true);
+  });
+
+  it("carries a separately resolved active OWNER membership beside the primary account", () => {
+    const context = selectXerianoAccountContext({
+      userId: "owner-user",
+      email: "owner@example.test",
+      legacyOwner: false,
+      internalOwner: true,
+      legacyWorkspaceKey: "xeriano-staging",
+      membership: {
+        accountId: "11111111-1111-4111-8111-111111111111",
+        accountName: "Primary Customer Account",
+        workspaceKey: "owner-customer",
+        brainWorkspaceId: null,
+        role: "CUSTOMER",
+      },
+    });
+
+    assert.ok(context);
+    assert.equal(context.role, "CUSTOMER");
     assert.equal(hasXerianoAccountMembership(context), true);
     assert.equal(hasXerianoOwnerAuthority(context), true);
   });
@@ -90,6 +112,61 @@ describe("Xeriamo staging OWNER and account authority", () => {
     }), false);
   });
 
+  it("binds a staging-development LAN Origin to the exact current application Host", () => {
+    const trusted = assessTrustedXeriamoApplicationOrigin({
+      requestUrl: "http://localhost:3000/api/hq/branding",
+      applicationUrl: "https://xeriamo.com",
+      originHeader: "http://192.168.178.49:3000",
+      hostHeader: "192.168.178.49:3000",
+      environment: "development",
+    });
+    assert.deepEqual(trusted, { allowed: true, originPresent: true, hostMatch: true });
+
+    assert.equal(isTrustedXeriamoApplicationOrigin({
+      requestUrl: "http://localhost:3000/api/hq/branding",
+      applicationUrl: "https://xeriamo.com",
+      originHeader: "http://192.168.178.49:3000",
+      hostHeader: "localhost:3000",
+      forwardedHostHeader: "192.168.178.49:3000",
+      forwardedProtoHeader: "http",
+      environment: "development",
+    }), true);
+
+    assert.equal(isTrustedXeriamoApplicationOrigin({
+      requestUrl: "http://192.168.178.49:3000/api/hq/branding",
+      applicationUrl: "https://xeriamo.com",
+      originHeader: "https://attacker.example",
+      hostHeader: "192.168.178.49:3000",
+      forwardedHostHeader: "attacker.example",
+      forwardedProtoHeader: "https",
+      environment: "development",
+    }), false);
+
+    assert.equal(isTrustedXeriamoApplicationOrigin({
+      requestUrl: "http://localhost:3000/api/hq/branding",
+      applicationUrl: "https://xeriamo.com",
+      originHeader: "https://attacker.example",
+      hostHeader: "192.168.178.49:3000",
+      environment: "development",
+    }), false);
+
+    assert.equal(isTrustedXeriamoApplicationOrigin({
+      requestUrl: "https://xeriamo.com/api/hq/branding",
+      applicationUrl: "https://xeriamo.com",
+      originHeader: "http://192.168.178.49:3000",
+      hostHeader: "192.168.178.49:3000",
+      environment: "production",
+    }), false);
+
+    assert.equal(isTrustedXeriamoApplicationOrigin({
+      requestUrl: "https://attacker.example/api/hq/branding",
+      applicationUrl: "https://xeriamo.com",
+      originHeader: "https://attacker.example",
+      hostHeader: "attacker.example",
+      environment: "production",
+    }), false);
+  });
+
   it("resolves only the explicit xeriano-staging workspace alias", () => {
     const previous = process.env.NEXHQ_WORKSPACE_SLUG;
     process.env.NEXHQ_WORKSPACE_SLUG = "xeriano-staging";
@@ -108,10 +185,13 @@ describe("Xeriamo staging OWNER and account authority", () => {
 
   it("wires owner pages and grants to the separated authorities", () => {
     const dashboard = read("app/(dashboard)/layout.tsx");
+    const auth = read("lib/xeriano/auth.ts");
     const ownerService = read("lib/xeriano/owner-customer-center.ts");
     const accountServer = read("lib/xeriano/server.ts");
     const grantRoute = read("app/api/hq/customers/[accountId]/credits/route.ts");
     assert.match(dashboard, /hasXerianoOwnerAuthority/);
+    assert.match(auth, /\.eq\("role", "OWNER"\)/);
+    assert.match(auth, /internalOwner: activeOwnerMembership/);
     assert.match(ownerService, /hasXerianoOwnerAuthority/);
     assert.match(accountServer, /hasXerianoAccountMembership/);
     assert.match(grantRoute, /isTrustedXeriamoApplicationOrigin/);

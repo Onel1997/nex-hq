@@ -13,6 +13,7 @@ import {
 } from "react";
 
 import { useLocale } from "@/lib/i18n";
+import { XeriamoBrandIdentity } from "@/components/xeriano/brand-identity";
 import { logoutOwner } from "@/app/auth-actions";
 import {
   getStudioSidebarSections,
@@ -66,7 +67,7 @@ export function StudioMobileNavigation({
   const close = useCallback(() => setOpen(false), []);
   const sections = getStudioSidebarSections(locale, audience);
   const brand = "Xeriamo";
-  const brandSubtitle = audience === "CUSTOMER" ? "Creator Suite" : "Owner Workspace";
+  const brandSubtitle = "Creator Suite";
 
   useEffect(() => {
     if (!open) return;
@@ -116,9 +117,12 @@ export function StudioMobileNavigation({
             onPointerDown={(event) => event.stopPropagation()}
           >
             <header>
-              <div>
-                <strong>{brand}</strong>
-                <span>{brandSubtitle}</span>
+              <div className="studio-mobile-branding">
+                <XeriamoBrandIdentity role="ICON" markOnly={audience === "OWNER"} />
+                <div className="studio-mobile-branding-copy">
+                  {audience === "OWNER" ? <XeriamoBrandIdentity role="LOGO" /> : <strong>{brand}</strong>}
+                  {audience === "CUSTOMER" ? <span>{brandSubtitle}</span> : null}
+                </div>
               </div>
               <button type="button" onClick={close} aria-label="Studio-Menü schließen" autoFocus>
                 <X size={19} />

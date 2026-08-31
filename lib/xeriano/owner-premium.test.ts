@@ -86,11 +86,13 @@ test("Owner product generation skips reservations but customer charging remains"
   assert.doesNotMatch(guard, /role === "ADMIN"/);
 });
 
-test("Owner UI presents unlimited while customer credit CTAs remain unchanged", () => {
+test("Owner UI presents monetary Creative cost while financial authority remains unlimited", () => {
   const creative = read("components/creative-studio/creative-studio-workspace.tsx");
   const ugc = read("components/ugc-video-studio/ugc-video-studio-workspace.tsx");
   assert.match(creative, /props\.ownerMode/);
-  assert.match(creative, /Owner · Unlimited/);
+  assert.match(creative, /Geschätzte Kosten · ca\./);
+  assert.match(creative, /`Generieren · ca\. \$\{formattedOwnerCostUsd\}`/);
+  assert.doesNotMatch(creative, /NEXHQ_CREATIVE_NANO_BANANA_COST_MAX_USD/);
   assert.match(creative, /`Generieren · \$\{customerCredits\} Credits`/);
   assert.match(ugc, /props\.ownerMode/);
   assert.match(ugc, /Owner · Unlimited/);

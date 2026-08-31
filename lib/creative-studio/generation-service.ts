@@ -11,6 +11,7 @@ import {
 } from "@/lib/creative-studio/contracts";
 import {
   assertNanoBananaCostAllowed,
+  estimateNanoBananaMaximumCostUsd,
   NANO_BANANA_PRO_COST_CAP_ENV,
   NANO_BANANA_PRO_EDIT_MODEL_ID,
   NANO_BANANA_PRO_TEXT_MODEL_ID,
@@ -217,6 +218,7 @@ export type GenerateCreativeJobDependencies = {
   provider?: CreativeImageProvider;
   fetcher?: typeof fetch;
   configuredCostCapUsd?: number | null;
+  costLimitPolicy?: "REQUIRE_CONFIGURED_CAP" | "OWNER_ESTIMATE_ONLY";
   now?: () => string;
 };
 
@@ -249,11 +251,14 @@ export async function generateCreativeJob(
     dependencies.configuredCostCapUsd === undefined
       ? parseCreativeCostCap(process.env[NANO_BANANA_PRO_COST_CAP_ENV])
       : dependencies.configuredCostCapUsd;
-  const estimatedMaximumCostUsd = assertNanoBananaCostAllowed({
-    quality: setup.quality,
-    batchSize: setup.batchSize,
-    configuredCostCapUsd: costCap,
-  });
+  const estimatedMaximumCostUsd =
+    dependencies.costLimitPolicy === "OWNER_ESTIMATE_ONLY"
+      ? estimateNanoBananaMaximumCostUsd(setup.quality, setup.batchSize)
+      : assertNanoBananaCostAllowed({
+          quality: setup.quality,
+          batchSize: setup.batchSize,
+          configuredCostCapUsd: costCap,
+        });
   const provider =
     dependencies.provider ?? new FalNanoBananaProvider(process.env.FAL_KEY);
   if (!provider.isConfigured()) {

@@ -400,7 +400,7 @@ test("Create and successful results expose prompt saving without changing genera
   assert.match(workspace, /reopenRunSetup\(activeRun\)/);
   assert.match(workspace, /addResultAsReference/);
   assert.deepEqual(CREATIVE_BATCH_SIZES, [1, 2, 3, 4]);
-  assert.match(workspace, /\* batchSize/);
+  assert.match(workspace, /estimatedCostsUsd\[quality\]\?\.\[batchSize\]/);
 });
 
 test("Creative browser code never assumes crypto.randomUUID is available", () => {

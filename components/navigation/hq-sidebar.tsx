@@ -17,6 +17,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { XeriamoBrandIdentity } from "@/components/xeriano/brand-identity";
 import { logoutOwner } from "@/app/auth-actions";
 import { ChevronDown, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import Link from "next/link";
@@ -122,9 +123,9 @@ export function HqSidebar() {
       aria-label={t("hqNavigation.navAriaLabel")}
     >
       <div className="hq-sidebar-header">
-        <Link href="/hq" className="hq-sidebar-logo" title="Xeriamo Owner">
-          <span className="hq-sidebar-logo-mark">X</span>
-          {showLabels ? <span className="hq-sidebar-logo-text">Xeriamo</span> : null}
+        <Link href="/hq" className="hq-sidebar-logo" title="Xeriamo Owner" aria-label="Xeriamo Owner Startseite">
+          <span className="hq-sidebar-logo-mark"><XeriamoBrandIdentity role="ICON" markOnly /></span>
+          {showLabels ? <span className="hq-sidebar-logo-text"><XeriamoBrandIdentity role="LOGO" /></span> : null}
         </Link>
         <button
           type="button"

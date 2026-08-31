@@ -9,6 +9,11 @@ const PUBLIC_ASSET_PATTERN =
 
 export const XERIANO_STRIPE_WEBHOOK_PATH = "/api/xeriano/billing/webhook" as const;
 
+export function isPublicBrandingPath(pathname: string): boolean {
+  return pathname === "/api/public/branding" ||
+    /^\/api\/public\/branding\/(?:logo|icon|favicon|apple-touch-icon)$/.test(pathname);
+}
+
 export function isSessionlessStripeWebhookPath(pathname: string): boolean {
   return pathname === XERIANO_STRIPE_WEBHOOK_PATH;
 }
@@ -39,6 +44,7 @@ export function isPublicNexhqPath(pathname: string): boolean {
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
     isSessionlessStripeWebhookPath(pathname) ||
+    isPublicBrandingPath(pathname) ||
     PUBLIC_ASSET_PATTERN.test(pathname)
   );
 }

@@ -321,11 +321,18 @@ export function CreativeStudioWorkspace(props: {
     selectedModel.maximumReferences,
   );
   const tooManyReferences = references.length > effectiveReferenceLimit;
-  const estimatedMaximumCostUsd = Number(
-    ((quality === "4K"
-      ? props.providerConfig?.pricesUsd.fourK ?? 0
-      : props.providerConfig?.pricesUsd.standard ?? 0) * batchSize).toFixed(2),
-  );
+  const estimatedMaximumCostUsd =
+    props.providerConfig?.estimatedCostsUsd[quality]?.[batchSize] ?? 0;
+  const formattedOwnerCostUsd = estimatedMaximumCostUsd.toLocaleString("de-DE", {
+    style: "currency",
+    currency: "USD",
+  });
+  const ownerProviderReady = Boolean(props.providerConfig?.ownerReady);
+  const selectedProviderReady = props.customerMode
+    ? Boolean(props.customerConfig?.ready)
+    : props.ownerMode
+      ? ownerProviderReady
+      : Boolean(props.providerConfig?.ready);
   const customerCredits = quoteXerianoCredits({ modelId: "nano-banana-pro", quality, count: batchSize });
   const insufficientCustomerCredits = Boolean(
     props.customerMode && availableCredits < customerCredits,
@@ -542,7 +549,14 @@ export function CreativeStudioWorkspace(props: {
       });
       return;
     }
-    if (!props.customerMode && !props.providerConfig?.ready) {
+    if (props.ownerMode && !ownerProviderReady) {
+      setNotice({
+        kind: "ERROR",
+        text: "Creative Studio ist serverseitig gerade nicht verfügbar.",
+      });
+      return;
+    }
+    if (!props.customerMode && !props.ownerMode && !props.providerConfig?.ready) {
       setNotice({
         kind: "ERROR",
         text: !props.providerConfig?.costCapConfigured
@@ -551,7 +565,7 @@ export function CreativeStudioWorkspace(props: {
         details: [
           !props.providerConfig?.credentialConfigured ? "FAL_KEY fehlt." : null,
           !props.providerConfig?.costCapConfigured
-            ? "NEXHQ_CREATIVE_NANO_BANANA_COST_MAX_USD fehlt oder ist ungültig."
+            ? "Kostenlimit nicht konfiguriert."
             : null,
           !props.providerConfig?.storageConfigured
             ? "Private NexHQ-Speicherung ist nicht konfiguriert."
@@ -564,6 +578,7 @@ export function CreativeStudioWorkspace(props: {
     }
     if (
       !props.customerMode &&
+      !props.ownerMode &&
       (props.providerConfig?.costCapUsd === null ||
       props.providerConfig?.costCapUsd === undefined ||
       estimatedMaximumCostUsd > props.providerConfig.costCapUsd)
@@ -685,6 +700,8 @@ export function CreativeStudioWorkspace(props: {
     props.providerConfig,
     props.customerConfig,
     props.customerMode,
+    props.ownerMode,
+    ownerProviderReady,
     productMode,
     references,
     insufficientCustomerCredits,
@@ -1218,7 +1235,7 @@ export function CreativeStudioWorkspace(props: {
                 />
                 {selectedModel.availability === "LIVE" ? (
                   <p className="cs-inline-cost">
-                    {props.ownerMode ? "Owner · Unlimited" : props.customerMode ? `Credit-Preis: ${customerCredits} Credits · Verfügbar: ${availableCredits.toLocaleString("de-DE")}` : <>Geschätzte Maximalkosten: {estimatedMaximumCostUsd.toLocaleString("de-DE", {
+                    {props.ownerMode ? `Geschätzte Kosten · ca. ${formattedOwnerCostUsd}` : props.customerMode ? `Credit-Preis: ${customerCredits} Credits · Verfügbar: ${availableCredits.toLocaleString("de-DE")}` : <>Geschätzte Maximalkosten: {estimatedMaximumCostUsd.toLocaleString("de-DE", {
                       style: "currency",
                       currency: "USD",
                     })}</>}
@@ -1266,11 +1283,9 @@ export function CreativeStudioWorkspace(props: {
                 </dl>
                 <p>
                   {selectedModel.availability === "LIVE" &&
-                  (props.customerMode
-                    ? props.customerConfig?.ready
-                    : props.providerConfig?.ready)
+                  selectedProviderReady
                     ? props.ownerMode
-                      ? "Owner · Unlimited"
+                      ? `Geschätzte Kosten · ca. ${formattedOwnerCostUsd}`
                       : props.customerMode
                       ? `${customerCredits} Credits · ${availableCredits.toLocaleString("de-DE")} verfügbar`
                       : `Live verbunden · geschätzte Maximalkosten ${estimatedMaximumCostUsd.toLocaleString("de-DE", { style: "currency", currency: "USD" })}`
@@ -1505,9 +1520,8 @@ export function CreativeStudioWorkspace(props: {
               ) : (
                 <Sparkles size={19} />
               )}
-              <span>{generating ? "Wird vorbereitet …" : props.customerMode ? `Generieren · ${customerCredits} Credits` : "Generieren"}</span>
+              <span>{generating ? "Wird vorbereitet …" : props.customerMode ? `Generieren · ${customerCredits} Credits` : props.ownerMode ? `Generieren · ca. ${formattedOwnerCostUsd}` : "Generieren"}</span>
             </button>
-            {props.ownerMode ? <small className="cs-owner-unlimited">Owner · Unlimited</small> : null}
           </div>
         </main>
       ) : view === "PROMPTS" ? (

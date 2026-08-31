@@ -31,9 +31,12 @@ export function selectXerianoAccountContext(input: {
   userId: string;
   email: string | null;
   legacyOwner: boolean;
+  /** Trusted active OWNER membership resolved independently of the primary account. */
+  internalOwner?: boolean;
   legacyWorkspaceKey: string;
   membership: XerianoMembershipAuthority | null;
 }): XerianoAccountContext | null {
+  const internalOwner = input.legacyOwner || input.internalOwner === true || input.membership?.role === "OWNER";
   if (input.membership) {
     return {
       userId: input.userId,
@@ -44,11 +47,11 @@ export function selectXerianoAccountContext(input: {
       workspaceKey: input.membership.workspaceKey,
       brainWorkspaceId: input.membership.brainWorkspaceId,
       source: "XERIANO_MEMBERSHIP",
-      internalOwner: input.legacyOwner || input.membership.role === "OWNER",
+      internalOwner,
     };
   }
 
-  if (!input.legacyOwner) return null;
+  if (!internalOwner) return null;
   return {
     userId: input.userId,
     email: input.email,

@@ -37,16 +37,32 @@ export async function resolveXerianoAccess(): Promise<XerianoAccessResult> {
   const legacyWorkspaceKey = process.env.NEXHQ_WORKSPACE_SLUG ?? "owner";
   try {
     const supabase = await createServerSupabase();
-    const { data, error } = await supabase
-      .from("xeriano_account_memberships")
-      .select("account_id,role,status,is_primary,xeriano_accounts!inner(id,name,studio_workspace_key,brain_workspace_id,status)")
-      .eq("user_id", userId)
-      .eq("status", "ACTIVE")
-      .eq("is_primary", true)
-      .maybeSingle();
+    const [{ data, error }, ownerMembership] = await Promise.all([
+      supabase
+        .from("xeriano_account_memberships")
+        .select("account_id,role,status,is_primary,xeriano_accounts!inner(id,name,studio_workspace_key,brain_workspace_id,status)")
+        .eq("user_id", userId)
+        .eq("status", "ACTIVE")
+        .eq("is_primary", true)
+        .maybeSingle(),
+      supabase
+        .from("xeriano_account_memberships")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("role", "OWNER")
+        .eq("status", "ACTIVE")
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    const activeOwnerMembership = !ownerMembership.error && Boolean(ownerMembership.data);
     if (error) {
       const context = selectXerianoAccountContext({
-        userId, email, legacyOwner, legacyWorkspaceKey, membership: null,
+        userId,
+        email,
+        legacyOwner,
+        internalOwner: activeOwnerMembership,
+        legacyWorkspaceKey,
+        membership: null,
       });
       return context
         ? { status: "AUTHENTICATED", context }
@@ -66,7 +82,12 @@ export async function resolveXerianoAccess(): Promise<XerianoAccessResult> {
         }
       : null;
     const context = selectXerianoAccountContext({
-      userId, email, legacyOwner, legacyWorkspaceKey, membership,
+      userId,
+      email,
+      legacyOwner,
+      internalOwner: activeOwnerMembership,
+      legacyWorkspaceKey,
+      membership,
     });
     return context
       ? { status: "AUTHENTICATED", context }
