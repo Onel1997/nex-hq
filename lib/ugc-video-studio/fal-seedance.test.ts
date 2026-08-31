@@ -367,6 +367,37 @@ test("initial POST service returns RUNNING immediately after provider acceptance
   assert.deepEqual(store.storageRequirements[0], { requiredResultBytes: 52_428_800 });
 });
 
+test("trusted Owner estimate-only execution does not require a legacy UGC cap", async () => {
+  const store = new MemoryUgcVideoStore();
+  const { provider, calls } = asyncProvider();
+  const active = setup({ duration: "10" });
+  const run = await generateUgcVideoJob(
+    {
+      scope,
+      jobId: "23232323-2323-4232-8232-232323232323",
+      setup: active,
+      references: [],
+    },
+    {
+      store,
+      provider,
+      configuredCostCapUsd: null,
+      costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+    },
+  );
+  assert.equal(run.status, "RUNNING");
+  assert.equal(
+    run.estimatedMaximumCostUsd,
+    estimateSeedanceMaximumCostUsd({
+      quality: active.quality,
+      aspectRatio: active.aspectRatio,
+      duration: active.duration,
+      hasVideoReference: false,
+    }),
+  );
+  assert.equal(calls.submit, 1);
+});
+
 test("queued and processing statuses remain RUNNING even well beyond ten seconds", async () => {
   const store = new MemoryUgcVideoStore();
   const { provider, calls } = asyncProvider({

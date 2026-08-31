@@ -25,6 +25,7 @@ export type UgcVideoPublicModelConfig = {
   costCapConfigured: boolean;
   storageConfigured: boolean;
   ready: boolean;
+  ownerReady: boolean;
   costCapUsd: number | null;
   costCapEnvironmentName:
     | "NEXHQ_UGC_SEEDANCE_COST_MAX_USD"
@@ -90,6 +91,8 @@ export function getUgcVideoProviderPublicConfig(
         costCapConfigured: seedance.costCapConfigured,
         storageConfigured: seedance.storageConfigured,
         ready: seedance.ready,
+        ownerReady:
+          seedance.credentialConfigured && seedance.storageConfigured,
         costCapUsd: seedance.costCapUsd,
         costCapEnvironmentName: "NEXHQ_UGC_SEEDANCE_COST_MAX_USD",
         pricingVersion: SEEDANCE_25_PRICING_VERSION,
@@ -103,6 +106,7 @@ export function getUgcVideoProviderPublicConfig(
         storageConfigured,
         ready:
           credentialConfigured && klingCostCapUsd !== null && storageConfigured,
+        ownerReady: credentialConfigured && storageConfigured,
         costCapUsd: klingCostCapUsd,
         costCapEnvironmentName: "NEXHQ_UGC_KLING_MOTION_COST_MAX_USD",
         pricingVersion: KLING_V3_PRO_MOTION_PRICING_VERSION,

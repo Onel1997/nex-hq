@@ -47,32 +47,39 @@ function reference(size: number): CreativeReferenceImage {
     previewUrl: "blob:test",
     source: { kind: "LOCAL_FILE_REFERENCE" },
     file,
+    tempReferenceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    uploadState: "READY",
   };
 }
 
-test("oversized Vercel multipart request fails before fetch/provider authority", async () => {
+test("large reference bytes stay out of the lightweight generation request", async () => {
   const selected = reference(8_000_000);
   let fetchCalls = 0;
-  await assert.rejects(
-    submitCreativeGeneration({
-      jobId: "11111111-1111-4111-8111-111111111111",
-      setup: setup(selected),
-      references: [selected],
-      fetcher: async () => {
-        fetchCalls += 1;
-        return new Response();
-      },
-    }),
-    (error: unknown) => {
-      assert.equal(error instanceof CreativeGenerationClientError, true);
-      assert.equal(
-        (error as CreativeGenerationClientError).code,
-        "REQUEST_PAYLOAD_TOO_LARGE",
-      );
-      return true;
+  let requestBody = "";
+  await submitCreativeGeneration({
+    jobId: "11111111-1111-4111-8111-111111111111",
+    setup: setup(selected),
+    references: [selected],
+    fetcher: async (_url, init) => {
+      fetchCalls += 1;
+      requestBody = String(init?.body ?? "");
+      return Response.json({
+        run: {
+          id: "11111111-1111-4111-8111-111111111111",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          status: "RUNNING",
+          setup: setup(selected),
+          results: [],
+          message: "Das Bild wird erstellt.",
+        },
+      });
     },
-  );
-  assert.equal(fetchCalls, 0);
+  });
+  assert.equal(fetchCalls, 1);
+  assert.ok(requestBody.length < 20_000);
+  assert.match(requestBody, /tempReferenceId/);
+  assert.doesNotMatch(requestBody, /8000000.{10000}/);
 });
 
 test("non-JSON Vercel 413 is normalized as a definite pre-provider failure", async () => {

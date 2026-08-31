@@ -72,6 +72,7 @@ function createDefaultTransport(
   const client: FalClient = createFalClient({ credentials });
   return {
     async uploadReference(reference) {
+      if (reference.providerUrl) return reference.providerUrl;
       const blob = new Blob([Uint8Array.from(reference.bytes)], {
         type: reference.metadata.mimeType,
       });
@@ -291,7 +292,8 @@ export class FalKlingMotionControlProvider implements UgcVideoProvider {
     try {
       for (const reference of selected) {
         uploadedUrls.push(
-          await this.transportInstance().uploadReference(reference),
+          reference.providerUrl ??
+            (await this.transportInstance().uploadReference(reference)),
         );
       }
     } catch (error) {

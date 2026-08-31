@@ -90,6 +90,10 @@ import type { XerianoCreativeCustomerConfig } from "@/lib/xeriano/customer-confi
 import type { XerianoCustomerStudioStatus } from "@/lib/xeriano/client-contracts";
 import { quoteXerianoCredits } from "@/lib/xeriano/pricing";
 import { xerianoCreationSchema } from "@/lib/xeriano/creation-contracts";
+import {
+  deleteXerianoTempReference,
+  uploadXerianoTempReference,
+} from "@/lib/xeriano/temp-references/client";
 
 type StudioView = "CREATE" | "PROMPTS" | "HISTORY";
 
@@ -134,8 +138,27 @@ function createReference(
     order,
     previewUrl: URL.createObjectURL(file),
     file,
+    tempReferenceId: null,
+    uploadState: "UPLOADING",
     source,
   };
+}
+
+function uploadCreativeReference(
+  reference: CreativeReferenceImage,
+  update: (id: string, value: Pick<CreativeReferenceImage, "tempReferenceId" | "uploadState">) => void,
+) {
+  void uploadXerianoTempReference({
+    studio: "CREATIVE_STUDIO",
+    kind: "IMAGE",
+    file: reference.file,
+  })
+    .then(({ tempReferenceId }) =>
+      update(reference.id, { tempReferenceId, uploadState: "READY" }),
+    )
+    .catch(() =>
+      update(reference.id, { tempReferenceId: null, uploadState: "FAILED" }),
+    );
 }
 
 function referenceMetadata(reference: CreativeReferenceImage) {
@@ -451,6 +474,15 @@ export function CreativeStudioWorkspace(props: {
         (a, b) => a.order - b.order,
       );
       setReferences(nextReferences);
+      for (const reference of nextReferences) {
+        uploadCreativeReference(reference, (id, value) =>
+          setReferences((current) =>
+            current.map((item) =>
+              item.id === id ? { ...item, ...value } : item,
+            ),
+          ),
+        );
+      }
       setMissingReferences(unresolved);
       referencesRef.current = nextReferences;
       setView("CREATE");
@@ -530,6 +562,15 @@ export function CreativeStudioWorkspace(props: {
     if (generationLockRef.current) return;
     const setup = buildSetup();
     if (!setup) return;
+    if (references.some((reference) => reference.uploadState !== "READY")) {
+      setNotice({
+        kind: "ERROR",
+        text: references.some((reference) => reference.uploadState === "FAILED")
+          ? "Upload fehlgeschlagen. Bitte entferne die Referenz und versuche es erneut."
+          : "Referenz wird hochgeladen …",
+      });
+      return;
+    }
     const model = creativeModelById(setup.modelId);
     if (model?.availability !== "LIVE") {
       const timestamp = nowIso();
@@ -675,6 +716,9 @@ export function CreativeStudioWorkspace(props: {
           "INVALID_REQUEST",
           "REFERENCE_LIMIT_EXCEEDED",
           "REFERENCE_INVALID",
+          "TEMP_REFERENCE_INCOMPLETE",
+          "TEMP_REFERENCE_EXPIRED",
+          "TEMP_REFERENCE_FORBIDDEN",
           "REQUEST_PAYLOAD_TOO_LARGE",
           "PROVIDER_NOT_CONFIGURED",
           "CREATIVE_COST_CAP_NOT_CONFIGURED",
@@ -755,13 +799,18 @@ export function CreativeStudioWorkspace(props: {
       ...references.map((reference) => reference.order),
       ...missingReferences.map((reference) => reference.order),
     ) + 1;
-    setReferences((current) => [
-      ...current,
-      ...accepted.map(({ file, source, role }, index) => ({
+    const additions = accepted.map(({ file, source, role }, index) => ({
         ...createReference(file, nextOrder + index, source),
         ...(role ? { role } : {}),
-      })),
-    ]);
+      }));
+    setReferences((current) => [...current, ...additions]);
+    for (const reference of additions) {
+      uploadCreativeReference(reference, (id, value) =>
+        setReferences((current) =>
+          current.map((item) => (item.id === id ? { ...item, ...value } : item)),
+        ),
+      );
+    }
     if (accepted.length !== entries.length) {
       setNotice({
         kind: "INFO",
@@ -961,7 +1010,11 @@ export function CreativeStudioWorkspace(props: {
     ],
   );
 
-  const removeReference = (id: string) =>
+  const removeReference = (id: string) => {
+    const removed = references.find((reference) => reference.id === id);
+    if (removed?.tempReferenceId) {
+      void deleteXerianoTempReference(removed.tempReferenceId);
+    }
     setReferences((current) =>
       current
         .filter((reference) => {
@@ -969,6 +1022,7 @@ export function CreativeStudioWorkspace(props: {
           return reference.id !== id;
         }),
     );
+  };
 
   const restoreMissingReference = useCallback(
     (referenceId: string, file: File) => {
@@ -1008,6 +1062,11 @@ export function CreativeStudioWorkspace(props: {
       setReferences((current) =>
         [...current, restored].sort((a, b) => a.order - b.order),
       );
+      uploadCreativeReference(restored, (id, value) =>
+        setReferences((current) =>
+          current.map((item) => (item.id === id ? { ...item, ...value } : item)),
+        ),
+      );
       setMissingReferences((current) =>
         current.filter((reference) => reference.referenceId !== referenceId),
       );
@@ -1022,7 +1081,12 @@ export function CreativeStudioWorkspace(props: {
   );
 
   const clearReferences = () => {
-    references.forEach((reference) => URL.revokeObjectURL(reference.previewUrl));
+    references.forEach((reference) => {
+      URL.revokeObjectURL(reference.previewUrl);
+      if (reference.tempReferenceId) {
+        void deleteXerianoTempReference(reference.tempReferenceId);
+      }
+    });
     setReferences([]);
     setMissingReferences([]);
   };
@@ -1524,6 +1588,9 @@ export function CreativeStudioWorkspace(props: {
                 !prompt.trim() ||
                 generating ||
                 tooManyReferences ||
+                references.some(
+                  (reference) => reference.uploadState !== "READY",
+                ) ||
                 Boolean(
                   props.customerMode &&
                     (!props.customerConfig?.ready ||

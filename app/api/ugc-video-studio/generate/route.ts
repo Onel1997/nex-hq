@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 
 import { resolveXerianoAccess } from "@/lib/xeriano/auth";
 import { authorizeXerianoGeneration } from "@/lib/xeriano/credit-guard";
@@ -17,7 +17,6 @@ import {
 } from "@/lib/xeriano/customer-generation";
 import {
   ugcVideoGenerationSetupSchema,
-  type UgcVideoReferenceMetadata,
 } from "@/lib/ugc-video-studio/contracts";
 import {
   generateUgcVideoJob,
@@ -28,9 +27,25 @@ import { UgcVideoCostCapError } from "@/lib/ugc-video-studio/seedance-config";
 import { resolveKlingMotionReferences } from "@/lib/ugc-video-studio/kling-motion-config";
 import { prepareKlingMotionMedia } from "@/lib/ugc-video-studio/kling-motion-media";
 import { requireTrustedCustomerMotionDuration } from "@/lib/xeriano/video-duration";
+import { xerianoTempReferenceGenerateEntrySchema } from "@/lib/xeriano/temp-references/contracts";
+import {
+  bindTempReferences,
+  resolveTempReferences,
+  XerianoTempReferenceError,
+} from "@/lib/xeriano/temp-references/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+const ugcGenerateRequestSchema = z
+  .object({
+    jobId: z.string().uuid(),
+    setup: ugcVideoGenerationSetupSchema,
+    tempReferences: z
+      .array(xerianoTempReferenceGenerateEntrySchema)
+      .max(50),
+  })
+  .strict();
 
 function errorResponse(input: {
   error: string;
@@ -66,52 +81,48 @@ export async function POST(request: Request) {
     return errorResponse({ error: authorization.message, code: authorization.code, status: authorization.status });
   }
   const customer = authorization.allowed && authorization.bypass === null;
+  const ownerUnlimited =
+    authorization.allowed && authorization.bypass === "OWNER_UNLIMITED";
   let customerAuthority: XerianoGenerationAuthority | null = null;
   let customerQuote: XerianoCustomerCreditQuote | null = null;
   let customerJobId: string | null = null;
 
   try {
-    const formData = await request.formData();
-    const jobId = formData.get("jobId");
-    const setupJson = formData.get("setup");
-    if (typeof jobId !== "string" || typeof setupJson !== "string") {
+    if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
       throw new UgcVideoGenerationError(
         "INVALID_REQUEST",
-        "Der Videoauftrag ist unvollständig.",
-        400,
+        "Referenzen müssen zuerst sicher hochgeladen werden.",
+        415,
       );
     }
-    const setup = ugcVideoGenerationSetupSchema.parse(JSON.parse(setupJson));
+    const parsed = ugcGenerateRequestSchema.parse(await request.json());
+    const { jobId, setup } = parsed;
     let providerSetup = setup;
-    const files = formData.getAll("reference");
-    let references: UgcVideoProviderReference[] = [];
-    for (let index = 0; index < setup.references.length; index += 1) {
-      const file = files[index];
-      const metadata: UgcVideoReferenceMetadata = setup.references[index]!;
-      if (
-        !(file instanceof File) ||
-        file.name !== metadata.name ||
-        file.type.toLowerCase() !== metadata.mimeType.toLowerCase()
-      ) {
-        throw new UgcVideoGenerationError(
-          "REFERENCE_INVALID",
-          "Mindestens eine Referenz stimmt nicht mit dem Setup überein.",
-          400,
-          `reference=${metadata.id};order=${index}`,
-        );
-      }
-      references.push({
-        metadata,
-        bytes: Buffer.from(await file.arrayBuffer()),
-      });
-    }
-    if (files.length !== references.length) {
+    if (
+      parsed.tempReferences.length !== setup.references.length ||
+      parsed.tempReferences.some(
+        (entry, index) => entry.referenceId !== setup.references[index]?.id,
+      )
+    ) {
       throw new UgcVideoGenerationError(
         "REFERENCE_INVALID",
         "Die Referenzen konnten nicht eindeutig zugeordnet werden.",
         400,
       );
     }
+    const resolvedReferences = await resolveTempReferences({
+      context: access.context,
+      studio: "UGC_VIDEO_STUDIO",
+      entries: parsed.tempReferences,
+      jobId,
+    });
+    let references: UgcVideoProviderReference[] = resolvedReferences.map(
+      (reference, index) => ({
+        metadata: setup.references[index]!,
+        bytes: reference.bytes,
+        providerUrl: reference.providerUrl,
+      }),
+    );
 
     if (setup.modelId === "kling-v3-pro-motion-control") {
       const motion = resolveKlingMotionReferences(setup).motionVideo;
@@ -180,15 +191,26 @@ export async function POST(request: Request) {
       });
     }
 
-    const run = await generateUgcVideoJob({
-      scope: {
-        workspaceId: access.context.workspaceKey,
-        actorId: access.context.userId,
-      },
+    await bindTempReferences({
+      context: access.context,
+      referenceIds: resolvedReferences.map((reference) => reference.authorityId),
       jobId,
-      setup: providerSetup,
-      references,
     });
+
+    const run = await generateUgcVideoJob(
+      {
+        scope: {
+          workspaceId: access.context.workspaceKey,
+          actorId: access.context.userId,
+        },
+        jobId,
+        setup: providerSetup,
+        references,
+      },
+      ownerUnlimited
+        ? { costLimitPolicy: "OWNER_ESTIMATE_ONLY" }
+        : {},
+    );
     if (customer) {
       customerAuthority = await reconcileCustomerGenerationFromRun({
         context: access.context,
@@ -226,6 +248,7 @@ export async function POST(request: Request) {
             "UGC_VIDEO_STORAGE_SETUP_FAILED",
           ].includes(error.code)) ||
         error instanceof UgcVideoCostCapError ||
+        error instanceof XerianoTempReferenceError ||
         error instanceof ZodError ||
         error instanceof SyntaxError ||
         (error instanceof Error &&
@@ -268,6 +291,9 @@ export async function POST(request: Request) {
       });
     }
     if (error instanceof XerianoCustomerGenerationError) {
+      return errorResponse({ error: error.message, code: error.code, status: error.status });
+    }
+    if (error instanceof XerianoTempReferenceError) {
       return errorResponse({ error: error.message, code: error.code, status: error.status });
     }
     if (error instanceof UgcVideoCostCapError) {

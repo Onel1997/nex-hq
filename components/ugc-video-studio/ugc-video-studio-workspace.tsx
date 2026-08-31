@@ -81,6 +81,10 @@ import type { UgcVideoProviderPublicConfig } from "@/lib/ugc-video-studio/provid
 import type { XerianoUgcCustomerConfig } from "@/lib/xeriano/customer-config";
 import type { XerianoCustomerStudioStatus } from "@/lib/xeriano/client-contracts";
 import { quoteXerianoCredits } from "@/lib/xeriano/pricing";
+import {
+  deleteXerianoTempReference,
+  uploadXerianoTempReference,
+} from "@/lib/xeriano/temp-references/client";
 
 type StudioView = "CREATE" | "PROMPTS" | "HISTORY";
 
@@ -107,10 +111,16 @@ function mediaTypeFromMime(mimeType: string): UgcVideoReferenceType | null {
 }
 
 function referenceMetadata(reference: UgcVideoReferenceMedia) {
-  const { file: _file, previewUrl: _previewUrl, ...metadata } = reference;
-  void _file;
-  void _previewUrl;
-  return metadata;
+  return {
+    id: reference.id,
+    name: reference.name,
+    mimeType: reference.mimeType,
+    mediaType: reference.mediaType,
+    byteLength: reference.byteLength,
+    durationSeconds: reference.durationSeconds,
+    role: reference.role,
+    order: reference.order,
+  };
 }
 
 function createReference(file: File, order: number): UgcVideoReferenceMedia {
@@ -127,7 +137,26 @@ function createReference(file: File, order: number): UgcVideoReferenceMedia {
     order,
     previewUrl: URL.createObjectURL(file),
     file,
+    tempReferenceId: null,
+    uploadState: "UPLOADING",
   };
+}
+
+function uploadUgcReference(
+  reference: UgcVideoReferenceMedia,
+  update: (id: string, value: Pick<UgcVideoReferenceMedia, "tempReferenceId" | "uploadState">) => void,
+) {
+  void uploadXerianoTempReference({
+    studio: "UGC_VIDEO_STUDIO",
+    kind: reference.mediaType,
+    file: reference.file,
+  })
+    .then(({ tempReferenceId }) =>
+      update(reference.id, { tempReferenceId, uploadState: "READY" }),
+    )
+    .catch(() =>
+      update(reference.id, { tempReferenceId: null, uploadState: "FAILED" }),
+    );
 }
 
 export function UgcVideoStudioWorkspace(props: {
@@ -526,12 +555,19 @@ export function UgcVideoStudioWorkspace(props: {
         counts[mediaType] += 1;
         accepted.push(file);
       }
-      setReferences((current) => [
-        ...current,
-        ...accepted.map((file, index) =>
-          createReference(file, current.length + index),
-        ),
-      ]);
+      const additions = accepted.map((file, index) =>
+        createReference(file, references.length + index),
+      );
+      setReferences((current) => [...current, ...additions]);
+      for (const reference of additions) {
+        uploadUgcReference(reference, (id, value) =>
+          setReferences((current) =>
+            current.map((item) =>
+              item.id === id ? { ...item, ...value } : item,
+            ),
+          ),
+        );
+      }
       if (accepted.length !== files.length) {
         setNotice({
           kind: "INFO",
@@ -557,7 +593,11 @@ export function UgcVideoStudioWorkspace(props: {
     })();
   }, [addReferences, props.initialLibraryAssetId]);
 
-  const removeReference = (id: string) =>
+  const removeReference = (id: string) => {
+    const removed = references.find((reference) => reference.id === id);
+    if (removed?.tempReferenceId) {
+      void deleteXerianoTempReference(removed.tempReferenceId);
+    }
     setReferences((current) =>
       current
         .filter((reference) => {
@@ -566,9 +606,15 @@ export function UgcVideoStudioWorkspace(props: {
         })
         .map((reference, order) => ({ ...reference, order })),
     );
+  };
 
   const clearReferences = () => {
-    references.forEach((reference) => URL.revokeObjectURL(reference.previewUrl));
+    references.forEach((reference) => {
+      URL.revokeObjectURL(reference.previewUrl);
+      if (reference.tempReferenceId) {
+        void deleteXerianoTempReference(reference.tempReferenceId);
+      }
+    });
     setReferences([]);
   };
 
@@ -584,6 +630,15 @@ export function UgcVideoStudioWorkspace(props: {
     }
     const setup = buildSetup();
     if (!setup) return;
+    if (references.some((reference) => reference.uploadState !== "READY")) {
+      setNotice({
+        kind: "ERROR",
+        text: references.some((reference) => reference.uploadState === "FAILED")
+          ? "Upload fehlgeschlagen. Bitte entferne die Referenz und versuche es erneut."
+          : "Referenz wird hochgeladen …",
+      });
+      return;
+    }
     const model = ugcVideoModelById(setup.modelId);
     if (model?.availability !== "LIVE") {
       const timestamp = nowIso();
@@ -636,16 +691,21 @@ export function UgcVideoStudioWorkspace(props: {
       });
       return;
     }
-    if (!props.customerMode && !selectedProviderConfig?.ready) {
+    if (
+      !props.customerMode &&
+      !(props.ownerMode
+        ? selectedProviderConfig?.ownerReady
+        : selectedProviderConfig?.ready)
+    ) {
       setNotice({
         kind: "ERROR",
-        text: !selectedProviderConfig?.costCapConfigured
+        text: !props.ownerMode && !selectedProviderConfig?.costCapConfigured
           ? "Das Kostenlimit für dieses Modell ist noch nicht eingerichtet."
           : `${selectedModel.name} ist serverseitig noch nicht vollständig eingerichtet.`,
         details: [
           !selectedProviderConfig?.credentialConfigured ? "FAL_KEY fehlt." : null,
-          !selectedProviderConfig?.costCapConfigured
-            ? `${selectedProviderConfig?.costCapEnvironmentName ?? "Das modellspezifische Kostenlimit"} fehlt oder ist ungültig.`
+          !props.ownerMode && !selectedProviderConfig?.costCapConfigured
+            ? "Das modellspezifische Kostenlimit fehlt oder ist ungültig."
             : null,
           !selectedProviderConfig?.storageConfigured
             ? "Private NexHQ-Speicherung ist nicht konfiguriert."
@@ -658,6 +718,7 @@ export function UgcVideoStudioWorkspace(props: {
     }
     if (
       !props.customerMode &&
+      !props.ownerMode &&
       (estimatedMaximumCostUsd === null ||
         selectedProviderConfig?.costCapUsd === null ||
         selectedProviderConfig?.costCapUsd === undefined ||
@@ -779,6 +840,7 @@ export function UgcVideoStudioWorkspace(props: {
     selectedCustomerModelConfig,
     references,
     props.customerMode,
+    props.ownerMode,
     customerModelUnavailable,
     customerCredits,
     insufficientCustomerCredits,
@@ -941,7 +1003,7 @@ export function UgcVideoStudioWorkspace(props: {
                     onBitrate={setBitrate}
                   />
                 )}
-                {props.ownerMode ? <div className="uv-owner-plan"><strong>Owner · Unlimited</strong></div> : <div className="uv-cost"><div><span>{props.customerMode?"Credit-Preis":"Geschätzte Maximalkosten"}</span><strong>{props.customerMode?(customerCredits!==null?`${customerCredits} Credits`:selectedModel.settingsKind === "KLING_MOTION_CONTROL"?"Videolänge wählen":"Für Kunden nicht verfügbar"):estimatedMaximumCostUsd === null ? "Nicht verfügbar" : `${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`}</strong></div><p>{props.customerMode?`${availableCredits.toLocaleString("de-DE")} Credits verfügbar.`:selectedModel.settingsKind === "KLING_MOTION_CONTROL" ? `Konservatives fal-Maximum für ${duration} Sekunden Ausgabe.` : references.some((reference) => reference.mediaType === "VIDEO") ? "Konservatives Maximum inklusive dokumentiertem Video-Referenzbudget." : "Tokenbasierte fal-Schätzung für Dauer, Format und Qualität."}</p>{!productMode&&props.providerConfig?<p>V1-Speicherlimit: {Math.round(props.providerConfig.resultStorageLimitBytes / 1024 / 1024)} MB pro Ergebnis.</p>:null}</div>}
+                <div className="uv-cost"><div><span>{props.customerMode?"Credit-Preis":"Geschätzte Kosten"}</span><strong>{props.customerMode?(customerCredits!==null?`${customerCredits} Credits`:selectedModel.settingsKind === "KLING_MOTION_CONTROL"?"Videolänge wählen":"Für Kunden nicht verfügbar"):estimatedMaximumCostUsd === null ? "Nicht verfügbar" : `ca. ${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`}</strong></div><p>{props.customerMode?`${availableCredits.toLocaleString("de-DE")} Credits verfügbar.`:selectedModel.settingsKind === "KLING_MOTION_CONTROL" ? `Für ${duration} Sekunden Ausgabe.` : references.some((reference) => reference.mediaType === "VIDEO") ? "Schätzung inklusive Video-Referenz." : "Schätzung für Dauer, Format und Qualität."}</p>{!productMode&&props.providerConfig?<p>V1-Speicherlimit: {Math.round(props.providerConfig.resultStorageLimitBytes / 1024 / 1024)} MB pro Ergebnis.</p>:null}</div>
               </section>
             </div>
 
@@ -985,7 +1047,7 @@ export function UgcVideoStudioWorkspace(props: {
             )}
           </section>
 
-          <div className="uv-generate-bar"><button type="button" className="uv-generate" disabled={generating || activeRun?.status === "RUNNING" || !prompt.trim() || !klingDurationAllowed || Boolean(props.customerMode&&(customerModelUnavailable||customerCredits===null||insufficientCustomerCredits||customerConcurrencyReached))} onClick={generate}>{generating || activeRun?.status === "RUNNING" ? <><Loader2 className="is-spinning" size={19} /> Video wird erstellt …</> : <><Sparkles size={19} /> {props.customerMode&&customerCredits!==null?`Generieren · ${customerCredits} Credits`:"Generieren"}</>}</button>{props.ownerMode?<small className="uv-owner-unlimited">Owner · Unlimited</small>:null}</div>
+          <div className="uv-generate-bar"><button type="button" className="uv-generate" disabled={generating || activeRun?.status === "RUNNING" || !prompt.trim() || !klingDurationAllowed || references.some((reference) => reference.uploadState !== "READY") || Boolean(props.customerMode&&(customerModelUnavailable||customerCredits===null||insufficientCustomerCredits||customerConcurrencyReached))} onClick={generate}>{generating || activeRun?.status === "RUNNING" ? <><Loader2 className="is-spinning" size={19} /> Video wird erstellt …</> : <><Sparkles size={19} /> {props.customerMode&&customerCredits!==null?`Generieren · ${customerCredits} Credits`:props.ownerMode&&estimatedMaximumCostUsd!==null?`Generieren · ca. ${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`:"Generieren"}</>}</button></div>
         </div>
       ) : view === "PROMPTS" ? (
         <UgcPromptLibrary

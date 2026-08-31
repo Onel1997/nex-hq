@@ -51,6 +51,7 @@ function createDefaultTransport(credentials: string): FalNanoBananaTransport {
   const client: FalClient = createFalClient({ credentials });
   return {
     async uploadReference(reference) {
+      if (reference.providerUrl) return reference.providerUrl;
       const copy = Uint8Array.from(reference.bytes);
       const blob = new Blob([copy], { type: reference.metadata.mimeType });
       return client.storage.upload(blob, {
@@ -219,7 +220,9 @@ export class FalNanoBananaProvider implements CreativeImageProvider {
     );
     const uploadedReferenceUrls: string[] = [];
     for (const reference of orderedReferences) {
-      uploadedReferenceUrls.push(await transport.uploadReference(reference));
+      uploadedReferenceUrls.push(
+        reference.providerUrl ?? (await transport.uploadReference(reference)),
+      );
     }
 
     const providerPrompt = buildNanoBananaProviderPrompt(request.setup);

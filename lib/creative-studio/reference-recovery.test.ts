@@ -39,6 +39,8 @@ function reference(
     order,
     file,
     previewUrl: `blob:${name}`,
+    tempReferenceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    uploadState: "READY",
     source,
   };
 }

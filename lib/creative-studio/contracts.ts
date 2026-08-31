@@ -93,6 +93,8 @@ export type CreativeReferenceSource = z.infer<
 export type CreativeReferenceImage = CreativeReferenceMetadata & {
   previewUrl: string;
   file: File;
+  tempReferenceId: string | null;
+  uploadState: "UPLOADING" | "READY" | "FAILED";
   /** Client/recovery provenance only. Never enters the provider setup payload. */
   source: CreativeReferenceSource;
 };

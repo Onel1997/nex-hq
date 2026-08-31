@@ -80,6 +80,7 @@ function createDefaultTransport(credentials: string): FalSeedanceTransport {
   const client: FalClient = createFalClient({ credentials });
   return {
     async uploadReference(reference) {
+      if (reference.providerUrl) return reference.providerUrl;
       const copy = Uint8Array.from(reference.bytes);
       const blob = new Blob([copy], { type: reference.metadata.mimeType });
       return client.storage.upload(blob, {
@@ -341,7 +342,9 @@ export class FalSeedanceProvider implements UgcVideoProvider {
     const uploadedUrls: string[] = [];
     try {
       for (const reference of orderedReferences) {
-        uploadedUrls.push(await transport.uploadReference(reference));
+        uploadedUrls.push(
+          reference.providerUrl ?? (await transport.uploadReference(reference)),
+        );
       }
     } catch (error) {
       throw new UgcVideoProviderDiagnosticError(

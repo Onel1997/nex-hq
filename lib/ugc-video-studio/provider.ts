@@ -9,6 +9,8 @@ import type {
 export type UgcVideoProviderReference = {
   metadata: UgcVideoReferenceMetadata;
   bytes: Buffer;
+  /** Short-lived private-storage delivery URL; never durable job truth. */
+  providerUrl?: string;
 };
 
 export type UgcVideoProviderRequest = {

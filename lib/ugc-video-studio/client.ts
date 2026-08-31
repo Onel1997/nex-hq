@@ -27,19 +27,33 @@ export async function submitUgcVideoGeneration(input: {
   fetcher?: typeof fetch;
   onCredit?: (receipt: XerianoClientCreditReceipt) => void;
 }): Promise<UgcVideoRun> {
-  const formData = new FormData();
-  formData.append("jobId", input.jobId);
-  formData.append("setup", JSON.stringify(input.setup));
-  for (const reference of [...input.references].sort(
-    (a, b) => a.order - b.order,
-  )) {
-    formData.append("reference", reference.file, reference.name);
+  if (
+    input.references.some(
+      (reference) =>
+        reference.uploadState !== "READY" || !reference.tempReferenceId,
+    )
+  ) {
+    throw new UgcVideoGenerationClientError(
+      "Eine Referenz wurde noch nicht vollständig hochgeladen.",
+      "TEMP_REFERENCE_INCOMPLETE",
+    );
   }
+  const body = JSON.stringify({
+    jobId: input.jobId,
+    setup: input.setup,
+    tempReferences: [...input.references]
+      .sort((a, b) => a.order - b.order)
+      .map((reference) => ({
+        referenceId: reference.id,
+        tempReferenceId: reference.tempReferenceId,
+      })),
+  });
   const response = await (input.fetcher ?? fetch)(
     "/api/ugc-video-studio/generate",
     {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body,
       credentials: "same-origin",
     },
   );

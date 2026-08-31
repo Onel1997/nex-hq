@@ -95,7 +95,9 @@ test("Owner UI presents monetary Creative cost while financial authority remains
   assert.doesNotMatch(creative, /NEXHQ_CREATIVE_NANO_BANANA_COST_MAX_USD/);
   assert.match(creative, /`Generieren · \$\{customerCredits\} Credits`/);
   assert.match(ugc, /props\.ownerMode/);
-  assert.match(ugc, /Owner · Unlimited/);
+  assert.match(ugc, /Geschätzte Kosten/);
+  assert.match(ugc, /Generieren · ca\./);
+  assert.doesNotMatch(ugc, /Owner · Unlimited/);
   assert.match(ugc, /`Generieren · \$\{customerCredits\} Credits`/);
 });
 

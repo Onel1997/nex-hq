@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 
 import {
   hasXerianoAccountMembership,
@@ -22,7 +22,6 @@ import {
   CREATIVE_GENERATION_HTTP_MAX_BYTES,
   creativeGenerationSetupSchema,
   creativeReferenceSnapshotSchema,
-  type CreativeReferenceMetadata,
 } from "@/lib/creative-studio/contracts";
 import {
   CreativeGenerationError,
@@ -32,6 +31,12 @@ import { logCreativeProviderDiagnostic } from "@/lib/creative-studio/provider-di
 import { CreativeCostCapError } from "@/lib/creative-studio/nano-banana-config";
 import type { CreativeProviderReference } from "@/lib/creative-studio/provider";
 import {
+  bindTempReferences,
+  resolveTempReferences,
+  XerianoTempReferenceError,
+} from "@/lib/xeriano/temp-references/server";
+import { xerianoTempReferenceGenerateEntrySchema } from "@/lib/xeriano/temp-references/contracts";
+import {
   assertXerianoCreationAuthorityReady,
   finalizeCreativeCreations,
   prepareCreativeCreationReferences,
@@ -40,6 +45,17 @@ import {
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+const creativeGenerateRequestSchema = z
+  .object({
+    jobId: z.string().uuid(),
+    setup: creativeGenerationSetupSchema,
+    referenceSnapshot: creativeReferenceSnapshotSchema.nullable(),
+    tempReferences: z
+      .array(xerianoTempReferenceGenerateEntrySchema)
+      .max(14),
+  })
+  .strict();
 
 function errorResponse(input: {
   error: string;
@@ -98,51 +114,43 @@ export async function POST(request: Request) {
         status: 413,
       });
     }
-    const formData = await request.formData();
-    const jobId = formData.get("jobId");
-    const setupJson = formData.get("setup");
-    if (typeof jobId !== "string" || typeof setupJson !== "string") {
+    if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
       throw new CreativeGenerationError(
-        "INVALID_REQUEST",
-        "Der Generierungsauftrag ist unvollständig.",
-        400,
+        "REFERENCE_INVALID",
+        "Referenzen müssen zuerst sicher hochgeladen werden.",
+        415,
       );
     }
-    const setup = creativeGenerationSetupSchema.parse(JSON.parse(setupJson));
-    const rawReferenceSnapshot = formData.get("referenceSnapshot");
-    const referenceSnapshot =
-      accountCreationMode && typeof rawReferenceSnapshot === "string"
-        ? creativeReferenceSnapshotSchema.parse(JSON.parse(rawReferenceSnapshot))
-        : null;
-    const files = formData.getAll("reference");
-    const references: CreativeProviderReference[] = [];
-    for (let index = 0; index < setup.references.length; index += 1) {
-      const file = files[index];
-      const metadata: CreativeReferenceMetadata = setup.references[index]!;
-      if (
-        !(file instanceof File) ||
-        file.name !== metadata.name ||
-        file.type.toLowerCase() !== metadata.mimeType.toLowerCase()
-      ) {
-        throw new CreativeGenerationError(
-          "REFERENCE_INVALID",
-          "Mindestens ein Referenzbild stimmt nicht mit dem Setup überein.",
-          400,
-          `reference=${metadata.id};order=${index}`,
-        );
-      }
-      references.push({
-        metadata,
-        bytes: Buffer.from(await file.arrayBuffer()),
-      });
-    }
-    if (files.length !== references.length) {
+    const parsed = creativeGenerateRequestSchema.parse(await request.json());
+    const { jobId, setup } = parsed;
+    const referenceSnapshot = accountCreationMode
+      ? parsed.referenceSnapshot
+      : null;
+    if (
+      parsed.tempReferences.length !== setup.references.length ||
+      parsed.tempReferences.some(
+        (entry, index) => entry.referenceId !== setup.references[index]?.id,
+      )
+    ) {
       throw new CreativeGenerationError(
         "REFERENCE_INVALID",
         "Die Referenzbilder konnten nicht eindeutig zugeordnet werden.",
         400,
       );
     }
+    const resolvedReferences = await resolveTempReferences({
+      context: access.context,
+      studio: "CREATIVE_STUDIO",
+      entries: parsed.tempReferences,
+      jobId,
+    });
+    const references: CreativeProviderReference[] = resolvedReferences.map(
+      (reference, index) => ({
+        metadata: setup.references[index]!,
+        bytes: reference.bytes,
+        providerUrl: reference.providerUrl,
+      }),
+    );
 
     if (accountCreationMode) {
       const canonicalQuote = quoteCreativeCustomerGeneration(setup);
@@ -167,6 +175,12 @@ export async function POST(request: Request) {
         snapshot: referenceSnapshot,
       });
     }
+
+    await bindTempReferences({
+      context: access.context,
+      referenceIds: resolvedReferences.map((reference) => reference.authorityId),
+      jobId,
+    });
 
     logCreativeProviderDiagnostic("submission_started", {
       stage: "generation_service",
@@ -284,6 +298,7 @@ export async function POST(request: Request) {
             "PROVIDER_NOT_CONFIGURED",
           ].includes(error.code)) ||
         error instanceof CreativeCostCapError ||
+        error instanceof XerianoTempReferenceError ||
         (error instanceof XerianoCreationError && !creativeRunObserved) ||
         error instanceof ZodError ||
         error instanceof SyntaxError ||
@@ -327,6 +342,13 @@ export async function POST(request: Request) {
       });
     }
     if (error instanceof XerianoCustomerGenerationError) {
+      return errorResponse({
+        error: error.message,
+        code: error.code,
+        status: error.status,
+      });
+    }
+    if (error instanceof XerianoTempReferenceError) {
       return errorResponse({
         error: error.message,
         code: error.code,

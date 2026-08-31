@@ -301,6 +301,8 @@ test("Kling public readiness uses its dedicated manual cost cap", () => {
     missing.models["kling-v3-pro-motion-control"].costCapConfigured,
     false,
   );
+  assert.equal(missing.models["kling-v3-pro-motion-control"].ready, false);
+  assert.equal(missing.models["kling-v3-pro-motion-control"].ownerReady, true);
   const ready = getUgcVideoProviderPublicConfig({
     NODE_ENV: "test",
     FAL_KEY: "test-only",
@@ -313,6 +315,48 @@ test("Kling public readiness uses its dedicated manual cost cap", () => {
     ready.models["kling-v3-pro-motion-control"].costCapEnvironmentName,
     "NEXHQ_UGC_KLING_MOTION_COST_MAX_USD",
   );
+});
+
+test("trusted provider URLs bypass redundant fal storage upload", async () => {
+  const active = setup();
+  let uploadCalls = 0;
+  const captured: { value: FalKlingMotionControlInput | null } = { value: null };
+  const transport: FalKlingMotionControlTransport = {
+    async uploadReference() {
+      uploadCalls += 1;
+      return "https://fal.invalid/uploaded";
+    },
+    async submit(_endpoint, input) {
+      captured.value = input;
+      return {
+        requestId: "signed-reference-request",
+        statusUrl: null,
+        responseUrl: null,
+        cancelUrl: null,
+        queuePosition: null,
+      };
+    },
+    async status() { return completedStatus(); },
+    async result() {
+      return {
+        requestId: "signed-reference-request",
+        data: { video: { url: "https://fal.media/result.mp4" } },
+      };
+    },
+  };
+  const references = providerReferences(active).map((item) => ({
+    ...item,
+    providerUrl: `https://private.example/${item.metadata.id}?signed=server-only`,
+  }));
+  await new FalKlingMotionControlProvider(undefined, transport).submit({
+    clientRequestId: "99999999-9999-4999-8999-999999999999",
+    endUserId: "owner",
+    setup: active,
+    references,
+  });
+  assert.equal(uploadCalls, 0);
+  assert.equal(captured.value?.image_url, "https://private.example/character?signed=server-only");
+  assert.equal(captured.value?.video_url, "https://private.example/motion?signed=server-only");
 });
 
 test("Kling adapter uploads selected references in stable order and submits once", async () => {

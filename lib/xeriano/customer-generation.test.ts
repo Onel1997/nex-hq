@@ -279,10 +279,10 @@ test("customer routes reserve before frozen execution and status never reserves"
   const ugc = read("app/api/ugc-video-studio/generate/route.ts");
   const status = read("app/api/ugc-video-studio/jobs/[jobId]/route.ts");
   assert.ok(creative.indexOf("reserveCustomerGeneration") < creative.indexOf("generateCreativeJob({"));
-  assert.ok(ugc.indexOf("reserveCustomerGeneration") < ugc.indexOf("generateUgcVideoJob({"));
+  assert.ok(ugc.indexOf("reserveCustomerGeneration") < ugc.indexOf("generateUgcVideoJob("));
   assert.ok(
-    ugc.indexOf("prepareKlingMotionMedia({") <
-      ugc.indexOf("reserveCustomerGeneration({"),
+    ugc.lastIndexOf("prepareKlingMotionMedia({") <
+      ugc.lastIndexOf("reserveCustomerGeneration({"),
     "the trusted media clip is prepared before credits are reserved",
   );
   assert.doesNotMatch(status, /reserveCustomerGeneration/);

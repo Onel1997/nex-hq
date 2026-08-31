@@ -120,6 +120,8 @@ export type UgcVideoReferenceMetadata = z.infer<
 export type UgcVideoReferenceMedia = UgcVideoReferenceMetadata & {
   previewUrl: string;
   file: File;
+  tempReferenceId: string | null;
+  uploadState: "UPLOADING" | "READY" | "FAILED";
 };
 
 export const ugcVideoAdvancedSettingsSchema = z

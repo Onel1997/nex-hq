@@ -495,6 +495,13 @@ export function ReferenceUploader(props: {
                   </button>
                 </div>
                 <p title={reference.name}>{reference.name}</p>
+                <small>
+                  {reference.uploadState === "UPLOADING"
+                    ? "Referenz wird hochgeladen …"
+                    : reference.uploadState === "FAILED"
+                      ? "Upload fehlgeschlagen."
+                      : "Bereit"}
+                </small>
                 <label>
                   <span className="sr-only">Rolle für {reference.name}</span>
                   <select

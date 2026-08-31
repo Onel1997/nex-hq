@@ -10,6 +10,8 @@ import {
 export type CreativeProviderReference = {
   metadata: CreativeGenerationSetup["references"][number];
   bytes: Buffer;
+  /** Short-lived, account-authorized URL; never persisted in a manifest. */
+  providerUrl?: string;
 };
 
 export type CreativeProviderRequest = {

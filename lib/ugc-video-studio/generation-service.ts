@@ -24,13 +24,16 @@ import {
 import { FalSeedanceProvider } from "@/lib/ugc-video-studio/providers/fal-seedance";
 import { FalKlingMotionControlProvider } from "@/lib/ugc-video-studio/providers/fal-kling-motion-control";
 import {
+  assertKlingMotionReferences,
   assertKlingMotionCostAllowed,
+  estimateKlingMotionMaximumCostUsd,
   getKlingMotionCostCap,
   KLING_V3_PRO_MOTION_CONTROL_MODEL_ID,
   KlingMotionReferenceError,
 } from "@/lib/ugc-video-studio/kling-motion-config";
 import {
   assertSeedanceCostAllowed,
+  estimateSeedanceMaximumCostUsd,
   parseUgcVideoCostCap,
   SEEDANCE_25_COST_CAP_ENV,
   SEEDANCE_25_REFERENCE_MODEL_ID,
@@ -202,6 +205,7 @@ function resolveProviderExecution(input: {
   setup: UgcVideoGenerationSetup;
   injectedProvider?: UgcVideoProvider;
   injectedCostCapUsd?: number | null;
+  costLimitPolicy?: "REQUIRE_CONFIGURED_CAP" | "OWNER_ESTIMATE_ONLY";
 }): UgcProviderExecution {
   if (input.setup.modelId === "seedance-2.5") {
     const costCap =
@@ -212,10 +216,20 @@ function resolveProviderExecution(input: {
       provider:
         input.injectedProvider ?? new FalSeedanceProvider(process.env.FAL_KEY),
       providerModel: SEEDANCE_25_REFERENCE_MODEL_ID,
-      estimatedMaximumCostUsd: assertSeedanceCostAllowed({
-        setup: input.setup,
-        configuredCostCapUsd: costCap,
-      }),
+      estimatedMaximumCostUsd:
+        input.costLimitPolicy === "OWNER_ESTIMATE_ONLY"
+          ? estimateSeedanceMaximumCostUsd({
+              quality: input.setup.quality,
+              aspectRatio: input.setup.aspectRatio,
+              duration: input.setup.duration,
+              hasVideoReference: input.setup.references.some(
+                (reference) => reference.mediaType === "VIDEO",
+              ),
+            })
+          : assertSeedanceCostAllowed({
+              setup: input.setup,
+              configuredCostCapUsd: costCap,
+            }),
       configuredName: "Seedance 2.5",
     };
   }
@@ -229,10 +243,18 @@ function resolveProviderExecution(input: {
         input.injectedProvider ??
         new FalKlingMotionControlProvider(process.env.FAL_KEY),
       providerModel: KLING_V3_PRO_MOTION_CONTROL_MODEL_ID,
-      estimatedMaximumCostUsd: assertKlingMotionCostAllowed({
-        setup: input.setup,
-        configuredCostCapUsd: costCap,
-      }),
+      estimatedMaximumCostUsd:
+        input.costLimitPolicy === "OWNER_ESTIMATE_ONLY"
+          ? (assertKlingMotionReferences(input.setup),
+            estimateKlingMotionMaximumCostUsd({
+              characterOrientation:
+                input.setup.klingMotion.characterOrientation,
+              selectedDurationSeconds: Number(input.setup.duration),
+            }))
+          : assertKlingMotionCostAllowed({
+              setup: input.setup,
+              configuredCostCapUsd: costCap,
+            }),
       configuredName: "Kling V3 Pro Motion Control",
     };
   }
@@ -444,6 +466,7 @@ export type GenerateUgcVideoJobDependencies = {
   provider?: UgcVideoProvider;
   fetcher?: typeof fetch;
   configuredCostCapUsd?: number | null;
+  costLimitPolicy?: "REQUIRE_CONFIGURED_CAP" | "OWNER_ESTIMATE_ONLY";
   now?: () => string;
 };
 
@@ -472,6 +495,9 @@ export async function generateUgcVideoJob(
       ...(dependencies.provider ? { injectedProvider: dependencies.provider } : {}),
       ...(dependencies.configuredCostCapUsd !== undefined
         ? { injectedCostCapUsd: dependencies.configuredCostCapUsd }
+        : {}),
+      ...(dependencies.costLimitPolicy
+        ? { costLimitPolicy: dependencies.costLimitPolicy }
         : {}),
     });
   } catch (error) {

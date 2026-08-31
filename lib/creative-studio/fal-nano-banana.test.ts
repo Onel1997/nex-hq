@@ -169,6 +169,44 @@ test("Nano Banana Pro uses the text endpoint only when no reference is supplied"
   assert.equal(endpoint, NANO_BANANA_PRO_TEXT_MODEL_ID);
 });
 
+test("Nano Banana consumes server-authorized reference URLs without fal re-upload", async () => {
+  let uploadCalls = 0;
+  let imageUrls: unknown = null;
+  const transport: FalNanoBananaTransport = {
+    async uploadReference() {
+      uploadCalls += 1;
+      return "https://fal.invalid/reupload";
+    },
+    async submit(_endpoint, input) {
+      imageUrls = (input as Record<string, unknown>).image_urls;
+      return { requestId: "fal-signed-1" };
+    },
+    async wait() {},
+    async result() {
+      return {
+        requestId: "fal-signed-1",
+        data: {
+          description: "done",
+          images: [{ url: "https://fal.media/result.png" }],
+        },
+      };
+    },
+  };
+  await new FalNanoBananaProvider(undefined, transport).generate({
+    clientRequestId: "21212121-2121-4212-8212-212121212121",
+    setup: setup({ batchSize: 1 }),
+    references: references().map((reference) => ({
+      ...reference,
+      providerUrl: `https://private.example/${reference.metadata.id}?signed=server-only`,
+    })),
+  });
+  assert.equal(uploadCalls, 0);
+  assert.deepEqual(imageUrls, [
+    "https://private.example/ref-model?signed=server-only",
+    "https://private.example/ref-design?signed=server-only",
+  ]);
+});
+
 test("fal acceptance parser supports installed and safe alternate request-id shapes", () => {
   assert.equal(extractFalQueueRequestId({ request_id: "installed-shape" }), "installed-shape");
   assert.equal(extractFalQueueRequestId({ requestId: "alternate-shape" }), "alternate-shape");

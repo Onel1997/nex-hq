@@ -1,5 +1,4 @@
 import {
-  CREATIVE_GENERATION_HTTP_MAX_BYTES,
   creativeRunSchema,
   type CreativeGenerationSetup,
   type CreativeReferenceImage,
@@ -11,8 +10,6 @@ import {
   type XerianoClientCreditReceipt,
 } from "@/lib/xeriano/client-contracts";
 
-const CREATIVE_MULTIPART_SAFETY_BYTES = 64 * 1024;
-
 export function estimateCreativeGenerationRequestBytes(input: {
   jobId: string;
   setup: CreativeGenerationSetup;
@@ -20,15 +17,15 @@ export function estimateCreativeGenerationRequestBytes(input: {
   referenceSnapshot?: CreativeReferenceSnapshot;
 }): number {
   const encoder = new TextEncoder();
-  return (
-    input.references.reduce((total, reference) => total + reference.file.size, 0) +
-    encoder.encode(input.jobId).byteLength +
-    encoder.encode(JSON.stringify(input.setup)).byteLength +
-    (input.referenceSnapshot
-      ? encoder.encode(JSON.stringify(input.referenceSnapshot)).byteLength
-      : 0) +
-    CREATIVE_MULTIPART_SAFETY_BYTES
-  );
+  return encoder.encode(JSON.stringify({
+    jobId: input.jobId,
+    setup: input.setup,
+    referenceSnapshot: input.referenceSnapshot ?? null,
+    tempReferences: input.references.map((reference) => ({
+      referenceId: reference.id,
+      tempReferenceId: reference.tempReferenceId,
+    })),
+  })).byteLength;
 }
 
 export class CreativeGenerationClientError extends Error {
@@ -50,28 +47,32 @@ export async function submitCreativeGeneration(input: {
   fetcher?: typeof fetch;
   onCredit?: (receipt: XerianoClientCreditReceipt) => void;
 }): Promise<CreativeRun> {
-  if (estimateCreativeGenerationRequestBytes(input) > CREATIVE_GENERATION_HTTP_MAX_BYTES) {
+  if (input.references.some(
+    (reference) =>
+      reference.uploadState !== "READY" || !reference.tempReferenceId,
+  )) {
     throw new CreativeGenerationClientError(
-      "Die Übertragung der ausgewählten Referenzen ist zu groß. Bitte verwende kleinere Dateien oder weniger Referenzen.",
-      "REQUEST_PAYLOAD_TOO_LARGE",
+      "Eine Referenz wurde noch nicht vollständig hochgeladen.",
+      "TEMP_REFERENCE_INCOMPLETE",
     );
   }
-  const formData = new FormData();
-  formData.append("jobId", input.jobId);
-  formData.append("setup", JSON.stringify(input.setup));
-  if (input.referenceSnapshot) {
-    formData.append("referenceSnapshot", JSON.stringify(input.referenceSnapshot));
-  }
-  for (const reference of [...input.references].sort(
-    (a, b) => a.order - b.order,
-  )) {
-    formData.append("reference", reference.file, reference.name);
-  }
+  const body = JSON.stringify({
+    jobId: input.jobId,
+    setup: input.setup,
+    referenceSnapshot: input.referenceSnapshot ?? null,
+    tempReferences: [...input.references]
+      .sort((a, b) => a.order - b.order)
+      .map((reference) => ({
+        referenceId: reference.id,
+        tempReferenceId: reference.tempReferenceId,
+      })),
+  });
   const response = await (input.fetcher ?? fetch)(
     "/api/creative-studio/generate",
     {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body,
       credentials: "same-origin",
     },
   );

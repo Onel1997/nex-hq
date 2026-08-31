@@ -327,6 +327,13 @@ export function UgcReferenceUploader(props: {
                 <button type="button" onClick={() => props.onRemove(reference.id)} aria-label={`${reference.name} entfernen`}><X size={14} /></button>
               </div>
               <p title={reference.name}>{reference.name}</p>
+              <small>
+                {reference.uploadState === "UPLOADING"
+                  ? "Referenz wird hochgeladen …"
+                  : reference.uploadState === "FAILED"
+                    ? "Upload fehlgeschlagen."
+                    : "Bereit"}
+              </small>
               <select
                 aria-label={`Rolle für ${reference.name}`}
                 value={reference.role}
