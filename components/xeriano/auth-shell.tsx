@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { XeriamoBrandIdentity } from "@/components/xeriano/brand-identity";
+import { XeriamoBrandLockup } from "@/components/xeriano/brand-identity";
 
 type Props = {
   title: string;
@@ -20,7 +20,7 @@ export function XerianoAuthShell({ title, description, children, footer, plan }:
       <section className="xeriano-auth-card">
         <header className="xeriano-auth-header">
           <Link href="/" className="xeriano-auth-brand" aria-label="Xeriamo Startseite">
-            <XeriamoBrandIdentity role="LOGO" />
+            <XeriamoBrandLockup />
           </Link>
           <h1>{title}</h1>
           <p>{description}</p>

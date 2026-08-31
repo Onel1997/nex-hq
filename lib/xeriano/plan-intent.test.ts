@@ -66,7 +66,7 @@ test("all auth views share the Xeriamo shell and prospectively show 30 Free cred
   assert.doesNotMatch(register + login + reset, /40 Credits/);
   assert.match(
     read("components/xeriano/auth-shell.tsx"),
-    /XeriamoBrandIdentity role="LOGO"/,
+    /XeriamoBrandLockup/,
   );
 });
 

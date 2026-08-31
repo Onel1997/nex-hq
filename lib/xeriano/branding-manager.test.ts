@@ -84,13 +84,14 @@ test("public branding reads are sessionless while every mutation remains exact-O
   assert.doesNotMatch(server, /role\s*===\s*["']ADMIN/);
 });
 
-test("compact Owner identities render one visible name without changing Customer composition", () => {
+test("active Icon + Logo lockups are consistent while Owner presentation remains stable", () => {
   const identity = read("components/xeriano/brand-identity.tsx");
   const header = read("components/layout/dashboard-shell.tsx");
   const sidebar = read("components/navigation/hq-sidebar.tsx");
   const drawer = read("components/navigation/studio-mobile-navigation.tsx");
   const customer = read("components/xeriano/customer-nav.tsx");
   const ownerCss = read("app/hq-navigation.css");
+  const productCss = read("app/xeriano.css");
   assert.match(identity, /showVisibleName = !markOnly && \(showName \|\| !asset\)/);
   assert.match(identity, /showVisibleName \? <strong>Xeriamo<\/strong> : markOnly \? null/);
   assert.match(identity, /hasSquareLogoCanvas/);
@@ -100,15 +101,22 @@ test("compact Owner identities render one visible name without changing Customer
   assert.doesNotMatch(header, /Owner Workspace/i);
   assert.match(sidebar, /role="ICON" markOnly/);
   assert.match(sidebar, /hq-sidebar-logo-text"><XeriamoBrandIdentity role="LOGO" \/>/);
-  assert.match(drawer, /markOnly=\{audience === "OWNER"\}/);
-  assert.match(drawer, /audience === "OWNER" \? <XeriamoBrandIdentity role="LOGO" \/> : <strong>\{brand\}<\/strong>/);
+  assert.match(drawer, /<XeriamoBrandIdentity role="ICON" markOnly \/>/);
+  assert.match(drawer, /<XeriamoBrandIdentity role="LOGO" \/>/);
   assert.doesNotMatch(drawer, /Owner Workspace/i);
+  assert.doesNotMatch(drawer, /Creator Suite/i);
   assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-owner \.studio-mobile-branding > \.xeriamo-brand-identity \{[^}]*background: #000;[^}]*box-shadow: none;/);
+  assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-customer \.studio-mobile-branding > \.xeriamo-brand-identity \{[^}]*background: #000;[^}]*box-shadow: none;/);
   assert.match(ownerCss, /\.hq-owner-mobile-brand > span:first-child \{[\s\S]*?background: #000;[\s\S]*?box-shadow: none;/);
   assert.match(ownerCss, /\.hq-owner-mobile-brand-copy \.xeriamo-brand-identity\.is-logo \{[\s\S]*?height: 48px;/);
   assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-owner \.studio-mobile-branding-copy \.xeriamo-brand-identity\.is-logo \{[^}]*height: 48px;/);
   assert.match(ownerCss, /\.xeriamo-brand-identity\.is-logo\.has-square-canvas img \{ object-fit: cover;/);
-  assert.doesNotMatch(customer, /markOnly/);
+  assert.match(identity, /export function XeriamoBrandLockup/);
+  assert.match(customer, /XeriamoBrandLockup/);
+  assert.doesNotMatch(customer, /showName/);
+  assert.match(productCss, /\.xeriamo-brand-lockup-mark\{[^}]*background:#000;[^}]*box-shadow:none/);
+  assert.match(productCss, /\.xeriamo-brand-lockup-wordmark\{[^}]*width:clamp\(145px,40vw,184px\);[^}]*height:48px/);
+  assert.doesNotMatch(productCss, /\.xeriano-auth-brand \.xeriamo-brand-identity\.is-logo\.is-fallback:before/);
 });
 
 test("uploads are server-owned, path-safe and do not auto-activate", () => {
@@ -157,6 +165,8 @@ test("runtime identity uses fallbacks and covers public, auth, customer and Owne
     "components/xeriano/public-header.tsx",
     "components/xeriano/auth-shell.tsx",
     "components/xeriano/customer-nav.tsx",
+  ]) assert.match(read(file), /XeriamoBrandLockup/, file);
+  for (const file of [
     "components/layout/dashboard-shell.tsx",
     "components/navigation/hq-sidebar.tsx",
   ]) assert.match(read(file), /XeriamoBrandIdentity/, file);

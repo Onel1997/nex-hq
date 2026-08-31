@@ -73,8 +73,7 @@ test("customer and Owner shells each mount the one shared drawer at shell level"
   assert.equal((dashboardShell.match(/StudioMobileNavigation audience="OWNER"/g) ?? []).length, 1);
   assert.doesNotMatch(customerNav, /useState\(false\)|xeriano-mobile-drawer|const items=/);
   assert.match(shared, /const brand = "Xeriamo"/);
-  assert.match(shared, /const brandSubtitle = "Creator Suite"/);
-  assert.match(shared, /audience === "CUSTOMER" \? <span>\{brandSubtitle\}<\/span> : null/);
+  assert.doesNotMatch(shared, /Creator Suite/i);
   assert.doesNotMatch(shared, /Owner Workspace/i);
   assert.match(shared, /is-\$\{audience\.toLowerCase\(\)\}/);
   assert.match(shared, /data-audience=\{audience\}/);

@@ -67,7 +67,6 @@ export function StudioMobileNavigation({
   const close = useCallback(() => setOpen(false), []);
   const sections = getStudioSidebarSections(locale, audience);
   const brand = "Xeriamo";
-  const brandSubtitle = "Creator Suite";
 
   useEffect(() => {
     if (!open) return;
@@ -118,10 +117,9 @@ export function StudioMobileNavigation({
           >
             <header>
               <div className="studio-mobile-branding">
-                <XeriamoBrandIdentity role="ICON" markOnly={audience === "OWNER"} />
+                <XeriamoBrandIdentity role="ICON" markOnly />
                 <div className="studio-mobile-branding-copy">
-                  {audience === "OWNER" ? <XeriamoBrandIdentity role="LOGO" /> : <strong>{brand}</strong>}
-                  {audience === "CUSTOMER" ? <span>{brandSubtitle}</span> : null}
+                  <XeriamoBrandIdentity role="LOGO" />
                 </div>
               </div>
               <button type="button" onClick={close} aria-label="Studio-Menü schließen" autoFocus>

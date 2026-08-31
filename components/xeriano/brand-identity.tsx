@@ -4,6 +4,19 @@
 
 import { useXeriamoBranding } from "./branding-provider";
 
+export function XeriamoBrandLockup() {
+  return (
+    <span className="xeriamo-brand-lockup">
+      <span className="xeriamo-brand-lockup-mark" aria-hidden="true">
+        <XeriamoBrandIdentity role="ICON" markOnly />
+      </span>
+      <span className="xeriamo-brand-lockup-wordmark">
+        <XeriamoBrandIdentity role="LOGO" />
+      </span>
+    </span>
+  );
+}
+
 export function XeriamoBrandIdentity({
   role,
   showName = false,
