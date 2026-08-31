@@ -8,7 +8,11 @@ import {
   endNexhqSession,
   GENERIC_LOGIN_ERROR,
 } from "./password-session";
-import { decideNexhqAuthRouting, isPublicNexhqPath } from "./routing";
+import {
+  decideNexhqAuthRouting,
+  isCustomerProductApiPath,
+  isPublicNexhqPath,
+} from "./routing";
 import { authorizePersonaActor } from "@/lib/persona/security/authorization";
 import { PersonaDomainError } from "@/lib/persona/domain/errors";
 import { updateSession } from "@/lib/supabase/middleware";
@@ -77,6 +81,59 @@ describe("NexHQ private-owner authentication foundation", () => {
       }),
       { kind: "allow" },
     );
+  });
+
+  it("keeps the Xeriamo product Design Studio customer-safe while protecting Design Studio Intern", () => {
+    assert.equal(isCustomerProductApiPath("/api/design-studio/history"), true);
+    assert.equal(isCustomerProductApiPath("/api/design/run"), false);
+
+    for (const pathname of [
+      "/app/design-studio",
+      "/api/design-studio/history",
+      "/api/design-studio/quote",
+      "/api/design-studio/generate",
+      "/api/design-studio/utility",
+      "/api/design-studio/svg-to-png",
+    ]) {
+      assert.deepEqual(
+        decideNexhqAuthRouting({
+          pathname,
+          authenticated: true,
+          internalOwner: false,
+        }),
+        { kind: "allow" },
+        pathname,
+      );
+    }
+
+    assert.deepEqual(
+      decideNexhqAuthRouting({
+        pathname: "/agents/design",
+        authenticated: true,
+        internalOwner: false,
+      }),
+      { kind: "redirect", location: "/app" },
+    );
+    assert.deepEqual(
+      decideNexhqAuthRouting({
+        pathname: "/api/design/run",
+        authenticated: true,
+        internalOwner: false,
+      }),
+      { kind: "api_forbidden", status: 403 },
+    );
+
+    for (const pathname of ["/hq/design-studio", "/agents/design"]) {
+      assert.deepEqual(
+        decideNexhqAuthRouting({
+          pathname,
+          authenticated: true,
+          internalOwner: true,
+        }),
+        { kind: "allow" },
+        pathname,
+      );
+    }
   });
 
   it("returns the JSON-401 decision for an unauthenticated API", () => {

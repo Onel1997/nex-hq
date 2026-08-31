@@ -13,6 +13,16 @@ export function isSessionlessStripeWebhookPath(pathname: string): boolean {
   return pathname === XERIANO_STRIPE_WEBHOOK_PATH;
 }
 
+export function isCustomerProductApiPath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/api/xeriano/") ||
+    pathname.startsWith("/api/creative-studio/") ||
+    pathname.startsWith("/api/ugc-video-studio/") ||
+    pathname === "/api/design-studio" ||
+    pathname.startsWith("/api/design-studio/")
+  );
+}
+
 export function isPublicNexhqPath(pathname: string): boolean {
   return (
     pathname === "/" ||
@@ -46,11 +56,7 @@ export function decideNexhqAuthRouting(input: {
   if (input.authenticated) {
     if (typeof input.internalOwner === "boolean" && !input.internalOwner) {
       if (input.pathname === "/app" || input.pathname.startsWith("/app/")) return { kind: "allow" };
-      if (
-        input.pathname.startsWith("/api/xeriano/") ||
-        input.pathname.startsWith("/api/creative-studio/") ||
-        input.pathname.startsWith("/api/ugc-video-studio/")
-      ) return { kind: "allow" };
+      if (isCustomerProductApiPath(input.pathname)) return { kind: "allow" };
       if (input.pathname === "/api" || input.pathname.startsWith("/api/")) return { kind: "api_forbidden", status: 403 };
       return { kind: "redirect", location: "/app" };
     }

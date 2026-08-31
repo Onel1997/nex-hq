@@ -1,8 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveValidatedNexhqActor } from "@/lib/auth/authentication";
-import { decideNexhqAuthRouting } from "@/lib/auth/routing";
-import { isSessionlessStripeWebhookPath } from "@/lib/auth/routing";
+import {
+  decideNexhqAuthRouting,
+  isCustomerProductApiPath,
+  isSessionlessStripeWebhookPath,
+} from "@/lib/auth/routing";
 import {
   clearVerifiedIdentityHeaders,
   NEXHQ_VERIFIED_USER_EMAIL_HEADER,
@@ -72,8 +75,7 @@ export async function updateSession(request: NextRequest) {
       internalOwner = [...new Set(compatibilityOwnerIds)].includes(authentication.actor.userId);
       const pathname = request.nextUrl.pathname;
       const customerBoundary = pathname === "/app" || pathname.startsWith("/app/") ||
-        pathname.startsWith("/api/xeriano/") || pathname.startsWith("/api/creative-studio/") ||
-        pathname.startsWith("/api/ugc-video-studio/");
+        isCustomerProductApiPath(pathname);
       if (!internalOwner && !customerBoundary) {
         // The additive Xeriano membership is the future role authority. Until
         // rollout, a missing table fails closed and legacy owner IDs stay valid.
