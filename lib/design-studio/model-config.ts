@@ -117,7 +117,7 @@ export function buildDesignProviderInput(input: {
     endpoint,
     payload: {
       ...common,
-      ...(input.referenceUrl ? { style_image_urls: [input.referenceUrl] } : {}),
+      ...(input.referenceUrl ? { image_urls: [input.referenceUrl] } : {}),
     },
   };
 }

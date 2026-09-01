@@ -4,7 +4,7 @@ import { buildDesignProviderPrompt, resolveDesignEndpoint } from "@/lib/design-s
 import { resolveDesignProviderCost } from "@/lib/design-studio/pricing-config";
 import { readRasterDimensions } from "@/lib/design-studio/raster-metadata";
 import { FalDesignProvider } from "@/lib/design-studio/providers/fal-design";
-import type { DesignProvider, DesignProviderReference } from "@/lib/design-studio/provider";
+import type { DesignProvider, DesignProviderQueueHandle, DesignProviderReference } from "@/lib/design-studio/provider";
 import { DesignProviderUnknownOutcomeError } from "@/lib/design-studio/provider";
 import { DesignProviderCapacityError, RECRAFT_CAPACITY_MESSAGE } from "@/lib/design-studio/provider-errors";
 import { DESIGN_JOB_VERSION, designJobManifestSchema, type DesignJobManifest } from "@/lib/design-studio/server-contracts";
@@ -160,6 +160,7 @@ export async function generateDesignJob(input: {
     createdAt: now(), updatedAt: now(), status: "RUNNING",
     setup, originalPrompt: setup.prompt, providerPrompt: null,
     providerModel: cost.providerModel, providerRequestId: null,
+    providerQueueHandle: null,
     estimatedCostUsdMicros: cost.totalCostMicros,
     referenceChecksumSha256: input.reference ? sha256(input.reference.bytes) : null,
     referenceStoragePath,
@@ -169,8 +170,14 @@ export async function generateDesignJob(input: {
   try {
     const response = await provider.generate({
       jobId: input.jobId, setup, reference: input.reference,
-      onAccepted: async (requestId, endpoint) => {
-        manifest = designJobManifestSchema.parse({ ...manifest, providerRequestId: requestId, providerModel: endpoint, updatedAt: now() });
+      onAccepted: async (requestId, endpoint, queueHandle?: DesignProviderQueueHandle) => {
+        manifest = designJobManifestSchema.parse({
+          ...manifest,
+          providerRequestId: requestId,
+          providerModel: endpoint,
+          providerQueueHandle: queueHandle ?? null,
+          updatedAt: now(),
+        });
         await store.writeManifest(manifest);
         await input.onProviderAccepted?.({
           providerRequestId: requestId,
@@ -242,6 +249,7 @@ export async function recoverDesignJob(
       providerRequestId: manifest.providerRequestId,
       providerModel: approvedEndpoint,
       providerPrompt: manifest.providerPrompt ?? buildRecoveryPrompt(manifest),
+      providerQueueHandle: manifest.providerQueueHandle as DesignProviderQueueHandle | null,
     });
     if (!response) return designManifestToRun(manifest);
     manifest = await persistProviderResults({

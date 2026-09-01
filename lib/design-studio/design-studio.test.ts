@@ -11,6 +11,7 @@ import { normalizeFalDesignResults } from "./providers/fal-design";
 import { FalDesignProvider, type FalDesignTransport } from "./providers/fal-design";
 import { quoteDesignCustomerGeneration } from "../xeriano/customer-generation";
 import { generateDesignJob } from "./generation-service";
+import type { DesignProviderQueueHandle } from "./provider";
 import type { DesignJobManifest } from "./server-contracts";
 
 function setup(patch: Partial<DesignGenerationSetup> = {}): DesignGenerationSetup {
@@ -61,7 +62,8 @@ test("references use real provider input fields", () => {
   const ideogram = buildDesignProviderInput({ setup: setup({ reference }), providerPrompt: "p", referenceUrl: "https://temporary.example/r" });
   assert.equal(ideogram.payload.image_url, "https://temporary.example/r");
   const recraft = buildDesignProviderInput({ setup: setup({ model: "RECRAFT_4", reference }), providerPrompt: "p", referenceUrl: "https://temporary.example/r" });
-  assert.deepEqual(recraft.payload.style_image_urls, ["https://temporary.example/r"]);
+  assert.deepEqual(recraft.payload.image_urls, ["https://temporary.example/r"]);
+  assert.equal("style_image_urls" in recraft.payload, false);
 });
 
 test("quoted slogan remains byte-for-byte visible authority and artwork-only rules are present", () => {
@@ -183,11 +185,18 @@ test("persistent generation stores original SVG bytes and replays one idempotent
     async readResult() { return null; },
   };
   const vectorSetup = setup({ model: "RECRAFT_4", outputMode: "VECTOR" });
+  const queueHandle: DesignProviderQueueHandle = {
+    requestId: "accepted-vector",
+    endpoint: DESIGN_ENDPOINTS.RECRAFT_VECTOR,
+    statusUrl: "https://queue.fal.run/accepted-vector/status",
+    responseUrl: "https://queue.fal.run/accepted-vector/response",
+    cancelUrl: "https://queue.fal.run/accepted-vector/cancel",
+  };
   const provider = {
     isConfigured: () => true,
-    async generate(input: { onAccepted?: (requestId: string, endpoint: typeof DESIGN_ENDPOINTS.RECRAFT_VECTOR) => Promise<void> | void }) {
+    async generate(input: { onAccepted?: (requestId: string, endpoint: typeof DESIGN_ENDPOINTS.RECRAFT_VECTOR, queueHandle?: DesignProviderQueueHandle) => Promise<void> | void }) {
       providerCalls += 1;
-      await input.onAccepted?.("accepted-vector", DESIGN_ENDPOINTS.RECRAFT_VECTOR);
+      await input.onAccepted?.("accepted-vector", DESIGN_ENDPOINTS.RECRAFT_VECTOR, queueHandle);
       return { providerModel: DESIGN_ENDPOINTS.RECRAFT_VECTOR, providerRequestId: "accepted-vector", providerPrompt: "safe", results: [{ url: "https://result.example/vector.svg", mimeType: "image/svg+xml", width: null, height: null }] };
     },
   };
@@ -203,6 +212,7 @@ test("persistent generation stores original SVG bytes and replays one idempotent
   assert.equal(first.status, "SUCCEEDED");
   assert.equal(first.results[0]?.mimeType, "image/svg+xml");
   assert.deepEqual([...stored.values()][0], svg);
+  assert.deepEqual((manifest as DesignJobManifest | null)?.providerQueueHandle, queueHandle);
   assert.equal(replay.id, first.id);
   assert.equal(providerCalls, 1);
 });

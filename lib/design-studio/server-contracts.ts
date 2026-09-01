@@ -2,6 +2,13 @@ import { z } from "zod";
 import { designGenerationSetupSchema, designResultSchema } from "@/lib/design-studio/contracts";
 
 export const DESIGN_JOB_VERSION = "xeriamo-design-job-v1" as const;
+export const designProviderQueueHandleSchema = z.object({
+  requestId: z.string().min(1).max(512),
+  endpoint: z.string().min(1).max(300),
+  statusUrl: z.string().url().max(2048),
+  responseUrl: z.string().url().max(2048),
+  cancelUrl: z.string().url().max(2048).nullable(),
+}).strict();
 export const designStoredResultSchema = z.object({
   publicView: designResultSchema,
   storagePath: z.string().min(1),
@@ -22,6 +29,7 @@ export const designJobManifestSchema = z.object({
   providerPrompt: z.string().max(12000).nullable(),
   providerModel: z.string().min(1),
   providerRequestId: z.string().min(1).nullable(),
+  providerQueueHandle: designProviderQueueHandleSchema.nullable().default(null),
   estimatedCostUsdMicros: z.number().int().nonnegative(),
   referenceChecksumSha256: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
   referenceStoragePath: z.string().min(1).nullable(),

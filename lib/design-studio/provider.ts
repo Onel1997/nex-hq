@@ -3,6 +3,13 @@ import type { DesignEndpoint } from "@/lib/design-studio/model-config";
 
 export type DesignProviderReference = { bytes: Buffer; mimeType: string; name: string };
 export type DesignProviderResult = { url: string; mimeType: string; width: number | null; height: number | null };
+export type DesignProviderQueueHandle = {
+  requestId: string;
+  endpoint: DesignEndpoint;
+  statusUrl: string;
+  responseUrl: string;
+  cancelUrl: string | null;
+};
 export type DesignProviderResponse = {
   providerModel: DesignEndpoint;
   providerRequestId: string;
@@ -15,7 +22,11 @@ export interface DesignProvider {
     jobId: string;
     setup: DesignGenerationSetup;
     reference: DesignProviderReference | null;
-    onAccepted?: (requestId: string, endpoint: DesignEndpoint) => Promise<void> | void;
+    onAccepted?: (
+      requestId: string,
+      endpoint: DesignEndpoint,
+      queueHandle?: DesignProviderQueueHandle,
+    ) => Promise<void> | void;
   }): Promise<DesignProviderResponse>;
   /**
    * Re-observes a previously accepted provider request without submitting it
@@ -26,6 +37,7 @@ export interface DesignProvider {
     providerRequestId: string;
     providerModel: DesignEndpoint;
     providerPrompt: string;
+    providerQueueHandle?: DesignProviderQueueHandle | null;
   }): Promise<DesignProviderResponse | null>;
 }
 
