@@ -122,9 +122,9 @@ export function UgcPromptLibrary(props: {
             <article className="uv-prompt-card" key={prompt.id}>
               <header><span>{UGC_VIDEO_TYPE_LABELS[prompt.videoType]}</span><button type="button" onClick={() => props.onFavorite(prompt)} aria-label={prompt.favorite ? "Favorit entfernen" : "Als Favorit markieren"}><Heart size={17} fill={prompt.favorite ? "currentColor" : "none"} /></button></header>
               <h2>{prompt.title}</h2>
-              <p>{prompt.prompt}</p>
+              <p>{prompt.prompt || (prompt.mode === "VIDEO_EDIT" ? "Standardmäßige Personen-Ersetzung ohne zusätzliche Anweisung." : "Kein Prompt")}</p>
               <div className="uv-tags">{prompt.tags.slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}</div>
-              <dl><div><dt>Modell</dt><dd>{ugcVideoModelById(prompt.modelId)?.name ?? prompt.modelId}</dd></div><div><dt>Setup</dt><dd>{setupLabel({ contractVersion: "nexhq-ugc-video-studio-v1", prompt: prompt.prompt, modelId: prompt.modelId, duration: prompt.duration, aspectRatio: prompt.aspectRatio, quality: prompt.quality, bitrate: prompt.bitrate, videoType: prompt.videoType, references: [], advanced: prompt.advanced, klingMotion: prompt.klingMotion })}</dd></div></dl>
+              <dl><div><dt>Modell</dt><dd>{ugcVideoModelById(prompt.modelId)?.name ?? prompt.modelId}</dd></div><div><dt>Setup</dt><dd>{setupLabel({ contractVersion: "nexhq-ugc-video-studio-v1", mode: prompt.mode, prompt: prompt.prompt, modelId: prompt.modelId, duration: prompt.duration, aspectRatio: prompt.aspectRatio, quality: prompt.quality, bitrate: prompt.bitrate, videoType: prompt.videoType, references: [], advanced: prompt.advanced, klingMotion: prompt.klingMotion, videoEdit: prompt.videoEdit })}</dd></div></dl>
               <small>Aktualisiert {formatDate(prompt.updatedAt)}</small>
               <footer>
                 <button type="button" className="uv-button uv-button--primary" onClick={() => props.onLoad(prompt)}><Play size={15} /> Laden</button>
@@ -156,7 +156,7 @@ export function UgcRunHistory(props: {
             <article className="uv-history-card" key={run.id}>
               <div className="uv-history-visual">{run.results[0] ? <video src={run.results[0].url} muted playsInline preload="metadata" /> : <Play size={22} />}</div>
               <div className="uv-history-body">
-                <div><h2>{run.setup.prompt}</h2><span data-status={run.status}>{statusLabel(run.status)}</span></div>
+                <div><h2>{run.setup.prompt || (run.setup.mode === "VIDEO_EDIT" ? "Video bearbeiten" : "UGC Video")}</h2><span data-status={run.status}>{statusLabel(run.status)}</span></div>
                 <p>{ugcVideoModelById(run.setup.modelId)?.name ?? run.setup.modelId} · {setupLabel(run.setup)}{run.setup.modelId === "seedance-2.5" ? ` · ${UGC_VIDEO_BITRATE_LABELS[run.setup.bitrate]}` : ""}</p>
                 <small>{formatDate(run.createdAt)} · {run.setup.references.length} Referenzen{run.estimatedMaximumCostUsd != null ? ` · max. ${run.estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $` : ""}</small>
                 {run.status === "FAILED" || run.status === "UNKNOWN_OUTCOME" ? <UgcProviderDetails run={run} /> : null}

@@ -33,6 +33,13 @@ export type UgcVideoProviderSubmission = {
   queuePosition: number | null;
 };
 
+export type UgcVideoProviderQueueHandle = {
+  endpoint: string;
+  statusUrl: string | null;
+  responseUrl: string | null;
+  cancelUrl: string | null;
+};
+
 export type UgcVideoProviderStatus = {
   status: "IN_QUEUE" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
   queuePosition: number | null;
@@ -76,11 +83,15 @@ export interface UgcVideoProvider {
   readonly providerId: string;
   isConfigured(): boolean;
   submit(request: UgcVideoProviderRequest): Promise<UgcVideoProviderSubmission>;
-  getStatus(providerRequestId: string): Promise<UgcVideoProviderStatus>;
+  getStatus(
+    providerRequestId: string,
+    queueHandle?: UgcVideoProviderQueueHandle | null,
+  ): Promise<UgcVideoProviderStatus>;
   getResult(input: {
     providerRequestId: string;
     setup: UgcVideoGenerationSetup;
     providerPrompt: string;
     referenceOrder: string[];
+    queueHandle?: UgcVideoProviderQueueHandle | null;
   }): Promise<UgcVideoProviderResponse>;
 }

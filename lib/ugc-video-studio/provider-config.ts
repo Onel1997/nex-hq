@@ -16,9 +16,23 @@ import {
   UGC_VIDEO_QUALITIES,
 } from "@/lib/ugc-video-studio/contracts";
 import { UGC_VIDEO_RESULT_MAX_BYTES } from "@/lib/ugc-video-studio/storage-policy";
+import {
+  KLING_O1_STANDARD_EDIT_MODEL_ID,
+  KLING_O3_PRO_EDIT_MODEL_ID,
+  RECOMMENDED_VIDEO_EDIT_MODEL_ID,
+  SEEDANCE_2_FAST_EDIT_MODEL_ID,
+  VIDEO_EDIT_MODEL_IDS,
+  ugcVideoModelById,
+  type UgcVideoEditModelId,
+} from "@/lib/ugc-video-studio/model-registry";
+
+export type UgcVideoPublicModelId =
+  | "seedance-2.5"
+  | "kling-v3-pro-motion-control"
+  | UgcVideoEditModelId;
 
 export type UgcVideoPublicModelConfig = {
-  modelId: "seedance-2.5" | "kling-v3-pro-motion-control";
+  modelId: UgcVideoPublicModelId;
   provider: "fal";
   providerModel: string;
   credentialConfigured: boolean;
@@ -29,19 +43,22 @@ export type UgcVideoPublicModelConfig = {
   costCapUsd: number | null;
   costCapEnvironmentName:
     | "NEXHQ_UGC_SEEDANCE_COST_MAX_USD"
-    | "NEXHQ_UGC_KLING_MOTION_COST_MAX_USD";
+    | "NEXHQ_UGC_KLING_MOTION_COST_MAX_USD"
+    | null;
   pricingVersion: string;
 };
 
 export type UgcVideoProviderPublicConfig = {
   models: Record<
-    "seedance-2.5" | "kling-v3-pro-motion-control",
+    UgcVideoPublicModelId,
     UgcVideoPublicModelConfig
   >;
+  recommendedVideoEditModelId: UgcVideoEditModelId;
   resultStorageLimitBytes: number;
   ownerPricing: {
     seedanceEstimatesUsd: Record<string, number>;
     klingPerSecondUsd: number;
+    videoEditEstimatesUsd: Record<string, number>;
   };
 };
 
@@ -65,6 +82,7 @@ export function getUgcVideoProviderPublicConfig(
       environment.SUPABASE_SERVICE_ROLE_KEY?.trim(),
   );
   const seedanceEstimatesUsd: Record<string, number> = {};
+  const videoEditEstimatesUsd: Record<string, number> = {};
   for (const quality of UGC_VIDEO_QUALITIES) {
     for (const aspectRatio of UGC_VIDEO_ASPECT_RATIOS) {
       for (const duration of UGC_VIDEO_DURATIONS) {
@@ -81,6 +99,30 @@ export function getUgcVideoProviderPublicConfig(
       }
     }
   }
+  for (const modelId of VIDEO_EDIT_MODEL_IDS) {
+    const model = ugcVideoModelById(modelId)!;
+    for (const duration of model.supportedDurations) {
+      videoEditEstimatesUsd[`${modelId}|${duration}`] = Number(
+        ((model.providerCostUsdMicrosPerSecond! * Number(duration)) / 1_000_000).toFixed(5),
+      );
+    }
+  }
+  const videoEditModel = (modelId: UgcVideoEditModelId): UgcVideoPublicModelConfig => {
+    const model = ugcVideoModelById(modelId)!;
+    return {
+      modelId,
+      provider: "fal",
+      providerModel: model.providerModelId!,
+      credentialConfigured,
+      costCapConfigured: true,
+      storageConfigured,
+      ready: credentialConfigured && storageConfigured,
+      ownerReady: credentialConfigured && storageConfigured,
+      costCapUsd: null,
+      costCapEnvironmentName: null,
+      pricingVersion: model.pricingVersion!,
+    };
+  };
   return {
     models: {
       "seedance-2.5": {
@@ -111,11 +153,16 @@ export function getUgcVideoProviderPublicConfig(
         costCapEnvironmentName: "NEXHQ_UGC_KLING_MOTION_COST_MAX_USD",
         pricingVersion: KLING_V3_PRO_MOTION_PRICING_VERSION,
       },
+      [KLING_O3_PRO_EDIT_MODEL_ID]: videoEditModel(KLING_O3_PRO_EDIT_MODEL_ID),
+      [KLING_O1_STANDARD_EDIT_MODEL_ID]: videoEditModel(KLING_O1_STANDARD_EDIT_MODEL_ID),
+      [SEEDANCE_2_FAST_EDIT_MODEL_ID]: videoEditModel(SEEDANCE_2_FAST_EDIT_MODEL_ID),
     },
+    recommendedVideoEditModelId: RECOMMENDED_VIDEO_EDIT_MODEL_ID,
     resultStorageLimitBytes: UGC_VIDEO_RESULT_MAX_BYTES,
     ownerPricing: {
       seedanceEstimatesUsd,
       klingPerSecondUsd: KLING_V3_PRO_MOTION_PRICE_PER_SECOND_USD,
+      videoEditEstimatesUsd,
     },
   };
 }
@@ -124,7 +171,7 @@ export function ugcVideoPublicModelConfig(
   config: UgcVideoProviderPublicConfig,
   modelId: string,
 ): UgcVideoPublicModelConfig | null {
-  return modelId === "seedance-2.5" || modelId === "kling-v3-pro-motion-control"
-    ? config.models[modelId]
+  return Object.hasOwn(config.models, modelId)
+    ? config.models[modelId as UgcVideoPublicModelId]
     : null;
 }

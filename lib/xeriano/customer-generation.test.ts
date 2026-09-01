@@ -62,6 +62,7 @@ function klingSetup(
 ): UgcVideoGenerationSetup {
   return {
     contractVersion: UGC_VIDEO_STUDIO_CONTRACT_VERSION,
+    mode: "MOTION_CONTROL",
     prompt: "Ein Testvideo",
     modelId: "kling-v3-pro-motion-control",
     duration: selectedSeconds,
@@ -75,6 +76,7 @@ function klingSetup(
     ],
     advanced: { ...DEFAULT_UGC_VIDEO_ADVANCED_SETTINGS },
     klingMotion: { ...DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS },
+    videoEdit: { sourceVideoReferenceId: null, characterMasterReferenceId: null, keepOriginalSound: false },
   };
 }
 

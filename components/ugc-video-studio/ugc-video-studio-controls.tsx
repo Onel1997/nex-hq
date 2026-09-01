@@ -42,9 +42,13 @@ import {
   type UgcVideoReferenceMedia,
   type UgcVideoReferenceRole,
   type UgcVideoKlingMotionSettings,
+  type UgcVideoMode,
+  type UgcVideoEditSettings,
 } from "@/lib/ugc-video-studio/contracts";
 import {
+  AUTO_RECOMMENDED_VIDEO_EDIT_MODEL_ID,
   UGC_VIDEO_MODEL_REGISTRY,
+  videoEditModelDefinitions,
   ugcVideoModelAvailabilityLabel,
   ugcVideoModelById,
   type UgcVideoModelDefinition,
@@ -366,8 +370,22 @@ export function UgcReferenceUploader(props: {
   );
 }
 
+export function isUgcModelOptionSelected(input: {
+  optionId: string;
+  resolvedModelId: string;
+  recommendedSelected: boolean;
+}): boolean {
+  if (input.optionId === AUTO_RECOMMENDED_VIDEO_EDIT_MODEL_ID) {
+    return input.recommendedSelected;
+  }
+  return !input.recommendedSelected && input.optionId === input.resolvedModelId;
+}
+
 export function UgcModelSelector(props: {
   modelId: string;
+  mode?: UgcVideoMode;
+  recommendedModelId?: string;
+  recommendedSelected?: boolean;
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
@@ -376,7 +394,18 @@ export function UgcModelSelector(props: {
 }) {
   const [search, setSearch] = useState("");
   const model = ugcVideoModelById(props.modelId) ?? UGC_VIDEO_MODEL_REGISTRY[0]!;
-  const models = UGC_VIDEO_MODEL_REGISTRY.filter((entry) =>
+  const mode = props.mode ?? "MOTION_CONTROL";
+  const modelIsRecommended =
+    mode === "VIDEO_EDIT" && model.id === props.recommendedModelId;
+  const recommendedOptionSelected = isUgcModelOptionSelected({
+    optionId: AUTO_RECOMMENDED_VIDEO_EDIT_MODEL_ID,
+    resolvedModelId: props.modelId,
+    recommendedSelected: Boolean(props.recommendedSelected),
+  });
+  const selectable = mode === "VIDEO_EDIT"
+    ? videoEditModelDefinitions()
+    : UGC_VIDEO_MODEL_REGISTRY.filter((entry) => entry.modeCompatibility.includes("MOTION_CONTROL") || !entry.visibleInProductMode);
+  const models = selectable.filter((entry) =>
     `${entry.name} ${entry.description}`.toLocaleLowerCase("de").includes(search.trim().toLocaleLowerCase("de")),
   );
   const close = () => { setSearch(""); props.onClose(); };
@@ -391,19 +420,31 @@ export function UgcModelSelector(props: {
         className="uv-model-popover"
         renderTrigger={({ controls, expanded, toggle, openFromKeyboard }) => (
           <button type="button" className="uv-model-current" onClick={toggle} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); openFromKeyboard(); } }} aria-haspopup="dialog" aria-controls={controls} aria-expanded={expanded}>
-            <span><Film size={19} /></span><span><strong>{model.name}</strong><small>{ugcVideoModelAvailabilityLabel(model.availability)}</small></span>{model.badge ? <em>{model.badge}</em> : null}<ChevronDown size={17} />
+            <span><Film size={19} /></span><span><strong>{props.recommendedSelected ? "Empfohlen" : model.name}</strong><small>{props.recommendedSelected ? `Aktuell: ${model.name}` : ugcVideoModelAvailabilityLabel(model.availability)}</small></span>{modelIsRecommended ? <em>Empfohlen</em> : model.badge ? <em>{model.badge}</em> : null}<ChevronDown size={17} />
           </button>
         )}
       >
         <label className="uv-model-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Modelle durchsuchen …" /></label>
         <div className="uv-model-options" role="listbox" aria-label="Videomodelle">
+          {mode === "VIDEO_EDIT" ? (
+            <button type="button" role="option" aria-selected={recommendedOptionSelected} className={recommendedOptionSelected ? "is-selected" : ""} onClick={() => { props.onChange(AUTO_RECOMMENDED_VIDEO_EDIT_MODEL_ID); close(); }}>
+              <span><Sparkles size={16} /></span><span><strong>Empfohlen</strong><small>Aktuell: {ugcVideoModelById(props.recommendedModelId ?? "")?.name ?? "Kling O3 Pro"}</small></span><em>Empfohlen</em>{recommendedOptionSelected ? <Check size={14} /> : null}
+            </button>
+          ) : null}
           {models.map((entry) => {
             const customerUnavailable = Boolean(
-              props.customerMode && entry.id !== "kling-v3-pro-motion-control",
+              props.customerMode && !entry.visibleInProductMode,
             );
+            const explicitlySelected = isUgcModelOptionSelected({
+              optionId: entry.id,
+              resolvedModelId: props.modelId,
+              recommendedSelected: Boolean(props.recommendedSelected),
+            });
+            const recommended =
+              mode === "VIDEO_EDIT" && entry.id === props.recommendedModelId;
             return (
-              <button type="button" role="option" aria-selected={entry.id === props.modelId} className={entry.id === props.modelId ? "is-selected" : ""} key={entry.id} disabled={customerUnavailable} onClick={() => { props.onChange(entry.id); close(); }}>
-                <span><Sparkles size={16} /></span><span><strong>{entry.name}</strong><small>{customerUnavailable ? "Für Kunden noch nicht bepreist" : entry.description}</small></span>{entry.badge ? <em>{entry.badge}</em> : null}{entry.id === props.modelId ? <Check size={14} /> : null}
+              <button type="button" role="option" aria-selected={explicitlySelected} className={explicitlySelected ? "is-selected" : ""} key={entry.id} disabled={customerUnavailable} onClick={() => { props.onChange(entry.id); close(); }}>
+                <span><Sparkles size={16} /></span><span><strong>{entry.name}</strong><small>{customerUnavailable ? "Für Kunden noch nicht bepreist" : entry.description}</small></span>{recommended ? <em>Empfohlen</em> : entry.badge ? <em>{entry.badge}</em> : null}{explicitlySelected ? <Check size={14} /> : null}
               </button>
             );
           })}
@@ -416,6 +457,88 @@ export function UgcModelSelector(props: {
         </p>
       ) : null}
     </section>
+  );
+}
+
+export function UgcModeSelector(props: {
+  mode: UgcVideoMode;
+  onChange: (mode: UgcVideoMode) => void;
+}) {
+  return (
+    <section className="uv-mode-selector" aria-label="UGC-Modus">
+      <button type="button" className={props.mode === "MOTION_CONTROL" ? "is-active" : ""} onClick={() => props.onChange("MOTION_CONTROL")}>
+        <strong>Bewegung übertragen</strong>
+        <span>Performance auf ein Charakterbild übertragen.</span>
+      </button>
+      <button type="button" className={props.mode === "VIDEO_EDIT" ? "is-active" : ""} onClick={() => props.onChange("VIDEO_EDIT")}>
+        <strong>Video bearbeiten</strong>
+        <span>Person im Quellvideo durch dein Model ersetzen.</span>
+      </button>
+    </section>
+  );
+}
+
+function VideoEditUploadTile(props: {
+  title: string;
+  description: string;
+  accept: string;
+  reference: UgcVideoReferenceMedia | null;
+  onSelect: (file: File) => void;
+  onRemove: () => void;
+  onDuration: (seconds: number) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <article className="uv-edit-upload-tile">
+      <div><strong>{props.title}</strong><span>{props.description}</span></div>
+      <input ref={inputRef} type="file" accept={props.accept} hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) props.onSelect(file); event.currentTarget.value = ""; }} />
+      {props.reference ? (
+        <div className="uv-edit-upload-ready">
+          <div className="uv-edit-upload-preview"><ReferencePreview reference={props.reference} onDuration={props.onDuration} /></div>
+          <div><strong title={props.reference.name}>{props.reference.name}</strong><span>{props.reference.uploadState === "UPLOADING" ? "Referenz wird hochgeladen …" : props.reference.uploadState === "FAILED" ? "Upload fehlgeschlagen. Bitte erneut versuchen." : "Bereit"}</span></div>
+          <button type="button" onClick={props.onRemove} aria-label={`${props.title} entfernen`}><X size={16} /></button>
+        </div>
+      ) : (
+        <button type="button" className="uv-edit-upload-empty" onClick={() => inputRef.current?.click()}><UploadCloud size={22} /><span>Datei auswählen</span></button>
+      )}
+      {props.reference ? <button type="button" className="uv-edit-upload-change" onClick={() => inputRef.current?.click()}>Referenz ändern</button> : null}
+    </article>
+  );
+}
+
+export function UgcVideoEditUploader(props: {
+  sourceVideo: UgcVideoReferenceMedia | null;
+  characterMaster: UgcVideoReferenceMedia | null;
+  onSelect: (kind: "VIDEO" | "IMAGE", file: File) => void;
+  onRemove: (id: string) => void;
+  onDuration: (id: string, seconds: number) => void;
+}) {
+  return (
+    <section className="uv-card uv-reference-card uv-edit-reference-card">
+      <div className="uv-section-heading"><div><span>01</span><div><h2>Video & Model</h2><p>VIDEO REIN · MODEL/MOCKUP REIN · GENERIEREN</p></div></div></div>
+      <div className="uv-edit-upload-grid">
+        <VideoEditUploadTile title="Quellvideo" description="Bestimmt Szene, Kamera und Bewegung." accept="video/mp4,video/quicktime,video/x-m4v" reference={props.sourceVideo} onSelect={(file) => props.onSelect("VIDEO", file)} onRemove={() => props.sourceVideo && props.onRemove(props.sourceVideo.id)} onDuration={(seconds) => props.sourceVideo && props.onDuration(props.sourceVideo.id, seconds)} />
+        <VideoEditUploadTile title="Model / Mockup" description="Bestimmt Person, Outfit und Design." accept="image/jpeg,image/png,image/webp" reference={props.characterMaster} onSelect={(file) => props.onSelect("IMAGE", file)} onRemove={() => props.characterMaster && props.onRemove(props.characterMaster.id)} onDuration={() => undefined} />
+      </div>
+      <p className="uv-soft-note">Uploads laufen direkt in deinen privaten temporären Xeriamo-Speicher.</p>
+    </section>
+  );
+}
+
+export function UgcVideoEditSettings(props: {
+  duration: UgcVideoGenerationSetup["duration"];
+  supportedDurations: readonly UgcVideoGenerationSetup["duration"][];
+  sourceDurationSeconds: number | null;
+  keepOriginalSoundSupported: boolean;
+  settings: UgcVideoEditSettings;
+  onDuration: (duration: UgcVideoGenerationSetup["duration"]) => void;
+  onChange: (settings: UgcVideoEditSettings) => void;
+}) {
+  return (
+    <div className="uv-edit-settings">
+      <fieldset className="uv-kling-duration"><legend>Videolänge</legend><div>{props.supportedDurations.map((value) => <button type="button" key={value} disabled={props.sourceDurationSeconds !== null && Number(value) > props.sourceDurationSeconds + .05} className={props.duration === value ? "is-active" : ""} onClick={() => props.onDuration(value)}>{value} Sek.</button>)}</div><p>Das Quellvideo wird serverseitig auf die gewählte Dauer vorbereitet.</p></fieldset>
+      {props.keepOriginalSoundSupported ? <label className="uv-check uv-kling-toggle"><input type="checkbox" checked={props.settings.keepOriginalSound} onChange={(event) => props.onChange({ ...props.settings, keepOriginalSound: event.target.checked })} /><span><strong>Originalton übernehmen</strong><small>Übernimmt den Ton des Quellvideos.</small></span></label> : null}
+    </div>
   );
 }
 

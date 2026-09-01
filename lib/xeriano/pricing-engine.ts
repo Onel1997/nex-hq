@@ -10,6 +10,12 @@ import {
   KLING_V3_PRO_MOTION_PRICING_SOURCE,
   KLING_V3_PRO_MOTION_PRICING_VERSION,
 } from "@/lib/ugc-video-studio/kling-motion-config";
+import {
+  KLING_O1_STANDARD_EDIT_MODEL_ID,
+  KLING_O3_PRO_EDIT_MODEL_ID,
+  SEEDANCE_2_FAST_EDIT_MODEL_ID,
+  ugcVideoModelById,
+} from "@/lib/ugc-video-studio/model-registry";
 import { resolveDesignProviderCost } from "@/lib/design-studio/pricing-config";
 import { DESIGN_UTILITY_PRICING_VERSION, resolveDesignUtilityConfig } from "@/lib/design-studio/utility-config";
 import {
@@ -19,6 +25,7 @@ import {
 } from "@/lib/xeriano/plans";
 import {
   quoteXerianoCredits,
+  XERIANO_CREDIT_PRICE_REGISTRY,
   XERIANO_CREDIT_PRICING_VERSION,
   type XerianoCreditQuoteInput,
 } from "@/lib/xeriano/pricing";
@@ -353,23 +360,34 @@ export function resolveProviderCost(
       fxVersion: fx.version,
     };
   }
-  if (input.modelId !== "kling-v3-pro-motion-control") return null;
+  if (
+    input.modelId !== "kling-v3-pro-motion-control" &&
+    input.modelId !== KLING_O3_PRO_EDIT_MODEL_ID &&
+    input.modelId !== KLING_O1_STANDARD_EDIT_MODEL_ID &&
+    input.modelId !== SEEDANCE_2_FAST_EDIT_MODEL_ID
+  ) return null;
   if (!Number.isInteger(input.durationSeconds) || input.durationSeconds <= 0) return null;
-  const unitMicros = decimalStringToMicros(
-    KLING_V3_PRO_MOTION_PRICE_PER_SECOND_USD.toString(),
-  );
+  const videoEditModel = input.modelId === "kling-v3-pro-motion-control"
+    ? null
+    : ugcVideoModelById(input.modelId);
+  const unitMicros = videoEditModel
+    ? videoEditModel.providerCostUsdMicrosPerSecond
+    : decimalStringToMicros(KLING_V3_PRO_MOTION_PRICE_PER_SECOND_USD.toString());
+  if (!unitMicros) return null;
   const originalCostMicros = unitMicros * input.durationSeconds;
   return {
     provider: "fal",
-    providerModel: KLING_V3_PRO_MOTION_CONTROL_MODEL_ID,
+    providerModel: providerModelOverride ?? videoEditModel?.providerModelId ?? KLING_V3_PRO_MOTION_CONTROL_MODEL_ID,
     operation: "VIDEO",
     billingUnit: "PER_SECOND",
     originalCurrency: "USD",
     originalCostMicros,
     convertedCostEurMicros:
       Math.ceil(originalCostMicros * fx.numerator / fx.denominator),
-    costVersion: KLING_V3_PRO_MOTION_PRICING_VERSION,
-    source: KLING_V3_PRO_MOTION_PRICING_SOURCE,
+    costVersion: videoEditModel?.pricingVersion ?? KLING_V3_PRO_MOTION_PRICING_VERSION,
+    source: videoEditModel
+      ? "fal model pricing snapshot verified for Xeriamo Video Edit"
+      : KLING_V3_PRO_MOTION_PRICING_SOURCE,
     verified: true,
     fxVersion: fx.version,
   };
@@ -441,8 +459,11 @@ export function evaluateGenerationPricing(input: {
   const priceRule = input.pricingRuleIdOverride ?? (
     input.quote.modelId === "nano-banana-pro"
       ? "nano-banana-pro-quality-v2"
-      : input.quote.modelId === "kling-v3-pro-motion-control"
-        ? "kling-v3-motion-per-second-v2"
+      : input.quote.modelId === "kling-v3-pro-motion-control" ||
+          input.quote.modelId === KLING_O3_PRO_EDIT_MODEL_ID ||
+          input.quote.modelId === KLING_O1_STANDARD_EDIT_MODEL_ID ||
+          input.quote.modelId === SEEDANCE_2_FAST_EDIT_MODEL_ID
+        ? XERIANO_CREDIT_PRICE_REGISTRY[input.quote.modelId].ruleId
         : input.quote.modelId === "design-background-remove"
           ? "design-background-remove-v1"
           : input.quote.modelId === "design-upscale"

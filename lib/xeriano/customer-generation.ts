@@ -20,6 +20,14 @@ import {
   assertKlingMotionReferences,
   KLING_MOTION_MAX_SECONDS,
 } from "@/lib/ugc-video-studio/kling-motion-config";
+import {
+  isUgcVideoEditModelId,
+  type UgcVideoEditModelId,
+} from "@/lib/ugc-video-studio/model-registry";
+import {
+  assertUgcVideoEditSetup,
+  UgcVideoEditInputError,
+} from "@/lib/ugc-video-studio/video-edit-config";
 import type { XerianoAccountContext } from "@/lib/xeriano/auth";
 import {
   quoteXerianoCredits,
@@ -45,7 +53,7 @@ export type XerianoGenerationAuthorityState =
 export type XerianoCustomerCreditQuote = {
   credits: number;
   pricingVersion: string;
-  modelId: "nano-banana-pro" | "kling-v3-pro-motion-control" | "ideogram-4" | "recraft-4" | "design-background-remove" | "design-upscale";
+  modelId: "nano-banana-pro" | "kling-v3-pro-motion-control" | UgcVideoEditModelId | "ideogram-4" | "recraft-4" | "design-background-remove" | "design-upscale";
   operation: XerianoCustomerOperation;
   studio: XerianoCustomerStudio;
   pricingSnapshot: Record<string, unknown>;
@@ -183,16 +191,31 @@ export function quoteUgcCustomerGeneration(
   setup: UgcVideoGenerationSetup,
   trustedMotionDurationSeconds?: number,
 ): XerianoCustomerCreditQuote {
-  if (setup.modelId !== "kling-v3-pro-motion-control") {
+  if (setup.modelId !== "kling-v3-pro-motion-control" && !isUgcVideoEditModelId(setup.modelId)) {
     throw new XerianoCustomerGenerationError(
       "CUSTOMER_MODEL_UNAVAILABLE",
       "Dieses Videomodell ist für Kunden noch nicht verfügbar.",
       400,
     );
   }
-  const resolution = assertKlingMotionReferences(setup);
-  const detectedSeconds =
-    trustedMotionDurationSeconds ?? resolution.motionVideo?.durationSeconds;
+  let detectedSeconds: number | null | undefined;
+  let characterOrientation: string | null = null;
+  if (isUgcVideoEditModelId(setup.modelId)) {
+    try {
+      const resolution = assertUgcVideoEditSetup(setup);
+      detectedSeconds = trustedMotionDurationSeconds ?? resolution.sourceVideo.durationSeconds;
+    } catch (error) {
+      throw new XerianoCustomerGenerationError(
+        "CUSTOMER_MODEL_UNAVAILABLE",
+        error instanceof UgcVideoEditInputError ? error.message : "Bitte prüfe dein Video-Edit-Setup.",
+        400,
+      );
+    }
+  } else {
+    const resolution = assertKlingMotionReferences(setup);
+    detectedSeconds = trustedMotionDurationSeconds ?? resolution.motionVideo?.durationSeconds;
+    characterOrientation = setup.klingMotion.characterOrientation;
+  }
   if (!detectedSeconds || !Number.isFinite(detectedSeconds)) {
     throw new XerianoCustomerGenerationError(
       "VIDEO_DURATION_REQUIRED",
@@ -200,19 +223,24 @@ export function quoteUgcCustomerGeneration(
       400,
     );
   }
-  const maximum = KLING_MOTION_MAX_SECONDS[setup.klingMotion.characterOrientation];
   const selectedSeconds = Number(setup.duration);
-  if (!(KLING_MOTION_DURATION_CHOICES as readonly string[]).includes(setup.duration)) {
+  if (
+    setup.modelId === "kling-v3-pro-motion-control" &&
+    !(KLING_MOTION_DURATION_CHOICES as readonly string[]).includes(setup.duration)
+  ) {
     throw new XerianoCustomerGenerationError(
       "VIDEO_DURATION_INVALID",
       "Wähle eine unterstützte Videolänge.",
       400,
     );
   }
-  if (selectedSeconds > maximum) {
+  if (
+    setup.modelId === "kling-v3-pro-motion-control" &&
+    selectedSeconds > KLING_MOTION_MAX_SECONDS[setup.klingMotion.characterOrientation]
+  ) {
     throw new XerianoCustomerGenerationError(
       "VIDEO_DURATION_INVALID",
-      `Bei dieser Ausrichtung sind maximal ${maximum} Sekunden möglich.`,
+      `Bei dieser Ausrichtung sind maximal ${KLING_MOTION_MAX_SECONDS[setup.klingMotion.characterOrientation]} Sekunden möglich.`,
       400,
     );
   }
@@ -224,8 +252,20 @@ export function quoteUgcCustomerGeneration(
     );
   }
   const billableSeconds = selectedSeconds;
+  const pricedModelId: "kling-v3-pro-motion-control" | UgcVideoEditModelId | null = setup.modelId === "kling-v3-pro-motion-control"
+    ? setup.modelId
+    : isUgcVideoEditModelId(setup.modelId)
+      ? setup.modelId
+      : null;
+  if (!pricedModelId) {
+    throw new XerianoCustomerGenerationError(
+      "CUSTOMER_MODEL_UNAVAILABLE",
+      "Dieses Videomodell ist für Kunden noch nicht verfügbar.",
+      400,
+    );
+  }
   const quoteInput = {
-    modelId: "kling-v3-pro-motion-control" as const,
+    modelId: pricedModelId,
     durationSeconds: billableSeconds,
   };
   const credits = quoteXerianoCredits(quoteInput);
@@ -238,15 +278,16 @@ export function quoteUgcCustomerGeneration(
   return {
     credits,
     pricingVersion: XERIANO_CREDIT_PRICING_VERSION,
-    modelId: "kling-v3-pro-motion-control",
+    modelId: setup.modelId,
     operation: "VIDEO",
     studio: "UGC_VIDEO_STUDIO",
     pricingSnapshot: {
-      modelId: "kling-v3-pro-motion-control",
+      modelId: setup.modelId,
+      mode: setup.mode,
       billableSeconds,
       selectedDurationSeconds: selectedSeconds,
       detectedReferenceSeconds: Number(detectedSeconds.toFixed(3)),
-      characterOrientation: setup.klingMotion.characterOrientation,
+      characterOrientation,
       credits,
       pricingVersion: XERIANO_CREDIT_PRICING_VERSION,
       economics: pricingEvaluationSnapshot(economics),

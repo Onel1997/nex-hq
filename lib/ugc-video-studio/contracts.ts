@@ -3,6 +3,10 @@ import { z } from "zod";
 export const UGC_VIDEO_STUDIO_CONTRACT_VERSION =
   "nexhq-ugc-video-studio-v1" as const;
 
+export const UGC_VIDEO_MODES = ["MOTION_CONTROL", "VIDEO_EDIT"] as const;
+export const ugcVideoModeSchema = z.enum(UGC_VIDEO_MODES);
+export type UgcVideoMode = z.infer<typeof ugcVideoModeSchema>;
+
 export const UGC_VIDEO_REFERENCE_TYPES = ["IMAGE", "VIDEO", "AUDIO"] as const;
 export const UGC_VIDEO_REFERENCE_ROLES = [
   "NONE",
@@ -146,6 +150,21 @@ export const DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS = Object.freeze({
   identityElementReferenceId: null as string | null,
 });
 
+export const DEFAULT_UGC_VIDEO_EDIT_SETTINGS = Object.freeze({
+  sourceVideoReferenceId: null as string | null,
+  characterMasterReferenceId: null as string | null,
+  keepOriginalSound: false,
+});
+
+export const ugcVideoEditSettingsSchema = z
+  .object({
+    sourceVideoReferenceId: z.string().min(1).nullable(),
+    characterMasterReferenceId: z.string().min(1).nullable(),
+    keepOriginalSound: z.boolean(),
+  })
+  .strict();
+export type UgcVideoEditSettings = z.infer<typeof ugcVideoEditSettingsSchema>;
+
 export const ugcVideoKlingMotionSettingsSchema = z
   .object({
     characterOrientation: z.enum(UGC_VIDEO_KLING_CHARACTER_ORIENTATIONS),
@@ -163,7 +182,8 @@ export type UgcVideoKlingMotionSettings = z.infer<
 export const ugcVideoGenerationSetupSchema = z
   .object({
     contractVersion: z.literal(UGC_VIDEO_STUDIO_CONTRACT_VERSION),
-    prompt: z.string().trim().min(1).max(12000),
+    mode: ugcVideoModeSchema.optional().default("MOTION_CONTROL"),
+    prompt: z.string().trim().max(12000),
     modelId: z.string().min(1),
     duration: z.enum(UGC_VIDEO_DURATIONS),
     aspectRatio: z.enum(UGC_VIDEO_ASPECT_RATIOS),
@@ -177,8 +197,20 @@ export const ugcVideoGenerationSetupSchema = z
     klingMotion: ugcVideoKlingMotionSettingsSchema
       .optional()
       .default(DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS),
+    videoEdit: ugcVideoEditSettingsSchema
+      .optional()
+      .default(DEFAULT_UGC_VIDEO_EDIT_SETTINGS),
   })
-  .strict();
+  .strict()
+  .superRefine((setup, context) => {
+    if (setup.mode === "MOTION_CONTROL" && !setup.prompt) {
+      context.addIssue({
+        code: "custom",
+        path: ["prompt"],
+        message: "Für Bewegung übertragen ist ein Prompt erforderlich.",
+      });
+    }
+  });
 export type UgcVideoGenerationSetup = z.infer<
   typeof ugcVideoGenerationSetupSchema
 >;
@@ -190,7 +222,8 @@ export const savedUgcVideoPromptSchema = z
     description: z.string().max(500),
     tags: z.array(z.string().min(1).max(40)).max(12),
     favorite: z.boolean(),
-    prompt: z.string().min(1).max(12000),
+    mode: ugcVideoModeSchema.optional().default("MOTION_CONTROL"),
+    prompt: z.string().max(12000),
     modelId: z.string().min(1),
     duration: z.enum(UGC_VIDEO_DURATIONS),
     aspectRatio: z.enum(UGC_VIDEO_ASPECT_RATIOS),
@@ -201,6 +234,9 @@ export const savedUgcVideoPromptSchema = z
     klingMotion: ugcVideoKlingMotionSettingsSchema
       .optional()
       .default(DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS),
+    videoEdit: ugcVideoEditSettingsSchema
+      .optional()
+      .default(DEFAULT_UGC_VIDEO_EDIT_SETTINGS),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     lastUsedAt: z.string().datetime().nullable(),

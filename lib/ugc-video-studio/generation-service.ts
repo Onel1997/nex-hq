@@ -23,6 +23,7 @@ import {
 } from "@/lib/ugc-video-studio/provider";
 import { FalSeedanceProvider } from "@/lib/ugc-video-studio/providers/fal-seedance";
 import { FalKlingMotionControlProvider } from "@/lib/ugc-video-studio/providers/fal-kling-motion-control";
+import { FalVideoEditProvider } from "@/lib/ugc-video-studio/providers/fal-video-edit";
 import {
   assertKlingMotionReferences,
   assertKlingMotionCostAllowed,
@@ -38,6 +39,15 @@ import {
   SEEDANCE_25_COST_CAP_ENV,
   SEEDANCE_25_REFERENCE_MODEL_ID,
 } from "@/lib/ugc-video-studio/seedance-config";
+import {
+  isUgcVideoEditModelId,
+  ugcVideoModelById,
+} from "@/lib/ugc-video-studio/model-registry";
+import {
+  assertUgcVideoEditSetup,
+  estimateUgcVideoEditCostUsd,
+  UgcVideoEditInputError,
+} from "@/lib/ugc-video-studio/video-edit-config";
 import {
   UGC_VIDEO_SERVER_JOB_VERSION,
   ugcVideoJobManifestSchema,
@@ -122,6 +132,21 @@ function validateReferences(
       400,
     );
   }
+  if (setup.mode === "VIDEO_EDIT") {
+    try {
+      assertUgcVideoEditSetup(setup);
+    } catch (error) {
+      if (error instanceof UgcVideoEditInputError) {
+        throw new UgcVideoGenerationError(
+          "REFERENCE_INVALID",
+          error.message,
+          400,
+          error.code,
+        );
+      }
+      throw error;
+    }
+  }
   const counts = { IMAGE: 0, VIDEO: 0, AUDIO: 0 };
   let totalBytes = 0;
   for (let index = 0; index < references.length; index += 1) {
@@ -184,12 +209,17 @@ function validateReferences(
       "seedance_video_reference_duration_exceeds_30_2_seconds",
     );
   }
-  if (totalBytes > UGC_VIDEO_REFERENCE_TOTAL_MAX_BYTES) {
+  const maximumTotalBytes = setup.mode === "VIDEO_EDIT"
+    ? setup.modelId === "seedance-2-fast-video-edit"
+      ? 80 * 1024 * 1024
+      : 230 * 1024 * 1024
+    : UGC_VIDEO_REFERENCE_TOTAL_MAX_BYTES;
+  if (totalBytes > maximumTotalBytes) {
     throw new UgcVideoGenerationError(
       "REFERENCE_INVALID",
       "Die Referenzen sind zusammen zu groß.",
       413,
-      `receivedBytes=${totalBytes};maximumBytes=${UGC_VIDEO_REFERENCE_TOTAL_MAX_BYTES}`,
+      `receivedBytes=${totalBytes};maximumBytes=${maximumTotalBytes}`,
     );
   }
 }
@@ -207,6 +237,21 @@ function resolveProviderExecution(input: {
   injectedCostCapUsd?: number | null;
   costLimitPolicy?: "REQUIRE_CONFIGURED_CAP" | "OWNER_ESTIMATE_ONLY";
 }): UgcProviderExecution {
+  if (input.setup.mode === "VIDEO_EDIT" && isUgcVideoEditModelId(input.setup.modelId)) {
+    assertUgcVideoEditSetup(input.setup);
+    const model = ugcVideoModelById(input.setup.modelId)!;
+    return {
+      provider:
+        input.injectedProvider ??
+        new FalVideoEditProvider(input.setup.modelId, process.env.FAL_KEY),
+      providerModel: model.providerModelId!,
+      estimatedMaximumCostUsd: estimateUgcVideoEditCostUsd({
+        modelId: input.setup.modelId,
+        duration: input.setup.duration,
+      }),
+      configuredName: model.name,
+    };
+  }
   if (input.setup.modelId === "seedance-2.5") {
     const costCap =
       input.injectedCostCapUsd === undefined
@@ -275,6 +320,9 @@ function providerForManifest(
   }
   if (manifest.setup.modelId === "kling-v3-pro-motion-control") {
     return new FalKlingMotionControlProvider(process.env.FAL_KEY);
+  }
+  if (manifest.setup.mode === "VIDEO_EDIT" && isUgcVideoEditModelId(manifest.setup.modelId)) {
+    return new FalVideoEditProvider(manifest.setup.modelId, process.env.FAL_KEY);
   }
   throw new UgcVideoGenerationError(
     "PROVIDER_NOT_CONFIGURED",
@@ -717,6 +765,12 @@ async function persistCompletedProviderResult(input: {
           .slice()
           .sort((a, b) => a.order - b.order)
           .map((reference) => reference.id),
+        queueHandle: {
+          endpoint: manifest.providerModel,
+          statusUrl: manifest.providerStatusUrl,
+          responseUrl: manifest.providerResponseUrl,
+          cancelUrl: manifest.providerCancelUrl,
+        },
       });
   manifest = ugcVideoJobManifestSchema.parse({
     ...manifest,
@@ -820,7 +874,12 @@ export async function observeUgcVideoJob(
   }
 
   try {
-    const providerStatus = await provider.getStatus(manifest.providerRequestId);
+    const providerStatus = await provider.getStatus(manifest.providerRequestId, {
+      endpoint: manifest.providerModel,
+      statusUrl: manifest.providerStatusUrl,
+      responseUrl: manifest.providerResponseUrl,
+      cancelUrl: manifest.providerCancelUrl,
+    });
     const observedAt = now();
     if (
       providerStatus.status === "IN_QUEUE" ||

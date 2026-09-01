@@ -43,7 +43,7 @@ export const ugcVideoJobManifestSchema = z
     updatedAt: z.string().datetime(),
     status: z.enum(["RUNNING", "SUCCEEDED", "FAILED", "UNKNOWN_OUTCOME"]),
     setup: ugcVideoGenerationSetupSchema,
-    originalPrompt: z.string().min(1).max(12000),
+    originalPrompt: z.string().max(12000),
     providerPrompt: z.string().max(20000).nullable(),
     referenceAuthority: z.array(ugcVideoReferenceAuthoritySchema).max(50),
     provider: z.literal("fal"),

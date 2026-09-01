@@ -41,9 +41,12 @@ test("V1 pricing is centralized, versioned and refuses undefined customer models
   assert.equal(quoteXerianoCredits({ modelId: "nano-banana-pro", quality: "2K", count: 4 }), 60);
   assert.equal(quoteXerianoCredits({ modelId: "nano-banana-pro", quality: "4K", count: 2 }), 60);
   assert.equal(quoteXerianoCredits({ modelId: "kling-v3-pro-motion-control", durationSeconds: 5 }), 125);
+  assert.equal(quoteXerianoCredits({ modelId: "kling-o3-pro-video-edit", durationSeconds: 5 }), 125);
+  assert.equal(quoteXerianoCredits({ modelId: "kling-o1-standard-video-edit", durationSeconds: 5 }), 100);
+  assert.equal(quoteXerianoCredits({ modelId: "seedance-2-fast-video-edit", durationSeconds: 5 }), 125);
   assert.throws(() => quoteXerianoCredits({ modelId: "kling-v3-pro-motion-control", durationSeconds: 0 }));
   assert.equal(isCustomerPricedModel("seedance-2.5"), false);
-  assert.equal(Object.keys(XERIANO_CREDIT_PRICE_REGISTRY).length, 2);
+  assert.equal(Object.keys(XERIANO_CREDIT_PRICE_REGISTRY).length, 5);
 });
 
 test("monthly launch plans, top-ups and one-time trial match approved V1 policy", () => {

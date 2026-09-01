@@ -4,7 +4,14 @@ export const XERIANO_CREDIT_PRICING_EFFECTIVE_DATE = "2026-08-30" as const;
 
 export type XerianoCreditQuoteInput =
   | { modelId: "nano-banana-pro"; quality: "1K" | "2K" | "4K"; count?: 1 | 2 | 3 | 4 }
-  | { modelId: "kling-v3-pro-motion-control"; durationSeconds: number }
+  | {
+      modelId:
+        | "kling-v3-pro-motion-control"
+        | "kling-o3-pro-video-edit"
+        | "kling-o1-standard-video-edit"
+        | "seedance-2-fast-video-edit";
+      durationSeconds: number;
+    }
   | {
       modelId: "ideogram-4" | "recraft-4";
       designModel: "IDEOGRAM_4" | "RECRAFT_4";
@@ -38,6 +45,36 @@ export const XERIANO_CREDIT_PRICE_REGISTRY = Object.freeze({
   },
   "kling-v3-pro-motion-control": {
     ruleId: "kling-v3-motion-per-second-v2",
+    rule: "PER_SECOND",
+    creditsPerSecond: 25,
+    version: XERIANO_CREDIT_PRICING_VERSION,
+    effectiveDate: XERIANO_CREDIT_PRICING_EFFECTIVE_DATE,
+    active: true,
+    pricingComplete: true,
+    customerAvailable: true,
+  },
+  "kling-o3-pro-video-edit": {
+    ruleId: "kling-o3-pro-video-edit-per-second-v1",
+    rule: "PER_SECOND",
+    creditsPerSecond: 25,
+    version: XERIANO_CREDIT_PRICING_VERSION,
+    effectiveDate: XERIANO_CREDIT_PRICING_EFFECTIVE_DATE,
+    active: true,
+    pricingComplete: true,
+    customerAvailable: true,
+  },
+  "kling-o1-standard-video-edit": {
+    ruleId: "kling-o1-standard-video-edit-per-second-v1",
+    rule: "PER_SECOND",
+    creditsPerSecond: 20,
+    version: XERIANO_CREDIT_PRICING_VERSION,
+    effectiveDate: XERIANO_CREDIT_PRICING_EFFECTIVE_DATE,
+    active: true,
+    pricingComplete: true,
+    customerAvailable: true,
+  },
+  "seedance-2-fast-video-edit": {
+    ruleId: "seedance-2-fast-video-edit-per-second-v1",
     rule: "PER_SECOND",
     creditsPerSecond: 25,
     version: XERIANO_CREDIT_PRICING_VERSION,
@@ -85,7 +122,12 @@ export function quoteXerianoCredits(input: XerianoCreditQuoteInput): number {
     || input.modelId === "design-background-remove" || input.modelId === "design-upscale") {
     throw new Error("DESIGN_PRICE_REQUIRES_SAFETY_ENGINE");
   }
-  if (input.modelId !== "kling-v3-pro-motion-control") {
+  if (
+    input.modelId !== "kling-v3-pro-motion-control" &&
+    input.modelId !== "kling-o3-pro-video-edit" &&
+    input.modelId !== "kling-o1-standard-video-edit" &&
+    input.modelId !== "seedance-2-fast-video-edit"
+  ) {
     throw new Error("CUSTOMER_PRICING_UNAVAILABLE");
   }
   const rule = XERIANO_CREDIT_PRICE_REGISTRY[input.modelId];
@@ -121,6 +163,24 @@ export function getCustomerPublishedPricingDto() {
         label: "Kling V3 Pro Motion Control",
         availability: "AVAILABLE",
         creditsPerSecond: XERIANO_CREDIT_PRICE_REGISTRY["kling-v3-pro-motion-control"].creditsPerSecond,
+      },
+      "kling-o3-pro-video-edit": {
+        modelId: "kling-o3-pro-video-edit",
+        label: "Kling O3 Pro",
+        availability: "AVAILABLE",
+        creditsPerSecond: XERIANO_CREDIT_PRICE_REGISTRY["kling-o3-pro-video-edit"].creditsPerSecond,
+      },
+      "kling-o1-standard-video-edit": {
+        modelId: "kling-o1-standard-video-edit",
+        label: "Kling O1 Standard",
+        availability: "AVAILABLE",
+        creditsPerSecond: XERIANO_CREDIT_PRICE_REGISTRY["kling-o1-standard-video-edit"].creditsPerSecond,
+      },
+      "seedance-2-fast-video-edit": {
+        modelId: "seedance-2-fast-video-edit",
+        label: "Seedance 2 Fast",
+        availability: "AVAILABLE",
+        creditsPerSecond: XERIANO_CREDIT_PRICE_REGISTRY["seedance-2-fast-video-edit"].creditsPerSecond,
       },
       "seedance-2.5": {
         modelId: "seedance-2.5",

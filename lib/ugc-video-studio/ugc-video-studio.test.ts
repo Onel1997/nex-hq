@@ -84,13 +84,16 @@ test("UGC contract supports flexible ordered image/video/audio references", () =
   assert.equal(parsed.prompt.startsWith("Realistisches"), true);
 });
 
-test("video model registry exposes Seedance and Kling Motion Control as live", () => {
+test("video model registry exposes Motion Control and all benchmark Video Edit models as live", () => {
   const live = UGC_VIDEO_MODEL_REGISTRY.filter(
     (model) => model.availability === "LIVE",
   );
   assert.deepEqual(live.map((model) => model.id), [
     "seedance-2.5",
     "kling-v3-pro-motion-control",
+    "kling-o3-pro-video-edit",
+    "kling-o1-standard-video-edit",
+    "seedance-2-fast-video-edit",
   ]);
   assert.equal(
     ugcVideoModelById("seedance-2.5")?.providerModelId,
@@ -127,6 +130,7 @@ test("prompt library and run history persist setup metadata without media bytes"
     description: "Natürliches UGC",
     tags: ["UGC", "Fit Check"],
     favorite: true,
+    mode: active.mode,
     prompt: active.prompt,
     modelId: active.modelId,
     duration: active.duration,
@@ -136,6 +140,7 @@ test("prompt library and run history persist setup metadata without media bytes"
     videoType: active.videoType,
     advanced: active.advanced,
     klingMotion: active.klingMotion,
+    videoEdit: active.videoEdit,
     createdAt: timestamp,
     updatedAt: timestamp,
     lastUsedAt: null,

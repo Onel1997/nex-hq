@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z, ZodError } from "zod";
 
+import { readRasterDimensions } from "@/lib/design-studio/raster-metadata";
 import { resolveXerianoAccess } from "@/lib/xeriano/auth";
 import { authorizeXerianoGeneration } from "@/lib/xeriano/credit-guard";
 import {
@@ -26,6 +27,16 @@ import type { UgcVideoProviderReference } from "@/lib/ugc-video-studio/provider"
 import { UgcVideoCostCapError } from "@/lib/ugc-video-studio/seedance-config";
 import { resolveKlingMotionReferences } from "@/lib/ugc-video-studio/kling-motion-config";
 import { prepareKlingMotionMedia } from "@/lib/ugc-video-studio/kling-motion-media";
+import {
+  AUTO_RECOMMENDED_VIDEO_EDIT_MODEL_ID,
+  resolveRecommendedVideoEditModelId,
+} from "@/lib/ugc-video-studio/model-registry";
+import {
+  assertUgcVideoEditImageDimensions,
+  resolveUgcVideoEditReferences,
+  UgcVideoEditInputError,
+} from "@/lib/ugc-video-studio/video-edit-config";
+import { prepareUgcVideoEditMedia } from "@/lib/ugc-video-studio/video-edit-media";
 import { requireTrustedCustomerMotionDuration } from "@/lib/xeriano/video-duration";
 import { xerianoTempReferenceGenerateEntrySchema } from "@/lib/xeriano/temp-references/contracts";
 import {
@@ -97,7 +108,22 @@ export async function POST(request: Request) {
     }
     const parsed = ugcGenerateRequestSchema.parse(await request.json());
     const { jobId, setup } = parsed;
-    let providerSetup = setup;
+    const recommendedModel = setup.mode === "VIDEO_EDIT"
+      ? resolveRecommendedVideoEditModelId(setup.modelId)
+      : null;
+    if (setup.mode === "VIDEO_EDIT" && !recommendedModel) {
+      throw new UgcVideoGenerationError(
+        "INVALID_REQUEST",
+        "Das ausgewählte Video-Edit-Modell ist nicht verfügbar.",
+        400,
+        setup.modelId === AUTO_RECOMMENDED_VIDEO_EDIT_MODEL_ID
+          ? "recommended_video_edit_model_unavailable"
+          : "video_edit_model_invalid",
+      );
+    }
+    let providerSetup = recommendedModel
+      ? { ...setup, modelId: recommendedModel }
+      : setup;
     if (
       parsed.tempReferences.length !== setup.references.length ||
       parsed.tempReferences.some(
@@ -124,7 +150,7 @@ export async function POST(request: Request) {
       }),
     );
 
-    if (setup.modelId === "kling-v3-pro-motion-control") {
+    if (providerSetup.modelId === "kling-v3-pro-motion-control") {
       const motion = resolveKlingMotionReferences(setup).motionVideo;
       const motionReference = motion
         ? references.find((reference) => reference.metadata.id === motion.id)
@@ -177,6 +203,84 @@ export async function POST(request: Request) {
       }
       providerSetup = prepared.setup;
       references = prepared.references;
+    }
+
+    if (providerSetup.mode === "VIDEO_EDIT") {
+      const editReferences = resolveUgcVideoEditReferences(providerSetup);
+      const source = editReferences.sourceVideo;
+      const sourceReference = references.find(
+        (reference) => reference.metadata.id === source.id,
+      );
+      const characterReference = references.find(
+        (reference) => reference.metadata.id === editReferences.characterMaster.id,
+      );
+      if (!sourceReference) {
+        throw new UgcVideoGenerationError(
+          "REFERENCE_INVALID",
+          "Bitte lade ein Quellvideo hoch.",
+          400,
+          "VIDEO_REQUIRED",
+        );
+      }
+      if (!characterReference) {
+        throw new UgcVideoEditInputError(
+          "CHARACTER_MASTER_REQUIRED",
+          "Bitte lade dein Model / Mockup hoch.",
+        );
+      }
+      try {
+        const dimensions = await readRasterDimensions(characterReference.bytes);
+        assertUgcVideoEditImageDimensions({
+          modelId: providerSetup.modelId as "kling-o3-pro-video-edit" | "kling-o1-standard-video-edit" | "seedance-2-fast-video-edit",
+          ...dimensions,
+        });
+      } catch (error) {
+        if (error instanceof UgcVideoEditInputError) throw error;
+        throw new UgcVideoEditInputError(
+          "UNSUPPORTED_IMAGE",
+          "Das Model / Mockup konnte nicht sicher geprüft werden.",
+        );
+      }
+      let trustedDuration: number;
+      try {
+        trustedDuration = requireTrustedCustomerMotionDuration({
+          bytes: sourceReference.bytes,
+          mimeType: sourceReference.metadata.mimeType,
+        });
+      } catch {
+        throw new UgcVideoGenerationError(
+          "REFERENCE_INVALID",
+          "Das Quellvideo konnte nicht sicher geprüft werden. Verwende eine gültige MP4- oder MOV-Datei.",
+          400,
+          "UNSUPPORTED_VIDEO",
+        );
+      }
+      const trustedSetup = {
+        ...providerSetup,
+        references: providerSetup.references.map((reference) =>
+          reference.id === source.id
+            ? { ...reference, durationSeconds: trustedDuration }
+            : reference,
+        ),
+      };
+      let prepared;
+      try {
+        prepared = prepareUgcVideoEditMedia({
+          setup: trustedSetup,
+          references,
+          trustedSourceDurationSeconds: trustedDuration,
+        });
+      } catch {
+        throw new UgcVideoGenerationError(
+          "REFERENCE_INVALID",
+          "Das Quellvideo konnte nicht sicher auf die gewählte Länge vorbereitet werden.",
+          400,
+          "VIDEO_TOO_LONG",
+        );
+      }
+      providerSetup = prepared.setup;
+      references = prepared.references;
+      if (customer) customerQuote = quoteUgcCustomerGeneration(providerSetup, trustedDuration);
     }
 
     if (customer) {
@@ -248,6 +352,7 @@ export async function POST(request: Request) {
             "UGC_VIDEO_STORAGE_SETUP_FAILED",
           ].includes(error.code)) ||
         error instanceof UgcVideoCostCapError ||
+        error instanceof UgcVideoEditInputError ||
         error instanceof XerianoTempReferenceError ||
         error instanceof ZodError ||
         error instanceof SyntaxError ||
@@ -295,6 +400,9 @@ export async function POST(request: Request) {
     }
     if (error instanceof XerianoTempReferenceError) {
       return errorResponse({ error: error.message, code: error.code, status: error.status });
+    }
+    if (error instanceof UgcVideoEditInputError) {
+      return errorResponse({ error: error.message, code: error.code, status: 400 });
     }
     if (error instanceof UgcVideoCostCapError) {
       return errorResponse({

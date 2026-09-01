@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { UgcVideoGenerationSetup } from "@/lib/ugc-video-studio/contracts";
 import { prepareKlingMotionMedia } from "@/lib/ugc-video-studio/kling-motion-media";
+import { prepareUgcVideoEditMedia } from "@/lib/ugc-video-studio/video-edit-media";
 import {
   clipIsoBmffFromStart,
   readIsoBmffDurationSeconds,
@@ -96,6 +97,40 @@ test("provider preparation replaces the submitted motion asset with the approved
   assert.equal(prepared.setup.duration, "10");
   assert.equal(prepared.setup.klingMotion.keepOriginalSound, true);
   assert.equal(prepared.setup.klingMotion.faceBindingEnabled, false);
+});
+
+test("Video Edit prepares the source-video master with the same real server-side clip authority", () => {
+  const sourceBytes = avFixture(12);
+  const setup = {
+    contractVersion: "nexhq-ugc-video-studio-v1",
+    mode: "VIDEO_EDIT",
+    prompt: "",
+    modelId: "kling-o3-pro-video-edit",
+    duration: "5",
+    aspectRatio: "AUTO",
+    quality: "720p",
+    bitrate: "STANDARD",
+    videoType: "UGC",
+    references: [
+      { id: "source", name: "source.mp4", mimeType: "video/mp4", mediaType: "VIDEO", byteLength: sourceBytes.length, durationSeconds: 12, role: "MOTION", order: 0 },
+      { id: "character", name: "character.png", mimeType: "image/png", mediaType: "IMAGE", byteLength: 8, durationSeconds: null, role: "MODEL", order: 1 },
+    ],
+    advanced: { seed: null, negativePrompt: "", generateAudio: false },
+    klingMotion: { characterOrientation: "VIDEO", keepOriginalSound: false, faceBindingEnabled: false, characterImageReferenceId: null, motionVideoReferenceId: null, identityElementReferenceId: null },
+    videoEdit: { sourceVideoReferenceId: "source", characterMasterReferenceId: "character", keepOriginalSound: false },
+  } as UgcVideoGenerationSetup;
+  const prepared = prepareUgcVideoEditMedia({
+    setup,
+    references: [
+      { metadata: setup.references[0]!, bytes: sourceBytes, providerUrl: "https://storage.example/original" },
+      { metadata: setup.references[1]!, bytes: Buffer.alloc(8), providerUrl: "https://storage.example/character" },
+    ],
+    trustedSourceDurationSeconds: 12,
+  });
+  assert.equal(readIsoBmffDurationSeconds(prepared.references[0]!.bytes), 5);
+  assert.equal(prepared.references[0]!.metadata.durationSeconds, 5);
+  assert.equal(prepared.references[0]!.providerUrl, undefined, "the provider cannot receive the untrimmed source URL");
+  assert.equal(prepared.references[1]!.providerUrl, "https://storage.example/character");
 });
 
 test("server clip rejects a selection longer than the trusted source", () => {
