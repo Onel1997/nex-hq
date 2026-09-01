@@ -34,6 +34,16 @@ export type XeriamoPublicBranding = Partial<
   Record<XeriamoBrandingRole, XeriamoPublicBrandAsset>
 >;
 
+/**
+ * `resolved` distinguishes an authoritative empty configuration from a
+ * transient read/loading state. Consumers must not turn the latter into
+ * visible fallback branding.
+ */
+export type XeriamoPublicBrandingSnapshot = {
+  branding: XeriamoPublicBranding;
+  resolved: boolean;
+};
+
 export function isXeriamoBrandingRole(value: unknown): value is XeriamoBrandingRole {
   return typeof value === "string" && XERIAMO_BRANDING_ROLES.includes(value as XeriamoBrandingRole);
 }

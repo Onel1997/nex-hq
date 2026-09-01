@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import test from "node:test";
 import { createCanvas } from "canvas";
+import * as React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { decideNexhqAuthRouting, isPublicBrandingPath } from "@/lib/auth/routing";
-import { XERIAMO_BRANDING_ROLES } from "./branding/contracts";
+import { XeriamoBrandLockup } from "@/components/xeriano/brand-identity";
+import { XeriamoBrandingProvider } from "@/components/xeriano/branding-provider";
+import { XERIAMO_BRANDING_ROLES, type XeriamoPublicBrandAsset } from "./branding/contracts";
+import { createXeriamoRootFaviconResponse, selectPublicBrandingCandidates } from "./branding/delivery";
+import { resolveXeriamoBrowserBranding, retainResolvedBrandingSnapshot } from "./branding/presentation";
 import { BRANDING_MAX_BYTES, BrandingValidationError, validateBrandingUpload } from "./branding/validation";
 
 const read = (file: string) => readFileSync(file, "utf8");
@@ -13,6 +20,21 @@ function png(width = 32, height = 32) {
   const canvas = createCanvas(width, height);
   canvas.getContext("2d").fillRect(1, 1, 2, 2);
   return canvas.toBuffer("image/png");
+}
+
+function publicAsset(
+  role: XeriamoPublicBrandAsset["role"],
+  version: string,
+  mimeType = "image/png",
+): XeriamoPublicBrandAsset {
+  return {
+    role,
+    version,
+    mimeType,
+    width: 512,
+    height: 512,
+    url: `/api/public/branding/${role.toLowerCase()}?v=${version}`,
+  };
 }
 
 test("Branding V1 has exactly four bounded roles and validates actual bytes", async () => {
@@ -92,7 +114,7 @@ test("active Icon + Logo lockups are consistent while Owner presentation remains
   const customer = read("components/xeriano/customer-nav.tsx");
   const ownerCss = read("app/hq-navigation.css");
   const productCss = read("app/xeriano.css");
-  assert.match(identity, /showVisibleName = !markOnly && \(showName \|\| !asset\)/);
+  assert.match(identity, /showVisibleName = !markOnly && \(showName \|\| \(snapshot\.resolved && !asset\)\)/);
   assert.match(identity, /showVisibleName \? <strong>Xeriamo<\/strong> : markOnly \? null/);
   assert.match(identity, /hasSquareLogoCanvas/);
   assert.match(header, /role="ICON" markOnly/);
@@ -108,8 +130,8 @@ test("active Icon + Logo lockups are consistent while Owner presentation remains
   assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-owner \.studio-mobile-branding > \.xeriamo-brand-identity \{[^}]*background: #000;[^}]*box-shadow: none;/);
   assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-customer \.studio-mobile-branding > \.xeriamo-brand-identity \{[^}]*background: #000;[^}]*box-shadow: none;/);
   assert.match(ownerCss, /\.hq-owner-mobile-brand > span:first-child \{[\s\S]*?background: #000;[\s\S]*?box-shadow: none;/);
-  assert.match(ownerCss, /\.hq-owner-mobile-brand-copy \.xeriamo-brand-identity\.is-logo \{[\s\S]*?height: 48px;/);
-  assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-owner \.studio-mobile-branding-copy \.xeriamo-brand-identity\.is-logo \{[^}]*height: 48px;/);
+  assert.match(ownerCss, /\.hq-owner-mobile-brand-copy \.xeriamo-brand-identity\.is-logo \{[\s\S]*?height: 40\.8px;/);
+  assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-owner \.studio-mobile-branding-copy \.xeriamo-brand-identity\.is-logo \{[^}]*height: 40\.8px;/);
   assert.match(ownerCss, /\.xeriamo-brand-identity\.is-logo\.has-square-canvas img \{ object-fit: cover;/);
   assert.match(identity, /export function XeriamoBrandLockup/);
   assert.match(customer, /XeriamoBrandLockup/);
@@ -117,6 +139,128 @@ test("active Icon + Logo lockups are consistent while Owner presentation remains
   assert.match(productCss, /\.xeriamo-brand-lockup-mark\{[^}]*background:#000;[^}]*box-shadow:none/);
   assert.match(productCss, /\.xeriamo-brand-lockup-wordmark\{[^}]*width:clamp\(145px,40vw,184px\);[^}]*height:48px/);
   assert.doesNotMatch(productCss, /\.xeriano-auth-brand \.xeriamo-brand-identity\.is-logo\.is-fallback:before/);
+});
+
+test("server-hydrated branding renders active Icon + Logo without a fallback transition", () => {
+  Object.assign(globalThis, { React });
+  const active = {
+    ICON: publicAsset("ICON", "icon-v1"),
+    LOGO: publicAsset("LOGO", "logo-v1", "image/svg+xml"),
+  };
+  const activeMarkup = renderToStaticMarkup(React.createElement(
+    XeriamoBrandingProvider,
+    { initialSnapshot: { branding: active, resolved: true } },
+    React.createElement(XeriamoBrandLockup),
+  ));
+  assert.match(activeMarkup, /\/api\/public\/branding\/icon/);
+  assert.match(activeMarkup, /\/api\/public\/branding\/logo/);
+  assert.doesNotMatch(activeMarkup, /<strong>Xeriamo<\/strong>/);
+  assert.doesNotMatch(activeMarkup, /is-fallback/);
+
+  const fallbackMarkup = renderToStaticMarkup(React.createElement(
+    XeriamoBrandingProvider,
+    { initialSnapshot: { branding: {}, resolved: true } },
+    React.createElement(XeriamoBrandLockup),
+  ));
+  assert.match(fallbackMarkup, /xeriamo-brand-fallback-mark/);
+  assert.match(fallbackMarkup, /<strong>Xeriamo<\/strong>/);
+
+  const loadingMarkup = renderToStaticMarkup(React.createElement(
+    XeriamoBrandingProvider,
+    { initialSnapshot: { branding: {}, resolved: false } },
+    React.createElement(XeriamoBrandLockup),
+  ));
+  assert.match(loadingMarkup, /is-loading/);
+  assert.doesNotMatch(loadingMarkup, /<strong>Xeriamo<\/strong>/);
+  assert.doesNotMatch(loadingMarkup, /xeriamo-brand-fallback-mark/);
+
+  const current = { branding: active, resolved: true };
+  assert.equal(retainResolvedBrandingSnapshot(current, { branding: {}, resolved: false }), current);
+  assert.deepEqual(
+    retainResolvedBrandingSnapshot(current, { branding: {}, resolved: true }),
+    { branding: {}, resolved: true },
+  );
+
+  const provider = read("components/xeriano/branding-provider.tsx");
+  assert.match(provider, /useState<XeriamoPublicBrandingSnapshot>\(initialSnapshot\)/);
+  assert.doesNotMatch(provider, /useEffect\(\(\) => \{\s*void load\(\)/);
+  assert.match(provider, /body\.resolved !== true/);
+  assert.match(provider, /await Promise\.all\(changedIdentityUrls/);
+  assert.match(provider, /image\.decode\(\)/);
+  assert.match(provider, /retainResolvedBrandingSnapshot/);
+
+  const rootLayout = read("app/layout.tsx");
+  assert.equal((rootLayout.match(/<XeriamoBrandingProvider/g) ?? []).length, 1);
+  assert.doesNotMatch(rootLayout, /<XeriamoBrandingProvider[^>]*\skey=/);
+  assert.match(read("lib/xeriano/branding/server.ts"), /branding: lastResolvedPublicBranding \?\? \{\}, resolved: false/);
+  assert.match(read("app\/api\/public\/branding\/route.ts"), /status: snapshot\.resolved \? 200 : 503/);
+});
+
+test("dynamic favicon authority is versioned, falls back to Icon and has no static App Router override", () => {
+  const faviconV1 = resolveXeriamoBrowserBranding({
+    FAVICON: publicAsset("FAVICON", "favicon-v1", "image/svg+xml"),
+    ICON: publicAsset("ICON", "icon-v1"),
+  });
+  const faviconV2 = resolveXeriamoBrowserBranding({
+    FAVICON: publicAsset("FAVICON", "favicon-v2", "image/svg+xml"),
+    ICON: publicAsset("ICON", "icon-v1"),
+  });
+  assert.equal(faviconV1.favicon.url, "/api/public/branding/favicon?v=favicon-v1");
+  assert.equal(faviconV1.favicon.sourceRole, "FAVICON");
+  assert.notEqual(faviconV1.favicon.url, faviconV2.favicon.url);
+
+  const iconFallback = resolveXeriamoBrowserBranding({ ICON: publicAsset("ICON", "icon-v7") });
+  assert.equal(iconFallback.favicon.url, "/api/public/branding/favicon?v=icon-v7");
+  assert.equal(iconFallback.favicon.sourceRole, "ICON");
+  assert.equal(iconFallback.appleTouchIcon.sourceRole, "ICON");
+
+  assert.equal(existsSync("app/favicon.ico") && statSync("app/favicon.ico").isFile(), false);
+  assert.equal(statSync("app/favicon.ico").isDirectory(), true);
+  assert.equal(existsSync("app/favicon.ico/route.ts"), true);
+  assert.equal(existsSync("public/xeriamo-favicon-fallback.ico"), true);
+  const layout = read("app/layout.tsx");
+  assert.match(layout, /generateMetadata/);
+  assert.match(layout, /browserBranding\.favicon\.url/);
+  assert.match(layout, /icon: \[\{ \.\.\.favicon, rel: "icon" \}\]/);
+  assert.match(layout, /shortcut: \[\{ \.\.\.favicon, rel: "shortcut icon" \}\]/);
+  assert.doesNotMatch(layout, /icon:\s*["']\/api\/public\/branding\/favicon["']/);
+});
+
+test("conventional root favicon returns authoritative bytes with Safari-safe cache policy", async () => {
+  const favicon = { role: "FAVICON" as const, mime_type: "image/svg+xml", bytes: "favicon" };
+  const icon = { role: "ICON" as const, mime_type: "image/png", bytes: "icon" };
+  assert.deepEqual(
+    selectPublicBrandingCandidates([icon, favicon], "FAVICON").map((candidate) => candidate.bytes),
+    ["favicon", "icon"],
+  );
+  assert.deepEqual(
+    selectPublicBrandingCandidates([icon], "FAVICON").map((candidate) => candidate.bytes),
+    ["icon"],
+  );
+  assert.deepEqual(selectPublicBrandingCandidates([], "FAVICON"), []);
+
+  const expected = new Uint8Array([0, 1, 2, 3, 254, 255]);
+  const response = createXeriamoRootFaviconResponse({ bytes: expected, mimeType: "image/png" });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/png");
+  assert.equal(response.headers.get("cache-control"), "no-store, max-age=0");
+  assert.equal(response.headers.get("location"), null);
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), expected);
+
+  const route = read("app/favicon.ico/route.ts");
+  assert.match(route, /loadPublicBrandingBytes\("FAVICON"\)/);
+  assert.match(route, /createXeriamoRootFaviconResponse/);
+  assert.doesNotMatch(route, /redirect/i);
+  const server = read("lib/xeriano/branding/server.ts");
+  assert.match(server, /selectPublicBrandingCandidates\(rows, role\)/);
+  assert.match(server, /role === "FAVICON" \? fallbackIcon\(\) : null/);
+
+  const fallback = readFileSync("public/xeriamo-favicon-fallback.ico");
+  assert.notEqual(
+    createHash("sha256").update(fallback).digest("hex"),
+    "2b8ad2d33455a8f736fc3a8ebf8f0bdea8848ad4c0db48a2833bd0f9cd775932",
+    "the retired triangle favicon must never be the Xeriamo fallback",
+  );
 });
 
 test("uploads are server-owned, path-safe and do not auto-activate", () => {
@@ -171,8 +315,28 @@ test("runtime identity uses fallbacks and covers public, auth, customer and Owne
     "components/navigation/hq-sidebar.tsx",
   ]) assert.match(read(file), /XeriamoBrandIdentity/, file);
   const layout = read("app/layout.tsx");
-  assert.match(layout, /\/api\/public\/branding\/favicon/);
-  assert.match(layout, /\/api\/public\/branding\/apple-touch-icon/);
+  const presentation = read("lib/xeriano/branding/presentation.ts");
+  assert.match(layout, /resolveXeriamoBrowserBranding/);
+  assert.match(presentation, /\/api\/public\/branding\/favicon/);
+  assert.match(presentation, /\/api\/public\/branding\/apple-touch-icon/);
+  assert.match(layout, /initialSnapshot=\{initialBranding\}/);
+});
+
+test("navigation lockups are reduced by 15 percent while Maintenance geometry stays unchanged", () => {
+  const productCss = read("app/xeriano.css");
+  assert.match(productCss, /\.xeriano-public-header \.xeriamo-brand-lockup-mark\{width:39\.1px;height:39\.1px;padding:4\.25px\}/);
+  assert.match(productCss, /\.xeriano-public-header \.xeriamo-brand-lockup-wordmark\{width:clamp\(113\.9px,31\.45vw,144\.5px\);height:37\.4px\}/);
+  assert.match(productCss, /\.xeriano-customer-mobile-header \.xeriamo-brand-lockup-mark\{width:42\.5px;height:42\.5px;padding:5\.1px\}/);
+  assert.match(productCss, /\.xeriano-customer-mobile-header \.xeriamo-brand-lockup-wordmark\{width:clamp\(123\.25px,34vw,156\.4px\);height:40\.8px\}/);
+  assert.match(productCss, /\.xeriano-maintenance-card \.xeriamo-brand-lockup-wordmark\{width:clamp\(150px,36vw,190px\)\}/);
+  assert.match(productCss, /\.xeriano-maintenance-card \.xeriamo-brand-lockup-mark\{width:46px;height:46px\}/);
+  const ownerCss = read("app/hq-navigation.css");
+  assert.match(ownerCss, /\.hq-owner-mobile-brand > span:first-child \{[\s\S]*?width: 42\.5px;[\s\S]*?height: 42\.5px;/);
+  assert.match(ownerCss, /\.hq-owner-mobile-brand-copy \.xeriamo-brand-identity\.is-logo \{[\s\S]*?width: clamp\(123\.25px, 34vw, 156\.4px\);[\s\S]*?height: 40\.8px;/);
+  assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-owner \.studio-mobile-branding > \.xeriamo-brand-identity \{[^}]*width: 42\.5px;[^}]*height: 42\.5px;/);
+  assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-customer \.studio-mobile-branding > \.xeriamo-brand-identity \{[^}]*width: 42\.5px;[^}]*height: 42\.5px;/);
+  assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-owner \.studio-mobile-branding-copy \.xeriamo-brand-identity\.is-logo \{[^}]*width: clamp\(112\.2px, 39\.1vw, 161\.5px\);[^}]*height: 40\.8px;/);
+  assert.match(ownerCss, /\.studio-mobile-nav-drawer\.is-customer \.studio-mobile-branding-copy \.xeriamo-brand-identity\.is-logo \{[^}]*width: clamp\(112\.2px, 39\.1vw, 161\.5px\);[^}]*height: 40\.8px;/);
 });
 
 test("Owner Branding Manager exposes four roles, preview, explicit activation and inactive-only delete", () => {

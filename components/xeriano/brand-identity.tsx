@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- Runtime-managed SVG/ICO/PNG branding uses stable revalidated endpoints. */
 
-import { useXeriamoBranding } from "./branding-provider";
+import { useXeriamoBrandingSnapshot } from "./branding-provider";
 
 export function XeriamoBrandLockup() {
   return (
@@ -27,13 +27,14 @@ export function XeriamoBrandIdentity({
   /** Compact Owner shells provide their single visible name beside this mark. */
   markOnly?: boolean;
 }) {
-  const asset = useXeriamoBranding()[role];
-  const showVisibleName = !markOnly && (showName || !asset);
+  const snapshot = useXeriamoBrandingSnapshot();
+  const asset = snapshot.branding[role];
+  const showVisibleName = !markOnly && (showName || (snapshot.resolved && !asset));
   const logoAspectRatio = asset?.width && asset.height ? asset.width / asset.height : null;
   const hasSquareLogoCanvas = role === "LOGO" && logoAspectRatio !== null && logoAspectRatio >= 0.8 && logoAspectRatio <= 1.25;
   return (
-    <span className={`xeriamo-brand-identity is-${role.toLowerCase()}${asset ? " has-asset" : " is-fallback"}${hasSquareLogoCanvas ? " has-square-canvas" : ""}`}>
-      {asset ? <img src={asset.url} alt="" aria-hidden="true" /> : role === "ICON" ? <span className="xeriamo-brand-fallback-mark" aria-hidden="true">X</span> : null}
+    <span className={`xeriamo-brand-identity is-${role.toLowerCase()}${asset ? " has-asset" : snapshot.resolved ? " is-fallback" : " is-loading"}${hasSquareLogoCanvas ? " has-square-canvas" : ""}`}>
+      {asset ? <img src={asset.url} alt="" aria-hidden="true" fetchPriority="high" /> : snapshot.resolved && role === "ICON" ? <span className="xeriamo-brand-fallback-mark" aria-hidden="true">X</span> : null}
       {showVisibleName ? <strong>Xeriamo</strong> : markOnly ? null : <span className="sr-only">Xeriamo</span>}
     </span>
   );

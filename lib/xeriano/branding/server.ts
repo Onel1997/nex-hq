@@ -12,8 +12,10 @@ import {
   type XeriamoBrandingAsset,
   type XeriamoBrandingRole,
   type XeriamoPublicBranding,
+  type XeriamoPublicBrandingSnapshot,
 } from "./contracts";
 import { brandingExtension, validateBrandingUpload } from "./validation";
+import { selectPublicBrandingCandidates } from "./delivery";
 
 const BUCKET = "xeriamo-branding";
 
@@ -139,9 +141,9 @@ export async function listOwnerBrandingAssets() {
   return (await selectBrandingRows()).map(mapOwnerAsset);
 }
 
-export async function loadPublicBranding(): Promise<XeriamoPublicBranding> {
-  let rows: BrandingRow[] = [];
-  try { rows = await selectBrandingRows({ activeOnly: true }); } catch { return {}; }
+let lastResolvedPublicBranding: XeriamoPublicBranding | null = null;
+
+function mapPublicBranding(rows: BrandingRow[]): XeriamoPublicBranding {
   return Object.fromEntries(rows.map((row) => {
     const version = createHash("sha256").update(`${row.id}:${row.updated_at}:${row.checksum_sha256}`).digest("hex").slice(0, 16);
     return [row.role, {
@@ -155,8 +157,22 @@ export async function loadPublicBranding(): Promise<XeriamoPublicBranding> {
   })) as XeriamoPublicBranding;
 }
 
+export async function loadPublicBrandingSnapshot(): Promise<XeriamoPublicBrandingSnapshot> {
+  try {
+    const branding = mapPublicBranding(await selectBrandingRows({ activeOnly: true }));
+    lastResolvedPublicBranding = branding;
+    return { branding, resolved: true };
+  } catch {
+    return { branding: lastResolvedPublicBranding ?? {}, resolved: false };
+  }
+}
+
+export async function loadPublicBranding(): Promise<XeriamoPublicBranding> {
+  return (await loadPublicBrandingSnapshot()).branding;
+}
+
 async function fallbackIcon() {
-  const bytes = await readFile(path.join(process.cwd(), "app", "favicon.ico"));
+  const bytes = await readFile(path.join(process.cwd(), "public", "xeriamo-favicon-fallback.ico"));
   return { bytes, mimeType: "image/x-icon", checksum: createHash("sha256").update(bytes).digest("hex") };
 }
 
@@ -177,19 +193,16 @@ function fallbackAppleTouchIcon() {
 export async function loadPublicBrandingBytes(role: XeriamoBrandingRole) {
   let rows: BrandingRow[] = [];
   try { rows = await selectBrandingRows({ activeOnly: true }); } catch { rows = []; }
-  let row = rows.find((candidate) => candidate.role === role);
-  if (!row && role === "APPLE_TOUCH_ICON") row = rows.find((candidate) => candidate.role === "ICON" && candidate.mime_type === "image/png");
-  if (!row) {
-    if (role === "APPLE_TOUCH_ICON") return fallbackAppleTouchIcon();
-    if (role === "FAVICON") return fallbackIcon();
-    return null;
+  const candidates = selectPublicBrandingCandidates(rows, role);
+
+  for (const row of candidates) {
+    const { data, error } = await createAdminClient().storage.from(row.storage_bucket).download(row.storage_path);
+    if (!error && data) {
+      return { bytes: Buffer.from(await data.arrayBuffer()), mimeType: row.mime_type, checksum: row.checksum_sha256 };
+    }
   }
-  const { data, error } = await createAdminClient().storage.from(row.storage_bucket).download(row.storage_path);
-  if (error || !data) {
-    if (role === "APPLE_TOUCH_ICON") return fallbackAppleTouchIcon();
-    return role === "FAVICON" ? fallbackIcon() : null;
-  }
-  return { bytes: Buffer.from(await data.arrayBuffer()), mimeType: row.mime_type, checksum: row.checksum_sha256 };
+  if (role === "APPLE_TOUCH_ICON") return fallbackAppleTouchIcon();
+  return role === "FAVICON" ? fallbackIcon() : null;
 }
 
 export async function loadOwnerBrandingBytes(assetId: string) {
