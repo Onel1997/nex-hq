@@ -16,6 +16,12 @@ function sanitizeText(value: string, maximum = 4000): string {
   return withoutCredentials.slice(0, maximum);
 }
 
+function sanitizeDiagnosticMessage(value: string): string {
+  return sanitizeText(value, 500)
+    .replace(/\brequest(?:[_\s-]?id)?\s*[:=]?\s*[A-Za-z0-9_-]{8,}\b/gi, "request [REDACTED]")
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[REDACTED_ID]");
+}
+
 function sanitizeValue(
   value: unknown,
   state: MutableSanitization,
@@ -81,6 +87,84 @@ function firstText(...values: unknown[]): string | null {
   return null;
 }
 
+export type FalProviderValidationDetail = {
+  providerErrorType: string | null;
+  providerValidationPath: string | null;
+  providerMessage: string | null;
+};
+
+function safeValidationPath(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    const parts = value.slice(0, 12).flatMap((part) => {
+      if (typeof part === "number" && Number.isSafeInteger(part) && part >= 0) {
+        return [String(part)];
+      }
+      if (
+        typeof part === "string" &&
+        /^[A-Za-z_][A-Za-z0-9_-]{0,79}$/.test(part)
+      ) return [part];
+      return [];
+    });
+    return parts.length ? parts.join(".") : null;
+  }
+  if (
+    typeof value === "string" &&
+    /^[A-Za-z_][A-Za-z0-9_.\-[\]]{0,299}$/.test(value)
+  ) return value;
+  return null;
+}
+
+function validationCandidates(body: unknown): Array<Record<string, unknown>> {
+  if (!body || typeof body !== "object") return [];
+  const record = body as Record<string, unknown>;
+  const values = [record.detail, record.errors, record.error];
+  return values.flatMap((value) => {
+    if (Array.isArray(value)) {
+      return value.filter(
+        (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object",
+      );
+    }
+    return value && typeof value === "object"
+      ? [value as Record<string, unknown>]
+      : [];
+  });
+}
+
+/** Extract only non-sensitive validation coordinates suitable for server diagnostics. */
+export function extractFalProviderValidationDetail(
+  input: unknown,
+): FalProviderValidationDetail {
+  const error = input && typeof input === "object"
+    ? input as Record<string, unknown>
+    : null;
+  const body = error && "body" in error ? error.body : input;
+  const candidate = validationCandidates(body)[0] ?? null;
+  const providerErrorType = firstText(
+    candidate?.type,
+    candidate?.code,
+    objectValue(body, "type"),
+    objectValue(body, "code"),
+  );
+  const providerValidationPath = safeValidationPath(
+    candidate?.loc ?? candidate?.path ?? candidate?.location,
+  );
+  const providerMessage = firstText(
+    candidate?.msg,
+    candidate?.message,
+    typeof objectValue(body, "detail") === "string"
+      ? objectValue(body, "detail")
+      : null,
+    objectValue(body, "message"),
+  );
+  return {
+    providerErrorType: providerErrorType
+      ? sanitizeText(providerErrorType, 200)
+      : null,
+    providerValidationPath,
+    providerMessage: providerMessage ? sanitizeDiagnosticMessage(providerMessage) : null,
+  };
+}
+
 export function sanitizeFalProviderError(input: {
   error: unknown;
   phase: UgcVideoProviderError["phase"];
@@ -98,6 +182,7 @@ export function sanitizeFalProviderError(input: {
   const body = error?.body;
   const bodyError = objectValue(body, "error");
   const bodyDetail = objectValue(body, "detail");
+  const validation = extractFalProviderValidationDetail(input.error);
   const state: MutableSanitization = { truncated: false };
   const sanitized = body === undefined
     ? null
@@ -116,12 +201,14 @@ export function sanitizeFalProviderError(input: {
     objectValue(bodyError, "code"),
     objectValue(bodyDetail, "code"),
     objectValue(bodyDetail, "type"),
+    validation.providerErrorType,
   );
   const providerMessage = sanitizeText(
     firstText(
       objectValue(body, "message"),
       objectValue(bodyError, "message"),
       typeof bodyDetail === "string" ? bodyDetail : null,
+      validation.providerMessage,
       error?.message,
       "Unbekannter Anbieterfehler",
     )!,

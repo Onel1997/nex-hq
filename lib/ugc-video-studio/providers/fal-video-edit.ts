@@ -13,6 +13,7 @@ import {
   type UgcVideoEditModelId,
 } from "@/lib/ugc-video-studio/model-registry";
 import {
+  extractFalProviderValidationDetail,
   sanitizeFalProviderError,
   sanitizeFalQueueText,
 } from "@/lib/ugc-video-studio/provider-diagnostics";
@@ -38,7 +39,10 @@ export type FalKlingVideoEditInput = {
   prompt: string;
   video_url: string;
   keep_audio: boolean;
-  elements: Array<{ frontal_image_url: string }>;
+  elements: Array<{
+    frontal_image_url: string;
+    reference_image_urls?: string[];
+  }>;
   shot_type?: "customize";
 };
 
@@ -88,6 +92,88 @@ export type FalVideoEditTransport = {
 
 const FAL_QUEUE_HOST = "queue.fal.run";
 const FAL_QUEUE_TIMEOUT_MS = 30_000;
+
+type FalVideoEditQueueSubmission = {
+  requestId: string;
+  statusUrl: string | null;
+  responseUrl: string | null;
+  cancelUrl: string | null;
+  queuePosition: number | null;
+};
+
+function safeModelIdForEndpoint(endpoint: FalVideoEditEndpoint): UgcVideoEditModelId {
+  if (endpoint === KLING_O3_PRO_EDIT_ENDPOINT) return "kling-o3-pro-video-edit";
+  if (endpoint === KLING_O1_STANDARD_EDIT_ENDPOINT) return "kling-o1-standard-video-edit";
+  return "seedance-2-fast-video-edit";
+}
+
+function logVideoEditRecoveryFailure(input: {
+  error: unknown;
+  endpoint: FalVideoEditEndpoint;
+  recoveryStage: "status" | "result";
+  providerStatus: number | null;
+  providerUrlSource: "authoritative" | "legacy-sdk";
+}) {
+  const detail = extractFalProviderValidationDetail(input.error);
+  console.warn("[xeriamo-ugc] ugc_video_edit_recovery_failed", {
+    model: safeModelIdForEndpoint(input.endpoint),
+    recoveryStage: input.recoveryStage,
+    providerStatus: input.providerStatus,
+    providerErrorType: detail.providerErrorType,
+    providerValidationPath: detail.providerValidationPath,
+    providerMessage: detail.providerMessage,
+    providerUrlSource: input.providerUrlSource,
+  });
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function firstQueueText(
+  records: Array<Record<string, unknown> | null>,
+  ...keys: string[]
+): string | null {
+  for (const record of records) {
+    if (!record) continue;
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  return null;
+}
+
+/** Normalize the installed fal queue contract without discarding its authoritative URLs. */
+export function extractFalVideoEditQueueSubmission(
+  value: unknown,
+): FalVideoEditQueueSubmission {
+  const root = recordValue(value);
+  const records = [
+    root,
+    recordValue(root?.queue),
+    recordValue(root?.data),
+    recordValue(root?.response),
+  ];
+  const requestId = firstQueueText(records, "request_id", "requestId");
+  if (!requestId) throw new Error("UGC_VIDEO_EDIT_REQUEST_ID_MISSING");
+  const statusUrl = firstQueueText(records, "status_url", "statusUrl");
+  const responseUrl = firstQueueText(records, "response_url", "responseUrl");
+  const cancelUrl = firstQueueText(records, "cancel_url", "cancelUrl");
+  const queuePositionValue = records.flatMap((record) => record ? [
+    record.queue_position,
+    record.queuePosition,
+  ] : []).find((item) => typeof item === "number" && Number.isInteger(item));
+  return {
+    requestId,
+    statusUrl: statusUrl ? assertUgcFalQueueUrl(statusUrl) : null,
+    responseUrl: responseUrl ? assertUgcFalQueueUrl(responseUrl) : null,
+    cancelUrl: cancelUrl ? assertUgcFalQueueUrl(cancelUrl) : null,
+    queuePosition: typeof queuePositionValue === "number" ? queuePositionValue : null,
+  };
+}
 
 export function assertUgcFalQueueUrl(value: string): string {
   let parsed: URL;
@@ -175,15 +261,20 @@ async function authoritativeQueueRequest(input: {
     });
     return await readFalResponse(response);
   } catch (error) {
-    throw new UgcVideoProviderDiagnosticError(
-      sanitizeFalProviderError({
-        error,
-        phase: input.stage,
-        endpoint: input.endpoint,
-        requestId: input.requestId,
-      }),
-      false,
-    );
+    const diagnostic = sanitizeFalProviderError({
+      error,
+      phase: input.stage,
+      endpoint: input.endpoint,
+      requestId: input.requestId,
+    });
+    logVideoEditRecoveryFailure({
+      error,
+      endpoint: input.endpoint,
+      providerUrlSource: "authoritative",
+      recoveryStage: input.stage === "STATUS" ? "status" : "result",
+      providerStatus: diagnostic.httpStatus,
+    });
+    throw new UgcVideoProviderDiagnosticError(diagnostic, false);
   }
 }
 
@@ -214,7 +305,7 @@ function statusFromRaw(value: unknown): UgcVideoProviderStatus {
   };
 }
 
-function createDefaultTransport(
+export function createFalVideoEditTransport(
   credentials: string,
   fetcher: typeof fetch = fetch,
 ): FalVideoEditTransport {
@@ -234,13 +325,7 @@ function createDefaultTransport(
         input: input as never,
         storageSettings: { expiresIn: "1d" },
       });
-      return {
-        requestId: queued.request_id,
-        statusUrl: queued.status_url ? assertUgcFalQueueUrl(queued.status_url) : null,
-        responseUrl: queued.response_url ? assertUgcFalQueueUrl(queued.response_url) : null,
-        cancelUrl: queued.cancel_url ? assertUgcFalQueueUrl(queued.cancel_url) : null,
-        queuePosition: queued.queue_position ?? null,
-      };
+      return extractFalVideoEditQueueSubmission(queued);
     },
     async status(endpoint, requestId, queueHandle) {
       const authoritativeUrl = queueHandleUrl(queueHandle, endpoint, "STATUS");
@@ -249,10 +334,17 @@ function createDefaultTransport(
           const status = await client.queue.status(endpoint, { requestId, logs: true });
           return statusFromRaw(status);
         } catch (error) {
-          throw new UgcVideoProviderDiagnosticError(
-            sanitizeFalProviderError({ error, phase: "STATUS", endpoint, requestId }),
-            false,
-          );
+          const diagnostic = sanitizeFalProviderError({
+            error, phase: "STATUS", endpoint, requestId,
+          });
+          logVideoEditRecoveryFailure({
+            error,
+            endpoint,
+            providerUrlSource: "legacy-sdk",
+            recoveryStage: "status",
+            providerStatus: diagnostic.httpStatus,
+          });
+          throw new UgcVideoProviderDiagnosticError(diagnostic, false);
         }
       }
       return statusFromRaw(await authoritativeQueueRequest({
@@ -266,8 +358,18 @@ function createDefaultTransport(
           const result = await client.queue.result(endpoint, { requestId });
           return { requestId: result.requestId, data: result.data as FalVideoEditOutput };
         } catch (error) {
+          const diagnostic = sanitizeFalProviderError({
+            error, phase: "RESULT", endpoint, requestId,
+          });
+          logVideoEditRecoveryFailure({
+            error,
+            endpoint,
+            providerUrlSource: "legacy-sdk",
+            recoveryStage: "result",
+            providerStatus: diagnostic.httpStatus,
+          });
           throw new UgcVideoProviderDiagnosticError(
-            sanitizeFalProviderError({ error, phase: "RESULT", endpoint, requestId }),
+            diagnostic,
             error instanceof ApiError && error.status >= 400 && error.status < 600,
           );
         }
@@ -395,7 +497,7 @@ export class FalVideoEditProvider implements UgcVideoProvider {
 
   private transportInstance() {
     if (!this.isConfigured()) throw new Error("FAL_KEY ist nicht eingerichtet.");
-    return this.transport ?? createDefaultTransport(this.credentials!.trim());
+    return this.transport ?? createFalVideoEditTransport(this.credentials!.trim());
   }
 
   async submit(request: UgcVideoProviderRequest): Promise<UgcVideoProviderSubmission> {

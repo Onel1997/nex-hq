@@ -485,6 +485,20 @@ function providerErrorSummary(error: UgcVideoProviderError): string {
   );
 }
 
+function isVideoEditRecoveryContractFailure(
+  manifest: UgcVideoJobManifest,
+  error: unknown,
+): error is UgcVideoProviderDiagnosticError {
+  if (
+    manifest.setup.mode !== "VIDEO_EDIT" ||
+    !(error instanceof UgcVideoProviderDiagnosticError)
+  ) return false;
+  return (
+    (error.diagnostic.phase === "STATUS" || error.diagnostic.phase === "RESULT") &&
+    (error.diagnostic.httpStatus === 405 || error.diagnostic.httpStatus === 422)
+  );
+}
+
 function resultDownloadDiagnostic(
   manifest: UgcVideoJobManifest,
   error: unknown,
@@ -972,6 +986,32 @@ export async function observeUgcVideoJob(
     });
     return manifestToRun(manifest);
   } catch (error) {
+    if (isVideoEditRecoveryContractFailure(manifest, error)) {
+      const observedAt = now();
+      console.warn("[xeriamo-ugc] video_edit_recovery_quarantined", {
+        model: manifest.setup.modelId,
+        recoveryStage: error.diagnostic.phase.toLowerCase(),
+        providerStatus: error.diagnostic.httpStatus,
+        providerUrlSource:
+          error.diagnostic.phase === "STATUS" && manifest.providerStatusUrl
+            ? "authoritative"
+            : error.diagnostic.phase === "RESULT" && manifest.providerResponseUrl
+              ? "authoritative"
+              : "legacy-sdk",
+      });
+      manifest = ugcVideoJobManifestSchema.parse({
+        ...manifest,
+        status: "UNKNOWN_OUTCOME",
+        providerStatusCheckedAt: observedAt,
+        providerObservationError: providerErrorSummary(error.diagnostic),
+        providerError: error.diagnostic,
+        updatedAt: observedAt,
+        message: "Der Anbieterstatus konnte nicht sicher abgerufen werden.",
+        technicalError: providerErrorSummary(error.diagnostic),
+      });
+      await store.writeManifest(manifest);
+      return manifestToRun(manifest);
+    }
     if (error instanceof UgcVideoProviderDiagnosticError && error.terminal) {
       manifest = ugcVideoJobManifestSchema.parse({
         ...manifest,
@@ -1034,8 +1074,8 @@ export async function observeUgcVideoJob(
       return manifestToRun(manifest);
     }
 
-    // The paid submission remains known. A transient queue/result observation
-    // problem must not be relabelled UNKNOWN and must never trigger resubmission.
+    // The paid submission remains known. A genuinely transient queue/result
+    // observation problem stays RUNNING and never triggers resubmission.
     const observationError =
       error instanceof UgcVideoProviderDiagnosticError
         ? providerErrorSummary(error.diagnostic)
