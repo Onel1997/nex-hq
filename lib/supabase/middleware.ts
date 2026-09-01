@@ -12,6 +12,13 @@ import {
   NEXHQ_VERIFIED_USER_ID_HEADER,
 } from "@/lib/auth/verified-request";
 import { parsePersonaAuthorizedUserIds } from "@/lib/persona/security/authorization";
+import { loadEdgeMaintenanceStatus } from "@/lib/xeriano/maintenance/edge-status";
+import {
+  isMaintenanceBlockedCustomerMutation,
+  isMaintenanceFrontendPath,
+  maintenanceDecision,
+  maintenanceReturnPath,
+} from "@/lib/xeriano/maintenance/routing";
 
 function copyResponseCookies(source: NextResponse, target: NextResponse) {
   source.cookies.getAll().forEach(({ name, value, ...options }) => {
@@ -28,6 +35,14 @@ export async function updateSession(request: NextRequest) {
   if (isSessionlessStripeWebhookPath(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
+
+  const pathname = request.nextUrl.pathname;
+  const maintenanceCandidate =
+    isMaintenanceFrontendPath(pathname) ||
+    isMaintenanceBlockedCustomerMutation({ pathname, method: request.method });
+  const maintenanceStatusPromise = maintenanceCandidate
+    ? loadEdgeMaintenanceStatus({ fresh: request.nextUrl.searchParams.has("maintenance_recheck") })
+    : null;
 
   const requestHeaders = new Headers(request.headers);
   clearVerifiedIdentityHeaders(requestHeaders);
@@ -73,10 +88,14 @@ export async function updateSession(request: NextRequest) {
         ? explicitOwnerIds
         : parsePersonaAuthorizedUserIds(process.env.NEXHQ_PERSONA_AUTHORIZED_USER_IDS);
       internalOwner = [...new Set(compatibilityOwnerIds)].includes(authentication.actor.userId);
-      const pathname = request.nextUrl.pathname;
       const customerBoundary = pathname === "/app" || pathname.startsWith("/app/") ||
         isCustomerProductApiPath(pathname);
-      if (!internalOwner && !customerBoundary) {
+      const maintenanceStatus = maintenanceStatusPromise
+        ? await maintenanceStatusPromise
+        : null;
+      const ownerResolutionRequiredForMaintenance =
+        maintenanceCandidate && maintenanceStatus?.state === "MAINTENANCE";
+      if (!internalOwner && (!customerBoundary || ownerResolutionRequiredForMaintenance)) {
         // The additive Xeriano membership is the future role authority. Until
         // rollout, a missing table fails closed and legacy owner IDs stay valid.
         const membership = await supabase
@@ -106,8 +125,50 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  const maintenanceStatus = maintenanceStatusPromise
+    ? await maintenanceStatusPromise
+    : null;
+  const gate = maintenanceDecision({
+    enabled: maintenanceStatus?.state === "MAINTENANCE",
+    pathname,
+    method: request.method,
+    exactOwner: internalOwner,
+  });
+
+  if (gate === "MAINTENANCE_API") {
+    return copyResponseCookies(
+      supabaseResponse,
+      NextResponse.json(
+        {
+          success: false,
+          code: "MAINTENANCE_MODE",
+          error: "Xeriamo wird gerade gewartet. Bitte versuche es in Kürze erneut.",
+        },
+        {
+          status: 503,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": "120",
+          },
+        },
+      ),
+    );
+  }
+
+  if (gate === "MAINTENANCE_PAGE") {
+    const maintenanceUrl = new URL("/maintenance", request.url);
+    maintenanceUrl.searchParams.set(
+      "returnTo",
+      maintenanceReturnPath(pathname, request.nextUrl.search),
+    );
+    return copyResponseCookies(
+      supabaseResponse,
+      NextResponse.redirect(maintenanceUrl),
+    );
+  }
+
   const decision = decideNexhqAuthRouting({
-    pathname: request.nextUrl.pathname,
+    pathname,
     authenticated,
     internalOwner: authenticatedUserId ? internalOwner : false,
   });

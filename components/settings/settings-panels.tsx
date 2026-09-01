@@ -10,6 +10,7 @@ import {
 
 import { logoutOwner } from "@/app/auth-actions";
 import { BrandingManager } from "@/components/settings/branding-manager";
+import { MaintenanceManager } from "@/components/settings/maintenance-manager";
 import type {
   OwnerIntegrationPresentation,
   OwnerSettingsPresentation,
@@ -55,6 +56,15 @@ export function SettingsPanels({ presentation }: { presentation: OwnerSettingsPr
           </div>
           <span className="owner-settings-environment"><Check size={14} aria-hidden="true" />{presentation.environmentLabel}</span>
         </article>
+      </section>
+
+      <section className="owner-settings-section" aria-labelledby="owner-settings-status">
+        <div className="owner-settings-section-heading">
+          <p>Status</p>
+          <h2 id="owner-settings-status">Xeriamo Status</h2>
+          <span>Customer-Zugang sicher pausieren, während OWNER und Hintergrundprozesse weiterarbeiten.</span>
+        </div>
+        <MaintenanceManager />
       </section>
 
       <section className="owner-settings-section" aria-labelledby="owner-settings-branding">

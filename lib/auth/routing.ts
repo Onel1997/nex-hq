@@ -1,6 +1,6 @@
 export type NexhqAuthRoutingDecision =
   | { kind: "allow" }
-  | { kind: "redirect"; location: "/login" | "/app" }
+  | { kind: "redirect"; location: "/login" | "/hq/login" | "/app" }
   | { kind: "api_unauthorized"; status: 401 }
   | { kind: "api_forbidden"; status: 403 };
 
@@ -35,6 +35,8 @@ export function isPublicNexhqPath(pathname: string): boolean {
     pathname === "/login" ||
     pathname === "/register" ||
     pathname === "/reset-password" ||
+    pathname === "/maintenance" ||
+    pathname === "/hq/login" ||
     pathname === "/impressum" ||
     pathname === "/datenschutz" ||
     pathname === "/terms" ||
@@ -44,6 +46,7 @@ export function isPublicNexhqPath(pathname: string): boolean {
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
     isSessionlessStripeWebhookPath(pathname) ||
+    pathname === "/api/public/maintenance" ||
     isPublicBrandingPath(pathname) ||
     PUBLIC_ASSET_PATTERN.test(pathname)
   );
@@ -73,5 +76,11 @@ export function decideNexhqAuthRouting(input: {
     return { kind: "api_unauthorized", status: 401 };
   }
 
-  return { kind: "redirect", location: "/login" };
+  return {
+    kind: "redirect",
+    location:
+      input.pathname === "/hq" || input.pathname.startsWith("/hq/")
+        ? "/hq/login"
+        : "/login",
+  };
 }
