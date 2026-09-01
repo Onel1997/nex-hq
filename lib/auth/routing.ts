@@ -11,7 +11,7 @@ export const XERIANO_STRIPE_WEBHOOK_PATH = "/api/xeriano/billing/webhook" as con
 
 export function isPublicBrandingPath(pathname: string): boolean {
   return pathname === "/api/public/branding" ||
-    /^\/api\/public\/branding\/(?:logo|icon|favicon|apple-touch-icon)$/.test(pathname);
+    /^\/api\/public\/branding\/(?:logo|icon|favicon|favicon-root|apple-touch-icon)$/.test(pathname);
 }
 
 export function isSessionlessStripeWebhookPath(pathname: string): boolean {

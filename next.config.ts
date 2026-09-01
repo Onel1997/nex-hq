@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    return [
+      {
+        source: "/favicon.ico",
+        destination: "/api/public/branding/favicon-root",
+      },
+    ];
+  },
   experimental: {
     // The installed Next runtime clones request bodies at 10 MiB by default.
     // Master Artwork accepts at most 20 MiB of raw binary data; keep a small

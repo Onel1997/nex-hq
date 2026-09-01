@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { createCanvas } from "canvas";
 import * as React from "react";
@@ -89,6 +89,7 @@ test("public branding reads are sessionless while every mutation remains exact-O
     "/api/public/branding/logo",
     "/api/public/branding/icon",
     "/api/public/branding/favicon",
+    "/api/public/branding/favicon-root",
     "/api/public/branding/apple-touch-icon",
   ]) {
     assert.equal(isPublicBrandingPath(path), true);
@@ -214,9 +215,9 @@ test("dynamic favicon authority is versioned, falls back to Icon and has no stat
   assert.equal(iconFallback.favicon.sourceRole, "ICON");
   assert.equal(iconFallback.appleTouchIcon.sourceRole, "ICON");
 
-  assert.equal(existsSync("app/favicon.ico") && statSync("app/favicon.ico").isFile(), false);
-  assert.equal(statSync("app/favicon.ico").isDirectory(), true);
-  assert.equal(existsSync("app/favicon.ico/route.ts"), true);
+  assert.equal(existsSync("app/favicon.ico"), false);
+  assert.equal(existsSync("app/favicon.ico/route.ts"), false);
+  assert.equal(existsSync("app/api/public/branding/favicon-root/route.ts"), true);
   assert.equal(existsSync("public/xeriamo-favicon-fallback.ico"), true);
   const layout = read("app/layout.tsx");
   assert.match(layout, /generateMetadata/);
@@ -247,10 +248,15 @@ test("conventional root favicon returns authoritative bytes with Safari-safe cac
   assert.equal(response.headers.get("location"), null);
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), expected);
 
-  const route = read("app/favicon.ico/route.ts");
+  const route = read("app/api/public/branding/favicon-root/route.ts");
   assert.match(route, /loadPublicBrandingBytes\("FAVICON"\)/);
   assert.match(route, /createXeriamoRootFaviconResponse/);
   assert.doesNotMatch(route, /redirect/i);
+  const nextConfig = read("next.config.ts");
+  assert.match(
+    nextConfig,
+    /source:\s*["']\/favicon\.ico["'][\s\S]*destination:\s*["']\/api\/public\/branding\/favicon-root["']/,
+  );
   const server = read("lib/xeriano/branding/server.ts");
   assert.match(server, /selectPublicBrandingCandidates\(rows, role\)/);
   assert.match(server, /role === "FAVICON" \? fallbackIcon\(\) : null/);
