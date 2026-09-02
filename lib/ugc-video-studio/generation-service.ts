@@ -25,6 +25,12 @@ import {
 import { FalSeedanceProvider } from "@/lib/ugc-video-studio/providers/fal-seedance";
 import { FalKlingMotionControlProvider } from "@/lib/ugc-video-studio/providers/fal-kling-motion-control";
 import { FalVideoEditProvider } from "@/lib/ugc-video-studio/providers/fal-video-edit";
+import { FalBaseVideoProvider } from "@/lib/ugc-video-studio/providers/fal-base-video";
+import {
+  assertUgcBaseVideoSetup,
+  estimateUgcBaseVideoCostUsd,
+} from "@/lib/ugc-video-studio/base-video-config";
+import { isUgcBaseVideoModelId } from "@/lib/ugc-video-studio/base-video-models";
 import {
   assertKlingMotionReferences,
   assertKlingMotionCostAllowed,
@@ -80,7 +86,8 @@ export class UgcVideoGenerationError extends Error {
       | "UGC_VIDEO_STORAGE_FAILED"
       | "RESULT_PERSISTENCE_FAILED"
       | "JOB_NOT_FOUND"
-      | "JOB_STATE_INCONSISTENT",
+      | "JOB_STATE_INCONSISTENT"
+      | "BASE_VIDEO_OWNER_ONLY",
     message: string,
     readonly status: number,
     readonly technicalDetails?: string,
@@ -150,6 +157,17 @@ function validateReferences(
         );
       }
       throw error;
+    }
+  }
+  if (setup.mode === "BASE_VIDEO") {
+    try {
+      assertUgcBaseVideoSetup(setup);
+    } catch (error) {
+      throw new UgcVideoGenerationError(
+        "REFERENCE_INVALID",
+        error instanceof Error ? error.message : "Das Basisvideo-Setup ist ungültig.",
+        400,
+      );
     }
   }
   const counts = { IMAGE: 0, VIDEO: 0, AUDIO: 0 };
@@ -242,6 +260,27 @@ function resolveProviderExecution(input: {
   injectedCostCapUsd?: number | null;
   costLimitPolicy?: "REQUIRE_CONFIGURED_CAP" | "OWNER_ESTIMATE_ONLY";
 }): UgcProviderExecution {
+  if (
+    input.setup.mode === "BASE_VIDEO" &&
+    isUgcBaseVideoModelId(input.setup.modelId)
+  ) {
+    if (input.costLimitPolicy !== "OWNER_ESTIMATE_ONLY") {
+      throw new UgcVideoGenerationError(
+        "BASE_VIDEO_OWNER_ONLY",
+        "Basisvideo erstellen ist derzeit nur für den Xeriamo OWNER verfügbar.",
+        403,
+      );
+    }
+    const resolved = assertUgcBaseVideoSetup(input.setup);
+    return {
+      provider:
+        input.injectedProvider ??
+        new FalBaseVideoProvider(input.setup.modelId, process.env.FAL_KEY),
+      providerModel: resolved.endpoint,
+      estimatedMaximumCostUsd: estimateUgcBaseVideoCostUsd(input.setup),
+      configuredName: "Basisvideo",
+    };
+  }
   if (input.setup.mode === "VIDEO_EDIT" && isUgcVideoEditModelId(input.setup.modelId)) {
     assertUgcVideoEditSetup(input.setup);
     const model = ugcVideoModelById(input.setup.modelId)!;
@@ -328,6 +367,12 @@ function providerForManifest(
   }
   if (manifest.setup.mode === "VIDEO_EDIT" && isUgcVideoEditModelId(manifest.setup.modelId)) {
     return new FalVideoEditProvider(manifest.setup.modelId, process.env.FAL_KEY);
+  }
+  if (
+    manifest.setup.mode === "BASE_VIDEO" &&
+    isUgcBaseVideoModelId(manifest.setup.modelId)
+  ) {
+    return new FalBaseVideoProvider(manifest.setup.modelId, process.env.FAL_KEY);
   }
   throw new UgcVideoGenerationError(
     "PROVIDER_NOT_CONFIGURED",

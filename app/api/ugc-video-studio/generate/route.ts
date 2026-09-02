@@ -37,6 +37,11 @@ import {
   UgcVideoEditInputError,
 } from "@/lib/ugc-video-studio/video-edit-config";
 import { prepareUgcVideoEditMedia } from "@/lib/ugc-video-studio/video-edit-media";
+import {
+  assertUgcBaseVideoSetup,
+  resolveBaseVideoVariant,
+  UgcBaseVideoInputError,
+} from "@/lib/ugc-video-studio/base-video-config";
 import { requireTrustedCustomerMotionDuration } from "@/lib/xeriano/video-duration";
 import { xerianoTempReferenceGenerateEntrySchema } from "@/lib/xeriano/temp-references/contracts";
 import {
@@ -124,6 +129,34 @@ export async function POST(request: Request) {
     let providerSetup = recommendedModel
       ? { ...setup, modelId: recommendedModel }
       : setup;
+    if (setup.mode === "BASE_VIDEO") {
+      if (!ownerUnlimited) {
+        throw new UgcVideoGenerationError(
+          "BASE_VIDEO_OWNER_ONLY",
+          "Basisvideo erstellen ist derzeit nur für den Xeriamo OWNER verfügbar.",
+          403,
+        );
+      }
+      const hasStartImage = Boolean(
+        setup.baseVideo.startImageReferenceId &&
+          setup.references.some(
+            (reference) =>
+              reference.id === setup.baseVideo.startImageReferenceId &&
+              reference.mediaType === "IMAGE",
+          ),
+      );
+      providerSetup = {
+        ...setup,
+        baseVideo: {
+          ...setup.baseVideo,
+          variant: resolveBaseVideoVariant({
+            modelId: setup.modelId,
+            hasStartImage,
+          }),
+        },
+      };
+      assertUgcBaseVideoSetup(providerSetup);
+    }
     if (
       parsed.tempReferences.length !== setup.references.length ||
       parsed.tempReferences.some(
@@ -149,6 +182,35 @@ export async function POST(request: Request) {
         providerUrl: reference.providerUrl,
       }),
     );
+
+    if (providerSetup.mode === "BASE_VIDEO") {
+      const startImageId = providerSetup.baseVideo.startImageReferenceId;
+      const startImage = startImageId
+        ? references.find(
+            (reference) => reference.metadata.id === startImageId,
+          ) ?? null
+        : null;
+      if (startImage) {
+        if (
+          !["image/jpeg", "image/png", "image/webp"].includes(
+            startImage.metadata.mimeType.toLowerCase(),
+          )
+        ) {
+          throw new UgcBaseVideoInputError(
+            "BASE_VIDEO_START_IMAGE_UNSUPPORTED",
+            "Das Startbild wird von diesem Modell nicht unterstützt.",
+          );
+        }
+        try {
+          await readRasterDimensions(startImage.bytes);
+        } catch {
+          throw new UgcBaseVideoInputError(
+            "BASE_VIDEO_START_IMAGE_UNSUPPORTED",
+            "Das Startbild konnte nicht sicher geprüft werden.",
+          );
+        }
+      }
+    }
 
     if (providerSetup.modelId === "kling-v3-pro-motion-control") {
       const motion = resolveKlingMotionReferences(setup).motionVideo;
@@ -363,6 +425,7 @@ export async function POST(request: Request) {
           ].includes(error.code)) ||
           error instanceof UgcVideoCostCapError ||
           error instanceof UgcVideoEditInputError ||
+          error instanceof UgcBaseVideoInputError ||
           error instanceof XerianoTempReferenceError ||
           error instanceof ZodError ||
           error instanceof SyntaxError ||
@@ -412,6 +475,9 @@ export async function POST(request: Request) {
       return errorResponse({ error: error.message, code: error.code, status: error.status });
     }
     if (error instanceof UgcVideoEditInputError) {
+      return errorResponse({ error: error.message, code: error.code, status: 400 });
+    }
+    if (error instanceof UgcBaseVideoInputError) {
       return errorResponse({ error: error.message, code: error.code, status: 400 });
     }
     if (error instanceof UgcVideoCostCapError) {

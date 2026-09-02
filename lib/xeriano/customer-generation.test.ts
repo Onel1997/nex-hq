@@ -77,6 +77,7 @@ function klingSetup(
     advanced: { ...DEFAULT_UGC_VIDEO_ADVANCED_SETTINGS },
     klingMotion: { ...DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS },
     videoEdit: { sourceVideoReferenceId: null, characterMasterReferenceId: null, keepOriginalSound: false },
+    baseVideo: { variant: "TEXT_TO_VIDEO", startImageReferenceId: null, resolution: "720p", generateAudio: false },
   };
 }
 

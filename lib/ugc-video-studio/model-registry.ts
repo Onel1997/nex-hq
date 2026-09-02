@@ -4,6 +4,7 @@ import {
   type UgcVideoMode,
   type UgcVideoReferenceType,
 } from "@/lib/ugc-video-studio/contracts";
+import { BASE_VIDEO_CLIENT_MODELS } from "@/lib/ugc-video-studio/base-video-models";
 
 export type UgcVideoModelAvailability = "LIVE" | "READY_TO_CONNECT" | "PLANNED";
 
@@ -49,7 +50,12 @@ export type UgcVideoModelDefinition = {
   supportedAspectRatios: readonly UgcVideoGenerationSetup["aspectRatio"][];
   supportedQualities: readonly UgcVideoGenerationSetup["quality"][];
   supportedBitrates: readonly UgcVideoGenerationSetup["bitrate"][];
-  settingsKind: "SEEDANCE" | "KLING_MOTION_CONTROL" | "VIDEO_EDIT" | "GENERIC";
+  settingsKind:
+    | "SEEDANCE"
+    | "KLING_MOTION_CONTROL"
+    | "VIDEO_EDIT"
+    | "BASE_VIDEO"
+    | "GENERIC";
   modeCompatibility: readonly UgcVideoMode[];
   visibleInProductMode: boolean;
   providerCostUsdMicrosPerSecond: number | null;
@@ -265,6 +271,38 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       characterReferenceStrategy: "SEEDANCE_IMAGE",
       videoEditMediaProfile: SEEDANCE_2_FAST_EDIT_MEDIA_PROFILE,
     },
+    ...BASE_VIDEO_CLIENT_MODELS.map((model) => ({
+      id: model.id,
+      providerId: "fal",
+      // Base-video endpoint selection is variant-specific and remains in the
+      // server-only execution registry, never in the shared browser registry.
+      providerModelId: null,
+      name: model.name,
+      description: model.description,
+      badge: model.badge,
+      availability: "LIVE" as const,
+      maximumReferences: 1,
+      supportedReferenceTypes: ["IMAGE"] as const,
+      supportedDurations: model.supportedDurations,
+      supportedAspectRatios: [
+        "AUTO",
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16",
+      ] as const,
+      supportedQualities: ["480p", "720p"] as const,
+      supportedBitrates: ["STANDARD"] as const,
+      settingsKind: "BASE_VIDEO" as const,
+      modeCompatibility: ["BASE_VIDEO"] as const,
+      visibleInProductMode: false,
+      providerCostUsdMicrosPerSecond: null,
+      pricingVersion: null,
+      characterReferenceStrategy: "NONE" as const,
+      videoEditMediaProfile: null,
+    })),
     {
       id: "minimax",
       providerId: "minimax",

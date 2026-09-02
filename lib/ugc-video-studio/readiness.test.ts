@@ -98,3 +98,29 @@ test("model quote changes synchronously and does not depend on prompt text", () 
   assert.ok(seedance > 0);
   assert.deepEqual(readyInput.references.map((reference) => reference.uploadState), ["READY", "READY"]);
 });
+
+test("OWNER BASE_VIDEO readiness is truthful for prompt, start image and preparation", () => {
+  const base = {
+    ...readyInput,
+    mode: "BASE_VIDEO" as const,
+    promptPresent: true,
+    promptAllowed: true,
+    sourceVideoPresent: false,
+    characterMasterPresent: false,
+    references: [] as Array<{ uploadState: "READY" | "UPLOADING" | "FAILED" }>,
+    startImageRequired: false,
+    startImagePresent: false,
+    aspectAllowed: true,
+    resolutionAllowed: true,
+    audioAllowed: true,
+    ownerModelUnavailable: false,
+    ownerEstimateUsd: 0.25,
+  };
+  assert.equal(resolveUgcGenerateReadiness(base).code, "READY");
+  assert.equal(resolveUgcGenerateReadiness({ ...base, promptPresent: false }).label, "Prompt hinzufügen");
+  assert.equal(resolveUgcGenerateReadiness({ ...base, startImageRequired: true }).label, "Startbild erforderlich");
+  assert.equal(resolveUgcGenerateReadiness({ ...base, references: [{ uploadState: "UPLOADING" }] }).label, "Startbild wird vorbereitet …");
+  assert.equal(resolveUgcGenerateReadiness({ ...base, durationAllowed: false }).label, "Ausgewählte Dauer wird nicht unterstützt");
+  assert.equal(resolveUgcGenerateReadiness({ ...base, aspectAllowed: false }).label, "Ausgewähltes Format wird nicht unterstützt");
+  assert.equal(resolveUgcGenerateReadiness({ ...base, promptAllowed: false }).code, "PROMPT_TOO_LONG");
+});

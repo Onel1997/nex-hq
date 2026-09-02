@@ -44,6 +44,9 @@ import {
   type UgcVideoKlingMotionSettings,
   type UgcVideoMode,
   type UgcVideoEditSettings,
+  type UgcBaseVideoResolution,
+  type UgcBaseVideoSettings,
+  type UgcBaseVideoVariant,
 } from "@/lib/ugc-video-studio/contracts";
 import {
   AUTO_RECOMMENDED_VIDEO_EDIT_MODEL_ID,
@@ -404,7 +407,11 @@ export function UgcModelSelector(props: {
   });
   const selectable = mode === "VIDEO_EDIT"
     ? videoEditModelDefinitions()
-    : UGC_VIDEO_MODEL_REGISTRY.filter((entry) => entry.modeCompatibility.includes("MOTION_CONTROL") || !entry.visibleInProductMode);
+    : mode === "BASE_VIDEO"
+      ? UGC_VIDEO_MODEL_REGISTRY.filter((entry) =>
+          entry.modeCompatibility.includes("BASE_VIDEO"),
+        )
+      : UGC_VIDEO_MODEL_REGISTRY.filter((entry) => entry.modeCompatibility.includes("MOTION_CONTROL") || !entry.visibleInProductMode);
   const models = selectable.filter((entry) =>
     `${entry.name} ${entry.description}`.toLocaleLowerCase("de").includes(search.trim().toLocaleLowerCase("de")),
   );
@@ -463,6 +470,7 @@ export function UgcModelSelector(props: {
 export function UgcModeSelector(props: {
   mode: UgcVideoMode;
   onChange: (mode: UgcVideoMode) => void;
+  baseVideoEnabled?: boolean;
 }) {
   return (
     <section className="uv-mode-selector" aria-label="UGC-Modus">
@@ -474,6 +482,12 @@ export function UgcModeSelector(props: {
         <strong>Video bearbeiten</strong>
         <span>Person im Quellvideo durch dein Model ersetzen.</span>
       </button>
+      {props.baseVideoEnabled ? (
+        <button type="button" className={props.mode === "BASE_VIDEO" ? "is-active" : ""} onClick={() => props.onChange("BASE_VIDEO")}>
+          <strong>Basisvideo erstellen</strong>
+          <span>Originales Fashion-Video aus Prompt und optionalem Startbild.</span>
+        </button>
+      ) : null}
     </section>
   );
 }
@@ -486,12 +500,13 @@ function VideoEditUploadTile(props: {
   onSelect: (file: File) => void;
   onRemove: () => void;
   onDuration: (seconds: number) => void;
+  disabled?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   return (
     <article className="uv-edit-upload-tile">
       <div><strong>{props.title}</strong><span>{props.description}</span></div>
-      <input ref={inputRef} type="file" accept={props.accept} hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) props.onSelect(file); event.currentTarget.value = ""; }} />
+      <input ref={inputRef} type="file" accept={props.accept} disabled={props.disabled} hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) props.onSelect(file); event.currentTarget.value = ""; }} />
       {props.reference ? (
         <div className="uv-edit-upload-ready">
           <div className="uv-edit-upload-preview"><ReferencePreview reference={props.reference} onDuration={props.onDuration} /></div>
@@ -499,9 +514,9 @@ function VideoEditUploadTile(props: {
           <button type="button" onClick={props.onRemove} aria-label={`${props.title} entfernen`}><X size={16} /></button>
         </div>
       ) : (
-        <button type="button" className="uv-edit-upload-empty" onClick={() => inputRef.current?.click()}><UploadCloud size={22} /><span>Datei auswählen</span></button>
+        <button type="button" disabled={props.disabled} className="uv-edit-upload-empty" onClick={() => inputRef.current?.click()}><UploadCloud size={22} /><span>{props.disabled ? "Für dieses Modell nicht verfügbar" : "Datei auswählen"}</span></button>
       )}
-      {props.reference ? <button type="button" className="uv-edit-upload-change" onClick={() => inputRef.current?.click()}>Referenz ändern</button> : null}
+      {props.reference && !props.disabled ? <button type="button" className="uv-edit-upload-change" onClick={() => inputRef.current?.click()}>Referenz ändern</button> : null}
     </article>
   );
 }
@@ -522,6 +537,61 @@ export function UgcVideoEditUploader(props: {
       </div>
       <p className="uv-soft-note">Uploads laufen direkt in deinen privaten temporären Xeriamo-Speicher.</p>
     </section>
+  );
+}
+
+export function UgcBaseVideoUploader(props: {
+  startImage: UgcVideoReferenceMedia | null;
+  imageSupported: boolean;
+  imageRequired: boolean;
+  variant: UgcBaseVideoVariant;
+  onSelect: (file: File) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <section className="uv-card uv-reference-card uv-edit-reference-card">
+      <div className="uv-section-heading">
+        <div><span>01</span><div><h2>Startbild</h2><p>{props.imageRequired ? "Für dieses Modell erforderlich." : "Optional – ohne Bild entsteht ein Video direkt aus dem Prompt."}</p></div></div>
+      </div>
+      <div className="uv-edit-upload-grid uv-edit-upload-grid--single">
+        <VideoEditUploadTile
+          title="Optionales Startbild"
+          description={props.imageSupported ? "Bestimmt den visuellen Ausgangspunkt des Videos." : "Dieses Text-zu-Video-Modell verwendet kein Startbild."}
+          accept="image/jpeg,image/png,image/webp"
+          reference={props.startImage}
+          onSelect={props.onSelect}
+          onRemove={props.onRemove}
+          onDuration={() => undefined}
+          disabled={!props.imageSupported}
+        />
+      </div>
+      <p className="uv-soft-note">
+        {props.variant === "IMAGE_TO_VIDEO" ? "Startbild zu Video" : "Text zu Video"}
+        {props.startImage && !props.imageSupported ? " · Das vorhandene Startbild wird bei diesem Modell nicht übermittelt." : ""}
+      </p>
+    </section>
+  );
+}
+
+export function UgcBaseVideoSettings(props: {
+  duration: UgcVideoGenerationSetup["duration"];
+  aspectRatio: UgcVideoGenerationSetup["aspectRatio"];
+  settings: UgcBaseVideoSettings;
+  supportedDurations: readonly UgcVideoGenerationSetup["duration"][];
+  supportedAspectRatios: readonly UgcVideoGenerationSetup["aspectRatio"][];
+  supportedResolutions: readonly UgcBaseVideoResolution[];
+  audioSupported: boolean;
+  onDuration: (value: UgcVideoGenerationSetup["duration"]) => void;
+  onAspectRatio: (value: UgcVideoGenerationSetup["aspectRatio"]) => void;
+  onChange: (value: UgcBaseVideoSettings) => void;
+}) {
+  return (
+    <div className="uv-edit-settings uv-base-video-settings">
+      <fieldset className="uv-kling-duration"><legend>Videolänge</legend><div>{props.supportedDurations.map((value) => <button type="button" key={value} className={props.duration === value ? "is-active" : ""} onClick={() => props.onDuration(value)}>{value} Sek.</button>)}</div></fieldset>
+      {props.supportedAspectRatios.length > 1 ? <fieldset className="uv-kling-duration"><legend>Format</legend><div>{props.supportedAspectRatios.map((value) => <button type="button" key={value} className={props.aspectRatio === value ? "is-active" : ""} onClick={() => props.onAspectRatio(value)}>{value === "AUTO" ? "Auto" : value}</button>)}</div></fieldset> : <p className="uv-soft-note">Format: {props.supportedAspectRatios[0] === "AUTO" ? "Automatisch" : props.supportedAspectRatios[0]}</p>}
+      {props.supportedResolutions.length > 1 ? <fieldset className="uv-kling-duration"><legend>Auflösung</legend><div>{props.supportedResolutions.map((value) => <button type="button" key={value} className={props.settings.resolution === value ? "is-active" : ""} onClick={() => props.onChange({ ...props.settings, resolution: value })}>{value}</button>)}</div></fieldset> : <p className="uv-soft-note">Auflösung: {props.supportedResolutions[0] === "AUTO" ? "Modellstandard" : props.supportedResolutions[0]}</p>}
+      {props.audioSupported ? <label className="uv-check uv-kling-toggle"><input type="checkbox" checked={props.settings.generateAudio} onChange={(event) => props.onChange({ ...props.settings, generateAudio: event.target.checked })} /><span><strong>Audio erzeugen</strong><small>Standardmäßig deaktiviert.</small></span></label> : null}
+    </div>
   );
 }
 

@@ -25,6 +25,11 @@ import {
   ugcVideoModelById,
   type UgcVideoEditModelId,
 } from "@/lib/ugc-video-studio/model-registry";
+import { BASE_VIDEO_SERVER_MODEL_REGISTRY } from "@/lib/ugc-video-studio/base-video-config";
+import {
+  BASE_VIDEO_CLIENT_MODELS,
+  baseVideoOwnerEstimateKey,
+} from "@/lib/ugc-video-studio/base-video-models";
 
 export type UgcVideoPublicModelId =
   | "seedance-2.5"
@@ -59,6 +64,14 @@ export type UgcVideoProviderPublicConfig = {
     seedanceEstimatesUsd: Record<string, number>;
     klingPerSecondUsd: number;
     videoEditEstimatesUsd: Record<string, number>;
+    baseVideoEstimatesUsd: Record<string, number>;
+  };
+  baseVideoOwnerPilot: {
+    enabled: boolean;
+    credentialConfigured: boolean;
+    storageConfigured: boolean;
+    ready: boolean;
+    modelIds: string[];
   };
 };
 
@@ -73,6 +86,7 @@ export function ugcOwnerEstimateKey(input: {
 
 export function getUgcVideoProviderPublicConfig(
   environment: NodeJS.ProcessEnv = process.env,
+  options: { includeBaseVideoOwnerPilot?: boolean } = {},
 ): UgcVideoProviderPublicConfig {
   const seedance = getSeedancePublicConfig(environment);
   const klingCostCapUsd = getKlingMotionCostCap(environment);
@@ -83,6 +97,7 @@ export function getUgcVideoProviderPublicConfig(
   );
   const seedanceEstimatesUsd: Record<string, number> = {};
   const videoEditEstimatesUsd: Record<string, number> = {};
+  const baseVideoEstimatesUsd: Record<string, number> = {};
   for (const quality of UGC_VIDEO_QUALITIES) {
     for (const aspectRatio of UGC_VIDEO_ASPECT_RATIOS) {
       for (const duration of UGC_VIDEO_DURATIONS) {
@@ -105,6 +120,35 @@ export function getUgcVideoProviderPublicConfig(
       videoEditEstimatesUsd[`${modelId}|${duration}`] = Number(
         ((model.providerCostUsdMicrosPerSecond! * Number(duration)) / 1_000_000).toFixed(5),
       );
+    }
+  }
+  for (const clientModel of options.includeBaseVideoOwnerPilot
+    ? BASE_VIDEO_CLIENT_MODELS
+    : []) {
+    const serverModel = BASE_VIDEO_SERVER_MODEL_REGISTRY[clientModel.id];
+    for (const [variant, variantDefinition] of Object.entries(serverModel.variants)) {
+      if (!variantDefinition) continue;
+      for (const duration of variantDefinition.durations) {
+        for (const resolution of variantDefinition.resolutions) {
+          for (const generateAudio of variantDefinition.audioSupported
+            ? [false, true]
+            : [false]) {
+            baseVideoEstimatesUsd[
+              baseVideoOwnerEstimateKey({
+                modelId: clientModel.id,
+                variant: variant as "TEXT_TO_VIDEO" | "IMAGE_TO_VIDEO",
+                duration,
+                resolution,
+                generateAudio,
+              })
+            ] = serverModel.estimateUsd({
+              duration,
+              resolution,
+              generateAudio,
+            });
+          }
+        }
+      }
     }
   }
   const videoEditModel = (modelId: UgcVideoEditModelId): UgcVideoPublicModelConfig => {
@@ -163,6 +207,16 @@ export function getUgcVideoProviderPublicConfig(
       seedanceEstimatesUsd,
       klingPerSecondUsd: KLING_V3_PRO_MOTION_PRICE_PER_SECOND_USD,
       videoEditEstimatesUsd,
+      baseVideoEstimatesUsd,
+    },
+    baseVideoOwnerPilot: {
+      enabled: Boolean(options.includeBaseVideoOwnerPilot),
+      credentialConfigured,
+      storageConfigured,
+      ready: credentialConfigured && storageConfigured,
+      modelIds: options.includeBaseVideoOwnerPilot
+        ? BASE_VIDEO_CLIENT_MODELS.map((model) => model.id)
+        : [],
     },
   };
 }

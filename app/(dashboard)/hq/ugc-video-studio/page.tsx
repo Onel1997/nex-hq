@@ -2,7 +2,10 @@ import type { Metadata, Viewport } from "next";
 
 import { UgcVideoStudioWorkspace } from "@/components/ugc-video-studio/ugc-video-studio-workspace";
 import { getUgcVideoProviderPublicConfig } from "@/lib/ugc-video-studio/provider-config";
-import { hasXerianoAccountMembership } from "@/lib/xeriano/access-policy";
+import {
+  hasXerianoAccountMembership,
+  hasXerianoOwnerAuthority,
+} from "@/lib/xeriano/access-policy";
 import { resolveXerianoAccess } from "@/lib/xeriano/auth";
 import "@/app/ugc-video-studio.css";
 
@@ -26,11 +29,17 @@ export default async function OwnerUgcVideoStudioPage({
   if (!hasAccount) {
     return <div className="xeriano-inline-notice">Für das UGC Video Studio wird eine aktive Xeriamo Account-Mitgliedschaft benötigt.</div>;
   }
+  const baseVideoOwnerPilot =
+    access.status === "AUTHENTICATED" &&
+    hasXerianoOwnerAuthority(access.context);
   return (
     <div className="xeriano-embedded-studio">
       <UgcVideoStudioWorkspace
         ownerMode
-        providerConfig={getUgcVideoProviderPublicConfig()}
+        baseVideoOwnerPilot={baseVideoOwnerPilot}
+        providerConfig={getUgcVideoProviderPublicConfig(process.env, {
+          includeBaseVideoOwnerPilot: baseVideoOwnerPilot,
+        })}
         initialModelId="kling-v3-pro-motion-control"
         initialLibraryAssetId={query.libraryAsset}
       />

@@ -86,7 +86,9 @@ test("UGC contract supports flexible ordered image/video/audio references", () =
 
 test("video model registry exposes Motion Control and all benchmark Video Edit models as live", () => {
   const live = UGC_VIDEO_MODEL_REGISTRY.filter(
-    (model) => model.availability === "LIVE",
+    (model) =>
+      model.availability === "LIVE" &&
+      !model.modeCompatibility.includes("BASE_VIDEO"),
   );
   assert.deepEqual(live.map((model) => model.id), [
     "seedance-2.5",
@@ -141,6 +143,7 @@ test("prompt library and run history persist setup metadata without media bytes"
     advanced: active.advanced,
     klingMotion: active.klingMotion,
     videoEdit: active.videoEdit,
+    baseVideo: active.baseVideo,
     createdAt: timestamp,
     updatedAt: timestamp,
     lastUsedAt: null,

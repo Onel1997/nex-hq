@@ -3,7 +3,11 @@ import { z } from "zod";
 export const UGC_VIDEO_STUDIO_CONTRACT_VERSION =
   "nexhq-ugc-video-studio-v1" as const;
 
-export const UGC_VIDEO_MODES = ["MOTION_CONTROL", "VIDEO_EDIT"] as const;
+export const UGC_VIDEO_MODES = [
+  "MOTION_CONTROL",
+  "VIDEO_EDIT",
+  "BASE_VIDEO",
+] as const;
 export const ugcVideoModeSchema = z.enum(UGC_VIDEO_MODES);
 export type UgcVideoMode = z.infer<typeof ugcVideoModeSchema>;
 
@@ -156,6 +160,46 @@ export const DEFAULT_UGC_VIDEO_EDIT_SETTINGS = Object.freeze({
   keepOriginalSound: false,
 });
 
+export const UGC_BASE_VIDEO_VARIANTS = [
+  "TEXT_TO_VIDEO",
+  "IMAGE_TO_VIDEO",
+] as const;
+export const ugcBaseVideoVariantSchema = z.enum(UGC_BASE_VIDEO_VARIANTS);
+export type UgcBaseVideoVariant = z.infer<typeof ugcBaseVideoVariantSchema>;
+
+export const UGC_BASE_VIDEO_RESOLUTIONS = [
+  "AUTO",
+  "480p",
+  "580p",
+  "720p",
+  "768p",
+] as const;
+export const ugcBaseVideoResolutionSchema = z.enum(
+  UGC_BASE_VIDEO_RESOLUTIONS,
+);
+export type UgcBaseVideoResolution = z.infer<
+  typeof ugcBaseVideoResolutionSchema
+>;
+
+export const DEFAULT_UGC_BASE_VIDEO_SETTINGS = Object.freeze({
+  variant: "TEXT_TO_VIDEO" as const,
+  startImageReferenceId: null as string | null,
+  resolution: "720p" as const,
+  generateAudio: false,
+});
+
+export const ugcBaseVideoSettingsSchema = z
+  .object({
+    variant: ugcBaseVideoVariantSchema,
+    startImageReferenceId: z.string().min(1).nullable(),
+    resolution: ugcBaseVideoResolutionSchema,
+    generateAudio: z.boolean(),
+  })
+  .strict();
+export type UgcBaseVideoSettings = z.infer<
+  typeof ugcBaseVideoSettingsSchema
+>;
+
 export const ugcVideoEditSettingsSchema = z
   .object({
     sourceVideoReferenceId: z.string().min(1).nullable(),
@@ -200,14 +244,23 @@ export const ugcVideoGenerationSetupSchema = z
     videoEdit: ugcVideoEditSettingsSchema
       .optional()
       .default(DEFAULT_UGC_VIDEO_EDIT_SETTINGS),
+    baseVideo: ugcBaseVideoSettingsSchema
+      .optional()
+      .default(DEFAULT_UGC_BASE_VIDEO_SETTINGS),
   })
   .strict()
   .superRefine((setup, context) => {
-    if (setup.mode === "MOTION_CONTROL" && !setup.prompt) {
+    if (
+      (setup.mode === "MOTION_CONTROL" || setup.mode === "BASE_VIDEO") &&
+      !setup.prompt
+    ) {
       context.addIssue({
         code: "custom",
         path: ["prompt"],
-        message: "Für Bewegung übertragen ist ein Prompt erforderlich.",
+        message:
+          setup.mode === "BASE_VIDEO"
+            ? "Für ein Basisvideo ist ein Prompt erforderlich."
+            : "Für Bewegung übertragen ist ein Prompt erforderlich.",
       });
     }
   });
@@ -237,6 +290,9 @@ export const savedUgcVideoPromptSchema = z
     videoEdit: ugcVideoEditSettingsSchema
       .optional()
       .default(DEFAULT_UGC_VIDEO_EDIT_SETTINGS),
+    baseVideo: ugcBaseVideoSettingsSchema
+      .optional()
+      .default(DEFAULT_UGC_BASE_VIDEO_SETTINGS),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     lastUsedAt: z.string().datetime().nullable(),
