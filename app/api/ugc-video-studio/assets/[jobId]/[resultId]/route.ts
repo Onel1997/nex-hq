@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 
+import { buildUgcVideoAssetResponse } from "@/lib/ugc-video-studio/result-delivery";
 import { SupabaseUgcVideoJobStore } from "@/lib/ugc-video-studio/server-storage";
 import { resolveXerianoAccess } from "@/lib/xeriano/auth";
 
 export const runtime = "nodejs";
 
-export async function GET(
+async function serve(
   request: Request,
   context: { params: Promise<{ jobId: string; resultId: string }> },
+  head: boolean,
 ) {
   const access = await resolveXerianoAccess();
   if (access.status === "UNAUTHENTICATED") {
@@ -30,18 +32,25 @@ export async function GET(
     return NextResponse.json({ error: "Video nicht gefunden." }, { status: 404 });
   }
   const download = new URL(request.url).searchParams.get("download") === "1";
-  return new NextResponse(new Blob([Uint8Array.from(asset.bytes)]), {
-    status: 200,
-    headers: {
-      "Content-Type": asset.mimeType,
-      "Content-Length": String(asset.bytes.byteLength),
-      "Cache-Control": "private, max-age=300",
-      "X-Content-Type-Options": "nosniff",
-      ...(download
-        ? {
-            "Content-Disposition": `attachment; filename="ugc-video-${resultId}.mp4"`,
-          }
-        : {}),
-    },
+  return buildUgcVideoAssetResponse({
+    request,
+    asset,
+    resultId,
+    download,
+    head,
   });
+}
+
+export function GET(
+  request: Request,
+  context: { params: Promise<{ jobId: string; resultId: string }> },
+) {
+  return serve(request, context, false);
+}
+
+export function HEAD(
+  request: Request,
+  context: { params: Promise<{ jobId: string; resultId: string }> },
+) {
+  return serve(request, context, true);
 }

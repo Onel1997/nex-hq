@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Copy,
+  Clipboard,
   Heart,
   Pencil,
   Play,
@@ -92,12 +92,13 @@ export function UgcPromptLibrary(props: {
   prompts: SavedUgcVideoPrompt[];
   onLoad: (prompt: SavedUgcVideoPrompt) => void;
   onEdit: (prompt: SavedUgcVideoPrompt) => void;
-  onDuplicate: (prompt: SavedUgcVideoPrompt) => void;
+  onCopy: (prompt: SavedUgcVideoPrompt) => Promise<boolean>;
   onFavorite: (prompt: SavedUgcVideoPrompt) => void;
   onDelete: (promptId: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const visible = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("de");
     return props.prompts
@@ -116,6 +117,7 @@ export function UgcPromptLibrary(props: {
         <label><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Prompts durchsuchen …" /></label>
         <button type="button" className={favoritesOnly ? "is-active" : ""} onClick={() => setFavoritesOnly((value) => !value)}><Heart size={15} /> Favoriten</button>
       </div>
+      {copyFeedback ? <p className="uv-copy-feedback" role="status">{copyFeedback}</p> : null}
       {visible.length ? (
         <div className="uv-prompt-grid">
           {visible.map((prompt) => (
@@ -127,10 +129,10 @@ export function UgcPromptLibrary(props: {
               <dl><div><dt>Modell</dt><dd>{ugcVideoModelById(prompt.modelId)?.name ?? prompt.modelId}</dd></div><div><dt>Setup</dt><dd>{setupLabel({ contractVersion: "nexhq-ugc-video-studio-v1", mode: prompt.mode, prompt: prompt.prompt, modelId: prompt.modelId, duration: prompt.duration, aspectRatio: prompt.aspectRatio, quality: prompt.quality, bitrate: prompt.bitrate, videoType: prompt.videoType, references: [], advanced: prompt.advanced, klingMotion: prompt.klingMotion, videoEdit: prompt.videoEdit })}</dd></div></dl>
               <small>Aktualisiert {formatDate(prompt.updatedAt)}</small>
               <footer>
-                <button type="button" className="uv-button uv-button--primary" onClick={() => props.onLoad(prompt)}><Play size={15} /> Laden</button>
-                <button type="button" onClick={() => props.onEdit(prompt)} aria-label="Bearbeiten"><Pencil size={15} /></button>
-                <button type="button" onClick={() => props.onDuplicate(prompt)} aria-label="Duplizieren"><Copy size={15} /></button>
-                <button type="button" onClick={() => props.onDelete(prompt.id)} aria-label="Löschen"><Trash2 size={15} /></button>
+                <button type="button" className="uv-button uv-button--primary" onClick={() => props.onLoad(prompt)} aria-label="Setup laden"><Play size={15} /> Laden</button>
+                <button type="button" onClick={() => props.onEdit(prompt)} aria-label="Prompt bearbeiten"><Pencil size={15} /></button>
+                <button type="button" onClick={() => { void props.onCopy(prompt).then((copied) => setCopyFeedback(copied ? "Prompt wurde kopiert." : "Prompt konnte nicht kopiert werden.")); }} aria-label="Prompt kopieren"><Clipboard size={15} /></button>
+                <button type="button" onClick={() => props.onDelete(prompt.id)} aria-label="Prompt löschen"><Trash2 size={15} /></button>
               </footer>
             </article>
           ))}

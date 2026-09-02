@@ -70,7 +70,8 @@ test("Creative and UGC Owner modes keep customer markup defaults unchanged", () 
   assert.doesNotMatch(creativeCss, /\.creative-studio-shell\.is-owner-product-mode \.cs-quick-bar/);
   assert.match(ugcCss, /\.ugc-video-studio-shell\.is-owner-product-mode \.uv-generate-bar/);
   assert.match(creative, /props\.customerMode \? `Generieren · \$\{customerCredits\} Credits` : props\.ownerMode \? `Generieren · ca\. \$\{formattedOwnerCostUsd\}` : "Generieren"/);
-  assert.match(ugc, /props\.customerMode&&customerCredits!==null\?`Generieren · \$\{customerCredits\} Credits`:props\.ownerMode&&estimatedMaximumCostUsd!==null\?`Generieren · ca\./);
+  assert.match(ugc, /props\.customerMode && customerCredits !== null[\s\S]*`Generieren · \$\{customerCredits\} Credits`/);
+  assert.match(ugc, /props\.ownerMode && estimatedMaximumCostUsd !== null[\s\S]*`Generieren · ca\. \$\{estimatedMaximumCostUsd\.toFixed\(2\)/);
   assert.doesNotMatch(creativeCss, /(?:^|\n)\.cs-quick-bar\{[^}]*flex-direction:column/);
   assert.doesNotMatch(ugcCss, /(?:^|\n)\.uv-generate-bar\{[^}]*flex-direction:column/);
 });

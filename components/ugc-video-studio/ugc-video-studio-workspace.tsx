@@ -35,6 +35,7 @@ import {
   UgcPromptLibrary,
   UgcRunHistory,
 } from "@/components/ugc-video-studio/ugc-video-studio-library";
+import { UgcResultVideo } from "@/components/ugc-video-studio/ugc-result-video";
 import {
   DEFAULT_UGC_VIDEO_ADVANCED_SETTINGS,
   DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS,
@@ -65,6 +66,7 @@ import {
   UgcVideoGenerationClientError,
 } from "@/lib/ugc-video-studio/client";
 import { createUgcVideoClientId } from "@/lib/ugc-video-studio/client-id";
+import { copyUgcPromptText } from "@/lib/ugc-video-studio/clipboard";
 import {
   DEFAULT_UGC_VIDEO_MODEL_ID,
   AUTO_RECOMMENDED_VIDEO_EDIT_MODEL_ID,
@@ -80,6 +82,7 @@ import {
   upsertUgcVideoPrompt,
   upsertUgcVideoRun,
 } from "@/lib/ugc-video-studio/persistence";
+import { resolveUgcGenerateReadiness } from "@/lib/ugc-video-studio/readiness";
 import {
   assertKlingMotionReferences,
   KlingMotionReferenceError,
@@ -236,22 +239,41 @@ export function UgcVideoStudioWorkspace(props: {
   const generationLockRef = useRef(false);
   const initialLibraryAssetLoadedRef = useRef(false);
   const statusPollInFlightRef = useRef(false);
+  const observeActiveRunNowRef = useRef<() => void>(() => undefined);
   referencesRef.current = references;
 
   useEffect(() => {
+    let cancelled = false;
     const restored = loadUgcVideoState(window.localStorage);
-    setPersisted(restored);
-    setActiveRun(
+    const restoredRun =
       restored.runs.find((run) => run.status === "RUNNING") ??
-        restored.runs[0] ??
-        null,
-    );
+      restored.runs[0] ??
+      null;
+    setPersisted(restored);
+    setActiveRun(restoredRun);
+    if (restoredRun?.status === "SUCCEEDED") {
+      void fetchUgcVideoJob({
+        jobId: restoredRun.id,
+        ...(props.customerMode
+          ? { onCredit: (receipt) => setAvailableCredits(receipt.availableCredits) }
+          : {}),
+      }).then((fresh) => {
+        if (cancelled) return;
+        const saved = saveUgcVideoState(
+          window.localStorage,
+          upsertUgcVideoRun(loadUgcVideoState(window.localStorage), fresh),
+        );
+        setPersisted(saved);
+        setActiveRun(fresh);
+      }).catch(() => undefined);
+    }
     return () => {
+      cancelled = true;
       referencesRef.current.forEach((reference) =>
         URL.revokeObjectURL(reference.previewUrl),
       );
     };
-  }, []);
+  }, [props.customerMode]);
 
   const persist = useCallback((next: UgcVideoPersistedState) => {
     const saved = saveUgcVideoState(window.localStorage, next);
@@ -261,6 +283,7 @@ export function UgcVideoStudioWorkspace(props: {
   useEffect(() => {
     if (activeRun?.status !== "RUNNING") return;
     let cancelled = false;
+    let lastResumeObservationAt = 0;
     const poll = async () => {
       if (
         cancelled ||
@@ -303,17 +326,28 @@ export function UgcVideoStudioWorkspace(props: {
         statusPollInFlightRef.current = false;
       }
     };
+    const observeNow = () => { void poll(); };
+    observeActiveRunNowRef.current = observeNow;
     const first = window.setTimeout(poll, 3_000);
     const interval = window.setInterval(poll, 3_000);
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") void poll();
+    const onResume = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastResumeObservationAt < 1_000) return;
+      lastResumeObservationAt = now;
+      void poll();
     };
-    document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener("visibilitychange", onResume);
+    window.addEventListener("pageshow", onResume);
     return () => {
       cancelled = true;
       window.clearTimeout(first);
       window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("visibilitychange", onResume);
+      window.removeEventListener("pageshow", onResume);
+      if (observeActiveRunNowRef.current === observeNow) {
+        observeActiveRunNowRef.current = () => undefined;
+      }
     };
   }, [activeRun?.id, activeRun?.providerRequestId, activeRun?.status, persist, props.customerMode]);
 
@@ -413,6 +447,30 @@ export function UgcVideoStudioWorkspace(props: {
       props.customerStatus.activeVideoJobs >=
         props.customerStatus.videoConcurrencyLimit,
   );
+  const generateReadiness = resolveUgcGenerateReadiness({
+    mode,
+    generating,
+    activeJobRunning: activeRun?.status === "RUNNING",
+    promptPresent: Boolean(prompt.trim()),
+    sourceVideoPresent: Boolean(sourceVideo),
+    characterMasterPresent: Boolean(characterMaster),
+    references: activeReferences,
+    durationAllowed: klingDurationAllowed,
+    customerMode: Boolean(props.customerMode),
+    ownerMode: Boolean(props.ownerMode),
+    customerModelUnavailable,
+    customerCredits,
+    insufficientCustomerCredits,
+    customerConcurrencyReached,
+    ownerEstimateUsd: estimatedMaximumCostUsd,
+  });
+  const generateLabel = generateReadiness.ready
+    ? props.customerMode && customerCredits !== null
+      ? `Generieren · ${customerCredits} Credits`
+      : props.ownerMode && estimatedMaximumCostUsd !== null
+        ? `Generieren · ca. ${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`
+        : "Generieren"
+    : generateReadiness.label;
 
   const buildSetup = useCallback((): UgcVideoGenerationSetup | null => {
     if (activeReferences.length > effectiveLimit) {
@@ -1035,6 +1093,9 @@ export function UgcVideoStudioWorkspace(props: {
       !model.supportedBitrates.includes(bitrate)
     )
       setBitrate(model.supportedBitrates[0]!);
+    // If a previous accepted job completed between polls, do not make model
+    // switching wait for the next interval before its truthful CTA can update.
+    observeActiveRunNowRef.current();
   };
 
   const toggleResultFavorite = (result: UgcVideoResult) => {
@@ -1177,7 +1238,7 @@ export function UgcVideoStudioWorkspace(props: {
             ) : activeRun?.results.length ? (
               <div className="uv-result-grid">{activeRun.results.map((result) => (
                 <article className="uv-result-card" key={result.id}>
-                  <video src={result.url} controls playsInline preload="metadata" />
+                  <UgcResultVideo result={result} />
                   <div><strong>{activeRun.setup.mode === "VIDEO_EDIT" ? ugcVideoModelById(activeRun.setup.modelId)?.name ?? activeRun.setup.modelId : UGC_VIDEO_TYPE_LABELS[activeRun.setup.videoType]}</strong><span>{activeRun.setup.modelId === "kling-v3-pro-motion-control" ? `${activeRun.setup.klingMotion.characterOrientation === "VIDEO" ? "Bewegung folgen" : "Bild folgen"}${activeRun.setup.klingMotion.keepOriginalSound ? " · Originalton" : ""}` : `${activeRun.setup.duration}s · ${activeRun.setup.quality}`}</span></div>
                   <footer>
                     <a href={result.downloadUrl}><Download size={15} /> Herunterladen</a>
@@ -1185,7 +1246,7 @@ export function UgcVideoStudioWorkspace(props: {
                     <button type="button" onClick={() => addResultAsReference(result)}><PlusReferenceIcon /> Als Referenz</button>
                     {productMode ? <button type="button" onClick={() => void saveResultToLibrary(result.id)}><Bookmark size={15} /> In Bibliothek speichern</button> : null}
                     <button type="button" onClick={() => toggleResultFavorite(result)} aria-label="Favorit"><Heart size={15} fill={result.favorite ? "currentColor" : "none"} /></button>
-                    <button type="button" onClick={() => navigator.clipboard.writeText(activeRun.setup.prompt)}><Clipboard size={15} /> Prompt kopieren</button>
+                    <button type="button" onClick={() => { void copyUgcPromptText(activeRun.setup.prompt).then((copied) => setNotice({ kind: copied ? "SUCCESS" : "ERROR", text: copied ? "Prompt wurde kopiert." : "Prompt konnte nicht kopiert werden." })); }}><Clipboard size={15} /> Prompt kopieren</button>
                     <button type="button" onClick={() => loadSetup(activeRun.setup)}><RotateCcw size={15} /> Neu erstellen</button>
                   </footer>
                 </article>
@@ -1202,7 +1263,7 @@ export function UgcVideoStudioWorkspace(props: {
             )}
           </section>
 
-          {!modelOpen ? <div className="uv-generate-bar"><button type="button" className="uv-generate" disabled={generating || activeRun?.status === "RUNNING" || (mode === "MOTION_CONTROL" && !prompt.trim()) || (mode === "VIDEO_EDIT" && (!sourceVideo || !characterMaster)) || !klingDurationAllowed || activeReferences.some((reference) => reference.uploadState !== "READY") || Boolean(props.customerMode&&(customerModelUnavailable||customerCredits===null||insufficientCustomerCredits||customerConcurrencyReached))} onClick={generate}>{generating || activeRun?.status === "RUNNING" ? <><Loader2 className="is-spinning" size={19} /> Video wird erstellt …</> : <><Sparkles size={19} /> {props.customerMode&&customerCredits!==null?`Generieren · ${customerCredits} Credits`:props.ownerMode&&estimatedMaximumCostUsd!==null?`Generieren · ca. ${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`:"Generieren"}</>}</button></div> : null}
+          {!modelOpen ? <div className="uv-generate-bar"><button type="button" className="uv-generate" data-readiness={generateReadiness.code} disabled={!generateReadiness.ready} onClick={generate}>{generating || activeRun?.status === "RUNNING" ? <Loader2 className="is-spinning" size={19} /> : <Sparkles size={19} />} {generateLabel}</button></div> : null}
         </div>
       ) : view === "PROMPTS" ? (
         <UgcPromptLibrary
@@ -1227,7 +1288,7 @@ export function UgcVideoStudioWorkspace(props: {
             persist(upsertUgcVideoPrompt(persisted, { ...saved, lastUsedAt: nowIso() }));
           }}
           onEdit={(saved) => { setEditingPrompt(saved); setSaveSource(ugcVideoGenerationSetupSchema.parse({ contractVersion: UGC_VIDEO_STUDIO_CONTRACT_VERSION, mode: saved.mode, prompt: saved.prompt, modelId: saved.modelId, duration: saved.duration, aspectRatio: saved.aspectRatio, quality: saved.quality, bitrate: saved.bitrate, videoType: saved.videoType, references: [], advanced: saved.advanced, klingMotion: saved.klingMotion, videoEdit: saved.videoEdit })); setSaveOpen(true); }}
-          onDuplicate={(saved) => persist(upsertUgcVideoPrompt(persisted, { ...saved, id: createUgcVideoClientId(), title: `${saved.title} – Kopie`, favorite: false, createdAt: nowIso(), updatedAt: nowIso(), lastUsedAt: null }))}
+          onCopy={(saved) => copyUgcPromptText(saved.prompt)}
           onFavorite={(saved) => persist(upsertUgcVideoPrompt(persisted, { ...saved, favorite: !saved.favorite, updatedAt: nowIso() }))}
           onDelete={(id) => persist(removeUgcVideoPrompt(persisted, id))}
         />
@@ -1236,12 +1297,27 @@ export function UgcVideoStudioWorkspace(props: {
           runs={persisted.runs}
           onLoadSetup={loadSetup}
           onSavePrompt={openSave}
-          onOpen={(run) => { setActiveRun(run); setView("CREATE"); window.setTimeout(() => document.getElementById("uv-results-title")?.scrollIntoView({ behavior: "smooth" }), 0); }}
+          onOpen={(run) => {
+            setActiveRun(run);
+            setView("CREATE");
+            window.setTimeout(() => document.getElementById("uv-results-title")?.scrollIntoView({ behavior: "smooth" }), 0);
+            if (run.status === "SUCCEEDED") {
+              void fetchUgcVideoJob({
+                jobId: run.id,
+                ...(props.customerMode
+                  ? { onCredit: (receipt) => setAvailableCredits(receipt.availableCredits) }
+                  : {}),
+              }).then((fresh) => {
+                persist(upsertUgcVideoRun(loadUgcVideoState(window.localStorage), fresh));
+                setActiveRun(fresh);
+              }).catch(() => undefined);
+            }
+          }}
         />
       )}
 
       <UgcPromptSaveDialog open={saveOpen} editing={editingPrompt} onClose={() => { setSaveOpen(false); setSaveSource(null); setEditingPrompt(null); }} onSave={savePrompt} />
-      {largeResult ? <div className="uv-video-modal" role="presentation" onPointerDown={() => setLargeResult(null)}><section role="dialog" aria-modal="true" aria-label="Video vergrößern" onPointerDown={(event) => event.stopPropagation()}><button type="button" onClick={() => setLargeResult(null)} aria-label="Schließen"><X size={19} /></button><video src={largeResult.url} controls autoPlay playsInline /></section></div> : null}
+      {largeResult ? <div className="uv-video-modal" role="presentation" onPointerDown={() => setLargeResult(null)}><section role="dialog" aria-modal="true" aria-label="Video vergrößern" onPointerDown={(event) => event.stopPropagation()}><button type="button" onClick={() => setLargeResult(null)} aria-label="Schließen"><X size={19} /></button><UgcResultVideo result={largeResult} autoPlay /></section></div> : null}
     </main>
   );
 }
