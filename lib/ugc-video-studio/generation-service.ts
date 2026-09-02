@@ -565,7 +565,7 @@ async function readDurableManifest(input: {
   } catch (error) {
     throw new UgcVideoGenerationError(
       "JOB_STATE_INCONSISTENT",
-      "Der gespeicherte Videoauftrag konnte nicht sicher gelesen werden.",
+      "Der Auftrag konnte nicht vollständig geladen werden.",
       503,
       manifestStateDetails(error, "manifest_read_failed"),
     );

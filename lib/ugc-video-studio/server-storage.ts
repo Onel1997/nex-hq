@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { requireEnv } from "@/lib/config/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   ugcVideoJobManifestSchema,
@@ -119,7 +120,10 @@ function safeSegment(value: string, label: string): string {
   return value;
 }
 
-function jobRoot(scope: UgcVideoJobScope, jobId: string): string {
+export function ugcVideoJobRootPath(
+  scope: UgcVideoJobScope,
+  jobId: string,
+): string {
   return [
     "workspace",
     safeSegment(scope.workspaceId, "workspace"),
@@ -130,12 +134,26 @@ function jobRoot(scope: UgcVideoJobScope, jobId: string): string {
   ].join("/");
 }
 
+export function ugcVideoJobClaimPath(
+  scope: UgcVideoJobScope,
+  jobId: string,
+): string {
+  return `${ugcVideoJobRootPath(scope, jobId)}/claim.json`;
+}
+
+export function ugcVideoJobManifestPath(
+  scope: UgcVideoJobScope,
+  jobId: string,
+): string {
+  return `${ugcVideoJobRootPath(scope, jobId)}/manifest.json`;
+}
+
 export function ugcVideoResultAssetPath(input: {
   scope: UgcVideoJobScope;
   jobId: string;
   resultId: string;
 }): string {
-  return `${jobRoot(input.scope, input.jobId)}/results/${safeSegment(
+  return `${ugcVideoJobRootPath(input.scope, input.jobId)}/results/${safeSegment(
     input.resultId,
     "result",
   )}`;
@@ -293,6 +311,19 @@ type StorageReadError = {
   code?: unknown;
 };
 
+type UgcVideoStorageObjectClient = {
+  createSignedUrl(
+    path: string,
+    expiresIn: number,
+  ): Promise<{ data: { signedUrl: string } | null; error: unknown }>;
+};
+
+type StorageReadDiagnostic = {
+  status: number | null;
+  code: string | null;
+  message: string | null;
+};
+
 /**
  * Supabase Storage may represent a missing object as HTTP 400 with an explicit
  * Object-not-found code/message. Only that narrow case is absence; every other
@@ -340,22 +371,221 @@ function safeStorageReadDetails(error: unknown): string {
   return `storage_read_failed:status=${status ?? "unknown"};code=${statusCode ?? "unknown"}`;
 }
 
-async function download(path: string): Promise<Buffer | null> {
-  await ensureUgcVideoBucket();
-  const { data, error } = await createAdminClient()
-    .storage.from(UGC_VIDEO_ASSET_BUCKET)
-    .download(path);
-  if (error) {
-    if (isUgcVideoStorageObjectNotFound(error)) return null;
+function storageReadDiagnostic(error: unknown): StorageReadDiagnostic {
+  if (!error || typeof error !== "object") {
+    return { status: null, code: null, message: null };
+  }
+  const candidate = error as StorageReadError;
+  const parsedStatus = Number.parseInt(String(candidate.status ?? ""), 10);
+  const codeValue = candidate.statusCode ?? candidate.code;
+  const rawMessage =
+    typeof candidate.message === "string" ? candidate.message : null;
+  return {
+    status: Number.isFinite(parsedStatus) ? parsedStatus : null,
+    code:
+      typeof codeValue === "string" || typeof codeValue === "number"
+        ? String(codeValue).slice(0, 80)
+        : null,
+    message: rawMessage
+      ? rawMessage
+          .replace(/https?:\/\/\S+/gi, "[redacted-url]")
+          .replace(
+            /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi,
+            "[redacted-id]",
+          )
+          .replace(/\bworkspace\/[^\s,;]+/gi, "[redacted-storage-path]")
+          .replace(/(token|authorization|apikey)=?\s*[^\s,;]+/gi, "$1=[redacted]")
+          .slice(0, 240)
+      : null,
+  };
+}
+
+function canRetryStorageReadWithSignedUrl(error: unknown): boolean {
+  const diagnostic = storageReadDiagnostic(error);
+  return diagnostic.status === 400 || diagnostic.status === 404;
+}
+
+export function ugcVideoAuthenticatedObjectUrl(input: {
+  configuredSupabaseUrl: string;
+  path: string;
+}): URL {
+  const configured = new URL(input.configuredSupabaseUrl);
+  const encodedPath = input.path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return new URL(
+    `/storage/v1/object/authenticated/${encodeURIComponent(UGC_VIDEO_ASSET_BUCKET)}/${encodedPath}`,
+    configured.origin,
+  );
+}
+
+function assertTrustedSignedStorageUrl(
+  signedUrl: string,
+  configuredSupabaseUrl: string,
+): URL {
+  const candidate = new URL(signedUrl);
+  const configured = new URL(configuredSupabaseUrl);
+  const configuredHostname = configured.hostname;
+  const storageHostname = configuredHostname.endsWith(".supabase.co")
+    ? configuredHostname.replace(".supabase.co", ".storage.supabase.co")
+    : configuredHostname;
+  const localDevelopment =
+    configured.protocol === "http:" &&
+    (configuredHostname === "localhost" ||
+      configuredHostname === "127.0.0.1" ||
+      configuredHostname === "::1");
+  if (
+    candidate.username ||
+    candidate.password ||
+    candidate.hash ||
+    candidate.port !== configured.port ||
+    (!localDevelopment && candidate.protocol !== "https:") ||
+    (localDevelopment && candidate.protocol !== configured.protocol) ||
+    ![configuredHostname, storageHostname].includes(candidate.hostname)
+  ) {
     throw new UgcVideoStorageError(
       "Der private Videospeicher konnte nicht gelesen werden.",
-      safeStorageReadDetails(error),
+      "signed_storage_url_rejected",
     );
   }
-  return Buffer.from(await data.arrayBuffer());
+  return candidate;
+}
+
+async function responseStorageError(response: Response): Promise<StorageReadError> {
+  let body: unknown = null;
+  try {
+    body = await response.clone().json();
+  } catch {
+    // A non-JSON Storage error is still classified by its HTTP status below.
+  }
+  const record =
+    body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  return {
+    status: response.status,
+    statusCode: record.statusCode ?? record.code ?? response.status,
+    code: record.code,
+    message:
+      typeof record.message === "string"
+        ? record.message
+        : typeof record.error === "string"
+          ? record.error
+          : response.statusText,
+  };
+}
+
+/**
+ * Reads one private UGC authority object using the server-only service role.
+ *
+ * The explicit `/object/authenticated/` route is Supabase's documented private
+ * object read authority. A short-lived signed read independently confirms an
+ * apparent 400/404 before the application classifies a durable job as absent.
+ * The signed URL is host-validated, never persisted, and never returned to the
+ * browser.
+ */
+export async function readUgcVideoStorageObject(input: {
+  storage: UgcVideoStorageObjectClient;
+  path: string;
+  configuredSupabaseUrl: string;
+  serviceRoleKey: string;
+  fetcher?: typeof fetch;
+  onFallback?: (diagnostic: StorageReadDiagnostic) => void;
+}): Promise<Buffer | null> {
+  const fetcher = input.fetcher ?? fetch;
+  const directUrl = ugcVideoAuthenticatedObjectUrl({
+    configuredSupabaseUrl: input.configuredSupabaseUrl,
+    path: input.path,
+  });
+  const directResponse = await fetcher(directUrl, {
+    cache: "no-store",
+    redirect: "error",
+    headers: {
+      apikey: input.serviceRoleKey,
+      Authorization: `Bearer ${input.serviceRoleKey}`,
+    },
+  });
+  if (directResponse.ok) {
+    return Buffer.from(await directResponse.arrayBuffer());
+  }
+  const directError = await responseStorageError(directResponse);
+  if (!canRetryStorageReadWithSignedUrl(directError)) {
+    throw new UgcVideoStorageError(
+      "Der private Videospeicher konnte nicht gelesen werden.",
+      safeStorageReadDetails(directError),
+    );
+  }
+
+  input.onFallback?.(storageReadDiagnostic(directError));
+  const signed = await input.storage.createSignedUrl(input.path, 60);
+  if (signed.error || !signed.data?.signedUrl) {
+    if (
+      isUgcVideoStorageObjectNotFound(directError) &&
+      signed.error &&
+      isUgcVideoStorageObjectNotFound(signed.error)
+    ) {
+      return null;
+    }
+    throw new UgcVideoStorageError(
+      "Der private Videospeicher konnte nicht gelesen werden.",
+      signed.error
+        ? `signed_${safeStorageReadDetails(signed.error)}`
+        : "signed_storage_url_missing",
+    );
+  }
+
+  const signedUrl = assertTrustedSignedStorageUrl(
+    signed.data.signedUrl,
+    input.configuredSupabaseUrl,
+  );
+  const response = await fetcher(signedUrl, {
+    cache: "no-store",
+    redirect: "error",
+  });
+  if (response.ok) {
+    return Buffer.from(await response.arrayBuffer());
+  }
+  const signedReadError = await responseStorageError(response);
+  if (
+    isUgcVideoStorageObjectNotFound(directError) &&
+    isUgcVideoStorageObjectNotFound(signedReadError)
+  ) {
+    return null;
+  }
+  throw new UgcVideoStorageError(
+    "Der private Videospeicher konnte nicht gelesen werden.",
+    `signed_${safeStorageReadDetails(signedReadError)}`,
+  );
+}
+
+async function download(path: string): Promise<Buffer | null> {
+  await ensureUgcVideoBucket();
+  const storage = createAdminClient().storage.from(
+    UGC_VIDEO_ASSET_BUCKET,
+  ) as unknown as UgcVideoStorageObjectClient;
+  return readUgcVideoStorageObject({
+    storage,
+    path,
+    configuredSupabaseUrl: requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
+    serviceRoleKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    onFallback: (diagnostic) => {
+      console.warn("[xeriamo-ugc] storage_read_fallback", {
+        objectKind: path.endsWith("/manifest.json")
+          ? "manifest"
+          : path.endsWith("/claim.json")
+            ? "claim"
+            : "result",
+        ...diagnostic,
+      });
+    },
+  });
 }
 
 export class SupabaseUgcVideoJobStore implements UgcVideoJobStore {
+  constructor(
+    private readonly readObject: (path: string) => Promise<Buffer | null> =
+      download,
+  ) {}
+
   async ensureReady(
     requirement?: UgcVideoStorageRequirement,
   ): Promise<UgcVideoStorageReadiness> {
@@ -368,7 +598,7 @@ export class SupabaseUgcVideoJobStore implements UgcVideoJobStore {
     requestFingerprint: string;
   }): Promise<"CREATED" | "EXISTS"> {
     await ensureUgcVideoBucket();
-    const path = `${jobRoot(input.scope, input.jobId)}/claim.json`;
+    const path = ugcVideoJobClaimPath(input.scope, input.jobId);
     const bytes = Buffer.from(
       JSON.stringify({
         requestFingerprint: input.requestFingerprint,
@@ -387,19 +617,28 @@ export class SupabaseUgcVideoJobStore implements UgcVideoJobStore {
     scope: UgcVideoJobScope,
     jobId: string,
   ): Promise<UgcVideoJobManifest | null> {
-    const bytes = await download(`${jobRoot(scope, jobId)}/manifest.json`);
+    const bytes = await this.readObject(ugcVideoJobManifestPath(scope, jobId));
     if (!bytes) {
-      const claim = await download(`${jobRoot(scope, jobId)}/claim.json`);
+      const claim = await this.readObject(ugcVideoJobClaimPath(scope, jobId));
       if (claim) {
         throw new UgcVideoJobStateError("claim_exists_without_manifest");
       }
       return null;
     }
     try {
-      return ugcVideoJobManifestSchema.parse(
+      const manifest = ugcVideoJobManifestSchema.parse(
         JSON.parse(bytes.toString("utf8")),
       );
+      if (
+        manifest.jobId !== jobId ||
+        manifest.workspaceId !== scope.workspaceId ||
+        manifest.actorId !== scope.actorId
+      ) {
+        throw new UgcVideoJobStateError("manifest_scope_mismatch");
+      }
+      return manifest;
     } catch (error) {
+      if (error instanceof UgcVideoJobStateError) throw error;
       throw new UgcVideoJobStateError(
         `manifest_invalid:${error instanceof Error ? error.name : "unknown"}`,
       );
@@ -416,7 +655,7 @@ export class SupabaseUgcVideoJobStore implements UgcVideoJobStore {
     const { error } = await createAdminClient()
       .storage.from(UGC_VIDEO_ASSET_BUCKET)
       .upload(
-        `${jobRoot(scope, parsed.jobId)}/manifest.json`,
+        ugcVideoJobManifestPath(scope, parsed.jobId),
         Buffer.from(JSON.stringify(parsed)),
         { contentType: "application/json", upsert: true },
       );
@@ -464,7 +703,7 @@ export class SupabaseUgcVideoJobStore implements UgcVideoJobStore {
         ? manifest.result
         : null;
     if (!record) return null;
-    const bytes = await download(record.storagePath);
+    const bytes = await this.readObject(record.storagePath);
     if (!bytes || sha256UgcVideo(bytes) !== record.sha256) return null;
     return { bytes, mimeType: record.publicView.mimeType };
   }

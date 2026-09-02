@@ -9,8 +9,16 @@ import {
   UGC_VIDEO_BUCKET_FILE_SIZE_LIMIT_BYTES,
   UGC_VIDEO_BUCKET_OPTIONS,
   UGC_VIDEO_RESULT_MAX_BYTES,
+  SupabaseUgcVideoJobStore,
+  UgcVideoJobStateError,
+  UgcVideoStorageError,
   UgcVideoStorageSetupError,
   isUgcVideoStorageObjectNotFound,
+  readUgcVideoStorageObject,
+  ugcVideoAuthenticatedObjectUrl,
+  ugcVideoJobClaimPath,
+  ugcVideoJobManifestPath,
+  ugcVideoJobRootPath,
 } from "@/lib/ugc-video-studio/server-storage";
 
 type Bucket = {
@@ -234,4 +242,234 @@ test("only explicit Supabase object absence becomes a missing UGC job", () => {
     }),
     false,
   );
+});
+
+const canonicalTestScope = {
+  workspaceId: "11111111-1111-4111-8111-111111111111",
+  actorId: "22222222-2222-4222-8222-222222222222",
+};
+const canonicalTestJobId = "33333333-3333-4333-8333-333333333333";
+
+test("one canonical job path is shared by claim, manifest, and reads without encoding drift", () => {
+  const root =
+    "workspace/11111111-1111-4111-8111-111111111111/actor/22222222-2222-4222-8222-222222222222/jobs/33333333-3333-4333-8333-333333333333";
+  assert.equal(
+    ugcVideoJobRootPath(canonicalTestScope, canonicalTestJobId),
+    root,
+  );
+  assert.equal(
+    ugcVideoJobClaimPath(canonicalTestScope, canonicalTestJobId),
+    `${root}/claim.json`,
+  );
+  assert.equal(
+    ugcVideoJobManifestPath(canonicalTestScope, canonicalTestJobId),
+    `${root}/manifest.json`,
+  );
+  assert.equal(
+    ugcVideoAuthenticatedObjectUrl({
+      configuredSupabaseUrl: "https://project.supabase.co",
+      path: `${root}/manifest.json`,
+    }).toString(),
+    `https://project.supabase.co/storage/v1/object/authenticated/${UGC_VIDEO_ASSET_BUCKET}/${root}/manifest.json`,
+  );
+});
+
+function privateObjectStorageFixture(input: {
+  signedUrl?: string;
+  signedError?: unknown;
+}) {
+  const signedPaths: string[] = [];
+  return {
+    signedPaths,
+    storage: {
+      async createSignedUrl(path: string) {
+        signedPaths.push(path);
+        return input.signedError
+          ? { data: null, error: input.signedError }
+          : {
+              data: {
+                signedUrl:
+                  input.signedUrl ??
+                  "https://project.supabase.co/storage/v1/object/sign/ugc-video-studio-assets/manifest.json?token=test",
+              },
+              error: null,
+            };
+      },
+    },
+  };
+}
+
+test("trusted private read uses authenticated Storage route and no-store", async () => {
+  const fixture = privateObjectStorageFixture({});
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const bytes = await readUgcVideoStorageObject({
+    storage: fixture.storage,
+    path: ugcVideoJobManifestPath(
+      canonicalTestScope,
+      canonicalTestJobId,
+    ),
+    configuredSupabaseUrl: "https://project.supabase.co",
+    serviceRoleKey: "server-secret-test-key",
+    fetcher: (async (url, init) => {
+      calls.push({ url: String(url), init });
+      return new Response("durable-manifest", { status: 200 });
+    }) as typeof fetch,
+  });
+  assert.equal(bytes?.toString("utf8"), "durable-manifest");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]!.url, /\/object\/authenticated\/ugc-video-studio-assets\/workspace\//);
+  assert.doesNotMatch(calls[0]!.url, /%252F|%2Fworkspace/);
+  assert.equal(calls[0]!.init?.cache, "no-store");
+  assert.equal(calls[0]!.init?.redirect, "error");
+  assert.equal(fixture.signedPaths.length, 0);
+});
+
+test("a false direct 400 is recovered through a server-only signed confirmation", async () => {
+  const path = ugcVideoJobManifestPath(
+    canonicalTestScope,
+    canonicalTestJobId,
+  );
+  const fixture = privateObjectStorageFixture({});
+  const diagnostics: unknown[] = [];
+  let calls = 0;
+  const bytes = await readUgcVideoStorageObject({
+    storage: fixture.storage,
+    path,
+    configuredSupabaseUrl: "https://project.supabase.co",
+    serviceRoleKey: "server-secret-test-key",
+    fetcher: (async () => {
+      calls += 1;
+      return calls === 1
+        ? Response.json(
+            { statusCode: "404", error: "not_found", message: "Object not found" },
+            { status: 400 },
+          )
+        : new Response("existing-manifest", { status: 200 });
+    }) as typeof fetch,
+    onFallback: (diagnostic) => diagnostics.push(diagnostic),
+  });
+  assert.equal(bytes?.toString("utf8"), "existing-manifest");
+  assert.deepEqual(fixture.signedPaths, [path]);
+  assert.equal(calls, 2);
+  assert.deepEqual(diagnostics, [
+    { status: 400, code: "404", message: "Object not found" },
+  ]);
+});
+
+test("only two independently explicit missing responses become object absence", async () => {
+  const fixture = privateObjectStorageFixture({
+    signedError: {
+      status: 400,
+      statusCode: "not_found",
+      message: "Object not found",
+    },
+  });
+  const result = await readUgcVideoStorageObject({
+    storage: fixture.storage,
+    path: "workspace/a/actor/b/jobs/c/manifest.json",
+    configuredSupabaseUrl: "https://project.supabase.co",
+    serviceRoleKey: "server-secret-test-key",
+    fetcher: (async () =>
+      Response.json(
+        { statusCode: "not_found", message: "Object not found" },
+        { status: 400 },
+      )) as typeof fetch,
+  });
+  assert.equal(result, null);
+});
+
+test("a non-absence Storage 400 remains an inconsistent state", async () => {
+  const fixture = privateObjectStorageFixture({
+    signedError: {
+      status: 400,
+      statusCode: "invalid_request",
+      message: "Invalid storage request",
+    },
+  });
+  await assert.rejects(
+    readUgcVideoStorageObject({
+      storage: fixture.storage,
+      path: "workspace/a/actor/b/jobs/c/manifest.json",
+      configuredSupabaseUrl: "https://project.supabase.co",
+      serviceRoleKey: "server-secret-test-key",
+      fetcher: (async () =>
+        Response.json(
+          { statusCode: "400", message: "Invalid storage request" },
+          { status: 400 },
+        )) as typeof fetch,
+    }),
+    (error) =>
+      error instanceof UgcVideoStorageError &&
+      /signed_storage_read_failed:status=400;code=invalid_request/.test(
+        error.technicalDetails,
+      ),
+  );
+});
+
+test("server-only signed fallback rejects an arbitrary host", async () => {
+  const fixture = privateObjectStorageFixture({
+    signedUrl: "https://malicious.example/manifest.json?token=secret",
+  });
+  await assert.rejects(
+    readUgcVideoStorageObject({
+      storage: fixture.storage,
+      path: "workspace/a/actor/b/jobs/c/manifest.json",
+      configuredSupabaseUrl: "https://project.supabase.co",
+      serviceRoleKey: "server-secret-test-key",
+      fetcher: (async () =>
+        Response.json(
+          { statusCode: "not_found", message: "Object not found" },
+          { status: 400 },
+        )) as typeof fetch,
+    }),
+    (error) =>
+      error instanceof UgcVideoStorageError &&
+      error.technicalDetails === "signed_storage_url_rejected",
+  );
+});
+
+test("malformed and claim-only durable states never become missing jobs", async () => {
+  const manifestPath = ugcVideoJobManifestPath(
+    canonicalTestScope,
+    canonicalTestJobId,
+  );
+  const malformed = new SupabaseUgcVideoJobStore(async (path) =>
+    path === manifestPath ? Buffer.from("{not-json") : null,
+  );
+  await assert.rejects(
+    malformed.readManifest(canonicalTestScope, canonicalTestJobId),
+    (error) =>
+      error instanceof UgcVideoJobStateError &&
+      /manifest_invalid/.test(error.technicalDetails),
+  );
+
+  const claimOnly = new SupabaseUgcVideoJobStore(async (path) =>
+    path.endsWith("/claim.json") ? Buffer.from("{}") : null,
+  );
+  await assert.rejects(
+    claimOnly.readManifest(canonicalTestScope, canonicalTestJobId),
+    (error) =>
+      error instanceof UgcVideoJobStateError &&
+      error.technicalDetails === "claim_exists_without_manifest",
+  );
+});
+
+test("job GET authenticates ownership before the trusted private manifest read", () => {
+  const route = readFileSync(
+    "app/api/ugc-video-studio/jobs/[jobId]/route.ts",
+    "utf8",
+  );
+  const storage = readFileSync(
+    "lib/ugc-video-studio/server-storage.ts",
+    "utf8",
+  );
+  assert.ok(
+    route.indexOf("const access = await resolveXerianoAccess()") <
+      route.indexOf("const run = await observeUgcVideoJob"),
+  );
+  assert.match(route, /workspaceId: access\.context\.workspaceKey/);
+  assert.match(route, /actorId: access\.context\.userId/);
+  assert.match(storage, /createAdminClient\(\)\.storage\.from/);
+  assert.match(storage, /requireEnv\("SUPABASE_SERVICE_ROLE_KEY"\)/);
+  assert.doesNotMatch(route, /createSignedUrl|manifest\.json/);
 });
