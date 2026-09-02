@@ -17,6 +17,7 @@ export class UgcVideoEditInputError extends Error {
       | "VIDEO_TOO_LARGE"
       | "UNSUPPORTED_VIDEO"
       | "UNSUPPORTED_IMAGE"
+      | "VIDEO_INPUT_UNSUPPORTED"
       | "MODEL_INPUT_UNSUPPORTED",
     message: string,
   ) {

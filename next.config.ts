@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The package resolves its platform binary relative to its own module path.
+  // Keep that Node resolution intact instead of bundling it into a route chunk.
+  serverExternalPackages: ["ffmpeg-static"],
   async rewrites() {
     return [
       {
@@ -15,9 +18,10 @@ const nextConfig: NextConfig = {
     // transport margin while exact length/checksum verification stays mandatory.
     middlewareClientMaxBodySize: 21 * 1024 * 1024,
   },
-  // Ensure face-api weight files under server-assets are included in
-  // serverless/output file tracing (Vercel / standalone).
+  // Ensure native/runtime assets are included in serverless output tracing
+  // (Vercel / standalone).
   outputFileTracingIncludes: {
+    "/api/ugc-video-studio/generate": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/**/*": ["./server-assets/face-api-models/**/*"],
     "/*": ["./server-assets/face-api-models/**/*"],
   },

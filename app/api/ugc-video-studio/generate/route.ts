@@ -265,17 +265,18 @@ export async function POST(request: Request) {
       };
       let prepared;
       try {
-        prepared = prepareUgcVideoEditMedia({
+        prepared = await prepareUgcVideoEditMedia({
           setup: trustedSetup,
           references,
           trustedSourceDurationSeconds: trustedDuration,
         });
-      } catch {
+      } catch (error) {
+        if (error instanceof UgcVideoEditInputError) throw error;
         throw new UgcVideoGenerationError(
           "REFERENCE_INVALID",
-          "Das Quellvideo konnte nicht sicher auf die gewählte Länge vorbereitet werden.",
+          "Das Video konnte nicht für das ausgewählte Modell vorbereitet werden.",
           400,
-          "VIDEO_TOO_LONG",
+          "VIDEO_INPUT_UNSUPPORTED",
         );
       }
       providerSetup = prepared.setup;

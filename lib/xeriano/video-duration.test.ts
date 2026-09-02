@@ -99,7 +99,7 @@ test("provider preparation replaces the submitted motion asset with the approved
   assert.equal(prepared.setup.klingMotion.faceBindingEnabled, false);
 });
 
-test("Video Edit prepares the source-video master with the same real server-side clip authority", () => {
+test("Video Edit prepares the source-video master before provider delivery", async () => {
   const sourceBytes = avFixture(12);
   const setup = {
     contractVersion: "nexhq-ugc-video-studio-v1",
@@ -119,15 +119,43 @@ test("Video Edit prepares the source-video master with the same real server-side
     klingMotion: { characterOrientation: "VIDEO", keepOriginalSound: false, faceBindingEnabled: false, characterImageReferenceId: null, motionVideoReferenceId: null, identityElementReferenceId: null },
     videoEdit: { sourceVideoReferenceId: "source", characterMasterReferenceId: "character", keepOriginalSound: false },
   } as UgcVideoGenerationSetup;
-  const prepared = prepareUgcVideoEditMedia({
+  const trimmedBytes = avFixture(5);
+  const normalizedBytes = Buffer.concat([
+    Buffer.alloc(4),
+    Buffer.from("ftyp"),
+    trimmedBytes,
+    Buffer.from("normalized"),
+  ]);
+  let inspections = 0;
+  const prepared = await prepareUgcVideoEditMedia({
     setup,
     references: [
       { metadata: setup.references[0]!, bytes: sourceBytes, providerUrl: "https://storage.example/original" },
       { metadata: setup.references[1]!, bytes: Buffer.alloc(8), providerUrl: "https://storage.example/character" },
     ],
     trustedSourceDurationSeconds: 12,
+    processor: {
+      async inspect(bytes) {
+        inspections += 1;
+        if (bytes === sourceBytes) return { width: 576, height: 1024, fps: 24, durationSeconds: 12, byteLength: bytes.byteLength, mimeType: "video/mp4", hasAudio: true };
+        if (bytes === trimmedBytes) return { width: 576, height: 1024, fps: 24, durationSeconds: 5, byteLength: bytes.byteLength, mimeType: "video/mp4", hasAudio: false };
+        return { width: 720, height: 1280, fps: 24, durationSeconds: 5, byteLength: bytes.byteLength, mimeType: "video/mp4", hasAudio: false };
+      },
+      async trim(input) {
+        assert.equal(input.durationSeconds, 5);
+        assert.equal(input.keepAudio, false);
+        return trimmedBytes;
+      },
+      async normalize(input) {
+        assert.equal(input.width, 720);
+        assert.equal(input.height, 1280);
+        assert.equal(input.fps, null, "valid 24 FPS is preserved");
+        return normalizedBytes;
+      },
+    },
   });
-  assert.equal(readIsoBmffDurationSeconds(prepared.references[0]!.bytes), 5);
+  assert.equal(inspections, 3);
+  assert.equal(prepared.references[0]!.bytes, normalizedBytes);
   assert.equal(prepared.references[0]!.metadata.durationSeconds, 5);
   assert.equal(prepared.references[0]!.providerUrl, undefined, "the provider cannot receive the untrimmed source URL");
   assert.equal(prepared.references[1]!.providerUrl, "https://storage.example/character");

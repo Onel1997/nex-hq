@@ -7,6 +7,34 @@ import {
 
 export type UgcVideoModelAvailability = "LIVE" | "READY_TO_CONNECT" | "PLANNED";
 
+type UgcVideoEditMediaProfileBase = {
+  allowedMimeTypes: readonly ["video/mp4", "video/quicktime"];
+  minDurationSeconds: number;
+  maxDurationSeconds: number;
+  minFps: number | null;
+  maxFps: number | null;
+  normalizedFps: number;
+  maxBytes: number;
+};
+
+export type UgcVideoEditMediaProfile = UgcVideoEditMediaProfileBase &
+  (
+    | {
+        dimensionPolicy: "AXIS_BOUNDS";
+        minWidth: number;
+        minHeight: number;
+        maxWidth: number;
+        maxHeight: number;
+      }
+    | {
+        /** fal documents Seedance input resolution as an approximate 480p–720p band. */
+        dimensionPolicy: "PIXEL_AREA_BOUNDS";
+        minPixelArea: number;
+        maxPixelArea: number;
+        maxLongEdge: number;
+      }
+  );
+
 export type UgcVideoModelDefinition = {
   id: string;
   providerId: string;
@@ -27,7 +55,56 @@ export type UgcVideoModelDefinition = {
   providerCostUsdMicrosPerSecond: number | null;
   pricingVersion: string | null;
   characterReferenceStrategy: "NONE" | "KLING_ELEMENT" | "SEEDANCE_IMAGE";
+  videoEditMediaProfile: UgcVideoEditMediaProfile | null;
 };
+
+const VIDEO_EDIT_MIME_TYPES = ["video/mp4", "video/quicktime"] as const;
+
+export const KLING_O3_PRO_EDIT_MEDIA_PROFILE = Object.freeze({
+  dimensionPolicy: "AXIS_BOUNDS" as const,
+  minWidth: 720,
+  minHeight: 720,
+  maxWidth: 3_840,
+  maxHeight: 3_840,
+  minDurationSeconds: 3,
+  maxDurationSeconds: 15.05,
+  minFps: 24,
+  maxFps: 60,
+  normalizedFps: 30,
+  maxBytes: 200 * 1024 * 1024,
+  allowedMimeTypes: VIDEO_EDIT_MIME_TYPES,
+});
+
+export const KLING_O1_STANDARD_EDIT_MEDIA_PROFILE = Object.freeze({
+  dimensionPolicy: "AXIS_BOUNDS" as const,
+  minWidth: 720,
+  minHeight: 720,
+  maxWidth: 2_160,
+  maxHeight: 2_160,
+  minDurationSeconds: 3,
+  maxDurationSeconds: 10.05,
+  minFps: 24,
+  maxFps: 60,
+  normalizedFps: 30,
+  maxBytes: 200 * 1024 * 1024,
+  allowedMimeTypes: VIDEO_EDIT_MIME_TYPES,
+});
+
+export const SEEDANCE_2_FAST_EDIT_MEDIA_PROFILE = Object.freeze({
+  // The API describes reference inputs as approximately 480p (640x640) to
+  // 720p (834x1112), rather than imposing Kling's per-axis bounds.
+  dimensionPolicy: "PIXEL_AREA_BOUNDS" as const,
+  minPixelArea: 640 * 640,
+  maxPixelArea: 834 * 1_112,
+  maxLongEdge: 1_112,
+  minDurationSeconds: 2,
+  maxDurationSeconds: 15,
+  minFps: null,
+  maxFps: null,
+  normalizedFps: 30,
+  maxBytes: 50 * 1024 * 1024,
+  allowedMimeTypes: VIDEO_EDIT_MIME_TYPES,
+});
 
 const ALL_DURATIONS = Array.from({ length: 27 }, (_, index) =>
   String(index + 4),
@@ -97,6 +174,7 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       providerCostUsdMicrosPerSecond: null,
       pricingVersion: "seedance-2.5-provider-cost-v1",
       characterReferenceStrategy: "NONE",
+      videoEditMediaProfile: null,
     },
     {
       id: "kling-v3-pro-motion-control",
@@ -119,6 +197,7 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       providerCostUsdMicrosPerSecond: 168_000,
       pricingVersion: "kling-v3-pro-motion-control-provider-cost-v1",
       characterReferenceStrategy: "NONE",
+      videoEditMediaProfile: null,
     },
     {
       id: KLING_O3_PRO_EDIT_MODEL_ID,
@@ -140,6 +219,7 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       providerCostUsdMicrosPerSecond: 168_000,
       pricingVersion: VIDEO_EDIT_PRICING_VERSION,
       characterReferenceStrategy: "KLING_ELEMENT",
+      videoEditMediaProfile: KLING_O3_PRO_EDIT_MEDIA_PROFILE,
     },
     {
       id: KLING_O1_STANDARD_EDIT_MODEL_ID,
@@ -161,6 +241,7 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       providerCostUsdMicrosPerSecond: 126_000,
       pricingVersion: VIDEO_EDIT_PRICING_VERSION,
       characterReferenceStrategy: "KLING_ELEMENT",
+      videoEditMediaProfile: KLING_O1_STANDARD_EDIT_MEDIA_PROFILE,
     },
     {
       id: SEEDANCE_2_FAST_EDIT_MODEL_ID,
@@ -182,6 +263,7 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       providerCostUsdMicrosPerSecond: 145_150,
       pricingVersion: VIDEO_EDIT_PRICING_VERSION,
       characterReferenceStrategy: "SEEDANCE_IMAGE",
+      videoEditMediaProfile: SEEDANCE_2_FAST_EDIT_MEDIA_PROFILE,
     },
     {
       id: "minimax",
@@ -203,6 +285,7 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       providerCostUsdMicrosPerSecond: null,
       pricingVersion: null,
       characterReferenceStrategy: "NONE",
+      videoEditMediaProfile: null,
     },
     {
       id: "veo",
@@ -224,6 +307,7 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       providerCostUsdMicrosPerSecond: null,
       pricingVersion: null,
       characterReferenceStrategy: "NONE",
+      videoEditMediaProfile: null,
     },
     {
       id: "sora",
@@ -245,6 +329,7 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       providerCostUsdMicrosPerSecond: null,
       pricingVersion: null,
       characterReferenceStrategy: "NONE",
+      videoEditMediaProfile: null,
     },
   ]);
 
