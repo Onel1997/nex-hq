@@ -10,6 +10,7 @@ import {
   UGC_VIDEO_BUCKET_OPTIONS,
   UGC_VIDEO_RESULT_MAX_BYTES,
   UgcVideoStorageSetupError,
+  isUgcVideoStorageObjectNotFound,
 } from "@/lib/ugc-video-studio/server-storage";
 
 type Bucket = {
@@ -198,4 +199,39 @@ test("unrelated Creative and existing Video storage limits remain unchanged", ()
   );
   assert.match(creative, /fileSizeLimit: 50 \* 1024 \* 1024/);
   assert.match(existingVideo, /524288000/);
+});
+
+test("only explicit Supabase object absence becomes a missing UGC job", () => {
+  assert.equal(
+    isUgcVideoStorageObjectNotFound({
+      status: 400,
+      statusCode: "not_found",
+      message: "Object not found",
+    }),
+    true,
+  );
+  assert.equal(
+    isUgcVideoStorageObjectNotFound({
+      status: 404,
+      statusCode: "404",
+      message: "Not Found",
+    }),
+    true,
+  );
+  assert.equal(
+    isUgcVideoStorageObjectNotFound({
+      status: 400,
+      statusCode: "400",
+      message: "Invalid storage request",
+    }),
+    false,
+  );
+  assert.equal(
+    isUgcVideoStorageObjectNotFound({
+      status: 503,
+      statusCode: "service_unavailable",
+      message: "Storage unavailable",
+    }),
+    false,
+  );
 });

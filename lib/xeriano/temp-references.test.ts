@@ -74,6 +74,22 @@ test("reference validation precedes customer reservation and binding follows it"
   }
   assert.match(creativeRoute, /error instanceof XerianoTempReferenceError/);
   assert.match(ugcRoute, /error instanceof XerianoTempReferenceError/);
+  const ugcGeneration = ugcRoute.indexOf(
+    "const run = await generateUgcVideoJob",
+  );
+  const durableCallback = ugcRoute.indexOf(
+    "onDurableJobReady:",
+    ugcGeneration,
+  );
+  assert.ok(ugcGeneration >= 0 && durableCallback > ugcGeneration);
+  assert.ok(
+    ugcRoute.indexOf("bindTempReferences({", durableCallback) >
+      durableCallback,
+  );
+  assert.equal(
+    ugcRoute.slice(0, ugcGeneration).includes("bindTempReferences({"),
+    false,
+  );
 });
 
 test("signed provider URLs remain server-only and never become durable setup truth", () => {
@@ -89,4 +105,3 @@ test("removal cannot delete a reference already bound to provider recovery", () 
   assert.match(server, /if \(row\.upload_state === "BOUND"\) return \{ deleted: false as const \}/);
   assert.match(server, /bound_job_id: input\.jobId/);
 });
-

@@ -47,9 +47,14 @@ import { quoteUgcCustomerGeneration } from "@/lib/xeriano/customer-generation";
 import {
   generateUgcVideoJob,
   observeUgcVideoJob,
+  UgcVideoGenerationError,
 } from "@/lib/ugc-video-studio/generation-service";
 import type { UgcVideoJobManifest } from "@/lib/ugc-video-studio/server-contracts";
-import { UGC_VIDEO_RESULT_MAX_BYTES, type UgcVideoJobStore } from "@/lib/ugc-video-studio/server-storage";
+import {
+  UGC_VIDEO_RESULT_MAX_BYTES,
+  UgcVideoJobStateError,
+  type UgcVideoJobStore,
+} from "@/lib/ugc-video-studio/server-storage";
 
 const MODELS = [
   [KLING_O3_PRO_EDIT_MODEL_ID, KLING_O3_PRO_EDIT_ENDPOINT],
@@ -84,6 +89,94 @@ function references(active: UgcVideoGenerationSetup): UgcVideoProviderReference[
     bytes: Buffer.alloc(metadata.byteLength, 1),
     providerUrl: `https://storage.example/${metadata.id}`,
   }));
+}
+
+function durableStoreFixture(input: {
+  failWrite?: (manifest: UgcVideoJobManifest, writeNumber: number) => boolean;
+  readError?: Error | null;
+} = {}) {
+  const holder: { manifest: UgcVideoJobManifest | null } = { manifest: null };
+  let claimed = false;
+  let writes = 0;
+  const store: UgcVideoJobStore = {
+    async ensureReady() {
+      return {
+        bucketId: "ugc-video-studio-assets",
+        bucketFileSizeLimitBytes: UGC_VIDEO_RESULT_MAX_BYTES,
+        resultMaxBytes: UGC_VIDEO_RESULT_MAX_BYTES,
+        private: true,
+        videoMp4Allowed: true,
+      };
+    },
+    async claim() {
+      if (claimed) return "EXISTS";
+      claimed = true;
+      return "CREATED";
+    },
+    async readManifest() {
+      if (input.readError) throw input.readError;
+      return holder.manifest;
+    },
+    async writeManifest(manifest) {
+      writes += 1;
+      if (input.failWrite?.(manifest, writes)) {
+        throw new Error("synthetic_manifest_write_failure");
+      }
+      holder.manifest = structuredClone(manifest);
+    },
+    async persistResult() {
+      return "unused";
+    },
+    async readResult() {
+      return null;
+    },
+  };
+  return { store, holder, writes: () => writes };
+}
+
+function acceptedProvider(input: {
+  endpoint?: FalVideoEditEndpoint;
+  onSubmit?: () => void;
+} = {}): { provider: UgcVideoProvider; submits: () => number } {
+  let submitCount = 0;
+  const endpoint = input.endpoint ?? KLING_O3_PRO_EDIT_ENDPOINT;
+  return {
+    submits: () => submitCount,
+    provider: {
+      providerId: "fal",
+      isConfigured: () => true,
+      async submit(request) {
+        submitCount += 1;
+        input.onSubmit?.();
+        return {
+          provider: "fal",
+          providerModel: endpoint,
+          providerRequestId: "accepted-once",
+          providerPrompt: request.setup.prompt,
+          referenceOrder: request.references.map((item) => item.metadata.id),
+          providerStatus: "IN_QUEUE",
+          statusUrl: "https://queue.fal.run/job/status",
+          responseUrl: "https://queue.fal.run/job/response",
+          cancelUrl: "https://queue.fal.run/job/cancel",
+          queuePosition: 0,
+        };
+      },
+      async getStatus() {
+        return {
+          status: "IN_PROGRESS",
+          queuePosition: null,
+          error: null,
+          logs: [],
+          inferenceTimeSeconds: null,
+          metrics: null,
+          truncated: false,
+        };
+      },
+      async getResult() {
+        throw new Error("result_not_expected");
+      },
+    },
+  };
 }
 
 test("server registry keeps exact endpoints and one changeable recommended model", () => {
@@ -418,6 +511,269 @@ test("accepted Video Edit queue authority is persisted and an idempotent replay 
   assert.equal(holder.manifest?.providerStatusUrl, "https://queue.fal.run/job/status");
   assert.equal(holder.manifest?.providerResponseUrl, "https://queue.fal.run/job/response");
   assert.equal(submits, 1);
+});
+
+test("durable manifest is readable before reference binding and provider submission", async () => {
+  const fixture = durableStoreFixture();
+  const active = setup();
+  const events: string[] = [];
+  const accepted = acceptedProvider({
+    onSubmit: () => {
+      events.push("submit");
+      assert.equal(fixture.holder.manifest?.providerStatus, "SUBMITTING");
+    },
+  });
+  const run = await generateUgcVideoJob(
+    {
+      scope: { workspaceId: "account", actorId: "owner" },
+      jobId: "56565656-5656-4656-8656-565656565656",
+      setup: active,
+      references: references(active),
+    },
+    {
+      store: fixture.store,
+      provider: accepted.provider,
+      costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+      onDurableJobReady: async (manifest) => {
+        events.push("bind");
+        assert.equal(fixture.holder.manifest?.jobId, manifest.jobId);
+        assert.equal(fixture.holder.manifest?.requestFingerprint, manifest.requestFingerprint);
+      },
+    },
+  );
+  assert.deepEqual(events, ["bind", "submit"]);
+  assert.equal(run.status, "RUNNING");
+  assert.equal(fixture.holder.manifest?.providerRequestId, "accepted-once");
+});
+
+test("O3, O1 and Seedance share the same durable-before-submit service invariant", async () => {
+  let index = 0;
+  for (const [modelId, endpoint] of MODELS) {
+    index += 1;
+    const fixture = durableStoreFixture();
+    const active = setup(modelId);
+    const accepted = acceptedProvider({
+      endpoint,
+      onSubmit: () => {
+        assert.equal(fixture.holder.manifest?.providerStatus, "SUBMITTING");
+      },
+    });
+    const jobId = `64646464-6464-4464-8${String(index).padStart(3, "0")}-646464646464`;
+    const run = await generateUgcVideoJob(
+      {
+        scope: { workspaceId: "account", actorId: "owner" },
+        jobId,
+        setup: active,
+        references: references(active),
+      },
+      {
+        store: fixture.store,
+        provider: accepted.provider,
+        costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+      },
+    );
+    assert.equal(run.status, "RUNNING");
+    assert.equal(fixture.holder.manifest?.providerModel, endpoint);
+    assert.equal(accepted.submits(), 1);
+  }
+});
+
+test("durable creation failure prevents binding and provider submission", async () => {
+  const fixture = durableStoreFixture({ failWrite: () => true });
+  const active = setup();
+  let bindings = 0;
+  const accepted = acceptedProvider();
+  await assert.rejects(
+    generateUgcVideoJob(
+      {
+        scope: { workspaceId: "account", actorId: "owner" },
+        jobId: "57575757-5757-4757-8757-575757575757",
+        setup: active,
+        references: references(active),
+      },
+      {
+        store: fixture.store,
+        provider: accepted.provider,
+        costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+        onDurableJobReady: async () => {
+          bindings += 1;
+        },
+      },
+    ),
+    (error) =>
+      error instanceof UgcVideoGenerationError &&
+      error.code === "UGC_VIDEO_STORAGE_SETUP_FAILED" &&
+      error.providerSubmissionPossible === false,
+  );
+  assert.equal(bindings, 0);
+  assert.equal(accepted.submits(), 0);
+});
+
+test("queue-handle persistence retries without another provider submission", async () => {
+  const fixture = durableStoreFixture({
+    failWrite: (manifest, writeNumber) =>
+      writeNumber === 2 && Boolean(manifest.providerRequestId),
+  });
+  const active = setup();
+  const accepted = acceptedProvider();
+  const run = await generateUgcVideoJob(
+    {
+      scope: { workspaceId: "account", actorId: "owner" },
+      jobId: "58585858-5858-4858-8858-585858585858",
+      setup: active,
+      references: references(active),
+    },
+    {
+      store: fixture.store,
+      provider: accepted.provider,
+      costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+    },
+  );
+  assert.equal(run.status, "RUNNING");
+  assert.equal(run.providerRequestId, "accepted-once");
+  assert.equal(accepted.submits(), 1);
+  assert.ok(fixture.writes() >= 3);
+});
+
+test("accepted queue-handle persistence ambiguity is durable UNKNOWN, never 404 or resubmit", async () => {
+  const fixture = durableStoreFixture({
+    failWrite: (manifest) =>
+      manifest.status === "RUNNING" && Boolean(manifest.providerRequestId),
+  });
+  const active = setup();
+  const accepted = acceptedProvider();
+  const input = {
+    scope: { workspaceId: "account", actorId: "owner" },
+    jobId: "59595959-5959-4959-8959-595959595959",
+    setup: active,
+    references: references(active),
+  };
+  const run = await generateUgcVideoJob(input, {
+    store: fixture.store,
+    provider: accepted.provider,
+    costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+  });
+  const replay = await generateUgcVideoJob(input, {
+    store: fixture.store,
+    provider: accepted.provider,
+    costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+  });
+  assert.equal(run.status, "UNKNOWN_OUTCOME");
+  assert.equal(replay.status, "UNKNOWN_OUTCOME");
+  assert.equal(fixture.holder.manifest?.providerRequestId, "accepted-once");
+  assert.equal(accepted.submits(), 1);
+});
+
+test("job reads distinguish true absence from inconsistent durable state", async () => {
+  const missing = durableStoreFixture();
+  await assert.rejects(
+    observeUgcVideoJob(
+      {
+        scope: { workspaceId: "account", actorId: "owner" },
+        jobId: "60606060-6060-4060-8060-606060606060",
+      },
+      { store: missing.store, provider: acceptedProvider().provider },
+    ),
+    (error) =>
+      error instanceof UgcVideoGenerationError &&
+      error.code === "JOB_NOT_FOUND" &&
+      error.status === 404,
+  );
+
+  const inconsistent = durableStoreFixture({
+    readError: new UgcVideoJobStateError("manifest_invalid:ZodError"),
+  });
+  await assert.rejects(
+    observeUgcVideoJob(
+      {
+        scope: { workspaceId: "account", actorId: "owner" },
+        jobId: "61616161-6161-4161-8161-616161616161",
+      },
+      { store: inconsistent.store, provider: acceptedProvider().provider },
+    ),
+    (error) =>
+      error instanceof UgcVideoGenerationError &&
+      error.code === "JOB_STATE_INCONSISTENT" &&
+      error.status === 503,
+  );
+});
+
+test("an idempotency claim without a manifest is inconsistent and never resubmitted", async () => {
+  const fixture = durableStoreFixture();
+  fixture.store.claim = async () => "EXISTS";
+  const active = setup();
+  const accepted = acceptedProvider();
+  await assert.rejects(
+    generateUgcVideoJob(
+      {
+        scope: { workspaceId: "account", actorId: "owner" },
+        jobId: "63636363-6363-4363-8363-636363636363",
+        setup: active,
+        references: references(active),
+      },
+      {
+        store: fixture.store,
+        provider: accepted.provider,
+        costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+      },
+    ),
+    (error) =>
+      error instanceof UgcVideoGenerationError &&
+      error.code === "JOB_STATE_INCONSISTENT" &&
+      error.status === 503,
+  );
+  assert.equal(accepted.submits(), 0);
+});
+
+test("stale durable SUBMITTING job becomes UNKNOWN without provider submission", async () => {
+  const fixture = durableStoreFixture();
+  const active = setup();
+  const accepted = acceptedProvider();
+  const input = {
+    scope: { workspaceId: "account", actorId: "owner" },
+    jobId: "62626262-6262-4262-8262-626262626262",
+    setup: active,
+    references: references(active),
+  };
+  await generateUgcVideoJob(input, {
+    store: fixture.store,
+    provider: accepted.provider,
+    costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+    now: () => "2026-09-02T08:00:00.000Z",
+  });
+  assert.ok(fixture.holder.manifest);
+  fixture.holder.manifest = {
+    ...fixture.holder.manifest,
+    status: "RUNNING",
+    providerRequestId: null,
+    providerStatus: "SUBMITTING",
+    updatedAt: "2026-09-02T08:00:00.000Z",
+  };
+  const run = await observeUgcVideoJob(
+    { scope: input.scope, jobId: input.jobId },
+    {
+      store: fixture.store,
+      provider: accepted.provider,
+      now: () => "2026-09-02T08:03:00.000Z",
+    },
+  );
+  assert.equal(run.status, "UNKNOWN_OUTCOME");
+  assert.equal(accepted.submits(), 1);
+});
+
+test("UGC route binds temp references only through the durable-job callback", () => {
+  const route = readFileSync(
+    "app/api/ugc-video-studio/generate/route.ts",
+    "utf8",
+  );
+  const generateAt = route.indexOf("const run = await generateUgcVideoJob");
+  const callbackAt = route.indexOf("onDurableJobReady:", generateAt);
+  const bindingAt = route.indexOf("await bindTempReferences", callbackAt);
+  assert.ok(generateAt >= 0);
+  assert.ok(callbackAt > generateAt);
+  assert.ok(bindingAt > callbackAt);
+  assert.equal(route.slice(0, generateAt).includes("await bindTempReferences"), false);
+  assert.match(route, /error\.providerSubmissionPossible/);
 });
 
 test("fal queue handles reject arbitrary hosts", () => {

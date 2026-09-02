@@ -296,12 +296,6 @@ export async function POST(request: Request) {
       });
     }
 
-    await bindTempReferences({
-      context: access.context,
-      referenceIds: resolvedReferences.map((reference) => reference.authorityId),
-      jobId,
-    });
-
     const run = await generateUgcVideoJob(
       {
         scope: {
@@ -312,9 +306,20 @@ export async function POST(request: Request) {
         setup: providerSetup,
         references,
       },
-      ownerUnlimited
-        ? { costLimitPolicy: "OWNER_ESTIMATE_ONLY" }
-        : {},
+      {
+        ...(ownerUnlimited
+          ? { costLimitPolicy: "OWNER_ESTIMATE_ONLY" as const }
+          : {}),
+        onDurableJobReady: async () => {
+          await bindTempReferences({
+            context: access.context,
+            referenceIds: resolvedReferences.map(
+              (reference) => reference.authorityId,
+            ),
+            jobId,
+          });
+        },
+      },
     );
     if (customer) {
       customerAuthority = await reconcileCustomerGenerationFromRun({
@@ -344,7 +349,11 @@ export async function POST(request: Request) {
   } catch (error) {
     if (customer && customerAuthority && customerJobId) {
       const definitelyBeforeProvider =
-        (error instanceof UgcVideoGenerationError &&
+        !(
+          error instanceof UgcVideoGenerationError &&
+          error.providerSubmissionPossible
+        ) &&
+        ((error instanceof UgcVideoGenerationError &&
           [
             "INVALID_REQUEST",
             "REFERENCE_LIMIT_EXCEEDED",
@@ -352,15 +361,15 @@ export async function POST(request: Request) {
             "PROVIDER_NOT_CONFIGURED",
             "UGC_VIDEO_STORAGE_SETUP_FAILED",
           ].includes(error.code)) ||
-        error instanceof UgcVideoCostCapError ||
-        error instanceof UgcVideoEditInputError ||
-        error instanceof XerianoTempReferenceError ||
-        error instanceof ZodError ||
-        error instanceof SyntaxError ||
-        (error instanceof Error &&
-          /UGC video (request claim|manifest write|storage preflight|storage setup)/i.test(
-            error.message,
-          ));
+          error instanceof UgcVideoCostCapError ||
+          error instanceof UgcVideoEditInputError ||
+          error instanceof XerianoTempReferenceError ||
+          error instanceof ZodError ||
+          error instanceof SyntaxError ||
+          (error instanceof Error &&
+            /UGC video (request claim|manifest write|storage preflight|storage setup)/i.test(
+              error.message,
+            )));
       try {
         if (definitelyBeforeProvider) {
           await releaseCustomerGenerationBeforeProvider({

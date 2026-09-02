@@ -20,6 +20,7 @@ import {
   type UgcVideoProviderStatus,
   UgcVideoProvider,
   UgcVideoProviderReference,
+  type UgcVideoProviderSubmission,
 } from "@/lib/ugc-video-studio/provider";
 import { FalSeedanceProvider } from "@/lib/ugc-video-studio/providers/fal-seedance";
 import { FalKlingMotionControlProvider } from "@/lib/ugc-video-studio/providers/fal-kling-motion-control";
@@ -58,6 +59,7 @@ import {
   SupabaseUgcVideoJobStore,
   UGC_VIDEO_RESULT_MAX_BYTES,
   UgcVideoResultTooLargeError,
+  UgcVideoJobStateError,
   UgcVideoStorageError,
   UgcVideoStorageSetupError,
   type UgcVideoJobScope,
@@ -76,10 +78,13 @@ export class UgcVideoGenerationError extends Error {
       | "UGC_VIDEO_RESULT_TOO_LARGE"
       | "UGC_VIDEO_STORAGE_SETUP_FAILED"
       | "UGC_VIDEO_STORAGE_FAILED"
-      | "RESULT_PERSISTENCE_FAILED",
+      | "RESULT_PERSISTENCE_FAILED"
+      | "JOB_NOT_FOUND"
+      | "JOB_STATE_INCONSISTENT",
     message: string,
     readonly status: number,
     readonly technicalDetails?: string,
+    readonly providerSubmissionPossible = false,
   ) {
     super(message);
     this.name = "UgcVideoGenerationError";
@@ -530,7 +535,85 @@ export type GenerateUgcVideoJobDependencies = {
   configuredCostCapUsd?: number | null;
   costLimitPolicy?: "REQUIRE_CONFIGURED_CAP" | "OWNER_ESTIMATE_ONLY";
   now?: () => string;
+  /** Runs only after the initial manifest has been persisted and read back. */
+  onDurableJobReady?: (manifest: UgcVideoJobManifest) => Promise<void>;
 };
+
+const DURABLE_MANIFEST_WRITE_ATTEMPTS = 3;
+const SUBMITTING_WITHOUT_HANDLE_TIMEOUT_MS = 2 * 60 * 1000;
+
+function manifestStateDetails(error: unknown, stage: string): string {
+  if (error instanceof UgcVideoJobStateError) {
+    return `${stage}:${error.technicalDetails}`.slice(0, 4000);
+  }
+  if (error instanceof UgcVideoStorageError) {
+    return `${stage}:${error.technicalDetails}`.slice(0, 4000);
+  }
+  return `${stage}:${error instanceof Error ? error.name : "unknown"}`.slice(
+    0,
+    4000,
+  );
+}
+
+async function readDurableManifest(input: {
+  store: UgcVideoJobStore;
+  scope: UgcVideoJobScope;
+  jobId: string;
+}): Promise<UgcVideoJobManifest | null> {
+  try {
+    return await input.store.readManifest(input.scope, input.jobId);
+  } catch (error) {
+    throw new UgcVideoGenerationError(
+      "JOB_STATE_INCONSISTENT",
+      "Der gespeicherte Videoauftrag konnte nicht sicher gelesen werden.",
+      503,
+      manifestStateDetails(error, "manifest_read_failed"),
+    );
+  }
+}
+
+async function persistAndConfirmManifest(input: {
+  store: UgcVideoJobStore;
+  scope: UgcVideoJobScope;
+  manifest: UgcVideoJobManifest;
+  stage: string;
+  providerSubmissionPossible: boolean;
+}): Promise<UgcVideoJobManifest> {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < DURABLE_MANIFEST_WRITE_ATTEMPTS; attempt += 1) {
+    try {
+      await input.store.writeManifest(input.manifest);
+      const persisted = await input.store.readManifest(
+        input.scope,
+        input.manifest.jobId,
+      );
+      if (
+        persisted &&
+        persisted.jobId === input.manifest.jobId &&
+        persisted.workspaceId === input.manifest.workspaceId &&
+        persisted.actorId === input.manifest.actorId &&
+        persisted.requestFingerprint === input.manifest.requestFingerprint &&
+        persisted.updatedAt === input.manifest.updatedAt
+      ) {
+        return persisted;
+      }
+      lastError = new Error("manifest_read_after_write_mismatch");
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new UgcVideoGenerationError(
+    input.providerSubmissionPossible
+      ? "JOB_STATE_INCONSISTENT"
+      : "UGC_VIDEO_STORAGE_SETUP_FAILED",
+    input.providerSubmissionPossible
+      ? "Der angenommene Videoauftrag konnte nicht vollständig gespeichert werden. Es wird kein neuer Auftrag gestartet."
+      : "Der private Videospeicher konnte nicht vorbereitet werden.",
+    503,
+    manifestStateDetails(lastError, input.stage),
+    input.providerSubmissionPossible,
+  );
+}
 
 export async function generateUgcVideoJob(
   input: {
@@ -611,12 +694,17 @@ export async function generateUgcVideoJob(
     requestFingerprint,
   });
   if (claim === "EXISTS") {
-    const existing = await store.readManifest(input.scope, input.jobId);
+    const existing = await readDurableManifest({
+      store,
+      scope: input.scope,
+      jobId: input.jobId,
+    });
     if (!existing) {
       throw new UgcVideoGenerationError(
-        "DUPLICATE_REQUEST_RUNNING",
-        "Dieser Videoauftrag wird bereits verarbeitet.",
-        409,
+        "JOB_STATE_INCONSISTENT",
+        "Der gespeicherte Videoauftrag ist unvollständig. Es wird kein neuer Auftrag gestartet.",
+        503,
+        "claim_exists_without_manifest",
       );
     }
     if (existing.requestFingerprint !== requestFingerprint) {
@@ -672,33 +760,45 @@ export async function generateUgcVideoJob(
     message: "Video wird erstellt …",
     technicalError: null,
   });
-  await store.writeManifest(manifest);
+  manifest = await persistAndConfirmManifest({
+    store,
+    scope: input.scope,
+    manifest,
+    stage: "initial_manifest",
+    providerSubmissionPossible: false,
+  });
 
+  if (dependencies.onDurableJobReady) {
+    try {
+      await dependencies.onDurableJobReady(manifest);
+    } catch (error) {
+      manifest = ugcVideoJobManifestSchema.parse({
+        ...manifest,
+        status: "FAILED",
+        providerStatus: "FAILED",
+        updatedAt: now(),
+        message: "Das Video konnte nicht für die Erstellung vorbereitet werden.",
+        technicalError: "durable_job_reference_binding_failed",
+      });
+      await persistAndConfirmManifest({
+        store,
+        scope: input.scope,
+        manifest,
+        stage: "reference_binding_failure",
+        providerSubmissionPossible: false,
+      });
+      throw error;
+    }
+  }
+
+  let submission: UgcVideoProviderSubmission;
   try {
-    const submission = await provider.submit({
+    submission = await provider.submit({
       clientRequestId: input.jobId,
       endUserId: input.scope.actorId,
       setup,
       references: input.references,
     });
-    manifest = ugcVideoJobManifestSchema.parse({
-      ...manifest,
-      provider: submission.provider,
-      providerModel: submission.providerModel,
-      providerRequestId: submission.providerRequestId,
-      providerPrompt: submission.providerPrompt,
-      providerSubmittedAt: now(),
-      providerStatus: submission.providerStatus,
-      providerStatusUrl: submission.statusUrl,
-      providerResponseUrl: submission.responseUrl,
-      providerCancelUrl: submission.cancelUrl,
-      providerQueuePosition: submission.queuePosition,
-      updatedAt: now(),
-      message: "Video wird erstellt …",
-      technicalError: null,
-    });
-    await store.writeManifest(manifest);
-    return manifestToRun(manifest);
   } catch (error) {
     const unknown = error instanceof UgcVideoProviderSubmitUnknownOutcomeError;
     const diagnostic =
@@ -707,26 +807,15 @@ export async function generateUgcVideoJob(
         : unknown
           ? error.diagnostic
           : null;
-    const accepted = Boolean(manifest.providerRequestId);
     manifest = ugcVideoJobManifestSchema.parse({
       ...manifest,
-      status: accepted ? "RUNNING" : unknown ? "UNKNOWN_OUTCOME" : "FAILED",
-      providerStatus: accepted
-        ? manifest.providerStatus
-        : unknown
-          ? null
-          : "FAILED",
+      status: unknown ? "UNKNOWN_OUTCOME" : "FAILED",
+      providerStatus: unknown ? null : "FAILED",
       updatedAt: now(),
-      message: accepted
-        ? "Video wird erstellt …"
-        : unknown
-          ? "Der Anbieterstatus ist unklar. Es wird kein neuer Auftrag gestartet."
-          : "Das Video konnte nicht erstellt werden.",
-      providerObservationError: accepted
-        ? error instanceof Error
-          ? `${error.name}: ${error.message}`.slice(0, 4000)
-          : "provider_acceptance_persistence_error"
-        : null,
+      message: unknown
+        ? "Der Anbieterstatus ist unklar. Es wird kein neuer Auftrag gestartet."
+        : "Das Video konnte nicht erstellt werden.",
+      providerObservationError: null,
       providerError: diagnostic,
       technicalError:
         diagnostic
@@ -735,7 +824,62 @@ export async function generateUgcVideoJob(
             ? `${error.name}: ${error.message}`.slice(0, 4000)
           : "unknown_video_generation_error",
     });
-    await store.writeManifest(manifest);
+    manifest = await persistAndConfirmManifest({
+      store,
+      scope: input.scope,
+      manifest,
+      stage: "submission_failure_manifest",
+      providerSubmissionPossible: true,
+    });
+    return manifestToRun(manifest);
+  }
+
+  const acceptedManifest = ugcVideoJobManifestSchema.parse({
+    ...manifest,
+    provider: submission.provider,
+    providerModel: submission.providerModel,
+    providerRequestId: submission.providerRequestId,
+    providerPrompt: submission.providerPrompt,
+    providerSubmittedAt: now(),
+    providerStatus: submission.providerStatus,
+    providerStatusUrl: submission.statusUrl,
+    providerResponseUrl: submission.responseUrl,
+    providerCancelUrl: submission.cancelUrl,
+    providerQueuePosition: submission.queuePosition,
+    updatedAt: now(),
+    message: "Video wird erstellt …",
+    technicalError: null,
+  });
+  try {
+    manifest = await persistAndConfirmManifest({
+      store,
+      scope: input.scope,
+      manifest: acceptedManifest,
+      stage: "provider_acceptance_manifest",
+      providerSubmissionPossible: true,
+    });
+    return manifestToRun(manifest);
+  } catch (error) {
+    const persistenceDetails =
+      error instanceof UgcVideoGenerationError
+        ? error.technicalDetails
+        : manifestStateDetails(error, "provider_acceptance_manifest");
+    const unknownManifest = ugcVideoJobManifestSchema.parse({
+      ...acceptedManifest,
+      status: "UNKNOWN_OUTCOME",
+      updatedAt: now(),
+      message:
+        "Der Anbieterstatus ist unklar. Es wird kein neuer Auftrag gestartet.",
+      providerObservationError: persistenceDetails,
+      technicalError: persistenceDetails,
+    });
+    manifest = await persistAndConfirmManifest({
+      store,
+      scope: input.scope,
+      manifest: unknownManifest,
+      stage: "provider_acceptance_quarantine",
+      providerSubmissionPossible: true,
+    });
     return manifestToRun(manifest);
   }
 }
@@ -847,10 +991,14 @@ export async function observeUgcVideoJob(
   const store = dependencies.store ?? new SupabaseUgcVideoJobStore();
   const fetcher = dependencies.fetcher ?? fetch;
   const now = dependencies.now ?? (() => new Date().toISOString());
-  let manifest = await store.readManifest(input.scope, input.jobId);
+  let manifest = await readDurableManifest({
+    store,
+    scope: input.scope,
+    jobId: input.jobId,
+  });
   if (!manifest) {
     throw new UgcVideoGenerationError(
-      "RESULT_PERSISTENCE_FAILED",
+      "JOB_NOT_FOUND",
       "Der Videoauftrag wurde nicht gefunden.",
       404,
     );
@@ -864,6 +1012,28 @@ export async function observeUgcVideoJob(
       manifest.status === "RUNNING" &&
       manifest.providerStatus === "SUBMITTING"
     ) {
+      const observedAt = now();
+      const submittingSince = Date.parse(manifest.updatedAt);
+      const observationTime = Date.parse(observedAt);
+      if (
+        Number.isFinite(submittingSince) &&
+        Number.isFinite(observationTime) &&
+        observationTime - submittingSince >=
+          SUBMITTING_WITHOUT_HANDLE_TIMEOUT_MS
+      ) {
+        manifest = ugcVideoJobManifestSchema.parse({
+          ...manifest,
+          status: "UNKNOWN_OUTCOME",
+          providerStatusCheckedAt: observedAt,
+          updatedAt: observedAt,
+          message:
+            "Der Anbieterstatus ist unklar. Es wird kein neuer Auftrag gestartet.",
+          providerObservationError:
+            "provider_acceptance_handle_not_persisted",
+          technicalError: "provider_request_id_missing_after_submission",
+        });
+        await store.writeManifest(manifest);
+      }
       return manifestToRun(manifest);
     }
     if (manifest.status !== "UNKNOWN_OUTCOME") {
@@ -1129,10 +1299,14 @@ export async function recoverUgcVideoResultStorage(
   const fetcher = dependencies.fetcher ?? fetch;
   const now = dependencies.now ?? (() => new Date().toISOString());
   await store.ensureReady();
-  let manifest = await store.readManifest(input.scope, input.jobId);
+  let manifest = await readDurableManifest({
+    store,
+    scope: input.scope,
+    jobId: input.jobId,
+  });
   if (!manifest) {
     throw new UgcVideoGenerationError(
-      "RESULT_PERSISTENCE_FAILED",
+      "JOB_NOT_FOUND",
       "Der Videoauftrag wurde nicht gefunden.",
       404,
     );

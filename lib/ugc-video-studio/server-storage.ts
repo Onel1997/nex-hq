@@ -53,6 +53,15 @@ export class UgcVideoStorageError extends Error {
   }
 }
 
+export class UgcVideoJobStateError extends Error {
+  readonly code = "UGC_VIDEO_JOB_STATE_INCONSISTENT" as const;
+
+  constructor(readonly technicalDetails: string) {
+    super("Der gespeicherte Videoauftrag konnte nicht sicher gelesen werden.");
+    this.name = "UgcVideoJobStateError";
+  }
+}
+
 export type UgcVideoJobScope = {
   workspaceId: string;
   actorId: string;
@@ -277,14 +286,71 @@ async function ensureUgcVideoBucket(
   return readiness;
 }
 
+type StorageReadError = {
+  message?: unknown;
+  status?: unknown;
+  statusCode?: unknown;
+  code?: unknown;
+};
+
+/**
+ * Supabase Storage may represent a missing object as HTTP 400 with an explicit
+ * Object-not-found code/message. Only that narrow case is absence; every other
+ * 4xx/5xx response is a storage failure and must not become a fake job 404.
+ */
+export function isUgcVideoStorageObjectNotFound(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as StorageReadError;
+  const status =
+    typeof candidate.status === "number"
+      ? candidate.status
+      : Number.parseInt(String(candidate.status ?? ""), 10);
+  const statusCode = String(
+    candidate.statusCode ?? candidate.code ?? "",
+  ).toLowerCase();
+  const message =
+    typeof candidate.message === "string"
+      ? candidate.message.toLowerCase()
+      : "";
+  if (status === 404 || statusCode === "404") return true;
+  if (
+    ["not_found", "notfound", "no_such_key", "nosuchkey", "object_not_found"].includes(
+      statusCode,
+    )
+  ) {
+    return true;
+  }
+  return (
+    status === 400 &&
+    /(?:object|resource|file) (?:was )?not found|does not exist/.test(message)
+  );
+}
+
+function safeStorageReadDetails(error: unknown): string {
+  if (!error || typeof error !== "object") return "storage_read_failed";
+  const candidate = error as StorageReadError;
+  const status =
+    typeof candidate.status === "number" ? candidate.status : null;
+  const statusCode =
+    typeof candidate.statusCode === "string"
+      ? candidate.statusCode
+      : typeof candidate.code === "string"
+        ? candidate.code
+        : null;
+  return `storage_read_failed:status=${status ?? "unknown"};code=${statusCode ?? "unknown"}`;
+}
+
 async function download(path: string): Promise<Buffer | null> {
   await ensureUgcVideoBucket();
   const { data, error } = await createAdminClient()
     .storage.from(UGC_VIDEO_ASSET_BUCKET)
     .download(path);
   if (error) {
-    if (/not found|does not exist/i.test(error.message)) return null;
-    throw new Error(`UGC video storage read failed: ${error.message}`);
+    if (isUgcVideoStorageObjectNotFound(error)) return null;
+    throw new UgcVideoStorageError(
+      "Der private Videospeicher konnte nicht gelesen werden.",
+      safeStorageReadDetails(error),
+    );
   }
   return Buffer.from(await data.arrayBuffer());
 }
@@ -322,8 +388,22 @@ export class SupabaseUgcVideoJobStore implements UgcVideoJobStore {
     jobId: string,
   ): Promise<UgcVideoJobManifest | null> {
     const bytes = await download(`${jobRoot(scope, jobId)}/manifest.json`);
-    if (!bytes) return null;
-    return ugcVideoJobManifestSchema.parse(JSON.parse(bytes.toString("utf8")));
+    if (!bytes) {
+      const claim = await download(`${jobRoot(scope, jobId)}/claim.json`);
+      if (claim) {
+        throw new UgcVideoJobStateError("claim_exists_without_manifest");
+      }
+      return null;
+    }
+    try {
+      return ugcVideoJobManifestSchema.parse(
+        JSON.parse(bytes.toString("utf8")),
+      );
+    } catch (error) {
+      throw new UgcVideoJobStateError(
+        `manifest_invalid:${error instanceof Error ? error.name : "unknown"}`,
+      );
+    }
   }
 
   async writeManifest(manifest: UgcVideoJobManifest): Promise<void> {

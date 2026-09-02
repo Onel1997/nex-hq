@@ -91,7 +91,18 @@ export async function GET(
       );
     }
     if (error instanceof UgcVideoGenerationError) {
-      if (customer && error.status === 404) {
+      if (error.code === "JOB_STATE_INCONSISTENT") {
+        console.error("[xeriamo-ugc] durable_job_state_inconsistent", {
+          jobId,
+          code: error.code,
+          stage: error.technicalDetails ?? "unknown",
+        });
+      }
+      if (
+        customer &&
+        error.code === "JOB_NOT_FOUND" &&
+        error.status === 404
+      ) {
         try {
           await quarantineCustomerGeneration({ context: access.context, jobId });
           return NextResponse.json(
