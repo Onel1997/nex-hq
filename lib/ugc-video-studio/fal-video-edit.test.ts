@@ -226,14 +226,15 @@ test("shared model copy is product-safe and model selection suppresses the stick
   assert.match(workspace, /ownerMode/);
 });
 
-test("Kling O3/O1 payloads use the official one-image Element contract", () => {
+test("Kling O3/O1 map one Character Master to the runtime-required image Element fields", () => {
   for (const modelId of [KLING_O3_PRO_EDIT_MODEL_ID, KLING_O1_STANDARD_EDIT_MODEL_ID] as const) {
     const input = buildFalVideoEditInput({ modelId, setup: setup(modelId), sourceVideoUrl: "https://storage.example/source", characterMasterUrl: "https://storage.example/character", endUserId: "actor" });
     assert.equal("video_url" in input && input.video_url, "https://storage.example/source");
-    assert.deepEqual("elements" in input && input.elements, [{ frontal_image_url: "https://storage.example/character" }]);
-    // Current fal schemas make additional reference images optional. Do not
-    // manufacture a duplicate image merely because documentation examples use one.
-    assert.equal(JSON.stringify(input).includes("reference_image_urls"), false);
+    assert.deepEqual("elements" in input && input.elements, [{
+      frontal_image_url: "https://storage.example/character",
+      reference_image_urls: ["https://storage.example/character"],
+    }]);
+    assert.equal("elements" in input && input.elements[0]?.reference_image_urls === null, false);
     assert.equal("image_url" in input, false);
     assert.equal("keep_original_sound" in input, false);
     assert.equal("character_orientation" in input, false);
@@ -270,8 +271,26 @@ test("Seedance maps source/character URLs, source-preserving aspect and silent 7
   assert.equal("resolution" in input && input.resolution, "720p");
   assert.equal("aspect_ratio" in input && input.aspect_ratio, "auto");
   assert.equal("generate_audio" in input && input.generate_audio, false);
+  assert.equal("elements" in input, false);
+  assert.equal(JSON.stringify(input).includes("frontal_image_url"), false);
+  assert.equal(JSON.stringify(input).includes("reference_image_urls"), false);
   assert.match(input.prompt, /@Image1/);
   assert.match(input.prompt, /@Video1/);
+});
+
+test("Setup laden restores configuration only and cannot submit or retry provider work", () => {
+  const library = readFileSync("components/ugc-video-studio/ugc-video-studio-library.tsx", "utf8");
+  const workspace = readFileSync("components/ugc-video-studio/ugc-video-studio-workspace.tsx", "utf8");
+  const loadSetup = workspace.slice(
+    workspace.indexOf("const loadSetup = useCallback"),
+    workspace.indexOf("const openSave =", workspace.indexOf("const loadSetup = useCallback")),
+  );
+
+  assert.match(library, /onClick=\{\(\) => props\.onLoadSetup\(run\.setup\)\}>Setup laden<\/button>/);
+  assert.doesNotMatch(library, /\/api\/ugc-video-studio\/generate/);
+  assert.match(loadSetup, /setPrompt\(setup\.prompt\)/);
+  assert.match(loadSetup, /setView\("CREATE"\)/);
+  assert.doesNotMatch(loadSetup, /fetch\(|generateUgcVideoJob|handleGenerate|provider\.submit/);
 });
 
 test("canonical intent keeps source video as scene master and rejects Character Master background authority", () => {

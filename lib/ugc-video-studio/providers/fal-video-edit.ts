@@ -41,7 +41,7 @@ export type FalKlingVideoEditInput = {
   keep_audio: boolean;
   elements: Array<{
     frontal_image_url: string;
-    reference_image_urls?: string[];
+    reference_image_urls: [string, ...string[]];
   }>;
   shot_type?: "customize";
 };
@@ -443,7 +443,10 @@ export function buildFalVideoEditInput(input: {
     prompt,
     video_url: input.sourceVideoUrl,
     keep_audio: input.setup.videoEdit.keepOriginalSound,
-    elements: [{ frontal_image_url: input.characterMasterUrl }],
+    elements: [{
+      frontal_image_url: input.characterMasterUrl,
+      reference_image_urls: [input.characterMasterUrl],
+    }],
     ...(input.modelId === "kling-o3-pro-video-edit" ? { shot_type: "customize" as const } : {}),
   };
 }
