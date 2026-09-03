@@ -7,6 +7,7 @@ export const UGC_VIDEO_MODES = [
   "MOTION_CONTROL",
   "VIDEO_EDIT",
   "BASE_VIDEO",
+  "VIDEO_RECAST",
 ] as const;
 export const ugcVideoModeSchema = z.enum(UGC_VIDEO_MODES);
 export type UgcVideoMode = z.infer<typeof ugcVideoModeSchema>;
@@ -160,6 +161,19 @@ export const DEFAULT_UGC_VIDEO_EDIT_SETTINGS = Object.freeze({
   keepOriginalSound: false,
 });
 
+export const UGC_VIDEO_RECAST_PROFILE =
+  "KLING_O3_CHARACTER_SCENE_RECAST" as const;
+
+export const DEFAULT_UGC_VIDEO_RECAST_SETTINGS = Object.freeze({
+  profile: UGC_VIDEO_RECAST_PROFILE,
+  sourceVideoReferenceId: null as string | null,
+  characterOutfitReferenceId: null as string | null,
+  faceReferenceId: null as string | null,
+  sceneStyleReferenceId: null as string | null,
+  sourceDurationSeconds: null as number | null,
+  keepAudio: false,
+});
+
 export const UGC_BASE_VIDEO_VARIANTS = [
   "TEXT_TO_VIDEO",
   "IMAGE_TO_VIDEO",
@@ -209,6 +223,21 @@ export const ugcVideoEditSettingsSchema = z
   .strict();
 export type UgcVideoEditSettings = z.infer<typeof ugcVideoEditSettingsSchema>;
 
+export const ugcVideoRecastSettingsSchema = z
+  .object({
+    profile: z.literal(UGC_VIDEO_RECAST_PROFILE),
+    sourceVideoReferenceId: z.string().min(1).nullable(),
+    characterOutfitReferenceId: z.string().min(1).nullable(),
+    faceReferenceId: z.string().min(1).nullable(),
+    sceneStyleReferenceId: z.string().min(1).nullable(),
+    sourceDurationSeconds: z.number().positive().max(15.05).nullable(),
+    keepAudio: z.boolean(),
+  })
+  .strict();
+export type UgcVideoRecastSettings = z.infer<
+  typeof ugcVideoRecastSettingsSchema
+>;
+
 export const ugcVideoKlingMotionSettingsSchema = z
   .object({
     characterOrientation: z.enum(UGC_VIDEO_KLING_CHARACTER_ORIENTATIONS),
@@ -244,6 +273,7 @@ export const ugcVideoGenerationSetupSchema = z
     videoEdit: ugcVideoEditSettingsSchema
       .optional()
       .default(DEFAULT_UGC_VIDEO_EDIT_SETTINGS),
+    videoRecast: ugcVideoRecastSettingsSchema.optional(),
     baseVideo: ugcBaseVideoSettingsSchema
       .optional()
       .default(DEFAULT_UGC_BASE_VIDEO_SETTINGS),
@@ -251,7 +281,9 @@ export const ugcVideoGenerationSetupSchema = z
   .strict()
   .superRefine((setup, context) => {
     if (
-      (setup.mode === "MOTION_CONTROL" || setup.mode === "BASE_VIDEO") &&
+      (setup.mode === "MOTION_CONTROL" ||
+        setup.mode === "BASE_VIDEO" ||
+        setup.mode === "VIDEO_RECAST") &&
       !setup.prompt
     ) {
       context.addIssue({
@@ -260,6 +292,8 @@ export const ugcVideoGenerationSetupSchema = z
         message:
           setup.mode === "BASE_VIDEO"
             ? "Für ein Basisvideo ist ein Prompt erforderlich."
+            : setup.mode === "VIDEO_RECAST"
+              ? "Beschreibe, wie das Video neu inszeniert werden soll."
             : "Für Bewegung übertragen ist ein Prompt erforderlich.",
       });
     }
@@ -290,6 +324,7 @@ export const savedUgcVideoPromptSchema = z
     videoEdit: ugcVideoEditSettingsSchema
       .optional()
       .default(DEFAULT_UGC_VIDEO_EDIT_SETTINGS),
+    videoRecast: ugcVideoRecastSettingsSchema.optional(),
     baseVideo: ugcBaseVideoSettingsSchema
       .optional()
       .default(DEFAULT_UGC_BASE_VIDEO_SETTINGS),

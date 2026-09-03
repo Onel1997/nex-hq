@@ -39,6 +39,15 @@ import {
 } from "@/lib/ugc-video-studio/video-edit-config";
 import { prepareUgcVideoEditMedia } from "@/lib/ugc-video-studio/video-edit-media";
 import {
+  assertUgcVideoRecastImageDimensions,
+  assertUgcVideoRecastUserPrompt,
+  KLING_O3_PRO_VIDEO_RECAST_MODEL_ID,
+  requireUgcVideoRecastSettings,
+  resolveUgcVideoRecastReferences,
+  UgcVideoRecastInputError,
+} from "@/lib/ugc-video-studio/video-recast-config";
+import { prepareUgcVideoRecastMedia } from "@/lib/ugc-video-studio/video-recast-media";
+import {
   assertUgcBaseVideoSetup,
   resolveBaseVideoVariant,
   UgcBaseVideoInputError,
@@ -114,6 +123,22 @@ export async function POST(request: Request) {
     }
     const parsed = ugcGenerateRequestSchema.parse(await request.json());
     const { jobId, setup } = parsed;
+    if (setup.mode === "VIDEO_RECAST") {
+      if (!ownerUnlimited) {
+        throw new UgcVideoGenerationError(
+          "VIDEO_RECAST_OWNER_ONLY",
+          "Video neu inszenieren ist derzeit nur für den Xeriamo OWNER verfügbar.",
+          403,
+        );
+      }
+      assertUgcVideoRecastUserPrompt(setup.prompt);
+      if (setup.modelId !== KLING_O3_PRO_VIDEO_RECAST_MODEL_ID) {
+        throw new UgcVideoRecastInputError(
+          "VIDEO_RECAST_MODEL_UNSUPPORTED",
+          "Dieses Modell unterstützt Video neu inszenieren nicht.",
+        );
+      }
+    }
     const recommendedModel = setup.mode === "VIDEO_EDIT"
       ? resolveRecommendedVideoEditModelId(setup.modelId)
       : null;
@@ -353,6 +378,79 @@ export async function POST(request: Request) {
       if (customer) customerQuote = quoteUgcCustomerGeneration(providerSetup, trustedDuration);
     }
 
+    if (providerSetup.mode === "VIDEO_RECAST") {
+      const recastReferences = resolveUgcVideoRecastReferences(providerSetup);
+      const sourceReference = references.find(
+        (reference) =>
+          reference.metadata.id === recastReferences.sourceVideo.id,
+      );
+      if (!sourceReference) {
+        throw new UgcVideoRecastInputError(
+          "VIDEO_REQUIRED",
+          "Bitte lade ein Quellvideo hoch.",
+        );
+      }
+      for (const [role, selected] of [
+        ["CHARACTER_OUTFIT", recastReferences.characterOutfit],
+        ["FACE", recastReferences.face],
+        ["SCENE_STYLE", recastReferences.sceneStyle],
+      ] as const) {
+        if (!selected) continue;
+        const reference = references.find(
+          (item) => item.metadata.id === selected.id,
+        );
+        if (!reference) {
+          throw new UgcVideoRecastInputError(
+            "REFERENCE_INVALID",
+            "Eine Bildreferenz konnte nicht sicher zugeordnet werden.",
+          );
+        }
+        try {
+          assertUgcVideoRecastImageDimensions({
+            role,
+            ...(await readRasterDimensions(reference.bytes)),
+          });
+        } catch (error) {
+          if (error instanceof UgcVideoRecastInputError) throw error;
+          throw new UgcVideoRecastInputError(
+            "UNSUPPORTED_IMAGE",
+            "Eine Bildreferenz konnte nicht sicher geprüft werden.",
+          );
+        }
+      }
+      let trustedDuration: number;
+      try {
+        trustedDuration = requireTrustedCustomerMotionDuration({
+          bytes: sourceReference.bytes,
+          mimeType: sourceReference.metadata.mimeType,
+        });
+      } catch {
+        throw new UgcVideoRecastInputError(
+          "UNSUPPORTED_VIDEO",
+          "Das Quellvideo konnte nicht sicher geprüft werden. Verwende eine gültige MP4- oder MOV-Datei.",
+        );
+      }
+      const trustedSetup = {
+        ...providerSetup,
+        references: providerSetup.references.map((reference) =>
+          reference.id === recastReferences.sourceVideo.id
+            ? { ...reference, durationSeconds: trustedDuration }
+            : reference,
+        ),
+        videoRecast: {
+          ...requireUgcVideoRecastSettings(providerSetup),
+          sourceDurationSeconds: trustedDuration,
+        },
+      };
+      const prepared = await prepareUgcVideoRecastMedia({
+        setup: trustedSetup,
+        references,
+        trustedSourceDurationSeconds: trustedDuration,
+      });
+      providerSetup = prepared.setup;
+      references = prepared.references;
+    }
+
     if (customer) {
       if (!customerQuote) {
         customerQuote = quoteUgcCustomerGeneration(providerSetup);
@@ -432,6 +530,7 @@ export async function POST(request: Request) {
           ].includes(error.code)) ||
           error instanceof UgcVideoCostCapError ||
           error instanceof UgcVideoEditInputError ||
+          error instanceof UgcVideoRecastInputError ||
           error instanceof UgcBaseVideoInputError ||
           error instanceof XerianoTempReferenceError ||
           error instanceof ZodError ||
@@ -463,8 +562,10 @@ export async function POST(request: Request) {
       code:
         error instanceof UgcVideoGenerationError
           ? error.code
-          : error instanceof UgcVideoCostCapError
-            ? error.code
+            : error instanceof UgcVideoCostCapError
+              ? error.code
+              : error instanceof UgcVideoRecastInputError
+                ? error.code
             : "UGC_VIDEO_GENERATION_FAILED",
     });
     if (error instanceof UgcVideoGenerationError) {
@@ -482,6 +583,9 @@ export async function POST(request: Request) {
       return errorResponse({ error: error.message, code: error.code, status: error.status });
     }
     if (error instanceof UgcVideoEditInputError) {
+      return errorResponse({ error: error.message, code: error.code, status: 400 });
+    }
+    if (error instanceof UgcVideoRecastInputError) {
       return errorResponse({ error: error.message, code: error.code, status: 400 });
     }
     if (error instanceof UgcBaseVideoInputError) {

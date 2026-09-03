@@ -31,6 +31,8 @@ import {
   UgcVideoEditUploader,
   UgcBaseVideoSettings,
   UgcBaseVideoUploader,
+  UgcVideoRecastSettings,
+  UgcVideoRecastUploader,
 } from "@/components/ugc-video-studio/ugc-video-studio-controls";
 import {
   UgcProviderDetails,
@@ -43,6 +45,7 @@ import {
   DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS,
   DEFAULT_UGC_VIDEO_EDIT_SETTINGS,
   DEFAULT_UGC_BASE_VIDEO_SETTINGS,
+  DEFAULT_UGC_VIDEO_RECAST_SETTINGS,
   UGC_VIDEO_AUDIO_REFERENCE_LIMIT,
   UGC_VIDEO_IMAGE_REFERENCE_LIMIT,
   UGC_VIDEO_REFERENCE_MAX_BYTES,
@@ -62,6 +65,7 @@ import {
   type UgcVideoResult,
   type UgcVideoRun,
   type UgcVideoMode,
+  type UgcVideoRecastSettings as UgcVideoRecastSettingsValue,
 } from "@/lib/ugc-video-studio/contracts";
 import {
   DEFAULT_BASE_VIDEO_MODEL_ID,
@@ -101,6 +105,13 @@ import {
   UgcVideoEditInputError,
 } from "@/lib/ugc-video-studio/video-edit-config";
 import type { UgcVideoProviderPublicConfig } from "@/lib/ugc-video-studio/provider-config";
+import {
+  assertUgcVideoRecastSetup,
+  KLING_O3_PRO_VIDEO_RECAST_MODEL_ID,
+  UgcVideoRecastInputError,
+  VIDEO_RECAST_MAX_DURATION_SECONDS,
+  VIDEO_RECAST_MIN_DURATION_SECONDS,
+} from "@/lib/ugc-video-studio/video-recast-config";
 import type { XerianoUgcCustomerConfig } from "@/lib/xeriano/customer-config";
 import type { XerianoCustomerStudioStatus } from "@/lib/xeriano/client-contracts";
 import { quoteXerianoCredits } from "@/lib/xeriano/pricing";
@@ -189,6 +200,7 @@ export function UgcVideoStudioWorkspace(props: {
   customerMode?: boolean;
   ownerMode?: boolean;
   baseVideoOwnerPilot?: boolean;
+  videoRecastOwnerPilot?: boolean;
   initialModelId?: string;
   initialLibraryAssetId?: string;
 }) {
@@ -228,6 +240,9 @@ export function UgcVideoStudioWorkspace(props: {
   });
   const [baseVideo, setBaseVideo] = useState<UgcVideoGenerationSetup["baseVideo"]>({
     ...DEFAULT_UGC_BASE_VIDEO_SETTINGS,
+  });
+  const [videoRecast, setVideoRecast] = useState<UgcVideoRecastSettingsValue>({
+    ...DEFAULT_UGC_VIDEO_RECAST_SETTINGS,
   });
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
@@ -387,6 +402,30 @@ export function UgcVideoStudioWorkspace(props: {
   ) ?? (references.filter((reference) => reference.mediaType === "IMAGE").length === 1
     ? references.find((reference) => reference.mediaType === "IMAGE")!
     : null);
+  const recastSourceVideo = references.find(
+    (reference) =>
+      reference.id === videoRecast.sourceVideoReferenceId &&
+      reference.mediaType === "VIDEO" &&
+      reference.role === "MOTION",
+  ) ?? null;
+  const recastCharacterOutfit = references.find(
+    (reference) =>
+      reference.id === videoRecast.characterOutfitReferenceId &&
+      reference.mediaType === "IMAGE" &&
+      reference.role === "OUTFIT",
+  ) ?? null;
+  const recastFace = references.find(
+    (reference) =>
+      reference.id === videoRecast.faceReferenceId &&
+      reference.mediaType === "IMAGE" &&
+      reference.role === "FACE",
+  ) ?? null;
+  const recastSceneStyle = references.find(
+    (reference) =>
+      reference.id === videoRecast.sceneStyleReferenceId &&
+      reference.mediaType === "IMAGE" &&
+      reference.role === "SCENE",
+  ) ?? null;
   const selectedBaseVideoModel = baseVideoClientModel(modelId);
   const startImage = references.find(
     (reference) => reference.id === baseVideo.startImageReferenceId,
@@ -409,17 +448,26 @@ export function UgcVideoStudioWorkspace(props: {
     ? [sourceVideo, characterMaster]
         .filter((reference): reference is UgcVideoReferenceMedia => Boolean(reference))
         .map((reference, order) => ({ ...reference, order }))
+    : mode === "VIDEO_RECAST"
+      ? [recastSourceVideo, recastCharacterOutfit, recastFace, recastSceneStyle]
+          .filter((reference): reference is UgcVideoReferenceMedia => Boolean(reference))
+          .map((reference, order) => ({ ...reference, order }))
     : mode === "BASE_VIDEO"
       ? startImage && selectedBaseVideoModel?.supportsImageToVideo
         ? [{ ...startImage, order: 0 }]
         : []
-      : references, [characterMaster, mode, references, selectedBaseVideoModel, sourceVideo, startImage]);
+      : references, [characterMaster, mode, recastCharacterOutfit, recastFace, recastSceneStyle, recastSourceVideo, references, selectedBaseVideoModel, sourceVideo, startImage]);
   const selectedSourceSeconds = sourceVideo?.durationSeconds ?? null;
+  const selectedRecastSourceSeconds = recastSourceVideo?.durationSeconds ?? null;
   const klingDurationAllowed =
     mode === "BASE_VIDEO"
       ? Boolean(selectedBaseVideoModel?.supportedDurations.includes(duration))
       : mode === "VIDEO_EDIT"
       ? selectedSourceSeconds === null || selectedKlingSeconds <= selectedSourceSeconds + 0.05
+      : mode === "VIDEO_RECAST"
+        ? selectedRecastSourceSeconds !== null &&
+          selectedRecastSourceSeconds >= VIDEO_RECAST_MIN_DURATION_SECONDS &&
+          selectedRecastSourceSeconds <= VIDEO_RECAST_MAX_DURATION_SECONDS
       : selectedModel.id !== "kling-v3-pro-motion-control" ||
         (selectedKlingSeconds <=
       (klingMotion.characterOrientation === "IMAGE" ? 10 : 30) &&
@@ -462,6 +510,13 @@ export function UgcVideoStudioWorkspace(props: {
           )
         : isUgcVideoEditModelId(selectedModel.id)
           ? props.providerConfig?.ownerPricing.videoEditEstimatesUsd[`${selectedModel.id}|${duration}`] ?? null
+          : mode === "VIDEO_RECAST" && selectedRecastSourceSeconds !== null
+            ? Number(
+                (
+                  selectedRecastSourceSeconds *
+                  (props.providerConfig?.ownerPricing.videoRecastPerSecondUsd ?? 0)
+                ).toFixed(5),
+              )
           : mode === "BASE_VIDEO" && baseVideoEstimateKey
             ? props.providerConfig?.ownerPricing.baseVideoEstimatesUsd[baseVideoEstimateKey] ?? null
           : null;
@@ -503,8 +558,12 @@ export function UgcVideoStudioWorkspace(props: {
       mode !== "BASE_VIDEO" ||
       modelId !== "pixverse-c1-base" ||
       new TextEncoder().encode(prompt).byteLength <= 2048,
-    sourceVideoPresent: Boolean(sourceVideo),
-    characterMasterPresent: Boolean(characterMaster),
+    sourceVideoPresent: Boolean(
+      mode === "VIDEO_RECAST" ? recastSourceVideo : sourceVideo,
+    ),
+    characterMasterPresent: Boolean(
+      mode === "VIDEO_RECAST" ? recastCharacterOutfit : characterMaster,
+    ),
     startImageRequired: Boolean(
       mode === "BASE_VIDEO" &&
         selectedBaseVideoModel &&
@@ -531,9 +590,12 @@ export function UgcVideoStudioWorkspace(props: {
     ownerMode: Boolean(props.ownerMode),
     customerModelUnavailable,
     ownerModelUnavailable: Boolean(
-      mode === "BASE_VIDEO" &&
+      (mode === "BASE_VIDEO" &&
         (!props.baseVideoOwnerPilot ||
-          !props.providerConfig?.baseVideoOwnerPilot.ready),
+          !props.providerConfig?.baseVideoOwnerPilot.ready)) ||
+      (mode === "VIDEO_RECAST" &&
+        (!props.videoRecastOwnerPilot ||
+          !props.providerConfig?.videoRecastOwnerPilot.ready)),
     ),
     customerCredits,
     insufficientCustomerCredits,
@@ -580,6 +642,10 @@ export function UgcVideoStudioWorkspace(props: {
       advanced,
       klingMotion,
       videoEdit,
+      videoRecast: {
+        ...videoRecast,
+        sourceDurationSeconds: selectedRecastSourceSeconds,
+      },
       baseVideo: effectiveBaseVideo,
     });
     if (!parsed.success) {
@@ -618,6 +684,20 @@ export function UgcVideoStudioWorkspace(props: {
         return null;
       }
     }
+    if (mode === "VIDEO_RECAST") {
+      try {
+        assertUgcVideoRecastSetup(parsed.data);
+      } catch (error) {
+        setNotice({
+          kind: "ERROR",
+          text:
+            error instanceof UgcVideoRecastInputError
+              ? error.message
+              : "Bitte prüfe Quellvideo und die Referenzbilder.",
+        });
+        return null;
+      }
+    }
     return parsed.data;
   }, [
     advanced,
@@ -635,6 +715,8 @@ export function UgcVideoStudioWorkspace(props: {
     selectedModel.name,
     videoType,
     videoEdit,
+    videoRecast,
+    selectedRecastSourceSeconds,
     effectiveBaseVideo,
   ]);
 
@@ -643,6 +725,13 @@ export function UgcVideoStudioWorkspace(props: {
       setNotice({
         kind: "ERROR",
         text: "Basisvideo erstellen ist derzeit nur im OWNER-Bereich verfügbar.",
+      });
+      return;
+    }
+    if (setup.mode === "VIDEO_RECAST" && !props.videoRecastOwnerPilot) {
+      setNotice({
+        kind: "ERROR",
+        text: "Video neu inszenieren ist derzeit nur im OWNER-Bereich verfügbar.",
       });
       return;
     }
@@ -658,6 +747,14 @@ export function UgcVideoStudioWorkspace(props: {
     setAdvanced(setup.advanced);
     setKlingMotion(setup.klingMotion);
     setVideoEdit(setup.videoEdit);
+    setVideoRecast({
+      ...(setup.videoRecast ?? DEFAULT_UGC_VIDEO_RECAST_SETTINGS),
+      sourceVideoReferenceId: null,
+      characterOutfitReferenceId: null,
+      faceReferenceId: null,
+      sceneStyleReferenceId: null,
+      sourceDurationSeconds: null,
+    });
     setBaseVideo({
       ...setup.baseVideo,
       startImageReferenceId: null,
@@ -671,7 +768,7 @@ export function UgcVideoStudioWorkspace(props: {
           }
         : { kind: "SUCCESS", text: "Setup wurde geladen." },
     );
-  }, [props.baseVideoOwnerPilot]);
+  }, [props.baseVideoOwnerPilot, props.videoRecastOwnerPilot]);
 
   const openSave = (source?: UgcVideoGenerationSetup) => {
     setEditingPrompt(null);
@@ -702,6 +799,7 @@ export function UgcVideoStudioWorkspace(props: {
         advanced: setup.advanced,
         klingMotion: setup.klingMotion,
         videoEdit: setup.videoEdit,
+        videoRecast: setup.videoRecast,
         baseVideo: setup.baseVideo,
         createdAt: existing?.createdAt ?? timestamp,
         updatedAt: timestamp,
@@ -815,6 +913,27 @@ export function UgcVideoStudioWorkspace(props: {
       sourceVideoReferenceId: current.sourceVideoReferenceId === id ? null : current.sourceVideoReferenceId,
       characterMasterReferenceId: current.characterMasterReferenceId === id ? null : current.characterMasterReferenceId,
     }));
+    setVideoRecast((current) => ({
+      ...current,
+      sourceVideoReferenceId:
+        current.sourceVideoReferenceId === id
+          ? null
+          : current.sourceVideoReferenceId,
+      characterOutfitReferenceId:
+        current.characterOutfitReferenceId === id
+          ? null
+          : current.characterOutfitReferenceId,
+      faceReferenceId:
+        current.faceReferenceId === id ? null : current.faceReferenceId,
+      sceneStyleReferenceId:
+        current.sceneStyleReferenceId === id
+          ? null
+          : current.sceneStyleReferenceId,
+      sourceDurationSeconds:
+        current.sourceVideoReferenceId === id
+          ? null
+          : current.sourceDurationSeconds,
+    }));
     setBaseVideo((current) => ({
       ...current,
       startImageReferenceId:
@@ -833,6 +952,7 @@ export function UgcVideoStudioWorkspace(props: {
     });
     setReferences([]);
     setVideoEdit({ ...DEFAULT_UGC_VIDEO_EDIT_SETTINGS });
+    setVideoRecast({ ...DEFAULT_UGC_VIDEO_RECAST_SETTINGS });
     setBaseVideo({ ...DEFAULT_UGC_BASE_VIDEO_SETTINGS });
   };
 
@@ -957,6 +1077,98 @@ export function UgcVideoStudioWorkspace(props: {
       setReferences((current) => current.map((reference) => reference.id === id ? { ...reference, ...value } : reference)),
     );
   }, [characterMaster, selectedModel.id, sourceVideo]);
+
+  const replaceVideoRecastReference = useCallback((
+    slot: "SOURCE_VIDEO" | "CHARACTER_OUTFIT" | "FACE" | "SCENE_STYLE",
+    file: File,
+  ) => {
+    const video = slot === "SOURCE_VIDEO";
+    const mediaType = mediaTypeFromMime(file.type);
+    const expectedType = video ? "VIDEO" : "IMAGE";
+    const allowed = UGC_VIDEO_REFERENCE_MIME_TYPES[expectedType] as readonly string[];
+    if (
+      mediaType !== expectedType ||
+      !allowed.includes(file.type) ||
+      file.size > UGC_VIDEO_REFERENCE_MAX_BYTES[expectedType]
+    ) {
+      setNotice({
+        kind: "ERROR",
+        text: video
+          ? "Dieses Quellvideo wird nicht unterstützt oder ist zu groß."
+          : "Dieses Referenzbild wird nicht unterstützt oder ist zu groß.",
+      });
+      return;
+    }
+    const previousId =
+      slot === "SOURCE_VIDEO"
+        ? videoRecast.sourceVideoReferenceId
+        : slot === "CHARACTER_OUTFIT"
+          ? videoRecast.characterOutfitReferenceId
+          : slot === "FACE"
+            ? videoRecast.faceReferenceId
+            : videoRecast.sceneStyleReferenceId;
+    const previous = previousId
+      ? references.find((reference) => reference.id === previousId) ?? null
+      : null;
+    if (previous) {
+      URL.revokeObjectURL(previous.previewUrl);
+      if (previous.tempReferenceId) {
+        void deleteXerianoTempReference(previous.tempReferenceId);
+      }
+    }
+    const role =
+      slot === "SOURCE_VIDEO"
+        ? "MOTION" as const
+        : slot === "CHARACTER_OUTFIT"
+          ? "OUTFIT" as const
+          : slot === "FACE"
+            ? "FACE" as const
+            : "SCENE" as const;
+    const created = {
+      ...createReference(file, references.length),
+      role,
+    };
+    setReferences((current) => [
+      ...current.filter((reference) => reference.id !== previous?.id),
+      created,
+    ].map((reference, order) => ({ ...reference, order })));
+    setVideoRecast((current) => ({
+      ...current,
+      ...(slot === "SOURCE_VIDEO"
+        ? {
+            sourceVideoReferenceId: created.id,
+            sourceDurationSeconds: null,
+          }
+        : slot === "CHARACTER_OUTFIT"
+          ? { characterOutfitReferenceId: created.id }
+          : slot === "FACE"
+            ? { faceReferenceId: created.id }
+            : { sceneStyleReferenceId: created.id }),
+    }));
+    uploadUgcReference(created, (id, value) =>
+      setReferences((current) => current.map((reference) =>
+        reference.id === id ? { ...reference, ...value } : reference,
+      )),
+    );
+  }, [references, videoRecast]);
+
+  const updateVideoRecastSourceDuration = useCallback(
+    (id: string, seconds: number) => {
+      setReferences((current) => current.map((reference) =>
+        reference.id === id
+          ? { ...reference, durationSeconds: seconds }
+          : reference,
+      ));
+      setVideoRecast((current) =>
+        current.sourceVideoReferenceId === id
+          ? { ...current, sourceDurationSeconds: seconds }
+          : current,
+      );
+      const rounded = Math.min(15, Math.max(4, Math.ceil(seconds)));
+      setDuration(String(rounded) as UgcVideoGenerationSetup["duration"]);
+    },
+    [],
+  );
 
   const generate = useCallback(async () => {
     if (generationLockRef.current) return;
@@ -1154,6 +1366,13 @@ export function UgcVideoStudioWorkspace(props: {
           "BASE_VIDEO_ASPECT_UNSUPPORTED",
           "BASE_VIDEO_RESOLUTION_UNSUPPORTED",
           "BASE_VIDEO_AUDIO_UNSUPPORTED",
+          "VIDEO_RECAST_OWNER_ONLY",
+          "VIDEO_RECAST_MODEL_UNSUPPORTED",
+          "VIDEO_RECAST_PROMPT_REQUIRED",
+          "PROVIDER_REFERENCE_TOKEN_UNSUPPORTED",
+          "CHARACTER_OUTFIT_REQUIRED",
+          "VIDEO_DURATION_INVALID",
+          "VIDEO_INPUT_UNSUPPORTED",
         ].includes(error.code);
       const storageSetupFailed =
         error instanceof UgcVideoGenerationClientError &&
@@ -1236,6 +1455,7 @@ export function UgcVideoStudioWorkspace(props: {
 
   const changeMode = (nextMode: UgcVideoMode) => {
     if (nextMode === "BASE_VIDEO" && !props.baseVideoOwnerPilot) return;
+    if (nextMode === "VIDEO_RECAST" && !props.videoRecastOwnerPilot) return;
     setMode(nextMode);
     if (nextMode === "VIDEO_EDIT") {
       const recommended = props.customerConfig?.recommendedVideoEditModelId ??
@@ -1280,6 +1500,23 @@ export function UgcVideoStudioWorkspace(props: {
         resolution: settings.resolutions.includes("720p") ? "720p" : settings.resolutions[0]!,
         generateAudio: false,
       }));
+    } else if (nextMode === "VIDEO_RECAST") {
+      setModelId(KLING_O3_PRO_VIDEO_RECAST_MODEL_ID);
+      setRecommendedSelected(false);
+      setAspectRatio("AUTO");
+      setQuality("720p");
+      setBitrate("STANDARD");
+      setAdvanced((current) => ({ ...current, generateAudio: false }));
+      setVideoRecast((current) => ({ ...current, keepAudio: false }));
+      if (videoRecast.sourceDurationSeconds !== null) {
+        const rounded = Math.min(
+          15,
+          Math.max(4, Math.ceil(videoRecast.sourceDurationSeconds)),
+        );
+        setDuration(String(rounded) as UgcVideoGenerationSetup["duration"]);
+      } else {
+        setDuration("5");
+      }
     } else {
       setModelId("kling-v3-pro-motion-control");
       setRecommendedSelected(false);
@@ -1403,7 +1640,7 @@ export function UgcVideoStudioWorkspace(props: {
         <div className="uv-create-view">
           <section className="uv-hero"><div><span>Referenzgesteuerte Videoerstellung</span><h1>UGC, das sich echt anfühlt.</h1><p>Referenzen hinzufügen, frei beschreiben und mit wenigen Einstellungen generieren.</p></div><span>{selectedModel.name} · fal</span></section>
 
-          {productMode ? <UgcModeSelector mode={mode} onChange={changeMode} baseVideoEnabled={Boolean(props.baseVideoOwnerPilot)} /> : null}
+          {productMode ? <UgcModeSelector mode={mode} onChange={changeMode} baseVideoEnabled={Boolean(props.baseVideoOwnerPilot)} videoRecastEnabled={Boolean(props.videoRecastOwnerPilot)} /> : null}
 
           <div className="uv-workspace">
             <div className="uv-main-column">
@@ -1413,6 +1650,14 @@ export function UgcVideoStudioWorkspace(props: {
                 onSelect={replaceVideoEditReference}
                 onRemove={removeReference}
                 onDuration={(id, seconds) => setReferences((current) => current.map((reference) => reference.id === id ? { ...reference, durationSeconds: seconds } : reference))}
+              /> : mode === "VIDEO_RECAST" ? <UgcVideoRecastUploader
+                sourceVideo={recastSourceVideo}
+                characterOutfit={recastCharacterOutfit}
+                face={recastFace}
+                sceneStyle={recastSceneStyle}
+                onSelect={replaceVideoRecastReference}
+                onRemove={removeReference}
+                onDuration={updateVideoRecastSourceDuration}
               /> : mode === "BASE_VIDEO" ? <UgcBaseVideoUploader
                 startImage={startImage}
                 imageSupported={Boolean(selectedBaseVideoModel?.supportsImageToVideo)}
@@ -1431,8 +1676,8 @@ export function UgcVideoStudioWorkspace(props: {
               />}
 
               <section className="uv-card uv-prompt-card">
-                <div className="uv-section-heading"><div><span>02</span><div><h2>{mode === "VIDEO_EDIT" ? "Was soll geändert werden?" : "Prompt"}</h2><p>{mode === "VIDEO_EDIT" ? "Optional – Xeriamo ersetzt die Hauptperson bereits automatisch." : mode === "BASE_VIDEO" ? "Beschreibe ein originales Fashion-Basisvideo." : "Szene, Kamera, Bewegung und Stimmung frei beschreiben."}</p></div></div><button type="button" className="uv-prompt-save" disabled={!prompt.trim()} onClick={() => openSave()}><Save size={14} /> Prompt speichern</button></div>
-                <textarea value={prompt} maxLength={12000} onChange={(event) => setPrompt(event.target.value)} placeholder={mode === "VIDEO_EDIT" ? "Optional: z. B. Bewahre den Oversized Fit und den Frontprint besonders stark." : mode === "BASE_VIDEO" ? "z. B. Eine erwachsene Person geht in einer modernen U-Bahn-Station eine Rolltreppe hinab, Ganzkörper, eine ruhige durchgehende Aufnahme …" : "Beschreibe dein UGC-Video, die Szene, Kamera, Bewegung und gewünschte Stimmung …"} />
+                <div className="uv-section-heading"><div><span>02</span><div><h2>{mode === "VIDEO_EDIT" ? "Was soll geändert werden?" : mode === "VIDEO_RECAST" ? "Neue Szene beschreiben" : "Prompt"}</h2><p>{mode === "VIDEO_EDIT" ? "Optional – Xeriamo ersetzt die Hauptperson bereits automatisch." : mode === "VIDEO_RECAST" ? "Beschreibe die neue Produktion. Bewegung, Kamera und Timing bleiben vom Quellvideo erhalten." : mode === "BASE_VIDEO" ? "Beschreibe ein originales Fashion-Basisvideo." : "Szene, Kamera, Bewegung und Stimmung frei beschreiben."}</p></div></div><button type="button" className="uv-prompt-save" disabled={!prompt.trim()} onClick={() => openSave()}><Save size={14} /> Prompt speichern</button></div>
+                <textarea value={prompt} maxLength={12000} onChange={(event) => setPrompt(event.target.value)} placeholder={mode === "VIDEO_EDIT" ? "Optional: z. B. Bewahre den Oversized Fit und den Frontprint besonders stark." : mode === "VIDEO_RECAST" ? "z. B. Inszeniere die Performance in einer modernen U-Bahn-Station mit kühlem Licht und hochwertigem Fashion-Look." : mode === "BASE_VIDEO" ? "z. B. Eine erwachsene Person geht in einer modernen U-Bahn-Station eine Rolltreppe hinab, Ganzkörper, eine ruhige durchgehende Aufnahme …" : "Beschreibe dein UGC-Video, die Szene, Kamera, Bewegung und gewünschte Stimmung …"} />
                 <div className="uv-prompt-meta"><span>{mode === "BASE_VIDEO" && modelId === "pixverse-c1-base" ? `${new TextEncoder().encode(prompt).byteLength.toLocaleString("de-DE")} / 2.048 Bytes` : `${prompt.length.toLocaleString("de-DE")} / 12.000`}</span><button type="button" disabled={!prompt} onClick={() => setPrompt("")}>Leeren</button></div>
                 {mode === "MOTION_CONTROL" ? <><div className="uv-prompt-tags" aria-label="Prompt-Ideen">{QUICK_TAGS.map((tag) => <button type="button" key={tag} onClick={() => setPrompt((current) => `${current}${current.trim() ? ", " : ""}${tag}`)}>{tag}</button>)}</div>
                 <div className="uv-video-types"><span>Video-Typ</span><div>{UGC_VIDEO_TYPES.map((type) => <button type="button" key={type} className={videoType === type ? "is-active" : ""} onClick={() => setVideoType(type)}>{UGC_VIDEO_TYPE_LABELS[type]}</button>)}</div></div></> : null}
@@ -1449,6 +1694,12 @@ export function UgcVideoStudioWorkspace(props: {
                     settings={videoEdit}
                     onDuration={setDuration}
                     onChange={setVideoEdit}
+                  />
+                ) : mode === "VIDEO_RECAST" ? (
+                  <UgcVideoRecastSettings
+                    sourceDurationSeconds={selectedRecastSourceSeconds}
+                    settings={videoRecast}
+                    onChange={setVideoRecast}
                   />
                 ) : mode === "BASE_VIDEO" && selectedBaseVideoModel && selectedBaseVideoVariant ? (
                   <UgcBaseVideoSettings
@@ -1487,7 +1738,7 @@ export function UgcVideoStudioWorkspace(props: {
                     onBitrate={setBitrate}
                   />
                 )}
-                <div className="uv-cost"><div><span>{props.customerMode?"Credit-Preis":"Geschätzte Kosten"}</span><strong>{props.customerMode?(customerCredits!==null?`${customerCredits} Credits`:selectedModel.settingsKind === "KLING_MOTION_CONTROL"||mode === "VIDEO_EDIT"?"Videolänge wählen":"Für Kunden nicht verfügbar"):estimatedMaximumCostUsd === null ? "Nicht verfügbar" : `ca. ${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`}</strong></div><p>{props.customerMode?`${availableCredits.toLocaleString("de-DE")} Credits verfügbar.`:mode === "BASE_VIDEO" ? `${baseVideoVariant === "IMAGE_TO_VIDEO" ? "Startbild zu Video" : "Text zu Video"} · ${duration} Sekunden.` : mode === "VIDEO_EDIT"||selectedModel.settingsKind === "KLING_MOTION_CONTROL"?`Für ${duration} Sekunden Ausgabe.`:references.some((reference) => reference.mediaType === "VIDEO")?"Schätzung inklusive Video-Referenz.":"Schätzung für Dauer, Format und Qualität."}</p>{!productMode&&props.providerConfig?<p>V1-Speicherlimit: {Math.round(props.providerConfig.resultStorageLimitBytes / 1024 / 1024)} MB pro Ergebnis.</p>:null}</div>
+                <div className="uv-cost"><div><span>{props.customerMode?"Credit-Preis":"Geschätzte Kosten"}</span><strong>{props.customerMode?(customerCredits!==null?`${customerCredits} Credits`:selectedModel.settingsKind === "KLING_MOTION_CONTROL"||mode === "VIDEO_EDIT"?"Videolänge wählen":"Für Kunden nicht verfügbar"):estimatedMaximumCostUsd === null ? "Nicht verfügbar" : `ca. ${estimatedMaximumCostUsd.toFixed(2).replace(".", ",")} $`}</strong></div><p>{props.customerMode?`${availableCredits.toLocaleString("de-DE")} Credits verfügbar.`:mode === "VIDEO_RECAST" ? selectedRecastSourceSeconds === null ? "Schätzung folgt nach erkannter Quelldauer." : `Für ${selectedRecastSourceSeconds.toLocaleString("de-DE", { maximumFractionDigits: 2 })} Sekunden Quelldauer.` : mode === "BASE_VIDEO" ? `${baseVideoVariant === "IMAGE_TO_VIDEO" ? "Startbild zu Video" : "Text zu Video"} · ${duration} Sekunden.` : mode === "VIDEO_EDIT"||selectedModel.settingsKind === "KLING_MOTION_CONTROL"?`Für ${duration} Sekunden Ausgabe.`:references.some((reference) => reference.mediaType === "VIDEO")?"Schätzung inklusive Video-Referenz.":"Schätzung für Dauer, Format und Qualität."}</p>{!productMode&&props.providerConfig?<p>V1-Speicherlimit: {Math.round(props.providerConfig.resultStorageLimitBytes / 1024 / 1024)} MB pro Ergebnis.</p>:null}</div>
               </section>
             </div>
 
@@ -1507,7 +1758,7 @@ export function UgcVideoStudioWorkspace(props: {
               <div className="uv-result-grid">{activeRun.results.map((result) => (
                 <article className="uv-result-card" key={result.id}>
                   <UgcResultVideo result={result} />
-                  <div><strong>{activeRun.setup.mode === "VIDEO_EDIT" || activeRun.setup.mode === "BASE_VIDEO" ? ugcVideoModelById(activeRun.setup.modelId)?.name ?? activeRun.setup.modelId : UGC_VIDEO_TYPE_LABELS[activeRun.setup.videoType]}</strong><span>{activeRun.setup.mode === "BASE_VIDEO" ? `Basisvideo · ${activeRun.setup.baseVideo.variant === "IMAGE_TO_VIDEO" ? "Startbild zu Video" : "Text zu Video"} · ${activeRun.setup.duration}s` : activeRun.setup.modelId === "kling-v3-pro-motion-control" ? `${activeRun.setup.klingMotion.characterOrientation === "VIDEO" ? "Bewegung folgen" : "Bild folgen"}${activeRun.setup.klingMotion.keepOriginalSound ? " · Originalton" : ""}` : `${activeRun.setup.duration}s · ${activeRun.setup.quality}`}</span></div>
+                  <div><strong>{activeRun.setup.mode === "VIDEO_EDIT" || activeRun.setup.mode === "BASE_VIDEO" || activeRun.setup.mode === "VIDEO_RECAST" ? ugcVideoModelById(activeRun.setup.modelId)?.name ?? activeRun.setup.modelId : UGC_VIDEO_TYPE_LABELS[activeRun.setup.videoType]}</strong><span>{activeRun.setup.mode === "VIDEO_RECAST" && activeRun.setup.videoRecast ? `Video neu inszenieren · ${(activeRun.setup.videoRecast.sourceDurationSeconds ?? Number(activeRun.setup.duration)).toLocaleString("de-DE", { maximumFractionDigits: 2 })}s · ${activeRun.setup.videoRecast.keepAudio ? "Audio an" : "Audio aus"}` : activeRun.setup.mode === "BASE_VIDEO" ? `Basisvideo · ${activeRun.setup.baseVideo.variant === "IMAGE_TO_VIDEO" ? "Startbild zu Video" : "Text zu Video"} · ${activeRun.setup.duration}s` : activeRun.setup.modelId === "kling-v3-pro-motion-control" ? `${activeRun.setup.klingMotion.characterOrientation === "VIDEO" ? "Bewegung folgen" : "Bild folgen"}${activeRun.setup.klingMotion.keepOriginalSound ? " · Originalton" : ""}` : `${activeRun.setup.duration}s · ${activeRun.setup.quality}`}</span></div>
                   <footer>
                     <a href={result.downloadUrl}><Download size={15} /> Herunterladen</a>
                     <button type="button" onClick={() => setLargeResult(result)}><Maximize2 size={15} /> Vergrößern</button>
@@ -1551,12 +1802,13 @@ export function UgcVideoStudioWorkspace(props: {
               advanced: saved.advanced,
               klingMotion: saved.klingMotion,
               videoEdit: saved.videoEdit,
+              videoRecast: saved.videoRecast,
               baseVideo: saved.baseVideo,
             });
             loadSetup(setup);
             persist(upsertUgcVideoPrompt(persisted, { ...saved, lastUsedAt: nowIso() }));
           }}
-          onEdit={(saved) => { setEditingPrompt(saved); setSaveSource(ugcVideoGenerationSetupSchema.parse({ contractVersion: UGC_VIDEO_STUDIO_CONTRACT_VERSION, mode: saved.mode, prompt: saved.prompt, modelId: saved.modelId, duration: saved.duration, aspectRatio: saved.aspectRatio, quality: saved.quality, bitrate: saved.bitrate, videoType: saved.videoType, references: [], advanced: saved.advanced, klingMotion: saved.klingMotion, videoEdit: saved.videoEdit, baseVideo: saved.baseVideo })); setSaveOpen(true); }}
+          onEdit={(saved) => { setEditingPrompt(saved); setSaveSource(ugcVideoGenerationSetupSchema.parse({ contractVersion: UGC_VIDEO_STUDIO_CONTRACT_VERSION, mode: saved.mode, prompt: saved.prompt, modelId: saved.modelId, duration: saved.duration, aspectRatio: saved.aspectRatio, quality: saved.quality, bitrate: saved.bitrate, videoType: saved.videoType, references: [], advanced: saved.advanced, klingMotion: saved.klingMotion, videoEdit: saved.videoEdit, videoRecast: saved.videoRecast, baseVideo: saved.baseVideo })); setSaveOpen(true); }}
           onCopy={(saved) => copyUgcPromptText(saved.prompt)}
           onFavorite={(saved) => persist(upsertUgcVideoPrompt(persisted, { ...saved, favorite: !saved.favorite, updatedAt: nowIso() }))}
           onDelete={(id) => persist(removeUgcVideoPrompt(persisted, id))}

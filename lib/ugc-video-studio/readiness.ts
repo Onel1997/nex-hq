@@ -62,6 +62,9 @@ export function resolveUgcGenerateReadiness(input: {
   if (input.mode === "BASE_VIDEO" && !input.promptPresent) {
     return { ready: false, code: "PROMPT_REQUIRED", label: "Prompt hinzufügen" };
   }
+  if (input.mode === "VIDEO_RECAST" && !input.promptPresent) {
+    return { ready: false, code: "PROMPT_REQUIRED", label: "Prompt hinzufügen" };
+  }
   if (input.mode === "BASE_VIDEO" && input.promptAllowed === false) {
     return { ready: false, code: "PROMPT_TOO_LONG", label: "Prompt ist zu lang" };
   }
@@ -70,6 +73,12 @@ export function resolveUgcGenerateReadiness(input: {
   }
   if (input.mode === "VIDEO_EDIT" && !input.characterMasterPresent) {
     return { ready: false, code: "CHARACTER_MASTER_REQUIRED", label: "Model / Mockup hinzufügen" };
+  }
+  if (input.mode === "VIDEO_RECAST" && !input.sourceVideoPresent) {
+    return { ready: false, code: "VIDEO_REQUIRED", label: "Quellvideo hinzufügen" };
+  }
+  if (input.mode === "VIDEO_RECAST" && !input.characterMasterPresent) {
+    return { ready: false, code: "CHARACTER_MASTER_REQUIRED", label: "Model / Outfit hinzufügen" };
   }
   if (
     input.mode === "BASE_VIDEO" &&

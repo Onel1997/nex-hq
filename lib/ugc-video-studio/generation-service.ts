@@ -26,6 +26,7 @@ import { FalSeedanceProvider } from "@/lib/ugc-video-studio/providers/fal-seedan
 import { FalKlingMotionControlProvider } from "@/lib/ugc-video-studio/providers/fal-kling-motion-control";
 import { FalVideoEditProvider } from "@/lib/ugc-video-studio/providers/fal-video-edit";
 import { FalBaseVideoProvider } from "@/lib/ugc-video-studio/providers/fal-base-video";
+import { FalVideoRecastProvider } from "@/lib/ugc-video-studio/providers/fal-video-recast";
 import {
   assertUgcBaseVideoSetup,
   estimateUgcBaseVideoCostUsd,
@@ -55,6 +56,14 @@ import {
   estimateUgcVideoEditCostUsd,
   UgcVideoEditInputError,
 } from "@/lib/ugc-video-studio/video-edit-config";
+import {
+  assertUgcVideoRecastSetup,
+  estimateUgcVideoRecastCostUsd,
+  KLING_O3_PRO_VIDEO_RECAST_ENDPOINT,
+  KLING_O3_PRO_VIDEO_RECAST_MODEL_ID,
+  requireUgcVideoRecastSettings,
+  UgcVideoRecastInputError,
+} from "@/lib/ugc-video-studio/video-recast-config";
 import {
   UGC_VIDEO_SERVER_JOB_VERSION,
   ugcVideoJobManifestSchema,
@@ -87,7 +96,8 @@ export class UgcVideoGenerationError extends Error {
       | "RESULT_PERSISTENCE_FAILED"
       | "JOB_NOT_FOUND"
       | "JOB_STATE_INCONSISTENT"
-      | "BASE_VIDEO_OWNER_ONLY",
+      | "BASE_VIDEO_OWNER_ONLY"
+      | "VIDEO_RECAST_OWNER_ONLY",
     message: string,
     readonly status: number,
     readonly technicalDetails?: string,
@@ -170,6 +180,21 @@ function validateReferences(
       );
     }
   }
+  if (setup.mode === "VIDEO_RECAST") {
+    try {
+      assertUgcVideoRecastSetup(setup);
+    } catch (error) {
+      if (error instanceof UgcVideoRecastInputError) {
+        throw new UgcVideoGenerationError(
+          "REFERENCE_INVALID",
+          error.message,
+          400,
+          error.code,
+        );
+      }
+      throw error;
+    }
+  }
   const counts = { IMAGE: 0, VIDEO: 0, AUDIO: 0 };
   let totalBytes = 0;
   for (let index = 0; index < references.length; index += 1) {
@@ -232,7 +257,8 @@ function validateReferences(
       "seedance_video_reference_duration_exceeds_30_2_seconds",
     );
   }
-  const maximumTotalBytes = setup.mode === "VIDEO_EDIT"
+  const maximumTotalBytes =
+    setup.mode === "VIDEO_EDIT" || setup.mode === "VIDEO_RECAST"
     ? setup.modelId === "seedance-2-fast-video-edit"
       ? 80 * 1024 * 1024
       : 230 * 1024 * 1024
@@ -260,6 +286,36 @@ function resolveProviderExecution(input: {
   injectedCostCapUsd?: number | null;
   costLimitPolicy?: "REQUIRE_CONFIGURED_CAP" | "OWNER_ESTIMATE_ONLY";
 }): UgcProviderExecution {
+  if (
+    input.setup.mode === "VIDEO_RECAST" &&
+    input.setup.modelId === KLING_O3_PRO_VIDEO_RECAST_MODEL_ID
+  ) {
+    if (input.costLimitPolicy !== "OWNER_ESTIMATE_ONLY") {
+      throw new UgcVideoGenerationError(
+        "VIDEO_RECAST_OWNER_ONLY",
+        "Video neu inszenieren ist derzeit nur für den Xeriamo OWNER verfügbar.",
+        403,
+      );
+    }
+    const resolved = assertUgcVideoRecastSetup(input.setup);
+    const settings = requireUgcVideoRecastSettings(input.setup);
+    const sourceDurationSeconds =
+      settings.sourceDurationSeconds ??
+      resolved.sourceVideo.durationSeconds;
+    if (sourceDurationSeconds === null) {
+      throw new UgcVideoRecastInputError(
+        "VIDEO_DURATION_INVALID",
+        "Die Quelldauer konnte nicht sicher bestimmt werden.",
+      );
+    }
+    return {
+      provider: input.injectedProvider ?? new FalVideoRecastProvider(),
+      providerModel: KLING_O3_PRO_VIDEO_RECAST_ENDPOINT,
+      estimatedMaximumCostUsd:
+        estimateUgcVideoRecastCostUsd(sourceDurationSeconds),
+      configuredName: "Kling O3 Pro · Video neu inszenieren",
+    };
+  }
   if (
     input.setup.mode === "BASE_VIDEO" &&
     isUgcBaseVideoModelId(input.setup.modelId)
@@ -367,6 +423,12 @@ function providerForManifest(
   }
   if (manifest.setup.mode === "VIDEO_EDIT" && isUgcVideoEditModelId(manifest.setup.modelId)) {
     return new FalVideoEditProvider(manifest.setup.modelId, process.env.FAL_KEY);
+  }
+  if (
+    manifest.setup.mode === "VIDEO_RECAST" &&
+    manifest.setup.modelId === KLING_O3_PRO_VIDEO_RECAST_MODEL_ID
+  ) {
+    return new FalVideoRecastProvider(process.env.FAL_KEY);
   }
   if (
     manifest.setup.mode === "BASE_VIDEO" &&
@@ -540,7 +602,8 @@ function isVideoEditRecoveryContractFailure(
   error: unknown,
 ): error is UgcVideoProviderDiagnosticError {
   if (
-    manifest.setup.mode !== "VIDEO_EDIT" ||
+    (manifest.setup.mode !== "VIDEO_EDIT" &&
+      manifest.setup.mode !== "VIDEO_RECAST") ||
     !(error instanceof UgcVideoProviderDiagnosticError)
   ) return false;
   return (

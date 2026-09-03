@@ -5,6 +5,12 @@ import {
   type UgcVideoReferenceType,
 } from "@/lib/ugc-video-studio/contracts";
 import { BASE_VIDEO_CLIENT_MODELS } from "@/lib/ugc-video-studio/base-video-models";
+import {
+  KLING_O3_PRO_VIDEO_RECAST_ENDPOINT,
+  KLING_O3_PRO_VIDEO_RECAST_MODEL_ID,
+  KLING_O3_PRO_VIDEO_RECAST_USD_MICROS_PER_SECOND,
+  VIDEO_RECAST_PRICING_VERSION,
+} from "@/lib/ugc-video-studio/video-recast-config";
 
 export type UgcVideoModelAvailability = "LIVE" | "READY_TO_CONNECT" | "PLANNED";
 
@@ -55,6 +61,7 @@ export type UgcVideoModelDefinition = {
     | "KLING_MOTION_CONTROL"
     | "VIDEO_EDIT"
     | "BASE_VIDEO"
+    | "VIDEO_RECAST"
     | "GENERIC";
   modeCompatibility: readonly UgcVideoMode[];
   visibleInProductMode: boolean;
@@ -271,6 +278,32 @@ export const UGC_VIDEO_MODEL_REGISTRY: readonly UgcVideoModelDefinition[] =
       characterReferenceStrategy: "SEEDANCE_IMAGE",
       videoEditMediaProfile: SEEDANCE_2_FAST_EDIT_MEDIA_PROFILE,
     },
+    {
+      id: KLING_O3_PRO_VIDEO_RECAST_MODEL_ID,
+      providerId: "fal",
+      providerModelId: KLING_O3_PRO_VIDEO_RECAST_ENDPOINT,
+      name: "Kling O3 Pro",
+      description:
+        "Model, Outfit und Szene neu aufbauen, während Bewegung und Kamera erhalten bleiben.",
+      badge: "OWNER Pilot",
+      availability: "LIVE",
+      maximumReferences: 4,
+      supportedReferenceTypes: ["IMAGE", "VIDEO"],
+      supportedDurations: [
+        "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+      ],
+      supportedAspectRatios: ["AUTO"],
+      supportedQualities: ["720p"],
+      supportedBitrates: ["STANDARD"],
+      settingsKind: "VIDEO_RECAST",
+      modeCompatibility: ["VIDEO_RECAST"],
+      visibleInProductMode: false,
+      providerCostUsdMicrosPerSecond:
+        KLING_O3_PRO_VIDEO_RECAST_USD_MICROS_PER_SECOND,
+      pricingVersion: VIDEO_RECAST_PRICING_VERSION,
+      characterReferenceStrategy: "KLING_ELEMENT",
+      videoEditMediaProfile: KLING_O3_PRO_EDIT_MEDIA_PROFILE,
+    },
     ...BASE_VIDEO_CLIENT_MODELS.map((model) => ({
       id: model.id,
       providerId: "fal",
@@ -394,6 +427,12 @@ export function resolveRecommendedVideoEditModelId(
 
 export function videoEditModelDefinitions(): readonly UgcVideoModelDefinition[] {
   return UGC_VIDEO_MODEL_REGISTRY.filter((model) => model.modeCompatibility.includes("VIDEO_EDIT"));
+}
+
+export function videoRecastModelDefinitions(): readonly UgcVideoModelDefinition[] {
+  return UGC_VIDEO_MODEL_REGISTRY.filter((model) =>
+    model.modeCompatibility.includes("VIDEO_RECAST"),
+  );
 }
 
 export function ugcVideoModelAvailabilityLabel(

@@ -96,6 +96,7 @@ test("video model registry exposes Motion Control and all benchmark Video Edit m
     "kling-o3-pro-video-edit",
     "kling-o1-standard-video-edit",
     "seedance-2-fast-video-edit",
+    "kling-o3-pro-video-recast",
   ]);
   assert.equal(
     ugcVideoModelById("seedance-2.5")?.providerModelId,
@@ -143,6 +144,7 @@ test("prompt library and run history persist setup metadata without media bytes"
     advanced: active.advanced,
     klingMotion: active.klingMotion,
     videoEdit: active.videoEdit,
+    videoRecast: active.videoRecast,
     baseVideo: active.baseVideo,
     createdAt: timestamp,
     updatedAt: timestamp,

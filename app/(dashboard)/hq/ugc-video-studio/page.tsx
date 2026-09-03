@@ -29,16 +29,20 @@ export default async function OwnerUgcVideoStudioPage({
   if (!hasAccount) {
     return <div className="xeriano-inline-notice">Für das UGC Video Studio wird eine aktive Xeriamo Account-Mitgliedschaft benötigt.</div>;
   }
-  const baseVideoOwnerPilot =
+  const exactOwner =
     access.status === "AUTHENTICATED" &&
     hasXerianoOwnerAuthority(access.context);
+  const baseVideoOwnerPilot = exactOwner;
+  const videoRecastOwnerPilot = exactOwner;
   return (
     <div className="xeriano-embedded-studio">
       <UgcVideoStudioWorkspace
         ownerMode
         baseVideoOwnerPilot={baseVideoOwnerPilot}
+        videoRecastOwnerPilot={videoRecastOwnerPilot}
         providerConfig={getUgcVideoProviderPublicConfig(process.env, {
           includeBaseVideoOwnerPilot: baseVideoOwnerPilot,
+          includeVideoRecastOwnerPilot: videoRecastOwnerPilot,
         })}
         initialModelId="kling-v3-pro-motion-control"
         initialLibraryAssetId={query.libraryAsset}

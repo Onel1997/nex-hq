@@ -30,11 +30,18 @@ import {
   BASE_VIDEO_CLIENT_MODELS,
   baseVideoOwnerEstimateKey,
 } from "@/lib/ugc-video-studio/base-video-models";
+import {
+  KLING_O3_PRO_VIDEO_RECAST_ENDPOINT,
+  KLING_O3_PRO_VIDEO_RECAST_MODEL_ID,
+  KLING_O3_PRO_VIDEO_RECAST_USD_MICROS_PER_SECOND,
+  VIDEO_RECAST_PRICING_VERSION,
+} from "@/lib/ugc-video-studio/video-recast-config";
 
 export type UgcVideoPublicModelId =
   | "seedance-2.5"
   | "kling-v3-pro-motion-control"
-  | UgcVideoEditModelId;
+  | UgcVideoEditModelId
+  | typeof KLING_O3_PRO_VIDEO_RECAST_MODEL_ID;
 
 export type UgcVideoPublicModelConfig = {
   modelId: UgcVideoPublicModelId;
@@ -65,6 +72,7 @@ export type UgcVideoProviderPublicConfig = {
     klingPerSecondUsd: number;
     videoEditEstimatesUsd: Record<string, number>;
     baseVideoEstimatesUsd: Record<string, number>;
+    videoRecastPerSecondUsd: number;
   };
   baseVideoOwnerPilot: {
     enabled: boolean;
@@ -72,6 +80,13 @@ export type UgcVideoProviderPublicConfig = {
     storageConfigured: boolean;
     ready: boolean;
     modelIds: string[];
+  };
+  videoRecastOwnerPilot: {
+    enabled: boolean;
+    credentialConfigured: boolean;
+    storageConfigured: boolean;
+    ready: boolean;
+    modelId: typeof KLING_O3_PRO_VIDEO_RECAST_MODEL_ID | null;
   };
 };
 
@@ -86,7 +101,10 @@ export function ugcOwnerEstimateKey(input: {
 
 export function getUgcVideoProviderPublicConfig(
   environment: NodeJS.ProcessEnv = process.env,
-  options: { includeBaseVideoOwnerPilot?: boolean } = {},
+  options: {
+    includeBaseVideoOwnerPilot?: boolean;
+    includeVideoRecastOwnerPilot?: boolean;
+  } = {},
 ): UgcVideoProviderPublicConfig {
   const seedance = getSeedancePublicConfig(environment);
   const klingCostCapUsd = getKlingMotionCostCap(environment);
@@ -200,6 +218,19 @@ export function getUgcVideoProviderPublicConfig(
       [KLING_O3_PRO_EDIT_MODEL_ID]: videoEditModel(KLING_O3_PRO_EDIT_MODEL_ID),
       [KLING_O1_STANDARD_EDIT_MODEL_ID]: videoEditModel(KLING_O1_STANDARD_EDIT_MODEL_ID),
       [SEEDANCE_2_FAST_EDIT_MODEL_ID]: videoEditModel(SEEDANCE_2_FAST_EDIT_MODEL_ID),
+      [KLING_O3_PRO_VIDEO_RECAST_MODEL_ID]: {
+        modelId: KLING_O3_PRO_VIDEO_RECAST_MODEL_ID,
+        provider: "fal",
+        providerModel: KLING_O3_PRO_VIDEO_RECAST_ENDPOINT,
+        credentialConfigured,
+        costCapConfigured: true,
+        storageConfigured,
+        ready: credentialConfigured && storageConfigured,
+        ownerReady: credentialConfigured && storageConfigured,
+        costCapUsd: null,
+        costCapEnvironmentName: null,
+        pricingVersion: VIDEO_RECAST_PRICING_VERSION,
+      },
     },
     recommendedVideoEditModelId: RECOMMENDED_VIDEO_EDIT_MODEL_ID,
     resultStorageLimitBytes: UGC_VIDEO_RESULT_MAX_BYTES,
@@ -208,6 +239,8 @@ export function getUgcVideoProviderPublicConfig(
       klingPerSecondUsd: KLING_V3_PRO_MOTION_PRICE_PER_SECOND_USD,
       videoEditEstimatesUsd,
       baseVideoEstimatesUsd,
+      videoRecastPerSecondUsd:
+        KLING_O3_PRO_VIDEO_RECAST_USD_MICROS_PER_SECOND / 1_000_000,
     },
     baseVideoOwnerPilot: {
       enabled: Boolean(options.includeBaseVideoOwnerPilot),
@@ -217,6 +250,18 @@ export function getUgcVideoProviderPublicConfig(
       modelIds: options.includeBaseVideoOwnerPilot
         ? BASE_VIDEO_CLIENT_MODELS.map((model) => model.id)
         : [],
+    },
+    videoRecastOwnerPilot: {
+      enabled: Boolean(options.includeVideoRecastOwnerPilot),
+      credentialConfigured,
+      storageConfigured,
+      ready:
+        Boolean(options.includeVideoRecastOwnerPilot) &&
+        credentialConfigured &&
+        storageConfigured,
+      modelId: options.includeVideoRecastOwnerPilot
+        ? KLING_O3_PRO_VIDEO_RECAST_MODEL_ID
+        : null,
     },
   };
 }

@@ -47,11 +47,13 @@ import {
   type UgcBaseVideoResolution,
   type UgcBaseVideoSettings,
   type UgcBaseVideoVariant,
+  type UgcVideoRecastSettings,
 } from "@/lib/ugc-video-studio/contracts";
 import {
   AUTO_RECOMMENDED_VIDEO_EDIT_MODEL_ID,
   UGC_VIDEO_MODEL_REGISTRY,
   videoEditModelDefinitions,
+  videoRecastModelDefinitions,
   ugcVideoModelAvailabilityLabel,
   ugcVideoModelById,
   type UgcVideoModelDefinition,
@@ -407,11 +409,17 @@ export function UgcModelSelector(props: {
   });
   const selectable = mode === "VIDEO_EDIT"
     ? videoEditModelDefinitions()
+    : mode === "VIDEO_RECAST"
+      ? videoRecastModelDefinitions()
     : mode === "BASE_VIDEO"
       ? UGC_VIDEO_MODEL_REGISTRY.filter((entry) =>
           entry.modeCompatibility.includes("BASE_VIDEO"),
         )
-      : UGC_VIDEO_MODEL_REGISTRY.filter((entry) => entry.modeCompatibility.includes("MOTION_CONTROL") || !entry.visibleInProductMode);
+      : UGC_VIDEO_MODEL_REGISTRY.filter((entry) =>
+          !entry.modeCompatibility.includes("VIDEO_RECAST") &&
+          (entry.modeCompatibility.includes("MOTION_CONTROL") ||
+            !entry.visibleInProductMode),
+        );
   const models = selectable.filter((entry) =>
     `${entry.name} ${entry.description}`.toLocaleLowerCase("de").includes(search.trim().toLocaleLowerCase("de")),
   );
@@ -471,6 +479,7 @@ export function UgcModeSelector(props: {
   mode: UgcVideoMode;
   onChange: (mode: UgcVideoMode) => void;
   baseVideoEnabled?: boolean;
+  videoRecastEnabled?: boolean;
 }) {
   return (
     <section className="uv-mode-selector" aria-label="UGC-Modus">
@@ -486,6 +495,12 @@ export function UgcModeSelector(props: {
         <button type="button" className={props.mode === "BASE_VIDEO" ? "is-active" : ""} onClick={() => props.onChange("BASE_VIDEO")}>
           <strong>Basisvideo erstellen</strong>
           <span>Originales Fashion-Video aus Prompt und optionalem Startbild.</span>
+        </button>
+      ) : null}
+      {props.videoRecastEnabled ? (
+        <button type="button" className={props.mode === "VIDEO_RECAST" ? "is-active" : ""} onClick={() => props.onChange("VIDEO_RECAST")}>
+          <strong>Video neu inszenieren</strong>
+          <span>Bewegung, Kamera und Timing behalten – Model, Outfit und Szene neu aufbauen.</span>
         </button>
       ) : null}
     </section>
@@ -536,6 +551,34 @@ export function UgcVideoEditUploader(props: {
         <VideoEditUploadTile title="Model / Mockup" description="Bestimmt Person, Outfit und Design." accept="image/jpeg,image/png,image/webp" reference={props.characterMaster} onSelect={(file) => props.onSelect("IMAGE", file)} onRemove={() => props.characterMaster && props.onRemove(props.characterMaster.id)} onDuration={() => undefined} />
       </div>
       <p className="uv-soft-note">Uploads laufen direkt in deinen privaten temporären Xeriamo-Speicher.</p>
+    </section>
+  );
+}
+
+export function UgcVideoRecastUploader(props: {
+  sourceVideo: UgcVideoReferenceMedia | null;
+  characterOutfit: UgcVideoReferenceMedia | null;
+  face: UgcVideoReferenceMedia | null;
+  sceneStyle: UgcVideoReferenceMedia | null;
+  onSelect: (
+    slot: "SOURCE_VIDEO" | "CHARACTER_OUTFIT" | "FACE" | "SCENE_STYLE",
+    file: File,
+  ) => void;
+  onRemove: (id: string) => void;
+  onDuration: (id: string, seconds: number) => void;
+}) {
+  return (
+    <section className="uv-card uv-reference-card uv-edit-reference-card uv-recast-reference-card">
+      <div className="uv-section-heading">
+        <div><span>01</span><div><h2>Quellvideo und Referenzen</h2><p>Vier klar getrennte Rollen – Xeriamo ordnet sie serverseitig zu.</p></div></div>
+      </div>
+      <div className="uv-edit-upload-grid">
+        <VideoEditUploadTile title="Quellvideo" description="Bestimmt Bewegung, Timing, Schnitte und Kamera." accept="video/mp4,video/quicktime,video/x-m4v" reference={props.sourceVideo} onSelect={(file) => props.onSelect("SOURCE_VIDEO", file)} onRemove={() => props.sourceVideo && props.onRemove(props.sourceVideo.id)} onDuration={(seconds) => props.sourceVideo && props.onDuration(props.sourceVideo.id, seconds)} />
+        <VideoEditUploadTile title="Model / Outfit" description="Bestimmt Person, Körper, Kleidung und Artwork." accept="image/jpeg,image/png,image/webp" reference={props.characterOutfit} onSelect={(file) => props.onSelect("CHARACTER_OUTFIT", file)} onRemove={() => props.characterOutfit && props.onRemove(props.characterOutfit.id)} onDuration={() => undefined} />
+        <VideoEditUploadTile title="Gesicht" description="Zusätzliche frontale Referenz für eine stabilere Identität." accept="image/jpeg,image/png,image/webp" reference={props.face} onSelect={(file) => props.onSelect("FACE", file)} onRemove={() => props.face && props.onRemove(props.face.id)} onDuration={() => undefined} />
+        <VideoEditUploadTile title="Umgebung / Stil" description="Bestimmt Location, Licht, Farblook und Atmosphäre." accept="image/jpeg,image/png,image/webp" reference={props.sceneStyle} onSelect={(file) => props.onSelect("SCENE_STYLE", file)} onRemove={() => props.sceneStyle && props.onRemove(props.sceneStyle.id)} onDuration={() => undefined} />
+      </div>
+      <p className="uv-soft-note">Gesicht und Umgebung / Stil sind optional. Uploads bleiben privat und werden nicht automatisch anders zugeordnet.</p>
     </section>
   );
 }
@@ -608,6 +651,26 @@ export function UgcVideoEditSettings(props: {
     <div className="uv-edit-settings">
       <fieldset className="uv-kling-duration"><legend>Videolänge</legend><div>{props.supportedDurations.map((value) => <button type="button" key={value} disabled={props.sourceDurationSeconds !== null && Number(value) > props.sourceDurationSeconds + .05} className={props.duration === value ? "is-active" : ""} onClick={() => props.onDuration(value)}>{value} Sek.</button>)}</div><p>Das Quellvideo wird serverseitig auf die gewählte Dauer vorbereitet.</p></fieldset>
       {props.keepOriginalSoundSupported ? <label className="uv-check uv-kling-toggle"><input type="checkbox" checked={props.settings.keepOriginalSound} onChange={(event) => props.onChange({ ...props.settings, keepOriginalSound: event.target.checked })} /><span><strong>Originalton übernehmen</strong><small>Übernimmt den Ton des Quellvideos.</small></span></label> : null}
+    </div>
+  );
+}
+
+export function UgcVideoRecastSettings(props: {
+  sourceDurationSeconds: number | null;
+  settings: UgcVideoRecastSettings;
+  onChange: (settings: UgcVideoRecastSettings) => void;
+}) {
+  return (
+    <div className="uv-edit-settings uv-recast-settings">
+      <div className="uv-kling-helper">
+        <strong>Quellvideo bleibt Bewegungsautorität</strong>
+        <span>Videolänge und Format folgen dem Quellvideo. Model, Outfit und Szene werden neu aufgebaut.</span>
+      </div>
+      <p className="uv-soft-note">Quelldauer: {props.sourceDurationSeconds === null ? "wird nach dem Upload erkannt" : `${props.sourceDurationSeconds.toLocaleString("de-DE", { maximumFractionDigits: 2 })} Sek.`}</p>
+      <label className="uv-check uv-kling-toggle">
+        <input type="checkbox" checked={props.settings.keepAudio} onChange={(event) => props.onChange({ ...props.settings, keepAudio: event.target.checked })} />
+        <span><strong>Originalton übernehmen</strong><small>Standardmäßig deaktiviert.</small></span>
+      </label>
     </div>
   );
 }
