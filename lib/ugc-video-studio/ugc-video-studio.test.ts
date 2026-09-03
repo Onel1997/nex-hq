@@ -17,6 +17,7 @@ import {
   UGC_VIDEO_STORAGE_KEY,
   loadUgcVideoState,
   saveUgcVideoState,
+  selectUgcVideoRunForMode,
   upsertUgcVideoPrompt,
   upsertUgcVideoRun,
   type UgcVideoStorage,
@@ -170,6 +171,86 @@ test("prompt library and run history persist setup metadata without media bytes"
   assert.equal(restored.prompts[0]?.quality, "720p");
   assert.equal(restored.prompts[0]?.bitrate, "STANDARD");
   assert.equal(restored.runs[0]?.setup.references[1]?.role, "MOTION");
+});
+
+test("result selection is isolated by workspace mode without mutating history or running jobs", () => {
+  const editRun: UgcVideoRun = {
+    id: "11111111-1111-4111-8111-111111111112",
+    createdAt: "2026-09-03T18:00:00.000Z",
+    updatedAt: "2026-09-03T18:01:00.000Z",
+    status: "UNKNOWN_OUTCOME",
+    setup: ugcVideoGenerationSetupSchema.parse({
+      ...setup(),
+      mode: "VIDEO_EDIT",
+      modelId: "kling-o3-pro-video-edit",
+    }),
+    results: [],
+    message: "Der Anbieterstatus konnte nicht sicher abgerufen werden.",
+  };
+  const recastRun: UgcVideoRun = {
+    ...editRun,
+    id: "11111111-1111-4111-8111-111111111113",
+    status: "SUCCEEDED",
+    setup: ugcVideoGenerationSetupSchema.parse({
+      ...setup(),
+      mode: "VIDEO_RECAST",
+      modelId: "kling-o3-pro-video-recast",
+      videoRecast: {
+        profile: "KLING_O3_CHARACTER_SCENE_RECAST",
+        sourceVideoReferenceId: "ref-video",
+        characterOutfitReferenceId: "ref-image",
+        faceReferenceId: null,
+        sceneStyleReferenceId: null,
+        sourceDurationSeconds: 4,
+        keepAudio: false,
+      },
+    }),
+    results: [
+      {
+        id: "recast-result",
+        url: "/api/ugc-video-studio/assets/recast/result",
+        downloadUrl: "/api/ugc-video-studio/assets/recast/result?download=1",
+        mimeType: "video/mp4",
+        width: 720,
+        height: 1280,
+        durationSeconds: 4,
+        byteLength: 1_024,
+        favorite: false,
+        provider: "fal",
+        providerModel: "fal-ai/kling-video/o3/pro/video-to-video/edit",
+        providerRequestId: "provider-request",
+      },
+    ],
+    message: "Video wurde erstellt.",
+  };
+  const runningRun: UgcVideoRun = {
+    ...editRun,
+    id: "11111111-1111-4111-8111-111111111114",
+    status: "RUNNING",
+    message: "Video wird erstellt …",
+  };
+  const state = upsertUgcVideoRun(
+    upsertUgcVideoRun(
+      upsertUgcVideoRun(
+        { version: 1, prompts: [], runs: [] },
+        editRun,
+      ),
+      recastRun,
+    ),
+    runningRun,
+  );
+
+  assert.equal(selectUgcVideoRunForMode(editRun, "VIDEO_RECAST"), null);
+  assert.equal(selectUgcVideoRunForMode(recastRun, "VIDEO_EDIT"), null);
+  assert.equal(selectUgcVideoRunForMode(editRun, "VIDEO_EDIT"), editRun);
+  assert.equal(selectUgcVideoRunForMode(recastRun, "VIDEO_RECAST"), recastRun);
+  assert.deepEqual(state.runs.map((run) => run.id), [
+    runningRun.id,
+    recastRun.id,
+    editRun.id,
+  ]);
+  assert.equal(state.runs[0]?.status, "RUNNING");
+  assert.equal(state.runs[1]?.results[0]?.id, "recast-result");
 });
 
 test("route, German owner UI, compact controls and Generate-only sticky action are present", () => {

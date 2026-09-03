@@ -91,6 +91,7 @@ import {
   loadUgcVideoState,
   removeUgcVideoPrompt,
   saveUgcVideoState,
+  selectUgcVideoRunForMode,
   upsertUgcVideoPrompt,
   upsertUgcVideoRun,
 } from "@/lib/ugc-video-studio/persistence";
@@ -380,6 +381,7 @@ export function UgcVideoStudioWorkspace(props: {
 
   const selectedModel =
     ugcVideoModelById(modelId) ?? UGC_VIDEO_MODEL_REGISTRY[0]!;
+  const visibleActiveRun = selectUgcVideoRunForMode(activeRun, mode);
   const effectiveLimit = selectedModel.maximumReferences;
   const selectedProviderConfig = props.providerConfig && Object.hasOwn(props.providerConfig.models, selectedModel.id)
     ? props.providerConfig.models[selectedModel.id as keyof typeof props.providerConfig.models]
@@ -1456,6 +1458,7 @@ export function UgcVideoStudioWorkspace(props: {
   const changeMode = (nextMode: UgcVideoMode) => {
     if (nextMode === "BASE_VIDEO" && !props.baseVideoOwnerPilot) return;
     if (nextMode === "VIDEO_RECAST" && !props.videoRecastOwnerPilot) return;
+    if (nextMode !== mode) setNotice(null);
     setMode(nextMode);
     if (nextMode === "VIDEO_EDIT") {
       const recommended = props.customerConfig?.recommendedVideoEditModelId ??
@@ -1751,31 +1754,31 @@ export function UgcVideoStudioWorkspace(props: {
           {notice ? <div className={`uv-notice is-${notice.kind.toLowerCase()}`} role={notice.kind === "ERROR" ? "alert" : "status"}><span>{notice.kind === "SUCCESS" ? <CheckCircle2 size={17} /> : notice.kind === "ERROR" ? <X size={17} /> : <Sparkles size={17} />}</span><div><strong>{notice.text}</strong>{notice.details ? <details><summary>Details</summary><p>{notice.details}</p></details> : null}</div><button type="button" onClick={() => setNotice(null)} aria-label="Meldung schließen"><X size={15} /></button></div> : null}
 
           <section className="uv-results" aria-labelledby="uv-results-title">
-            <header><div><span>Ausgabe</span><h2 id="uv-results-title">Ergebnisse</h2></div>{activeRun?.status === "SUCCEEDED" ? <button type="button" onClick={() => openSave(activeRun.setup)}><Save size={15} /> Prompt speichern</button> : null}</header>
-            {activeRun?.status === "RUNNING" ? (
+            <header><div><span>Ausgabe</span><h2 id="uv-results-title">Ergebnisse</h2></div>{visibleActiveRun?.status === "SUCCEEDED" ? <button type="button" onClick={() => openSave(visibleActiveRun.setup)}><Save size={15} /> Prompt speichern</button> : null}</header>
+            {visibleActiveRun?.status === "RUNNING" ? (
               <div className="uv-result-empty"><Loader2 className="is-spinning" size={30} /><h3>Video wird erstellt …</h3><p>Der Auftrag wurde einmal übermittelt. Bitte nicht erneut senden.</p></div>
-            ) : activeRun?.results.length ? (
-              <div className="uv-result-grid">{activeRun.results.map((result) => (
+            ) : visibleActiveRun?.results.length ? (
+              <div className="uv-result-grid">{visibleActiveRun.results.map((result) => (
                 <article className="uv-result-card" key={result.id}>
                   <UgcResultVideo result={result} />
-                  <div><strong>{activeRun.setup.mode === "VIDEO_EDIT" || activeRun.setup.mode === "BASE_VIDEO" || activeRun.setup.mode === "VIDEO_RECAST" ? ugcVideoModelById(activeRun.setup.modelId)?.name ?? activeRun.setup.modelId : UGC_VIDEO_TYPE_LABELS[activeRun.setup.videoType]}</strong><span>{activeRun.setup.mode === "VIDEO_RECAST" && activeRun.setup.videoRecast ? `Video neu inszenieren · ${(activeRun.setup.videoRecast.sourceDurationSeconds ?? Number(activeRun.setup.duration)).toLocaleString("de-DE", { maximumFractionDigits: 2 })}s · ${activeRun.setup.videoRecast.keepAudio ? "Audio an" : "Audio aus"}` : activeRun.setup.mode === "BASE_VIDEO" ? `Basisvideo · ${activeRun.setup.baseVideo.variant === "IMAGE_TO_VIDEO" ? "Startbild zu Video" : "Text zu Video"} · ${activeRun.setup.duration}s` : activeRun.setup.modelId === "kling-v3-pro-motion-control" ? `${activeRun.setup.klingMotion.characterOrientation === "VIDEO" ? "Bewegung folgen" : "Bild folgen"}${activeRun.setup.klingMotion.keepOriginalSound ? " · Originalton" : ""}` : `${activeRun.setup.duration}s · ${activeRun.setup.quality}`}</span></div>
+                  <div><strong>{visibleActiveRun.setup.mode === "VIDEO_EDIT" || visibleActiveRun.setup.mode === "BASE_VIDEO" || visibleActiveRun.setup.mode === "VIDEO_RECAST" ? ugcVideoModelById(visibleActiveRun.setup.modelId)?.name ?? visibleActiveRun.setup.modelId : UGC_VIDEO_TYPE_LABELS[visibleActiveRun.setup.videoType]}</strong><span>{visibleActiveRun.setup.mode === "VIDEO_RECAST" && visibleActiveRun.setup.videoRecast ? `Video neu inszenieren · ${(visibleActiveRun.setup.videoRecast.sourceDurationSeconds ?? Number(visibleActiveRun.setup.duration)).toLocaleString("de-DE", { maximumFractionDigits: 2 })}s · ${visibleActiveRun.setup.videoRecast.keepAudio ? "Audio an" : "Audio aus"}` : visibleActiveRun.setup.mode === "BASE_VIDEO" ? `Basisvideo · ${visibleActiveRun.setup.baseVideo.variant === "IMAGE_TO_VIDEO" ? "Startbild zu Video" : "Text zu Video"} · ${visibleActiveRun.setup.duration}s` : visibleActiveRun.setup.modelId === "kling-v3-pro-motion-control" ? `${visibleActiveRun.setup.klingMotion.characterOrientation === "VIDEO" ? "Bewegung folgen" : "Bild folgen"}${visibleActiveRun.setup.klingMotion.keepOriginalSound ? " · Originalton" : ""}` : `${visibleActiveRun.setup.duration}s · ${visibleActiveRun.setup.quality}`}</span></div>
                   <footer>
                     <a href={result.downloadUrl}><Download size={15} /> Herunterladen</a>
                     <button type="button" onClick={() => setLargeResult(result)}><Maximize2 size={15} /> Vergrößern</button>
                     <button type="button" onClick={() => addResultAsReference(result)}><PlusReferenceIcon /> Als Referenz</button>
                     {productMode ? <button type="button" onClick={() => void saveResultToLibrary(result.id)}><Bookmark size={15} /> In Bibliothek speichern</button> : null}
                     <button type="button" onClick={() => toggleResultFavorite(result)} aria-label="Favorit"><Heart size={15} fill={result.favorite ? "currentColor" : "none"} /></button>
-                    <button type="button" onClick={() => { void copyUgcPromptText(activeRun.setup.prompt).then((copied) => setNotice({ kind: copied ? "SUCCESS" : "ERROR", text: copied ? "Prompt wurde kopiert." : "Prompt konnte nicht kopiert werden." })); }}><Clipboard size={15} /> Prompt kopieren</button>
-                    <button type="button" onClick={() => loadSetup(activeRun.setup)}><RotateCcw size={15} /> Neu erstellen</button>
+                    <button type="button" onClick={() => { void copyUgcPromptText(visibleActiveRun.setup.prompt).then((copied) => setNotice({ kind: copied ? "SUCCESS" : "ERROR", text: copied ? "Prompt wurde kopiert." : "Prompt konnte nicht kopiert werden." })); }}><Clipboard size={15} /> Prompt kopieren</button>
+                    <button type="button" onClick={() => loadSetup(visibleActiveRun.setup)}><RotateCcw size={15} /> Neu erstellen</button>
                   </footer>
                 </article>
               ))}</div>
-            ) : activeRun?.status === "FAILED" || activeRun?.status === "UNKNOWN_OUTCOME" ? (
+            ) : visibleActiveRun?.status === "FAILED" || visibleActiveRun?.status === "UNKNOWN_OUTCOME" ? (
               <div className="uv-result-empty uv-result-empty--failed">
                 <X size={29} />
-                <h3>{activeRun.status === "FAILED" ? "Das Video konnte nicht erstellt werden." : activeRun.message ?? "Der Anbieterstatus ist unklar."}</h3>
-                <p>{activeRun.status === "FAILED" ? "Unter Details findest du die bereinigte Anbieter-Meldung, sofern sie verfügbar ist." : "Der angenommene Auftrag wird nicht erneut gesendet."}</p>
-                <UgcProviderDetails run={activeRun} />
+                <h3>{visibleActiveRun.status === "FAILED" ? "Das Video konnte nicht erstellt werden." : visibleActiveRun.message ?? "Der Anbieterstatus ist unklar."}</h3>
+                <p>{visibleActiveRun.status === "FAILED" ? "Unter Details findest du die bereinigte Anbieter-Meldung, sofern sie verfügbar ist." : "Der angenommene Auftrag wird nicht erneut gesendet."}</p>
+                <UgcProviderDetails run={visibleActiveRun} />
               </div>
             ) : (
               <div className="uv-result-empty"><Play size={29} /><h3>Bereit für dein erstes Video</h3><p>Hier erscheint dein dauerhaft gespeichertes Ergebnis. Es werden keine Beispielvideos erfunden.</p></div>
@@ -1819,6 +1822,9 @@ export function UgcVideoStudioWorkspace(props: {
           onLoadSetup={loadSetup}
           onSavePrompt={openSave}
           onOpen={(run) => {
+            if (run.setup.mode === "BASE_VIDEO" && !props.baseVideoOwnerPilot) return;
+            if (run.setup.mode === "VIDEO_RECAST" && !props.videoRecastOwnerPilot) return;
+            setMode(run.setup.mode);
             setActiveRun(run);
             setView("CREATE");
             window.setTimeout(() => document.getElementById("uv-results-title")?.scrollIntoView({ behavior: "smooth" }), 0);

@@ -1,6 +1,7 @@
 import {
   ugcVideoPersistedStateSchema,
   type SavedUgcVideoPrompt,
+  type UgcVideoMode,
   type UgcVideoPersistedState,
   type UgcVideoRun,
 } from "@/lib/ugc-video-studio/contracts";
@@ -70,4 +71,11 @@ export function upsertUgcVideoRun(
       MAX_RUNS,
     ),
   };
+}
+
+export function selectUgcVideoRunForMode(
+  run: UgcVideoRun | null,
+  mode: UgcVideoMode,
+): UgcVideoRun | null {
+  return run?.setup.mode === mode ? run : null;
 }

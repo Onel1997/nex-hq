@@ -782,6 +782,6 @@ test("status endpoint and client polling are UGC-owned and reload resumes persis
   assert.match(library, /<summary>Details<\/summary>/);
   assert.match(library, /Provider-Meldung/);
   assert.match(library, /Request ID/);
-  assert.match(workspace, /<UgcProviderDetails run=\{activeRun\}/);
+  assert.match(workspace, /<UgcProviderDetails run=\{visibleActiveRun\}/);
   assert.doesNotMatch(route + client + workspace, /deterministic-runtime|agents\/image/);
 });
