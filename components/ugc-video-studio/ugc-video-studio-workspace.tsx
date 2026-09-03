@@ -1776,7 +1776,7 @@ export function UgcVideoStudioWorkspace(props: {
             ) : visibleActiveRun?.status === "FAILED" || visibleActiveRun?.status === "UNKNOWN_OUTCOME" ? (
               <div className="uv-result-empty uv-result-empty--failed">
                 <X size={29} />
-                <h3>{visibleActiveRun.status === "FAILED" ? "Das Video konnte nicht erstellt werden." : visibleActiveRun.message ?? "Der Anbieterstatus ist unklar."}</h3>
+                <h3>{visibleActiveRun.status === "FAILED" ? visibleActiveRun.message ?? "Das Video konnte nicht erstellt werden." : visibleActiveRun.message ?? "Der Anbieterstatus ist unklar."}</h3>
                 <p>{visibleActiveRun.status === "FAILED" ? "Unter Details findest du die bereinigte Anbieter-Meldung, sofern sie verfügbar ist." : "Der angenommene Auftrag wird nicht erneut gesendet."}</p>
                 <UgcProviderDetails run={visibleActiveRun} />
               </div>

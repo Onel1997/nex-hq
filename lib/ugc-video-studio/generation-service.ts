@@ -448,7 +448,7 @@ function terminalProviderMessage(error: UgcVideoProviderError): string {
   return /content[_ -]?policy|moderation|partner_validation|likeness|privacy/.test(
     evidence,
   )
-    ? "Diese Referenz kann von diesem Videomodell nicht verarbeitet werden."
+    ? "Der Anbieter hat die Verarbeitung wegen seiner Inhaltsprüfung abgelehnt. Es wurde kein Ergebnis erstellt. Der Auftrag wird nicht automatisch erneut gesendet."
     : "Das Video konnte nicht erstellt werden.";
 }
 
@@ -594,6 +594,24 @@ function providerErrorSummary(error: UgcVideoProviderError): string {
   return `fal_${error.phase.toLowerCase()}_${error.httpStatus ?? "unknown"}:${error.providerMessage}`.slice(
     0,
     4000,
+  );
+}
+
+export const UGC_VIDEO_PROVIDER_CONTENT_POLICY_REJECTED =
+  "PROVIDER_CONTENT_POLICY_REJECTED" as const;
+
+function isAuthoritativeContentPolicyRejection(
+  error: unknown,
+): error is UgcVideoProviderDiagnosticError {
+  if (!(error instanceof UgcVideoProviderDiagnosticError)) return false;
+  const { diagnostic } = error;
+  if (
+    diagnostic.httpStatus !== 422 ||
+    (diagnostic.phase !== "STATUS" && diagnostic.phase !== "RESULT")
+  ) return false;
+  const evidence = `${diagnostic.providerCode ?? ""} ${diagnostic.providerMessage} ${diagnostic.providerBody ?? ""}`.toLowerCase();
+  return /content[_ -]?policy(?:[_ -]?violation)?|content checker|moderation/.test(
+    evidence,
   );
 }
 
@@ -1264,6 +1282,25 @@ export async function observeUgcVideoJob(
     });
     return manifestToRun(manifest);
   } catch (error) {
+    if (isAuthoritativeContentPolicyRejection(error)) {
+      const observedAt = now();
+      manifest = ugcVideoJobManifestSchema.parse({
+        ...manifest,
+        status: "FAILED",
+        providerStatus: "FAILED",
+        providerStatusCheckedAt: observedAt,
+        providerObservationError: null,
+        providerError: error.diagnostic,
+        updatedAt: observedAt,
+        message: terminalProviderMessage(error.diagnostic),
+        technicalError: `${UGC_VIDEO_PROVIDER_CONTENT_POLICY_REJECTED}:${providerErrorSummary(error.diagnostic)}`.slice(
+          0,
+          4000,
+        ),
+      });
+      await store.writeManifest(manifest);
+      return manifestToRun(manifest);
+    }
     if (isVideoEditRecoveryContractFailure(manifest, error)) {
       const observedAt = now();
       console.warn("[xeriamo-ugc] video_edit_recovery_quarantined", {

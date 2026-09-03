@@ -53,6 +53,7 @@ import { quoteUgcCustomerGeneration } from "@/lib/xeriano/customer-generation";
 import {
   generateUgcVideoJob,
   observeUgcVideoJob,
+  UGC_VIDEO_PROVIDER_CONTENT_POLICY_REJECTED,
   UgcVideoGenerationError,
 } from "@/lib/ugc-video-studio/generation-service";
 import type { UgcVideoJobManifest } from "@/lib/ugc-video-studio/server-contracts";
@@ -560,6 +561,113 @@ test("accepted Video Edit HTTP 422 becomes UNKNOWN and remains recoverable witho
   assert.equal(holder.manifest?.providerStatusUrl, "https://queue.fal.run/job/status");
   assert.equal(holder.manifest?.providerResponseUrl, "https://queue.fal.run/job/response");
   assert.equal(JSON.stringify(first).includes("queue.fal.run"), false);
+});
+
+test("accepted O3 result content-policy rejection is terminal FAILED and never resubmitted", async () => {
+  const fixture = durableStoreFixture();
+  let submits = 0;
+  let statusReads = 0;
+  let resultReads = 0;
+  const provider: UgcVideoProvider = {
+    providerId: "fal",
+    isConfigured: () => true,
+    async submit(request) {
+      submits += 1;
+      return {
+        provider: "fal",
+        providerModel: KLING_O3_PRO_EDIT_ENDPOINT,
+        providerRequestId: "accepted-content-policy",
+        providerPrompt: request.setup.prompt,
+        referenceOrder: request.references.map((item) => item.metadata.id),
+        providerStatus: "IN_QUEUE",
+        statusUrl: "https://queue.fal.run/job/status",
+        responseUrl: "https://queue.fal.run/job/response",
+        cancelUrl: null,
+        queuePosition: 0,
+      };
+    },
+    async getStatus() {
+      statusReads += 1;
+      return {
+        status: "COMPLETED",
+        queuePosition: null,
+        error: null,
+        logs: [],
+        inferenceTimeSeconds: null,
+        metrics: null,
+        truncated: false,
+      };
+    },
+    async getResult() {
+      resultReads += 1;
+      throw new UgcVideoProviderDiagnosticError({
+        phase: "RESULT",
+        httpStatus: 422,
+        providerCode: "content_policy_violation",
+        providerMessage:
+          "The content could not be processed because it contained material flagged by a content checker.",
+        providerBody: null,
+        requestId: "accepted-content-policy",
+        endpoint: KLING_O3_PRO_EDIT_ENDPOINT,
+        occurredAt: "2026-09-03T19:38:26.000Z",
+        truncated: false,
+      }, false);
+    },
+  };
+  const active = setup();
+  const input = {
+    scope: { workspaceId: "account", actorId: "owner" },
+    jobId: "64646464-6464-4464-8464-646464646464",
+    setup: active,
+    references: references(active),
+  };
+  const submitted = await generateUgcVideoJob(input, {
+    store: fixture.store,
+    provider,
+    costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+  });
+  const failed = await observeUgcVideoJob(
+    { scope: input.scope, jobId: input.jobId },
+    { store: fixture.store, provider },
+  );
+  const reloaded = await observeUgcVideoJob(
+    { scope: input.scope, jobId: input.jobId },
+    { store: fixture.store, provider },
+  );
+
+  assert.equal(submitted.providerRequestId, "accepted-content-policy");
+  assert.equal(failed.status, "FAILED");
+  assert.equal(reloaded.status, "FAILED");
+  assert.equal(failed.providerRequestId, "accepted-content-policy");
+  assert.equal(failed.providerError?.phase, "RESULT");
+  assert.equal(failed.providerError?.httpStatus, 422);
+  assert.equal(failed.providerError?.providerCode, "content_policy_violation");
+  assert.match(failed.message ?? "", /Inhaltsprüfung abgelehnt/);
+  assert.match(failed.message ?? "", /nicht automatisch erneut gesendet/);
+  assert.match(
+    fixture.holder.manifest?.technicalError ?? "",
+    new RegExp(`^${UGC_VIDEO_PROVIDER_CONTENT_POLICY_REJECTED}:`),
+  );
+  assert.ok(fixture.holder.manifest?.providerSubmittedAt);
+  assert.equal(submits, 1);
+  assert.equal(statusReads, 1);
+  assert.equal(resultReads, 1);
+});
+
+test("UGC failed result UI renders the terminal server message instead of UNKNOWN copy", () => {
+  const workspace = readFileSync(
+    "components/ugc-video-studio/ugc-video-studio-workspace.tsx",
+    "utf8",
+  );
+  const library = readFileSync(
+    "components/ugc-video-studio/ugc-video-studio-library.tsx",
+    "utf8",
+  );
+  assert.match(
+    workspace,
+    /visibleActiveRun\.status === "FAILED" \? visibleActiveRun\.message/,
+  );
+  assert.match(library, /content\[_ -\]\?policy\|content checker/);
 });
 
 test("HTTP 422 diagnostics identify authoritative recovery without leaking URL or request ID", async () => {

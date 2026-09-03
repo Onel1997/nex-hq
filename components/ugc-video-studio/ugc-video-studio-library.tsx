@@ -65,7 +65,7 @@ function readableProviderMessage(run: UgcVideoRun): string | null {
   const error = run.providerError;
   if (!error) return null;
   const evidence = `${error.providerCode ?? ""} ${error.providerMessage} ${error.providerBody ?? ""}`.toLowerCase();
-  if (/moderation|safety|content policy|blocked/.test(evidence)) {
+  if (/moderation|safety|content[_ -]?policy|content checker|blocked/.test(evidence)) {
     return "Der Anbieter hat den Inhalt bei seiner Prüfung abgelehnt.";
   }
   if (/decode|invalid image|reference.*invalid|image.*invalid/.test(evidence)) {
