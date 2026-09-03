@@ -70,6 +70,7 @@ export class CreativeGenerationError extends Error {
       | "INVALID_REQUEST"
       | "REFERENCE_LIMIT_EXCEEDED"
       | "REFERENCE_INVALID"
+      | "REFERENCE_ORDER_INVALID"
       | "PROVIDER_NOT_CONFIGURED"
       | "DUPLICATE_REQUEST_RUNNING"
       | "IDEMPOTENCY_CONFLICT"
@@ -99,7 +100,23 @@ function buildFingerprint(input: {
   return hash.digest("hex");
 }
 
-function validateReferences(
+export function assertCreativeReferenceOrder(
+  setup: CreativeGenerationSetup,
+): void {
+  for (let expectedOrder = 0; expectedOrder < setup.references.length; expectedOrder += 1) {
+    const receivedOrder = setup.references[expectedOrder]!.order;
+    if (receivedOrder !== expectedOrder) {
+      throw new CreativeGenerationError(
+        "REFERENCE_ORDER_INVALID",
+        "Die Reihenfolge der Referenzbilder ist ungültig. Bitte lade das Setup erneut.",
+        400,
+        `expectedOrder=${expectedOrder};receivedOrder=${receivedOrder}`,
+      );
+    }
+  }
+}
+
+export function validateCreativeReferences(
   setup: CreativeGenerationSetup,
   references: CreativeProviderReference[],
 ): void {
@@ -118,14 +135,22 @@ function validateReferences(
       400,
     );
   }
+  assertCreativeReferenceOrder(setup);
   let total = 0;
   for (let index = 0; index < references.length; index += 1) {
     const reference = references[index]!;
     const metadata = setup.references[index]!;
     const expectedMime = metadata.mimeType.toLowerCase();
+    if (reference.metadata.order !== index) {
+      throw new CreativeGenerationError(
+        "REFERENCE_ORDER_INVALID",
+        "Die Reihenfolge der Referenzbilder ist ungültig. Bitte lade das Setup erneut.",
+        400,
+        `expectedOrder=${index};receivedOrder=${reference.metadata.order}`,
+      );
+    }
     if (
       reference.metadata.id !== metadata.id ||
-      reference.metadata.order !== index ||
       reference.bytes.byteLength !== metadata.byteLength ||
       reference.bytes.byteLength > CREATIVE_REFERENCE_MAX_BYTES ||
       !CREATIVE_REFERENCE_MIME_TYPES.includes(
@@ -136,7 +161,7 @@ function validateReferences(
         "REFERENCE_INVALID",
         "Mindestens ein Referenzbild ist ungültig oder zu groß.",
         400,
-        `reference=${metadata.id};order=${index};expectedBytes=${metadata.byteLength};receivedBytes=${reference.bytes.byteLength};mime=${expectedMime}`,
+        `reference=${metadata.id};expectedBytes=${metadata.byteLength};receivedBytes=${reference.bytes.byteLength};mime=${expectedMime}`,
       );
     }
     total += reference.bytes.byteLength;
@@ -429,7 +454,7 @@ export async function generateCreativeJob(
       503,
     );
   }
-  validateReferences(setup, input.references);
+  validateCreativeReferences(setup, input.references);
   const costCap =
     dependencies.configuredCostCapUsd === undefined
       ? parseCreativeCostCap(process.env[NANO_BANANA_PRO_COST_CAP_ENV])

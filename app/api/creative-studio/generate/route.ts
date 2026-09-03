@@ -24,8 +24,10 @@ import {
   creativeReferenceSnapshotSchema,
 } from "@/lib/creative-studio/contracts";
 import {
+  assertCreativeReferenceOrder,
   CreativeGenerationError,
   generateCreativeJob,
+  validateCreativeReferences,
 } from "@/lib/creative-studio/generation-service";
 import { logCreativeProviderDiagnostic } from "@/lib/creative-studio/provider-diagnostics";
 import { CreativeCostCapError } from "@/lib/creative-studio/nano-banana-config";
@@ -123,6 +125,7 @@ export async function POST(request: Request) {
     }
     const parsed = creativeGenerateRequestSchema.parse(await request.json());
     const { jobId, setup } = parsed;
+    assertCreativeReferenceOrder(setup);
     const referenceSnapshot = accountCreationMode
       ? parsed.referenceSnapshot
       : null;
@@ -151,6 +154,7 @@ export async function POST(request: Request) {
         providerUrl: reference.providerUrl,
       }),
     );
+    validateCreativeReferences(setup, references);
 
     if (accountCreationMode) {
       const canonicalQuote = quoteCreativeCustomerGeneration(setup);
@@ -295,6 +299,7 @@ export async function POST(request: Request) {
             "INVALID_REQUEST",
             "REFERENCE_LIMIT_EXCEEDED",
             "REFERENCE_INVALID",
+            "REFERENCE_ORDER_INVALID",
             "PROVIDER_NOT_CONFIGURED",
           ].includes(error.code)) ||
         error instanceof CreativeCostCapError ||

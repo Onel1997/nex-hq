@@ -9,6 +9,7 @@ import {
   type CreativeGenerationSetup,
 } from "@/lib/creative-studio/contracts";
 import {
+  CreativeGenerationError,
   generateCreativeJob,
   reconcileCreativeJob,
 } from "@/lib/creative-studio/generation-service";
@@ -536,6 +537,54 @@ test("missing legacy cap still fails closed without trusted Owner policy", async
   assert.equal(calls.value, 0);
 });
 
+test("non-contiguous reference order fails before claim, cost authority, or provider", async () => {
+  const store = new MemoryCreativeStore();
+  const calls = { value: 0 };
+  const legacySetup = setup({
+    references: setup().references.map((reference) => ({
+      ...reference,
+      order: reference.order + 3,
+    })),
+  });
+  const legacyReferences = references().map((reference) => ({
+    ...reference,
+    metadata: {
+      ...reference.metadata,
+      order: reference.metadata.order + 3,
+    },
+  }));
+
+  await assert.rejects(
+    generateCreativeJob(
+      {
+        scope: { workspaceId: "owner", actorId: "owner-1" },
+        jobId: "77777777-7777-4777-8777-777777777777",
+        setup: legacySetup,
+        references: legacyReferences,
+      },
+      {
+        store,
+        provider: successfulProvider(calls),
+        costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+      },
+    ),
+    (error: unknown) => {
+      assert.equal(error instanceof CreativeGenerationError, true);
+      if (!(error instanceof CreativeGenerationError)) return false;
+      assert.equal(error.code, "REFERENCE_ORDER_INVALID");
+      assert.equal(
+        error.message,
+        "Die Reihenfolge der Referenzbilder ist ungültig. Bitte lade das Setup erneut.",
+      );
+      assert.equal(error.technicalDetails, "expectedOrder=0;receivedOrder=3");
+      return true;
+    },
+  );
+  assert.equal(store.claims.size, 0);
+  assert.equal(store.manifests.size, 0);
+  assert.equal(calls.value, 0);
+});
+
 test("ambiguous provider completion becomes UNKNOWN_OUTCOME and is not resubmitted", async () => {
   const store = new MemoryCreativeStore();
   let calls = 0;
@@ -680,6 +729,22 @@ test("Creative live route keeps credentials server-only and has no Image Studio 
   assert.match(route, /authorizeXerianoGeneration/);
   assert.match(route, /costLimitPolicy: "OWNER_ESTIMATE_ONLY"/);
   assert.match(route, /financialMode: ownerUnlimited/);
+  assert.ok(
+    route.indexOf("assertCreativeReferenceOrder(setup)") <
+      route.indexOf("const resolvedReferences = await resolveTempReferences"),
+  );
+  assert.ok(
+    route.indexOf("validateCreativeReferences(setup, references)") <
+      route.indexOf("customerAuthority = await reserveCustomerGeneration"),
+  );
+  assert.ok(
+    route.indexOf("validateCreativeReferences(setup, references)") <
+      route.indexOf("await prepareCreativeCreationReferences"),
+  );
+  assert.ok(
+    route.indexOf("validateCreativeReferences(setup, references)") <
+      route.indexOf("await bindTempReferences"),
+  );
   assert.match(adapter, /process\.env\.FAL_KEY/);
   assert.doesNotMatch(workspace, /process\.env|SUPABASE_SERVICE_ROLE_KEY/);
   assert.doesNotMatch(

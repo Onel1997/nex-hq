@@ -62,6 +62,7 @@ import {
   CreativeGenerationClientError,
   fetchCreativeAccountHistory,
   fetchCreativeGenerationJob,
+  observeCreativeGenerationJob,
   submitCreativeGeneration,
 } from "@/lib/creative-studio/client";
 import { createCreativeClientId } from "@/lib/creative-studio/client-id";
@@ -70,9 +71,11 @@ import {
   fallbackSnapshotFromRun,
   fetchCreativeReferenceSnapshot,
   mergeCreativeRunClientState,
+  preserveCreativeRunAgainstLocalDowngrade,
   recoverCreativeReferenceBlobs,
   saveCreativeReferenceSnapshot,
 } from "@/lib/creative-studio/reference-recovery";
+import { canonicalizeCreativeReferenceOrder } from "@/lib/creative-studio/reference-order";
 import {
   CREATIVE_MODEL_REGISTRY,
   DEFAULT_CREATIVE_MODEL_ID,
@@ -172,6 +175,13 @@ function referenceMetadata(reference: CreativeReferenceImage) {
   };
 }
 
+function isTerminalCreativeRun(run: CreativeRun | null | undefined): boolean {
+  return Boolean(
+    run &&
+      ["SUCCEEDED", "PARTIALLY_SUCCEEDED", "FAILED"].includes(run.status),
+  );
+}
+
 export function CreativeStudioWorkspace(props: {
   providerConfig?: CreativeProviderPublicConfig;
   customerConfig?: XerianoCreativeCustomerConfig;
@@ -232,7 +242,9 @@ export function CreativeStudioWorkspace(props: {
   const initialCreationLoadedRef = useRef(false);
   const creationSyncAttemptedRef = useRef(new Set<string>());
   const providerRecoveryAttemptedRef = useRef(new Set<string>());
+  const activeRunRef = useRef(activeRun);
   referencesRef.current = references;
+  activeRunRef.current = activeRun;
 
   useEffect(() => {
     const restored = loadCreativeStudioState(window.localStorage);
@@ -289,8 +301,7 @@ export function CreativeStudioWorkspace(props: {
     if (
       !productMode ||
       !activeRun ||
-      (activeRun.status !== "RUNNING" &&
-        !(activeRun.status === "UNKNOWN_OUTCOME" && activeRun.providerRequestId))
+      (activeRun.status !== "RUNNING" && activeRun.status !== "UNKNOWN_OUTCOME")
     ) return;
     if (
       activeRun.status === "UNKNOWN_OUTCOME" &&
@@ -309,12 +320,28 @@ export function CreativeStudioWorkspace(props: {
         if (cancelled) return;
         const merged = mergeCreativeRunClientState(
           run,
-          activeRun,
+          activeRunRef.current ?? activeRun,
         );
         persistRun(merged);
+        activeRunRef.current = merged;
         setActiveRun(merged);
-      } catch {
-        // A status read never resubmits the paid job. Try again while RUNNING.
+      } catch (error) {
+        if (
+          error instanceof CreativeGenerationClientError &&
+          error.code === "JOB_NOT_FOUND" &&
+          activeRunRef.current?.id === activeRun.id &&
+          activeRunRef.current.status === "RUNNING" &&
+          activeRunRef.current.message !== "Der Auftrag wird vorbereitet …"
+        ) {
+          const preparing = {
+            ...activeRunRef.current,
+            message: "Der Auftrag wird vorbereitet …",
+          };
+          activeRunRef.current = preparing;
+          persistRun(preparing);
+          setActiveRun(preparing);
+        }
+        // Status reads never submit or retry provider work.
       }
     };
     const interval =
@@ -343,8 +370,12 @@ export function CreativeStudioWorkspace(props: {
           jobId: activeRun.id,
           onCredit: (receipt) => setAvailableCredits(receipt.availableCredits),
         });
-        const merged = mergeCreativeRunClientState(observed, activeRun);
+        const merged = mergeCreativeRunClientState(
+          observed,
+          activeRunRef.current ?? activeRun,
+        );
         persistRun(merged);
+        activeRunRef.current = merged;
         setActiveRun(merged);
       } catch {
         // Historical jobs can lack Creation provenance. One bounded read is
@@ -383,47 +414,52 @@ export function CreativeStudioWorkspace(props: {
         props.customerStatus.imageConcurrencyLimit,
   );
 
-  const buildSetup = useCallback((): CreativeGenerationSetup | null => {
-    if (references.length > effectiveReferenceLimit) {
-      setNotice({
-        kind: "ERROR",
-        text: `${selectedModel.name} unterstützt höchstens ${effectiveReferenceLimit} Referenzen. Entferne zuerst ${references.length - effectiveReferenceLimit}.`,
+  const buildSetup = useCallback(
+    (inputReferences = references): CreativeGenerationSetup | null => {
+      const canonicalReferences =
+        canonicalizeCreativeReferenceOrder(inputReferences);
+      if (canonicalReferences.length > effectiveReferenceLimit) {
+        setNotice({
+          kind: "ERROR",
+          text: `${selectedModel.name} unterstützt höchstens ${effectiveReferenceLimit} Referenzen. Entferne zuerst ${canonicalReferences.length - effectiveReferenceLimit}.`,
+        });
+        return null;
+      }
+      const parsed = creativeGenerationSetupSchema.safeParse({
+        contractVersion: CREATIVE_STUDIO_CONTRACT_VERSION,
+        prompt,
+        modelId,
+        aspectRatio,
+        quality,
+        batchSize,
+        outputType,
+        references: canonicalReferences.map(referenceMetadata),
+        advanced,
       });
-      return null;
-    }
-    const parsed = creativeGenerationSetupSchema.safeParse({
-      contractVersion: CREATIVE_STUDIO_CONTRACT_VERSION,
-      prompt,
-      modelId,
-      aspectRatio,
-      quality,
-      batchSize,
-      outputType,
-      references: references.map(referenceMetadata),
+      if (!parsed.success) {
+        setNotice({
+          kind: "ERROR",
+          text: prompt.trim()
+            ? "Bitte prüfe dein Setup."
+            : "Schreibe zuerst einen Prompt.",
+        });
+        return null;
+      }
+      return parsed.data;
+    },
+    [
       advanced,
-    });
-    if (!parsed.success) {
-      setNotice({
-        kind: "ERROR",
-        text: prompt.trim()
-          ? "Bitte prüfe dein Setup."
-          : "Schreibe zuerst einen Prompt.",
-      });
-      return null;
-    }
-    return parsed.data;
-  }, [
-    advanced,
-    aspectRatio,
-    batchSize,
-    effectiveReferenceLimit,
-    modelId,
-    outputType,
-    prompt,
-    quality,
-    references,
-    selectedModel.name,
-  ]);
+      aspectRatio,
+      batchSize,
+      effectiveReferenceLimit,
+      modelId,
+      outputType,
+      prompt,
+      quality,
+      references,
+      selectedModel.name,
+    ],
+  );
 
   const loadSetup = useCallback((setup: CreativeGenerationSetup) => {
     setPrompt(setup.prompt);
@@ -453,20 +489,22 @@ export function CreativeStudioWorkspace(props: {
       }
 
       const recovered = await recoverCreativeReferenceBlobs({ snapshot });
-      const nextReferences = recovered.restored.map(({ entry, blob }) => {
-        const file = new File([blob], entry.filename, {
-          type: blob.type || entry.mimeType,
-        });
-        return {
-          ...createReference(file, entry.order, entry.source),
-          id: entry.referenceId,
-          name: entry.filename,
-          mimeType: blob.type || entry.mimeType,
-          byteLength: blob.size,
-          role: entry.role,
-          order: entry.order,
-        } satisfies CreativeReferenceImage;
-      });
+      const nextReferences = canonicalizeCreativeReferenceOrder(
+        recovered.restored.map(({ entry, blob }) => {
+          const file = new File([blob], entry.filename, {
+            type: blob.type || entry.mimeType,
+          });
+          return {
+            ...createReference(file, entry.order, entry.source),
+            id: entry.referenceId,
+            name: entry.filename,
+            mimeType: blob.type || entry.mimeType,
+            byteLength: blob.size,
+            role: entry.role,
+            order: entry.order,
+          } satisfies CreativeReferenceImage;
+        }),
+      );
       referencesRef.current.forEach((reference) =>
         URL.revokeObjectURL(reference.previewUrl),
       );
@@ -560,12 +598,13 @@ export function CreativeStudioWorkspace(props: {
 
   const generate = useCallback(async () => {
     if (generationLockRef.current) return;
-    const setup = buildSetup();
+    const canonicalReferences = canonicalizeCreativeReferenceOrder(references);
+    const setup = buildSetup(canonicalReferences);
     if (!setup) return;
-    if (references.some((reference) => reference.uploadState !== "READY")) {
+    if (canonicalReferences.some((reference) => reference.uploadState !== "READY")) {
       setNotice({
         kind: "ERROR",
-        text: references.some((reference) => reference.uploadState === "FAILED")
+        text: canonicalReferences.some((reference) => reference.uploadState === "FAILED")
           ? "Upload fehlgeschlagen. Bitte entferne die Referenz und versuche es erneut."
           : "Referenz wird hochgeladen …",
       });
@@ -647,13 +686,15 @@ export function CreativeStudioWorkspace(props: {
       return;
     }
     generationLockRef.current = true;
+    setReferences(canonicalReferences);
+    referencesRef.current = canonicalReferences;
     setGenerating(true);
     setNotice(null);
     const timestamp = nowIso();
     const jobId = createCreativeClientId();
     const referenceSnapshot = buildCreativeReferenceSnapshot({
       jobId,
-      references,
+      references: canonicalReferences,
       createdAt: timestamp,
     });
     const provisional: CreativeRun = {
@@ -673,6 +714,7 @@ export function CreativeStudioWorkspace(props: {
       ...(props.customerMode ? {} : { estimatedMaximumCostUsd }),
     };
     persistRun(provisional);
+    activeRunRef.current = provisional;
     setActiveRun(provisional);
     try {
       if (productMode) {
@@ -691,14 +733,18 @@ export function CreativeStudioWorkspace(props: {
       const run = await submitCreativeGeneration({
         jobId,
         setup,
-        references,
+        references: canonicalReferences,
         ...(productMode ? { referenceSnapshot } : {}),
         ...(props.customerMode
           ? { onCredit: (receipt) => setAvailableCredits(receipt.availableCredits) }
           : {}),
       });
-      const mergedRun = mergeCreativeRunClientState(run, provisional);
+      const mergedRun = mergeCreativeRunClientState(
+        run,
+        activeRunRef.current ?? provisional,
+      );
       persistRun(mergedRun);
+      activeRunRef.current = mergedRun;
       setActiveRun(mergedRun);
       setNotice({
         kind:
@@ -716,6 +762,7 @@ export function CreativeStudioWorkspace(props: {
           "INVALID_REQUEST",
           "REFERENCE_LIMIT_EXCEEDED",
           "REFERENCE_INVALID",
+          "REFERENCE_ORDER_INVALID",
           "TEMP_REFERENCE_INCOMPLETE",
           "TEMP_REFERENCE_EXPIRED",
           "TEMP_REFERENCE_FORBIDDEN",
@@ -731,8 +778,66 @@ export function CreativeStudioWorkspace(props: {
           "GENERATION_ALREADY_STARTED",
           "CUSTOMER_ACCOUNT_REQUIRED",
         ].includes(error.code);
-      const failed: CreativeRun = {
-        ...provisional,
+      if (!knownPreflightFailure) {
+        try {
+          const observation = await observeCreativeGenerationJob({
+            jobId,
+            ...(props.customerMode
+              ? { onCredit: (receipt) => setAvailableCredits(receipt.availableCredits) }
+              : {}),
+          });
+          if (observation.state === "FOUND") {
+            const recovered = mergeCreativeRunClientState(
+              observation.run,
+              activeRunRef.current ?? provisional,
+            );
+            persistRun(recovered);
+            activeRunRef.current = recovered;
+            setActiveRun(recovered);
+            setNotice({
+              kind:
+                recovered.status === "SUCCEEDED" ||
+                recovered.status === "PARTIALLY_SUCCEEDED"
+                  ? "SUCCESS"
+                  : "INFO",
+              text: recovered.message ?? "Der Auftrag wird sicher beobachtet.",
+            });
+            return;
+          }
+          const current = activeRunRef.current;
+          if (current?.id === jobId && isTerminalCreativeRun(current)) {
+            return;
+          }
+          const preparing: CreativeRun = {
+            ...(current?.id === jobId ? current : provisional),
+            status: "RUNNING",
+            updatedAt: nowIso(),
+            message: "Der Auftrag wird vorbereitet …",
+          };
+          persistRun(preparing);
+          activeRunRef.current = preparing;
+          setActiveRun(preparing);
+          setNotice({ kind: "INFO", text: preparing.message! });
+          return;
+        } catch {
+          // Only after one safe manifest observation failed is the local
+          // transport outcome considered ambiguous. No generation is retried.
+        }
+      }
+      const current = activeRunRef.current;
+      if (
+        !knownPreflightFailure &&
+        current?.id === jobId &&
+        isTerminalCreativeRun(current)
+      ) {
+        return;
+      }
+      const baseline =
+        !knownPreflightFailure && current?.id === jobId
+          ? current
+          : provisional;
+      const failedCandidate: CreativeRun = {
+        ...baseline,
         updatedAt: nowIso(),
         status: knownPreflightFailure ? "FAILED" : "UNKNOWN_OUTCOME",
         message:
@@ -740,7 +845,12 @@ export function CreativeStudioWorkspace(props: {
             ? error.message
             : "Der Anbieterstatus ist unklar. Der Auftrag wird nicht automatisch erneut gesendet.",
       };
+      const failed = preserveCreativeRunAgainstLocalDowngrade(
+        failedCandidate,
+        current,
+      );
       persistRun(failed);
+      activeRunRef.current = failed;
       setActiveRun(failed);
       setNotice({
         kind: "ERROR",
@@ -794,16 +904,14 @@ export function CreativeStudioWorkspace(props: {
     });
     const available = Math.max(0, effectiveReferenceLimit - references.length);
     const accepted = withinTotal.slice(0, available);
-    const nextOrder = Math.max(
-      -1,
-      ...references.map((reference) => reference.order),
-      ...missingReferences.map((reference) => reference.order),
-    ) + 1;
+    const nextOrder = references.length;
     const additions = accepted.map(({ file, source, role }, index) => ({
         ...createReference(file, nextOrder + index, source),
         ...(role ? { role } : {}),
       }));
-    setReferences((current) => [...current, ...additions]);
+    setReferences((current) =>
+      canonicalizeCreativeReferenceOrder([...current, ...additions]),
+    );
     for (const reference of additions) {
       uploadCreativeReference(reference, (id, value) =>
         setReferences((current) =>
@@ -817,7 +925,7 @@ export function CreativeStudioWorkspace(props: {
         text: `Einige Dateien wurden nicht hinzugefügt. Erlaubt sind PNG, JPG, WebP oder AVIF bis 8 MB pro Bild und 18 MB insgesamt; ${selectedModel.name} unterstützt bis zu ${effectiveReferenceLimit} Referenzen.`,
       });
     }
-  }, [effectiveReferenceLimit, missingReferences, references, selectedModel.name]);
+  }, [effectiveReferenceLimit, references, selectedModel.name]);
 
   const addReferences = useCallback(
     (files: File[]) =>
@@ -1016,11 +1124,11 @@ export function CreativeStudioWorkspace(props: {
       void deleteXerianoTempReference(removed.tempReferenceId);
     }
     setReferences((current) =>
-      current
+      canonicalizeCreativeReferenceOrder(current
         .filter((reference) => {
           if (reference.id === id) URL.revokeObjectURL(reference.previewUrl);
           return reference.id !== id;
-        }),
+        })),
     );
   };
 
@@ -1060,7 +1168,7 @@ export function CreativeStudioWorkspace(props: {
         role: missing.role,
       };
       setReferences((current) =>
-        [...current, restored].sort((a, b) => a.order - b.order),
+        canonicalizeCreativeReferenceOrder([...current, restored]),
       );
       uploadCreativeReference(restored, (id, value) =>
         setReferences((current) =>

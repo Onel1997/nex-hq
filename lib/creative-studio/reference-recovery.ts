@@ -5,6 +5,7 @@ import {
   type CreativeReferenceSnapshotEntry,
   type CreativeRun,
 } from "@/lib/creative-studio/contracts";
+import { canonicalizeCreativeReferenceOrder } from "@/lib/creative-studio/reference-order";
 
 export type CreativeRecoveredReference = {
   entry: CreativeReferenceSnapshotEntry;
@@ -26,8 +27,7 @@ export function buildCreativeReferenceSnapshot(input: {
     version: "xeriano-creative-reference-snapshot-v1",
     jobId: input.jobId,
     createdAt: input.createdAt ?? new Date().toISOString(),
-    references: [...input.references]
-      .sort((a, b) => a.order - b.order)
+    references: canonicalizeCreativeReferenceOrder(input.references)
       .map((reference) => ({
         referenceId: reference.id,
         order: reference.order,
@@ -46,8 +46,7 @@ export function fallbackSnapshotFromRun(run: CreativeRun): CreativeReferenceSnap
     version: "xeriano-creative-reference-snapshot-v1",
     jobId: run.id,
     createdAt: run.createdAt,
-    references: [...run.setup.references]
-      .sort((a, b) => a.order - b.order)
+    references: canonicalizeCreativeReferenceOrder(run.setup.references)
       .map((reference) => ({
         referenceId: reference.id,
         order: reference.order,
@@ -160,15 +159,33 @@ export function mergeCreativeRunClientState(
   existing: CreativeRun | null | undefined,
 ): CreativeRun {
   if (!existing || existing.id !== incoming.id) return incoming;
+  const terminalStatuses = new Set<CreativeRun["status"]>([
+    "SUCCEEDED",
+    "PARTIALLY_SUCCEEDED",
+    "FAILED",
+  ]);
+  if (
+    terminalStatuses.has(existing.status) &&
+    !terminalStatuses.has(incoming.status)
+  ) {
+    return existing;
+  }
   const previousResults = new Map(existing.results.map((result) => [result.id, result]));
+  const incomingResults = incoming.results.length
+    ? incoming.results
+    : existing.results.length
+      ? existing.results
+      : incoming.results;
   return {
     ...incoming,
+    providerRequestId:
+      incoming.providerRequestId ?? existing.providerRequestId ?? null,
     ...(incoming.referenceSnapshot
       ? {}
       : existing.referenceSnapshot
         ? { referenceSnapshot: existing.referenceSnapshot }
         : {}),
-    results: incoming.results.map((result) => {
+    results: incomingResults.map((result) => {
       const previous = previousResults.get(result.id);
       return previous
         ? {
@@ -183,5 +200,27 @@ export function mergeCreativeRunClientState(
           }
         : result;
     }),
+  };
+}
+
+/** A local transport failure is never allowed to erase newer durable state. */
+export function preserveCreativeRunAgainstLocalDowngrade(
+  localCandidate: CreativeRun,
+  current: CreativeRun | null | undefined,
+): CreativeRun {
+  if (!current || current.id !== localCandidate.id) return localCandidate;
+  if (
+    ["SUCCEEDED", "PARTIALLY_SUCCEEDED", "FAILED"].includes(current.status)
+  ) {
+    return current;
+  }
+  return {
+    ...localCandidate,
+    providerRequestId:
+      current.providerRequestId ?? localCandidate.providerRequestId ?? null,
+    results: current.results.length ? current.results : localCandidate.results,
+    ...(current.referenceSnapshot
+      ? { referenceSnapshot: current.referenceSnapshot }
+      : {}),
   };
 }

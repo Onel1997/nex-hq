@@ -1,10 +1,13 @@
 import {
   creativeRunSchema,
+  creativeGenerationSetupSchema,
+  creativeReferenceSnapshotSchema,
   type CreativeGenerationSetup,
   type CreativeReferenceImage,
   type CreativeReferenceSnapshot,
   type CreativeRun,
 } from "@/lib/creative-studio/contracts";
+import { canonicalizeCreativeReferenceOrder } from "@/lib/creative-studio/reference-order";
 import {
   xerianoClientCreditReceiptSchema,
   type XerianoClientCreditReceipt,
@@ -17,15 +20,60 @@ export function estimateCreativeGenerationRequestBytes(input: {
   referenceSnapshot?: CreativeReferenceSnapshot;
 }): number {
   const encoder = new TextEncoder();
-  return encoder.encode(JSON.stringify({
+  return encoder.encode(
+    JSON.stringify(buildCreativeGenerationRequestPayload(input)),
+  ).byteLength;
+}
+
+export function buildCreativeGenerationRequestPayload(input: {
+  jobId: string;
+  setup: CreativeGenerationSetup;
+  references: CreativeReferenceImage[];
+  referenceSnapshot?: CreativeReferenceSnapshot;
+}) {
+  const references = canonicalizeCreativeReferenceOrder(input.references);
+  const setup = creativeGenerationSetupSchema.parse({
+    ...input.setup,
+    references: references.map((reference) => ({
+      id: reference.id,
+      name: reference.name,
+      mimeType: reference.mimeType,
+      byteLength: reference.byteLength,
+      role: reference.role,
+      order: reference.order,
+    })),
+  });
+  const snapshotById = new Map(
+    input.referenceSnapshot?.references.map((reference) => [
+      reference.referenceId,
+      reference,
+    ]) ?? [],
+  );
+  const referenceSnapshot = input.referenceSnapshot
+    ? creativeReferenceSnapshotSchema.parse({
+        ...input.referenceSnapshot,
+        references: references.map((reference) => ({
+          referenceId: reference.id,
+          order: reference.order,
+          role: reference.role,
+          source: reference.source,
+          filename: reference.name,
+          mimeType: reference.mimeType,
+          byteLength: reference.byteLength,
+          checksumSha256:
+            snapshotById.get(reference.id)?.checksumSha256 ?? null,
+        })),
+      })
+    : null;
+  return {
     jobId: input.jobId,
-    setup: input.setup,
-    referenceSnapshot: input.referenceSnapshot ?? null,
-    tempReferences: input.references.map((reference) => ({
+    setup,
+    referenceSnapshot,
+    tempReferences: references.map((reference) => ({
       referenceId: reference.id,
       tempReferenceId: reference.tempReferenceId,
     })),
-  })).byteLength;
+  };
 }
 
 export class CreativeGenerationClientError extends Error {
@@ -56,17 +104,8 @@ export async function submitCreativeGeneration(input: {
       "TEMP_REFERENCE_INCOMPLETE",
     );
   }
-  const body = JSON.stringify({
-    jobId: input.jobId,
-    setup: input.setup,
-    referenceSnapshot: input.referenceSnapshot ?? null,
-    tempReferences: [...input.references]
-      .sort((a, b) => a.order - b.order)
-      .map((reference) => ({
-        referenceId: reference.id,
-        tempReferenceId: reference.tempReferenceId,
-      })),
-  });
+  const requestPayload = buildCreativeGenerationRequestPayload(input);
+  const body = JSON.stringify({ ...requestPayload });
   const response = await (input.fetcher ?? fetch)(
     "/api/creative-studio/generate",
     {
@@ -134,6 +173,30 @@ export async function fetchCreativeGenerationJob(input: {
     if (receipt.success) input.onCredit?.(receipt.data);
   }
   return creativeRunSchema.parse(payload.run);
+}
+
+export async function observeCreativeGenerationJob(input: {
+  jobId: string;
+  fetcher?: typeof fetch;
+  onCredit?: (receipt: XerianoClientCreditReceipt) => void;
+}): Promise<
+  | { state: "FOUND"; run: CreativeRun }
+  | { state: "PREPARING" }
+> {
+  try {
+    return {
+      state: "FOUND",
+      run: await fetchCreativeGenerationJob(input),
+    };
+  } catch (error) {
+    if (
+      error instanceof CreativeGenerationClientError &&
+      error.code === "JOB_NOT_FOUND"
+    ) {
+      return { state: "PREPARING" };
+    }
+    throw error;
+  }
 }
 
 export async function fetchCreativeAccountHistory(input: {

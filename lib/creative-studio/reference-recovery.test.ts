@@ -3,6 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  observeCreativeGenerationJob,
+} from "@/lib/creative-studio/client";
+import {
   CREATIVE_STUDIO_CONTRACT_VERSION,
   DEFAULT_CREATIVE_ADVANCED_SETTINGS,
   creativeRunSchema,
@@ -15,6 +18,7 @@ import {
   fallbackSnapshotFromRun,
   fetchCreativeReferenceSnapshot,
   mergeCreativeRunClientState,
+  preserveCreativeRunAgainstLocalDowngrade,
   recoverCreativeReferenceBlobs,
   saveCreativeReferenceSnapshot,
 } from "@/lib/creative-studio/reference-recovery";
@@ -209,6 +213,80 @@ test("server refresh preserves snapshot, favorite and idempotent Library import 
   assert.equal(merged.referenceSnapshot?.jobId, JOB_ID);
   assert.equal(merged.results[0]?.favorite, true);
   assert.equal(merged.results[0]?.libraryAssetId, ASSET_ID);
+});
+
+test("server SUCCEEDED hydrates over local UNKNOWN_OUTCOME without losing results", () => {
+  const localUnknown = run({
+    status: "UNKNOWN_OUTCOME",
+    results: [],
+    providerRequestId: null,
+    message: "Der Anbieterstatus ist unklar.",
+  });
+  const serverSucceeded = run({
+    providerRequestId: "provider-request-present",
+  });
+  const merged = mergeCreativeRunClientState(serverSucceeded, localUnknown);
+  assert.equal(merged.status, "SUCCEEDED");
+  assert.equal(merged.providerRequestId, "provider-request-present");
+  assert.equal(merged.results.length, 1);
+});
+
+test("late local UNKNOWN_OUTCOME cannot overwrite an observed terminal server run", () => {
+  const serverSucceeded = run({
+    providerRequestId: "provider-request-present",
+  });
+  const localUnknown = run({
+    status: "UNKNOWN_OUTCOME",
+    results: [],
+    providerRequestId: null,
+    message: "Der Anbieterstatus ist unklar.",
+  });
+  const preserved = preserveCreativeRunAgainstLocalDowngrade(
+    localUnknown,
+    serverSucceeded,
+  );
+  assert.equal(preserved.status, "SUCCEEDED");
+  assert.equal(preserved.providerRequestId, "provider-request-present");
+  assert.equal(preserved.results.length, 1);
+});
+
+test("early manifest 404 is classified as PREPARING without generation retry", async () => {
+  const calls: Array<{ url: string; method: string }> = [];
+  const observed = await observeCreativeGenerationJob({
+    jobId: JOB_ID,
+    fetcher: async (input, init) => {
+      calls.push({ url: String(input), method: init?.method ?? "GET" });
+      return Response.json(
+        { success: false, code: "JOB_NOT_FOUND", error: "Noch nicht sichtbar." },
+        { status: 404 },
+      );
+    },
+  });
+  assert.deepEqual(observed, { state: "PREPARING" });
+  assert.deepEqual(calls, [
+    {
+      url: `/api/creative-studio/jobs/${JOB_ID}`,
+      method: "GET",
+    },
+  ]);
+  assert.equal(calls.some((call) => call.url.endsWith("/generate")), false);
+});
+
+test("ambiguous submission observation hydrates a later successful manifest", async () => {
+  let calls = 0;
+  const observed = await observeCreativeGenerationJob({
+    jobId: JOB_ID,
+    fetcher: async () => {
+      calls += 1;
+      return Response.json({ success: true, run: run() });
+    },
+  });
+  assert.equal(calls, 1);
+  assert.equal(observed.state, "FOUND");
+  if (observed.state === "FOUND") {
+    assert.equal(observed.run.status, "SUCCEEDED");
+    assert.equal(observed.run.results.length, 1);
+  }
 });
 
 test("customer setup recovery and result actions remain non-paid UI operations", () => {
