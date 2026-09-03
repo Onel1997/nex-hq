@@ -42,7 +42,13 @@ import {
   type FalVideoEditEndpoint,
   type FalVideoEditTransport,
 } from "@/lib/ugc-video-studio/providers/fal-video-edit";
-import { assertUgcVideoEditImageDimensions, estimateUgcVideoEditCostUsd } from "@/lib/ugc-video-studio/video-edit-config";
+import {
+  assertUgcVideoEditImageDimensions,
+  assertUgcVideoEditSetup,
+  assertUgcVideoEditUserPromptTokens,
+  estimateUgcVideoEditCostUsd,
+  UgcVideoEditInputError,
+} from "@/lib/ugc-video-studio/video-edit-config";
 import { quoteUgcCustomerGeneration } from "@/lib/xeriano/customer-generation";
 import {
   generateUgcVideoJob,
@@ -241,6 +247,99 @@ test("Kling O3/O1 map one Character Master to the runtime-required image Element
     assert.match(input.prompt, /@Video1/);
     assert.match(input.prompt, /@Element1/);
   }
+});
+
+test("Kling O3 user instructions cannot inject Seedance-style image/video aliases", () => {
+  for (const token of ["@Image1", "@Video1", "@image12", "@video2"]) {
+    const active = { ...setup(), prompt: `Keep the scene natural. ${token}` };
+    assert.throws(
+      () => assertUgcVideoEditSetup(active),
+      (error) =>
+        error instanceof UgcVideoEditInputError &&
+        error.code === "PROVIDER_REFERENCE_TOKEN_UNSUPPORTED" &&
+        /Upload-Felder/.test(error.message),
+    );
+    assert.throws(
+      () =>
+        buildFalVideoEditInput({
+          modelId: KLING_O3_PRO_EDIT_MODEL_ID,
+          setup: active,
+          sourceVideoUrl: "https://storage.example/source",
+          characterMasterUrl: "https://storage.example/character",
+          endUserId: "actor",
+        }),
+      (error) =>
+        error instanceof UgcVideoEditInputError &&
+        error.code === "PROVIDER_REFERENCE_TOKEN_UNSUPPORTED",
+    );
+  }
+});
+
+test("invalid Kling aliases fail before durable/provider work and Customer reservation", async () => {
+  const active = {
+    ...setup(),
+    prompt: "Preserve the motion from @Video1 and appearance from @Image1.",
+  };
+  const provider = acceptedProvider();
+  const durable = durableStoreFixture();
+  await assert.rejects(
+    generateUgcVideoJob(
+      {
+        scope: { workspaceId: "workspace", actorId: "actor" },
+        jobId: "b1111111-1111-4111-8111-111111111111",
+        setup: active,
+        references: references(active),
+      },
+      {
+        provider: provider.provider,
+        store: durable.store,
+        costLimitPolicy: "OWNER_ESTIMATE_ONLY",
+      },
+    ),
+    (error) =>
+      error instanceof UgcVideoGenerationError &&
+      error.code === "REFERENCE_INVALID" &&
+      error.technicalDetails === "PROVIDER_REFERENCE_TOKEN_UNSUPPORTED",
+  );
+  assert.equal(provider.submits(), 0);
+  assert.equal(durable.writes(), 0);
+
+  const route = readFileSync(
+    "app/api/ugc-video-studio/generate/route.ts",
+    "utf8",
+  );
+  const guardAt = route.indexOf("assertUgcVideoEditUserPromptTokens({");
+  const tempReadAt = route.indexOf("await resolveTempReferences({");
+  const reserveAt = route.indexOf("await reserveCustomerGeneration({");
+  const providerAt = route.indexOf("await generateUgcVideoJob(");
+  assert.ok(guardAt >= 0 && guardAt < tempReadAt);
+  assert.ok(guardAt < reserveAt && reserveAt < providerAt);
+});
+
+test("Seedance retains its explicit @Image1/@Video1 reference syntax", () => {
+  assert.doesNotThrow(() =>
+    assertUgcVideoEditUserPromptTokens({
+      modelId: SEEDANCE_2_FAST_EDIT_MODEL_ID,
+      prompt: "Keep @Video1 framing and use @Image1 appearance.",
+    }),
+  );
+  const active = {
+    ...setup(SEEDANCE_2_FAST_EDIT_MODEL_ID),
+    prompt: "Keep @Video1 framing and use @Image1 appearance.",
+  };
+  const input = buildFalVideoEditInput({
+    modelId: SEEDANCE_2_FAST_EDIT_MODEL_ID,
+    setup: active,
+    sourceVideoUrl: "https://storage.example/source",
+    characterMasterUrl: "https://storage.example/character",
+    endUserId: "actor",
+  });
+  assert.deepEqual("image_urls" in input && input.image_urls, [
+    "https://storage.example/character",
+  ]);
+  assert.deepEqual("video_urls" in input && input.video_urls, [
+    "https://storage.example/source",
+  ]);
 });
 
 test("safe fal validation extraction keeps type/path/message and ignores provider input", () => {

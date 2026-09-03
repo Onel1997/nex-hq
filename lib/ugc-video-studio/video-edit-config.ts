@@ -4,6 +4,7 @@ import type {
 } from "@/lib/ugc-video-studio/contracts";
 import {
   isUgcVideoEditModelId,
+  KLING_O3_PRO_EDIT_MODEL_ID,
   ugcVideoModelById,
   type UgcVideoEditModelId,
 } from "@/lib/ugc-video-studio/model-registry";
@@ -18,12 +19,36 @@ export class UgcVideoEditInputError extends Error {
       | "UNSUPPORTED_VIDEO"
       | "UNSUPPORTED_IMAGE"
       | "VIDEO_INPUT_UNSUPPORTED"
-      | "MODEL_INPUT_UNSUPPORTED",
+      | "MODEL_INPUT_UNSUPPORTED"
+      | "PROVIDER_REFERENCE_TOKEN_UNSUPPORTED",
     message: string,
   ) {
     super(message);
     this.name = "UgcVideoEditInputError";
   }
+}
+
+const KLING_USER_REFERENCE_TOKEN_PATTERN = /@(Image|Video)\d+\b/iu;
+
+/**
+ * Kling O3's source video and Character Master are bound by Xeriamo through
+ * `video_url` and `elements`. Provider aliases belong to the final internal
+ * provider prompt and must not be supplied through the free-form user field.
+ */
+export function assertUgcVideoEditUserPromptTokens(input: {
+  modelId: string;
+  prompt: string;
+}): void {
+  if (
+    input.modelId !== KLING_O3_PRO_EDIT_MODEL_ID ||
+    !KLING_USER_REFERENCE_TOKEN_PATTERN.test(input.prompt)
+  ) {
+    return;
+  }
+  throw new UgcVideoEditInputError(
+    "PROVIDER_REFERENCE_TOKEN_UNSUPPORTED",
+    "Entferne @Image- und @Video-Verweise aus deinem Hinweis. Quellvideo und Model / Mockup werden automatisch über die Upload-Felder zugeordnet.",
+  );
 }
 
 export type UgcVideoEditReferenceResolution = {
@@ -90,6 +115,10 @@ export function assertUgcVideoEditSetup(
       "Dieses Modell unterstützt Video bearbeiten nicht.",
     );
   }
+  assertUgcVideoEditUserPromptTokens({
+    modelId: model.id,
+    prompt: setup.prompt,
+  });
   if (!model.supportedDurations.includes(setup.duration)) {
     throw new UgcVideoEditInputError(
       "VIDEO_TOO_LONG",

@@ -33,6 +33,7 @@ import {
 } from "@/lib/ugc-video-studio/model-registry";
 import {
   assertUgcVideoEditImageDimensions,
+  assertUgcVideoEditUserPromptTokens,
   resolveUgcVideoEditReferences,
   UgcVideoEditInputError,
 } from "@/lib/ugc-video-studio/video-edit-config";
@@ -156,6 +157,12 @@ export async function POST(request: Request) {
         },
       };
       assertUgcBaseVideoSetup(providerSetup);
+    }
+    if (providerSetup.mode === "VIDEO_EDIT") {
+      assertUgcVideoEditUserPromptTokens({
+        modelId: providerSetup.modelId,
+        prompt: providerSetup.prompt,
+      });
     }
     if (
       parsed.tempReferences.length !== setup.references.length ||

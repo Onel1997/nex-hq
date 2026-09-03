@@ -28,7 +28,10 @@ import {
   type UgcVideoProviderStatus,
   type UgcVideoProviderSubmission,
 } from "@/lib/ugc-video-studio/provider";
-import { resolveUgcVideoEditReferences } from "@/lib/ugc-video-studio/video-edit-config";
+import {
+  assertUgcVideoEditUserPromptTokens,
+  resolveUgcVideoEditReferences,
+} from "@/lib/ugc-video-studio/video-edit-config";
 
 export type FalVideoEditEndpoint =
   | typeof KLING_O3_PRO_EDIT_ENDPOINT
@@ -398,6 +401,10 @@ export function buildCharacterReplacePrompt(input: {
   modelId: UgcVideoEditModelId;
   userInstruction: string;
 }): string {
+  assertUgcVideoEditUserPromptTokens({
+    modelId: input.modelId,
+    prompt: input.userInstruction,
+  });
   const characterToken = input.modelId === "seedance-2-fast-video-edit"
     ? "@Image1"
     : "@Element1";
