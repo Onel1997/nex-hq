@@ -4,7 +4,6 @@ import {
   Bookmark,
   CheckCircle2,
   Clipboard,
-  Download,
   Heart,
   History,
   Loader2,
@@ -40,6 +39,7 @@ import {
   UgcRunHistory,
 } from "@/components/ugc-video-studio/ugc-video-studio-library";
 import { UgcResultVideo } from "@/components/ugc-video-studio/ugc-result-video";
+import { XerianoMediaSaveLink } from "@/components/xeriano/media-save-link";
 import {
   DEFAULT_UGC_VIDEO_ADVANCED_SETTINGS,
   DEFAULT_UGC_VIDEO_KLING_MOTION_SETTINGS,
@@ -1763,7 +1763,12 @@ export function UgcVideoStudioWorkspace(props: {
                   <UgcResultVideo result={result} />
                   <div><strong>{visibleActiveRun.setup.mode === "VIDEO_EDIT" || visibleActiveRun.setup.mode === "BASE_VIDEO" || visibleActiveRun.setup.mode === "VIDEO_RECAST" ? ugcVideoModelById(visibleActiveRun.setup.modelId)?.name ?? visibleActiveRun.setup.modelId : UGC_VIDEO_TYPE_LABELS[visibleActiveRun.setup.videoType]}</strong><span>{visibleActiveRun.setup.mode === "VIDEO_RECAST" && visibleActiveRun.setup.videoRecast ? `Video neu inszenieren · ${(visibleActiveRun.setup.videoRecast.sourceDurationSeconds ?? Number(visibleActiveRun.setup.duration)).toLocaleString("de-DE", { maximumFractionDigits: 2 })}s · ${visibleActiveRun.setup.videoRecast.keepAudio ? "Audio an" : "Audio aus"}` : visibleActiveRun.setup.mode === "BASE_VIDEO" ? `Basisvideo · ${visibleActiveRun.setup.baseVideo.variant === "IMAGE_TO_VIDEO" ? "Startbild zu Video" : "Text zu Video"} · ${visibleActiveRun.setup.duration}s` : visibleActiveRun.setup.modelId === "kling-v3-pro-motion-control" ? `${visibleActiveRun.setup.klingMotion.characterOrientation === "VIDEO" ? "Bewegung folgen" : "Bild folgen"}${visibleActiveRun.setup.klingMotion.keepOriginalSound ? " · Originalton" : ""}` : `${visibleActiveRun.setup.duration}s · ${visibleActiveRun.setup.quality}`}</span></div>
                   <footer>
-                    <a href={result.downloadUrl}><Download size={15} /> Herunterladen</a>
+                    <XerianoMediaSaveLink
+                      href={result.downloadUrl}
+                      fileName={`xeriamo-video-${result.id}`}
+                      mimeType={result.mimeType}
+                      iconSize={15}
+                    />
                     <button type="button" onClick={() => setLargeResult(result)}><Maximize2 size={15} /> Vergrößern</button>
                     <button type="button" onClick={() => addResultAsReference(result)}><PlusReferenceIcon /> Als Referenz</button>
                     {productMode ? <button type="button" onClick={() => void saveResultToLibrary(result.id)}><Bookmark size={15} /> In Bibliothek speichern</button> : null}

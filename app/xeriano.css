@@ -203,3 +203,12 @@
 .xeriano-owner-unlimited-status{min-height:40px;padding:0 13px;display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(167,139,250,.25);border-radius:999px;color:#e6deff;background:rgba(167,139,250,.09);font-size:.82rem;font-weight:700;white-space:nowrap}
 .xeriano-owner-unlimited-status svg{width:16px;height:16px}
 @media(max-width:700px){.xeriano-owner-unlimited-card{grid-template-columns:auto minmax(0,1fr);padding:19px}.xeriano-owner-unlimited-status{grid-column:1/-1;justify-self:stretch;justify-content:center}.xeriano-owner-home-actions{width:100%}.xeriano-owner-home-actions a{flex:1;justify-content:center}}
+
+@media(max-width:760px){
+  .xeriamo-design-studio input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+  .xeriamo-design-studio textarea,
+  .xeriamo-design-studio select{max-width:100%;font-size:16px!important}
+  .xeriamo-design-studio img,.xeriamo-design-studio video,.xeriamo-design-studio canvas{max-width:100%}
+  .xeriamo-design-studio,.xeriamo-design-studio>*,.xd-create>*,.xd-results article,.xd-history article>section{min-width:0;max-width:100%}
+  .xeriamo-design-studio code,.xeriano-inline-notice{overflow-wrap:anywhere;word-break:break-word}
+}

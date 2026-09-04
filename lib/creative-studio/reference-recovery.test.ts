@@ -321,7 +321,7 @@ test("customer setup recovery and result actions remain non-paid UI operations",
   assert.match(workspace, /In Bibliothek/);
   assert.match(workspace, /cs-result-library/);
   assert.match(workspace, /Als Referenz/);
-  assert.match(workspace, /Herunterladen/);
+  assert.match(workspace, /XerianoMediaSaveLink/);
   assert.match(workspace, /Weitere Ergebnisaktionen/);
   assert.match(css, /\.cs-result-actions--customer/);
   assert.match(css, /grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\) auto/);

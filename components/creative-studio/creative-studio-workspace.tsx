@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   Bookmark,
   Check,
-  Download,
   Heart,
   History,
   ImagePlus,
@@ -39,6 +38,7 @@ import {
   PromptLibrary,
   RunHistory,
 } from "@/components/creative-studio/creative-studio-library";
+import { XerianoMediaSaveLink } from "@/components/xeriano/media-save-link";
 
 import {
   CREATIVE_GLOBAL_REFERENCE_LIMIT,
@@ -88,6 +88,7 @@ import {
   upsertCreativePrompt,
   upsertCreativeRun,
 } from "@/lib/creative-studio/persistence";
+import { copyPromptText } from "@/lib/xeriano/clipboard";
 import type { CreativeProviderPublicConfig } from "@/lib/creative-studio/nano-banana-config";
 import type { XerianoCreativeCustomerConfig } from "@/lib/xeriano/customer-config";
 import type { XerianoCustomerStudioStatus } from "@/lib/xeriano/client-contracts";
@@ -1611,9 +1612,11 @@ export function CreativeStudioWorkspace(props: {
                                   ? "Favorit entfernen"
                                   : "Als Favorit markieren"}
                               </button>
-                              <a href={result.downloadUrl ?? result.url} download>
-                                <Download size={16} /> Herunterladen
-                              </a>
+                              <XerianoMediaSaveLink
+                                href={result.downloadUrl ?? result.url}
+                                fileName={`xeriamo-creative-${result.id}`}
+                                mimeType={result.mimeType}
+                              />
                               <a
                                 href={result.url}
                                 target="_blank"
@@ -1632,9 +1635,12 @@ export function CreativeStudioWorkspace(props: {
                       </footer>
                     ) : (
                       <footer>
-                        <a href={result.downloadUrl ?? result.url} download>
-                          <Download size={15} /> Herunterladen
-                        </a>
+                        <XerianoMediaSaveLink
+                          href={result.downloadUrl ?? result.url}
+                          fileName={`xeriamo-creative-${result.id}`}
+                          mimeType={result.mimeType}
+                          iconSize={15}
+                        />
                         <button
                           type="button"
                           onClick={() => void addResultAsReference(result)}
@@ -1768,19 +1774,7 @@ export function CreativeStudioWorkspace(props: {
               }),
             )
           }
-          onDuplicate={(saved) =>
-            persist(
-              upsertCreativePrompt(persisted, {
-                ...saved,
-                id: createCreativeClientId(),
-                title: `${saved.title} – Kopie`,
-                favorite: false,
-                createdAt: nowIso(),
-                updatedAt: nowIso(),
-                lastUsedAt: null,
-              }),
-            )
-          }
+          onCopy={(saved) => copyPromptText(saved.prompt)}
           onDelete={(id) => persist(removeCreativePrompt(persisted, id))}
         />
       ) : (

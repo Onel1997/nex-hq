@@ -430,6 +430,43 @@ body:has(.ugc-video-studio-shell) {
   .ugc-video-studio-shell *::before,
   .ugc-video-studio-shell *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
+
+/* iOS zooms focused form controls below 16px and can leave the visual
+   viewport horizontally offset after the keyboard closes. Keep the studio's
+   effective mobile control size at Safari's non-zooming threshold. */
+@media (max-width: 760px) {
+  .ugc-video-studio-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+  .ugc-video-studio-shell textarea,
+  .ugc-video-studio-shell select {
+    max-width: 100%;
+    font-size: 16px !important;
+  }
+
+  .ugc-video-studio-shell img,
+  .ugc-video-studio-shell video,
+  .ugc-video-studio-shell canvas {
+    max-width: 100%;
+  }
+
+  .uv-layout > *,
+  .uv-main-column > *,
+  .uv-side-column > *,
+  .uv-result-card,
+  .uv-history-card,
+  .uv-notice > div,
+  .uv-modal > * {
+    min-width: 0;
+  }
+
+  .uv-notice,
+  .uv-notice code,
+  .uv-provider-details,
+  .uv-provider-details code,
+  .uv-result-empty {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
 .ugc-video-studio-shell.is-owner-product-mode .uv-owner-plan{margin-top:12px;padding-top:12px;border-top:1px solid var(--uv-border);color:#b9a8f5;font-size:10px;font-weight:750;letter-spacing:.035em}
 .ugc-video-studio-shell.is-owner-product-mode .uv-generate-bar{align-items:center;flex-direction:column;gap:6px}
 .ugc-video-studio-shell.is-owner-product-mode .uv-owner-unlimited{display:block;margin:0;color:#b9a8f5;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-align:center}

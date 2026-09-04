@@ -3,7 +3,6 @@
 import {
   Check,
   Copy,
-  Download,
   Heart,
   ImageIcon,
   MoreHorizontal,
@@ -21,6 +20,8 @@ import {
   xerianoCreationSchema,
   type XerianoCreation,
 } from "@/lib/xeriano/creation-contracts";
+import { copyPromptText } from "@/lib/xeriano/clipboard";
+import { XerianoMediaSaveLink } from "@/components/xeriano/media-save-link";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("de-DE", {
@@ -91,9 +92,9 @@ export function XerianoCreationDetail({
 
   async function copyPrompt() {
     if (!creation) return;
-    await navigator.clipboard.writeText(creation.originalPrompt);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
+    const success = await copyPromptText(creation.originalPrompt);
+    setCopied(success);
+    if (success) window.setTimeout(() => setCopied(false), 1800);
   }
 
   if (error) return <div className="xeriano-inline-notice">{error}</div>;
@@ -142,9 +143,12 @@ export function XerianoCreationDetail({
           <Heart size={17} fill={creation.favorite ? "currentColor" : "none"} />
           Favorit
         </button>
-        <a href={creation.resultDownloadUrl} download>
-          <Download size={17} /> Herunterladen
-        </a>
+        <XerianoMediaSaveLink
+          href={creation.resultDownloadUrl}
+          fileName={creation.title}
+          mimeType={creation.mimeType}
+          iconSize={17}
+        />
         <details>
           <summary><MoreHorizontal size={17} /> Mehr</summary>
           <div><span>In Bibliothek</span></div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Eraser, Heart, ImageIcon, Library, Maximize2, MoreHorizontal, Palette, Play, Plus, Sparkles } from "lucide-react";
+import { Eraser, Heart, ImageIcon, Library, Maximize2, MoreHorizontal, Palette, Play, Plus, Sparkles } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -12,6 +12,7 @@ import {
 } from "@/lib/design-studio/client";
 import type { XerianoLibraryAsset } from "@/lib/xeriano/library";
 import { handoffHref } from "@/lib/xeriano/library";
+import { XerianoMediaSaveLink } from "@/components/xeriano/media-save-link";
 
 const filters = [
   ["ALL", "Alle"],
@@ -255,7 +256,7 @@ export function XerianoLibraryGrid({
                     {asset.design?.canBackgroundRemove ? <button disabled={Boolean(utilityBusy) || !utilityReady("BACKGROUND_REMOVE")} onClick={() => void runUtility(asset, "BACKGROUND_REMOVE")}><Eraser/>{utilityBusy === `${asset.id}:BACKGROUND_REMOVE` ? "Hintergrund wird entfernt …" : utilityLabel("BACKGROUND_REMOVE", "Hintergrund entfernen")}</button> : null}
                     {asset.design?.canUpscale ? <button disabled={Boolean(utilityBusy) || !utilityReady("UPSCALE")} onClick={() => void runUtility(asset, "UPSCALE")}><Maximize2/>{utilityBusy === `${asset.id}:UPSCALE` ? "Wird auf 4K hochskaliert …" : utilityLabel("UPSCALE", "Auf 4K upscalen")}</button> : null}
                     <Link href={handoffHref(asset.id, "CREATIVE_STUDIO", audience)}><Plus/>Im Creative Studio verwenden</Link>
-                    <a href={`/api/xeriano/library/${asset.id}/content?download=1`}><Download/>{asset.mimeType === "image/svg+xml" ? "SVG herunterladen" : "Herunterladen"}</a>
+                    <XerianoMediaSaveLink href={`/api/xeriano/library/${asset.id}/content?download=1`} fileName={asset.title} mimeType={asset.mimeType} downloadLabel={asset.mimeType === "image/svg+xml" ? "SVG herunterladen" : "Herunterladen"}/>
                     <Link href={`${studioRoot}/design-studio?asset=${encodeURIComponent(asset.id)}&mode=details`}>Details bearbeiten</Link>
                     <button onClick={() => void toggleFavorite(asset)}><Heart/>Favorit</button>
                   </div>

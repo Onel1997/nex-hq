@@ -2475,3 +2475,45 @@ body:has(.creative-studio-shell) {
     animation-iteration-count: 1 !important;
   }
 }
+
+.cs-copy-feedback {
+  margin: -5px 2px 12px;
+  color: #9de9c3;
+  font-size: 10px;
+  font-weight: 680;
+}
+
+/* Prevent Safari's automatic input zoom and contain mobile studio content
+   without changing the tablet/desktop composition. */
+@media (max-width: 760px) {
+  .creative-studio-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+  .creative-studio-shell textarea,
+  .creative-studio-shell select {
+    max-width: 100%;
+    font-size: 16px !important;
+  }
+
+  .creative-studio-shell img,
+  .creative-studio-shell video,
+  .creative-studio-shell canvas {
+    max-width: 100%;
+  }
+
+  .cs-create-layout > *,
+  .cs-main-column > *,
+  .cs-side-column > *,
+  .cs-result-card,
+  .cs-history-card,
+  .cs-notice__copy,
+  .cs-modal > * {
+    min-width: 0;
+  }
+
+  .cs-notice,
+  .cs-notice code,
+  .cs-result-error,
+  .cs-result-error code {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}

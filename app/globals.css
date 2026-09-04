@@ -417,6 +417,31 @@
 .is-content-custom-grid button { display: grid; gap: .25rem; }
 .is-content-custom-grid button span { color: var(--nx-text-muted, #a8b5c8); font-size: .75rem; }
 
+/* Last-resort mobile page containment. Pinch zoom remains available; this
+   only prevents layout overflow from becoming horizontal document scroll. */
+@media (max-width: 760px) {
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  @supports (overflow: clip) {
+    html,
+    body {
+      overflow-x: clip;
+    }
+  }
+
+  .xeriano-customer-shell,
+  .xeriano-customer-main,
+  .hq-app-main,
+  .hq-app-content {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
 @media (max-width: 760px) {
   .is-content-purpose-grid { grid-template-columns: 1fr; }
   .is-content-pack-summary { grid-template-columns: 1fr; }

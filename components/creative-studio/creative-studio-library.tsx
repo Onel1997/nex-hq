@@ -54,12 +54,13 @@ export function PromptLibrary(props: {
   onCreate: () => void;
   onLoad: (prompt: SavedCreativePrompt) => void;
   onToggleFavorite: (prompt: SavedCreativePrompt) => void;
-  onDuplicate: (prompt: SavedCreativePrompt) => void;
+  onCopy: (prompt: SavedCreativePrompt) => Promise<boolean>;
   onEdit: (prompt: SavedCreativePrompt) => void;
   onDelete: (promptId: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<PromptFilter>("ALL");
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const filtered = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("de");
     return props.prompts
@@ -124,6 +125,7 @@ export function PromptLibrary(props: {
           ))}
         </div>
       </div>
+      {copyFeedback ? <p className="cs-copy-feedback" role="status">{copyFeedback}</p> : null}
       {filtered.length ? (
         <div className="cs-prompt-grid">
           {filtered.map((prompt) => (
@@ -178,8 +180,14 @@ export function PromptLibrary(props: {
                   <button
                     type="button"
                     className="cs-icon-button"
-                    onClick={() => props.onDuplicate(prompt)}
-                    aria-label="Prompt duplizieren"
+                    onClick={() => {
+                      void props.onCopy(prompt).then((copied) => {
+                        setCopyFeedback(copied
+                          ? "Prompt wurde kopiert."
+                          : "Prompt konnte nicht kopiert werden.");
+                      });
+                    }}
+                    aria-label="Prompt kopieren"
                   >
                     <Copy size={16} />
                   </button>
