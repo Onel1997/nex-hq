@@ -9,6 +9,9 @@ const read = (file: string) => readFileSync(path.join(root, file), "utf8");
 const migration = read(
   "supabase/migrations/20260831181745_xeriano_temp_references_v1.sql",
 );
+const videoEditorMigration = read(
+  "supabase/migrations/20260904201254_xeriamo_video_editor_references_and_render_lease.sql",
+);
 const server = read("lib/xeriano/temp-references/server.ts");
 const client = read("lib/xeriano/temp-references/client.ts");
 const creativeClient = read("lib/creative-studio/client.ts");
@@ -104,4 +107,14 @@ test("signed provider URLs remain server-only and never become durable setup tru
 test("removal cannot delete a reference already bound to provider recovery", () => {
   assert.match(server, /if \(row\.upload_state === "BOUND"\) return \{ deleted: false as const \}/);
   assert.match(server, /bound_job_id: input\.jobId/);
+});
+
+test("Video Editor adds a separate bounded studio value without changing existing authorities", () => {
+  assert.match(videoEditorMigration, /'CREATIVE_STUDIO','UGC_VIDEO_STUDIO','VIDEO_EDITOR_STUDIO'/);
+  assert.match(videoEditorMigration, /studio = 'VIDEO_EDITOR_STUDIO'/);
+  assert.match(videoEditorMigration, /kind = 'VIDEO'[\s\S]*104857600/);
+  assert.match(videoEditorMigration, /kind = 'AUDIO'[\s\S]*15728640/);
+  assert.match(server, /VIDEO_EDITOR_STUDIO:[\s\S]*"video\/mp4": 100 \* 1024 \* 1024/);
+  assert.match(server, /VIDEO_EDITOR_STUDIO:[\s\S]*"audio\/mpeg": 15 \* 1024 \* 1024/);
+  assert.match(server, /studio === "VIDEO_EDITOR_STUDIO" && !hasXerianoOwnerAuthority\(context\)/);
 });

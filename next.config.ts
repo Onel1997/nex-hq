@@ -22,6 +22,8 @@ const nextConfig: NextConfig = {
   // (Vercel / standalone).
   outputFileTracingIncludes: {
     "/api/ugc-video-studio/generate": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/video-editor-studio/analyze": ["./node_modules/ffmpeg-static/ffmpeg"],
+    "/api/video-editor-studio/render": ["./node_modules/ffmpeg-static/ffmpeg"],
     "/api/**/*": ["./server-assets/face-api-models/**/*"],
     "/*": ["./server-assets/face-api-models/**/*"],
   },

@@ -3,6 +3,7 @@ const OWNER_PRODUCT_ROUTE_ROOTS = [
   "/hq/design-studio",
   "/hq/creative-studio",
   "/hq/ugc-video-studio",
+  "/hq/video-editor-studio",
   "/hq/library",
   "/hq/credits",
 ] as const;

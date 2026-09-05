@@ -131,6 +131,7 @@ test("Owner navigation has one canonical route authority and exact active routes
       "Design Studio",
       "Creative Studio",
       "UGC Video Studio",
+      "Video Editor Studio",
       "Bibliothek",
       "Credits / Plan",
       "Design Studio Intern",
@@ -147,12 +148,14 @@ test("Owner navigation has one canonical route authority and exact active routes
   const library = owner.find((item) => item.href === "/hq/library");
   const creative = owner.find((item) => item.href === "/hq/creative-studio");
   const ugc = owner.find((item) => item.href === "/hq/ugc-video-studio");
+  const editor = owner.find((item) => item.href === "/hq/video-editor-studio");
   const video = owner.find((item) => item.id === "video");
-  assert.ok(customers && library && creative && ugc && video);
+  assert.ok(customers && library && creative && ugc && editor && video);
   assert.equal(isSidebarNavItemActive("/hq/library/creation-id", library), true);
   assert.equal(isSidebarNavItemActive("/hq/customers/customer-id", customers), true);
   assert.equal(isSidebarNavItemActive("/hq/creative-studio", creative), true);
   assert.equal(isSidebarNavItemActive("/hq/ugc-video-studio", ugc), true);
+  assert.equal(isSidebarNavItemActive("/hq/video-editor-studio", editor), true);
   assert.equal(isSidebarNavItemActive(video.href, video), true);
 });
 
@@ -170,6 +173,7 @@ test("Owner navigation groups the active Studios, unfinished Studios and adminis
     "Design Studio",
     "Creative Studio",
     "UGC Video Studio",
+    "Video Editor Studio",
   ]);
   assert.deepEqual(sections[2]?.items.map((item) => item.label), [
     "Bibliothek",

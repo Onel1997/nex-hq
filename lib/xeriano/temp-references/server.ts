@@ -5,6 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   hasXerianoAccountMembership,
+  hasXerianoOwnerAuthority,
   resolveXerianoAccess,
   type XerianoAccountContext,
 } from "@/lib/xeriano/auth";
@@ -19,6 +20,16 @@ import {
   type XerianoTempReferenceKind,
   type XerianoTempReferenceStudio,
 } from "./contracts";
+
+function assertVideoEditorOwner(context: XerianoAccountContext, studio: XerianoTempReferenceStudio) {
+  if (studio === "VIDEO_EDITOR_STUDIO" && !hasXerianoOwnerAuthority(context)) {
+    throw new XerianoTempReferenceError(
+      "TEMP_REFERENCE_FORBIDDEN",
+      403,
+      "Das Video Editor Studio ist derzeit ein OWNER-Pilot.",
+    );
+  }
+}
 
 type TempReferenceRow = {
   id: string;
@@ -84,6 +95,19 @@ const MIME_LIMITS: Record<
       "video/quicktime": 200 * 1024 * 1024,
       "video/webm": 200 * 1024 * 1024,
       "video/x-m4v": 200 * 1024 * 1024,
+    },
+    AUDIO: {
+      "audio/mpeg": 15 * 1024 * 1024,
+      "audio/wav": 15 * 1024 * 1024,
+      "audio/x-wav": 15 * 1024 * 1024,
+    },
+  },
+  VIDEO_EDITOR_STUDIO: {
+    VIDEO: {
+      "video/mp4": 100 * 1024 * 1024,
+      "video/quicktime": 100 * 1024 * 1024,
+      "video/webm": 100 * 1024 * 1024,
+      "video/x-m4v": 100 * 1024 * 1024,
     },
     AUDIO: {
       "audio/mpeg": 15 * 1024 * 1024,
@@ -177,6 +201,7 @@ export async function createTempReferenceSlot(input: {
   request: unknown;
 }) {
   const parsed = xerianoTempReferenceSlotRequestSchema.parse(input.request);
+  assertVideoEditorOwner(input.context, parsed.studio);
   const mimeType = parsed.mimeType.toLowerCase();
   assertDeclaredUpload({ ...parsed, mimeType });
   const id = randomUUID();
@@ -325,6 +350,7 @@ export async function completeTempReference(input: {
   referenceId: string;
 }) {
   const row = await ownedRow(input);
+  assertVideoEditorOwner(input.context, row.studio);
   if (new Date(row.expires_at).getTime() <= Date.now()) {
     throw new XerianoTempReferenceError(
       "TEMP_REFERENCE_EXPIRED",
@@ -497,6 +523,7 @@ export async function deleteTempReference(input: {
   referenceId: string;
 }) {
   const row = await ownedRow(input);
+  assertVideoEditorOwner(input.context, row.studio);
   if (row.upload_state === "BOUND") return { deleted: false as const };
   await createAdminClient().storage.from(row.storage_bucket).remove([row.storage_path]);
   const removed = await createAdminClient()

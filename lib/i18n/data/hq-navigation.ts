@@ -23,6 +23,7 @@ import {
   PackageSearch,
   Settings,
   ShoppingBag,
+  Scissors,
   UserRound,
   UsersRound,
   Wand2,
@@ -43,6 +44,7 @@ const OWNER_STUDIO_NAV: Array<{
     | "image"
     | "creative"
     | "ugcVideo"
+    | "videoEditor"
     | "video"
     | "products"
     | "shopify";
@@ -82,6 +84,17 @@ const OWNER_STUDIO_NAV: Array<{
     isActive: (pathname) =>
       pathname === "/hq/ugc-video-studio" ||
       pathname.startsWith("/hq/ugc-video-studio/"),
+  },
+  {
+    id: "video-editor",
+    href: "/hq/video-editor-studio",
+    group: "primary",
+    labelKey: "videoEditor",
+    icon: Scissors,
+    accent: "#58dff0",
+    isActive: (pathname) =>
+      pathname === "/hq/video-editor-studio" ||
+      pathname.startsWith("/hq/video-editor-studio/"),
   },
   {
     id: "designer-internal",
@@ -164,6 +177,7 @@ export function getHqSidebarSections(locale: Locale): HqSidebarSection[] {
     image: agents.studioNames.image,
     creative: "Creative Studio",
     ugcVideo: "UGC Video Studio",
+    videoEditor: "Video Editor Studio",
     video: agents.videoStudio,
     products: "Produktbibliothek",
     shopify: agents.studioNames.shopify,

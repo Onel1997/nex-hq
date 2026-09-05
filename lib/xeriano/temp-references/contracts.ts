@@ -8,6 +8,7 @@ export const XERIAMO_PROVIDER_REFERENCE_URL_TTL_SECONDS = 60 * 60;
 export const xerianoTempReferenceStudioSchema = z.enum([
   "CREATIVE_STUDIO",
   "UGC_VIDEO_STUDIO",
+  "VIDEO_EDITOR_STUDIO",
 ]);
 export const xerianoTempReferenceKindSchema = z.enum([
   "IMAGE",
