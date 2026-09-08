@@ -10,7 +10,7 @@ import {
 import { normalizeFalDesignResults } from "./providers/fal-design";
 import { FalDesignProvider, type FalDesignTransport } from "./providers/fal-design";
 import { quoteDesignCustomerGeneration } from "../xeriano/customer-generation";
-import { generateDesignJob } from "./generation-service";
+import { generateDesignJob, recoverDesignJob } from "./generation-service";
 import type { DesignProviderQueueHandle } from "./provider";
 import type { DesignJobManifest } from "./server-contracts";
 
@@ -132,6 +132,103 @@ test("accepted fal request recovery observes status and never submits again", as
   assert.equal(recovered?.providerRequestId, "accepted-request");
   assert.equal(recovered?.results.length, 1);
   assert.equal(submitted, 0);
+});
+
+test("accepted Ideogram recovery persists the result once and remains terminal on reload", async () => {
+  const endpoint = DESIGN_ENDPOINTS.IDEOGRAM_TEXT;
+  const acceptedHandle: DesignProviderQueueHandle = {
+    requestId: "accepted-ideogram",
+    endpoint,
+    statusUrl: "https://queue.fal.run/ideogram/v4/requests/accepted-ideogram/status",
+    responseUrl: "https://queue.fal.run/ideogram/v4/requests/accepted-ideogram",
+    cancelUrl: "https://queue.fal.run/ideogram/v4/requests/accepted-ideogram/cancel",
+  };
+  let manifest = {
+    version: "xeriamo-design-job-v1",
+    jobId: "00000000-0000-4000-8000-000000000081",
+    workspaceId: "workspace",
+    actorId: "actor",
+    requestFingerprint: "a".repeat(64),
+    createdAt: "2026-09-08T17:26:00.000Z",
+    updatedAt: "2026-09-08T17:26:38.000Z",
+    status: "UNKNOWN_OUTCOME",
+    setup: setup(),
+    originalPrompt: setup().prompt,
+    providerPrompt: null,
+    providerModel: endpoint,
+    providerRequestId: acceptedHandle.requestId,
+    providerQueueHandle: acceptedHandle,
+    estimatedCostUsdMicros: 47_186,
+    referenceChecksumSha256: null,
+    referenceStoragePath: null,
+    results: [],
+    message: "Der Anbieterstatus wird sicher geprüft.",
+    failureCode: null,
+    technicalError: "Der Anbieterstatus ist nach der Übermittlung nicht eindeutig.",
+  } as DesignJobManifest;
+  let recoverCalls = 0;
+  let submitCalls = 0;
+  let persistedResults = 0;
+  const canvas = createCanvas(96, 64);
+  const png = canvas.toBuffer("image/png");
+  const store = {
+    async readManifest() { return manifest; },
+    async writeManifest(value: DesignJobManifest) { manifest = value; },
+    async persistResult() { persistedResults += 1; return "results/recovered-ideogram.png"; },
+  };
+  const provider = {
+    isConfigured: () => true,
+    async generate() { submitCalls += 1; throw new Error("must not submit"); },
+    async recover(input: { providerQueueHandle?: DesignProviderQueueHandle | null }) {
+      recoverCalls += 1;
+      assert.deepEqual(input.providerQueueHandle, acceptedHandle);
+      return {
+        providerModel: endpoint,
+        providerRequestId: acceptedHandle.requestId,
+        providerPrompt: "safe prompt",
+        results: [{ url: "https://result.example/ideogram.png", mimeType: "image/png", width: null, height: null }],
+      };
+    },
+  };
+  const dependencies = {
+    store: store as never,
+    provider,
+    fetcher: async () => new Response(Uint8Array.from(png), {
+      status: 200,
+      headers: { "content-type": "image/png" },
+    }),
+    now: () => "2026-09-08T17:30:00.000Z",
+  };
+
+  const recovered = await recoverDesignJob({
+    scope: { workspaceId: "workspace", actorId: "actor" },
+    jobId: manifest.jobId,
+  }, dependencies);
+  const reloaded = await recoverDesignJob({
+    scope: { workspaceId: "workspace", actorId: "actor" },
+    jobId: manifest.jobId,
+  }, dependencies);
+
+  assert.equal(recovered.status, "SUCCEEDED");
+  assert.equal(recovered.results.length, 1);
+  assert.equal(recovered.results[0]?.url.startsWith("/api/design-studio/assets/"), true);
+  assert.deepEqual(reloaded, recovered);
+  assert.equal(recoverCalls, 1);
+  assert.equal(persistedResults, 1);
+  assert.equal(submitCalls, 0);
+  assert.equal(manifest.providerRequestId, acceptedHandle.requestId);
+});
+
+test("successful Design recovery is projected idempotently through the existing Library authority", async () => {
+  const route = await readFile(new URL("../../app/api/design-studio/jobs/[jobId]/route.ts", import.meta.url), "utf8");
+  const projection = await readFile(new URL("./projection.ts", import.meta.url), "utf8");
+  assert.ok(route.indexOf("await recoverDesignJob") < route.indexOf("await finalizeDesignCreations"));
+  assert.match(route, /if \(isSuccessfulDesignRun\(run\)\)/);
+  assert.match(projection, /eq\("source_studio", "DESIGN_STUDIO"\)/);
+  assert.match(projection, /eq\("source_job_id", input\.run\.id\)/);
+  assert.match(projection, /eq\("source_result_id", result\.publicView\.id\)/);
+  assert.match(projection, /if \(!assetId\)/);
+  assert.match(projection, /if \(!creationId\)/);
 });
 
 test("shared economics produces server-authoritative, dimension-sensitive safe quotes", () => {

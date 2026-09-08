@@ -62,6 +62,31 @@ function logRecraftQueue(
   else console.info(`[xeriamo-design] ${event}`, payload);
 }
 
+function logDesignQueueObservation(
+  event: "poll_endpoint_match" | "poll_failed" | "result_recovered",
+  fields: {
+    endpoint: DesignEndpoint;
+    requestIdPresent: boolean;
+    recoveryStage: FalQueueStage;
+    providerStatus?: string | number | null;
+    providerUrlSource?: FalQueueUrlSource | null;
+  },
+) {
+  if (isRecraftEndpoint(fields.endpoint)) {
+    logRecraftQueue(`recraft_${event}`, fields);
+    return;
+  }
+  const payload = {
+    routeClass: fields.endpoint,
+    requestIdPresent: fields.requestIdPresent,
+    recoveryStage: fields.recoveryStage,
+    providerStatus: fields.providerStatus ?? null,
+    providerUrlSource: fields.providerUrlSource ?? null,
+  };
+  if (event === "poll_failed") console.warn(`[xeriamo-design] design_queue_${event}`, payload);
+  else console.info(`[xeriamo-design] design_queue_${event}`, payload);
+}
+
 /**
  * Extracts the acceptance identity from the installed fal contract while also
  * accepting the camel-case and wrapped shapes returned by older compatible
@@ -216,14 +241,14 @@ export function createFalDesignQueueObserver(
     try {
       const value = await readFalQueueResponse(response);
       if (stage === "result") {
-        logRecraftQueue("recraft_result_recovered", {
+        logDesignQueueObservation("result_recovered", {
           endpoint, requestIdPresent: true, recoveryStage: stage, providerStatus: response.status,
           providerUrlSource: observation.source,
         });
       }
       return value;
     } catch (error) {
-      logRecraftQueue("recraft_poll_failed", {
+      logDesignQueueObservation("poll_failed", {
         endpoint,
         requestIdPresent: true,
         recoveryStage: stage,
@@ -247,7 +272,7 @@ export function createFalDesignQueueObserver(
         throw new Error("FAL_DESIGN_QUEUE_STATUS_INVALID");
       }
       if (status === "COMPLETED") {
-        logRecraftQueue("recraft_poll_endpoint_match", {
+        logDesignQueueObservation("poll_endpoint_match", {
           endpoint, requestIdPresent: true, recoveryStage: "status", providerStatus: status,
           providerUrlSource: queueHandle ? "authoritative" : "legacy-reconstructed",
         });
@@ -260,9 +285,12 @@ export function createFalDesignQueueObserver(
   };
 }
 
-function defaultTransport(credentials: string): FalDesignTransport {
-  const client: FalClient = createFalClient({ credentials });
-  const recraftQueue = createFalDesignQueueObserver(credentials);
+export function createFalDesignTransport(
+  credentials: string,
+  client: FalClient = createFalClient({ credentials }),
+  fetcher: typeof fetch = fetch,
+): FalDesignTransport {
+  const queueObserver = createFalDesignQueueObserver(credentials, fetcher);
   return {
     upload(reference) {
       return client.storage.upload(new Blob([Uint8Array.from(reference.bytes)], { type: reference.mimeType }), {
@@ -296,8 +324,8 @@ function defaultTransport(credentials: string): FalDesignTransport {
       return { requestId, queueHandle };
     },
     async wait(endpoint, requestId, queueHandle) {
-      if (isRecraftEndpoint(endpoint)) {
-        while (await recraftQueue.status(endpoint, requestId, queueHandle) !== "COMPLETED") {
+      if (queueHandle || isRecraftEndpoint(endpoint)) {
+        while (await queueObserver.status(endpoint, requestId, queueHandle) !== "COMPLETED") {
           await new Promise((resolve) => setTimeout(resolve, 1_000));
         }
         return;
@@ -310,8 +338,8 @@ function defaultTransport(credentials: string): FalDesignTransport {
       });
     },
     async status(endpoint, requestId, queueHandle) {
-      if (isRecraftEndpoint(endpoint)) {
-        return await recraftQueue.status(endpoint, requestId, queueHandle) === "COMPLETED" ? "COMPLETED" : "RUNNING";
+      if (queueHandle || isRecraftEndpoint(endpoint)) {
+        return await queueObserver.status(endpoint, requestId, queueHandle) === "COMPLETED" ? "COMPLETED" : "RUNNING";
       }
       const status = await client.queue.status(endpoint as never, {
         requestId,
@@ -320,7 +348,7 @@ function defaultTransport(credentials: string): FalDesignTransport {
       return status.status === "COMPLETED" ? "COMPLETED" : "RUNNING";
     },
     async result(endpoint, requestId, queueHandle) {
-      if (isRecraftEndpoint(endpoint)) return recraftQueue.result(endpoint, requestId, queueHandle);
+      if (queueHandle || isRecraftEndpoint(endpoint)) return queueObserver.result(endpoint, requestId, queueHandle);
       const response = await client.queue.result(endpoint as never, { requestId });
       return response.data;
     },
@@ -364,7 +392,7 @@ export class FalDesignProvider implements DesignProvider {
 
   async generate(input: Parameters<DesignProvider["generate"]>[0]) {
     if (!this.isConfigured()) throw new Error("DESIGN_PROVIDER_NOT_CONFIGURED");
-    const transport = this.transport ?? defaultTransport(this.credentials!.trim());
+    const transport = this.transport ?? createFalDesignTransport(this.credentials!.trim());
     const referenceUrl = input.reference ? await transport.upload(input.reference) : null;
     const providerPrompt = buildDesignProviderPrompt(input.setup);
     const prepared = buildDesignProviderInput({ setup: input.setup, providerPrompt, referenceUrl });
@@ -393,7 +421,7 @@ export class FalDesignProvider implements DesignProvider {
 
   async recover(input: Parameters<NonNullable<DesignProvider["recover"]>>[0]) {
     if (!this.isConfigured()) throw new Error("DESIGN_PROVIDER_NOT_CONFIGURED");
-    const transport = this.transport ?? defaultTransport(this.credentials!.trim());
+    const transport = this.transport ?? createFalDesignTransport(this.credentials!.trim());
     try {
       if (!transport.status) return null;
       const status = await transport.status(

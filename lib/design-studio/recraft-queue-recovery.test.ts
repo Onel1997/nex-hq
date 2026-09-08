@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { FalClient } from "@fal-ai/client";
 
 import {
   DESIGN_STUDIO_CONTRACT_VERSION,
@@ -13,6 +14,7 @@ import type { DesignProviderQueueHandle } from "./provider";
 import {
   assertFalDesignQueueUrl,
   buildFalDesignQueueObservationUrl,
+  createFalDesignTransport,
   createFalDesignQueueObserver,
   extractFalDesignQueueHandle,
   extractFalDesignQueueRequestId,
@@ -92,6 +94,46 @@ test("authoritative Recraft observer uses provider-returned status and response 
   });
   assert.deepEqual(calls.map((call) => call.url), [handle.statusUrl, handle.responseUrl]);
   assert.deepEqual(calls.map((call) => call.authorization), ["Key server-secret", "Key server-secret"]);
+});
+
+test("Ideogram recovery transport uses persisted authoritative URLs without reconstruction", async () => {
+  const endpoint = DESIGN_ENDPOINTS.IDEOGRAM_TEXT;
+  const handle = {
+    ...queueHandle(endpoint, "ideogram-provider-issued-handle"),
+    statusUrl: "https://queue.fal.run/ideogram/v4/requests/accepted-request/status",
+    responseUrl: "https://queue.fal.run/ideogram/v4/requests/accepted-request",
+  };
+  const fetched: string[] = [];
+  let nativeStatusCalls = 0;
+  let nativeResultCalls = 0;
+  const client = {
+    storage: { async upload() { throw new Error("must not upload"); } },
+    queue: {
+      async status() { nativeStatusCalls += 1; throw new Error("must not reconstruct status"); },
+      async result() { nativeResultCalls += 1; throw new Error("must not reconstruct result"); },
+    },
+  } as unknown as FalClient;
+  const fetcher: typeof fetch = async (input) => {
+    const url = String(input);
+    fetched.push(url);
+    const body = url === handle.statusUrl
+      ? { status: "COMPLETED" }
+      : { images: [{ url: "https://result.example/ideogram.png", content_type: "image/png" }] };
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  const transport = createFalDesignTransport("server-secret", client, fetcher);
+
+  assert.equal(await transport.status?.(endpoint, handle.requestId, handle), "COMPLETED");
+  assert.deepEqual(await transport.result(endpoint, handle.requestId, handle), {
+    images: [{ url: "https://result.example/ideogram.png", content_type: "image/png" }],
+  });
+  assert.deepEqual(fetched, [handle.statusUrl, handle.responseUrl]);
+  assert.equal(nativeStatusCalls, 0);
+  assert.equal(nativeResultCalls, 0);
+  assert.equal(new URL(fetched[0]!).search, "");
 });
 
 test("fal acceptance parser captures installed queue URLs and compatible request-id shapes", () => {
