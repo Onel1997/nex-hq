@@ -7,7 +7,8 @@ export const DESIGN_UTILITY_CONFIG = Object.freeze({
   BACKGROUND_REMOVE: Object.freeze({
     endpoint: "fal-ai/ideogram/remove-background",
     providerCostUsdMicros: 10_000,
-    providerCostSource: "OWNER-provided fal estimate: USD 0.01 per image (2026-08-31)",
+    providerCostSource: "fal Ideogram Remove Background published USD 0.01 per image, reviewed 2026-09-08",
+    maxInputBytes: 10 * 1024 * 1024,
     pricingRuleId: "design-background-remove-v1",
   }),
   UPSCALE: Object.freeze({
@@ -17,6 +18,7 @@ export const DESIGN_UTILITY_CONFIG = Object.freeze({
     providerUnitCostUsdMicros: 1_110,
     estimatedComputeSeconds: 18,
     pricingRuleId: "design-upscale-2x-v1",
+    maxInputBytes: 50 * 1024 * 1024,
   }),
 });
 

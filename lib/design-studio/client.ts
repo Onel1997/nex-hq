@@ -67,6 +67,33 @@ export async function submitDesignUtility(input: {
   return { status: "SUCCEEDED" as const, result: result as DesignUtilityClientResult };
 }
 
+export async function fetchDesignUtilityJob(jobId: string, fetcher: typeof fetch = fetch) {
+  const response = await fetcher(`/api/design-studio/utility/jobs/${encodeURIComponent(jobId)}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const body = await response.json().catch(() => null) as {
+    success?: unknown;
+    status?: unknown;
+    result?: unknown;
+    error?: unknown;
+    code?: unknown;
+  } | null;
+  if (!response.ok) throw new DesignUtilityClientError(
+    typeof body?.error === "string" ? body.error : "Die Aktion konnte nicht geladen werden.",
+    typeof body?.code === "string" ? body.code : null,
+    response.status,
+  );
+  const result = body?.result as Partial<DesignUtilityClientResult> | null;
+  return {
+    status: typeof body?.status === "string" ? body.status : "UNKNOWN_OUTCOME",
+    result: result && typeof result.assetId === "string" && typeof result.creationId === "string"
+      && typeof result.width === "number" && typeof result.height === "number"
+      ? result as DesignUtilityClientResult
+      : null,
+  };
+}
+
 export async function submitSvgToPng(input: {
   jobId: string;
   sourceAssetId: string;
@@ -97,6 +124,71 @@ export async function submitSvgToPng(input: {
     throw new DesignUtilityClientError("PNG-Version konnte nicht erstellt werden.", "SVG_TO_PNG_RESULT_INVALID", 503);
   }
   return { status: "SUCCEEDED" as const, result: result as DesignUtilityClientResult };
+}
+
+export async function submitDesignPrintFile(input: {
+  jobId: string;
+  sourceAssetId: string;
+  removeBackground: boolean;
+  fetcher?: typeof fetch;
+}) {
+  const response = await (input.fetcher ?? fetch)("/api/design-studio/print-file", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({
+      jobId: input.jobId,
+      sourceAssetId: input.sourceAssetId,
+      removeBackground: input.removeBackground,
+    }),
+  });
+  const body = await response.json().catch(() => null) as {
+    success?: unknown;
+    error?: unknown;
+    code?: unknown;
+    result?: unknown;
+  } | null;
+  if (!response.ok || body?.success !== true) {
+    throw new DesignUtilityClientError(
+      typeof body?.error === "string" ? body.error : "Druckdatei konnte nicht erstellt werden.",
+      typeof body?.code === "string" ? body.code : null,
+      response.status,
+    );
+  }
+  const result = body.result as Partial<DesignUtilityClientResult> | null;
+  if (!result || typeof result.assetId !== "string" || typeof result.creationId !== "string"
+    || typeof result.width !== "number" || typeof result.height !== "number") {
+    throw new DesignUtilityClientError("Druckdatei konnte nicht erstellt werden.", "PRINT_FILE_RESULT_INVALID", 503);
+  }
+  return { status: "SUCCEEDED" as const, result: result as DesignUtilityClientResult };
+}
+
+export async function fetchDesignPrintFileJob(jobId: string, fetcher: typeof fetch = fetch) {
+  const response = await fetcher(`/api/design-studio/print-file/jobs/${encodeURIComponent(jobId)}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const body = await response.json().catch(() => null) as {
+    status?: unknown;
+    result?: unknown;
+    error?: unknown;
+    code?: unknown;
+  } | null;
+  if (!response.ok) {
+    throw new DesignUtilityClientError(
+      typeof body?.error === "string" ? body.error : "Druckdatei konnte nicht geladen werden.",
+      typeof body?.code === "string" ? body.code : null,
+      response.status,
+    );
+  }
+  const result = body?.result as Partial<DesignUtilityClientResult> | null;
+  return {
+    status: typeof body?.status === "string" ? body.status : "PREPARING",
+    result: result && typeof result.assetId === "string" && typeof result.creationId === "string"
+      && typeof result.width === "number" && typeof result.height === "number"
+      ? result as DesignUtilityClientResult
+      : null,
+  };
 }
 
 export async function submitDesignGeneration(input: { jobId: string; setup: DesignGenerationSetup; reference: File | null; fetcher?: typeof fetch }): Promise<{ run: DesignRun; credit?: unknown }> {

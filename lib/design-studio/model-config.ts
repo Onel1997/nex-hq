@@ -7,6 +7,8 @@ export const DESIGN_ENDPOINTS = Object.freeze({
   RECRAFT_VECTOR: "fal-ai/recraft/v4/text-to-vector",
   RECRAFT_REFERENCE_RASTER: "recraft/v4/style/text-to-image",
   RECRAFT_REFERENCE_VECTOR: "recraft/v4/style/text-to-vector",
+  GPT_IMAGE_2_TEXT: "openai/gpt-image-2",
+  GPT_IMAGE_2_EDIT: "openai/gpt-image-2/edit",
 } as const);
 export type DesignEndpoint = (typeof DESIGN_ENDPOINTS)[keyof typeof DESIGN_ENDPOINTS];
 
@@ -15,6 +17,10 @@ export function resolveDesignEndpoint(setup: DesignGenerationSetup): DesignEndpo
   if (setup.model === "IDEOGRAM_4") {
     if (setup.outputMode !== "RASTER") throw new Error("DESIGN_OUTPUT_UNSUPPORTED");
     return referenced ? DESIGN_ENDPOINTS.IDEOGRAM_REFERENCE : DESIGN_ENDPOINTS.IDEOGRAM_TEXT;
+  }
+  if (setup.model === "GPT_IMAGE_2") {
+    if (setup.outputMode !== "RASTER") throw new Error("DESIGN_OUTPUT_UNSUPPORTED");
+    return referenced ? DESIGN_ENDPOINTS.GPT_IMAGE_2_EDIT : DESIGN_ENDPOINTS.GPT_IMAGE_2_TEXT;
   }
   if (setup.outputMode === "VECTOR") {
     return referenced ? DESIGN_ENDPOINTS.RECRAFT_REFERENCE_VECTOR : DESIGN_ENDPOINTS.RECRAFT_VECTOR;
@@ -52,7 +58,18 @@ export const DESIGN_RASTER_DIMENSIONS = Object.freeze({
   }),
 } as const);
 
+/** Official GPT Image 2-compatible custom sizes. Each edge is divisible by 16,
+ * the selected product aspect ratio is exact, and no post-generation stretch
+ * is required. */
+export const GPT_IMAGE_2_DIMENSIONS = Object.freeze({
+  "1:1": { width: 1024, height: 1024 },
+  "4:5": { width: 1024, height: 1280 },
+  "3:4": { width: 768, height: 1024 },
+  "2:3": { width: 1024, height: 1536 },
+} as const);
+
 export function resolveDesignOutputDimensions(setup: DesignGenerationSetup) {
+  if (setup.model === "GPT_IMAGE_2") return GPT_IMAGE_2_DIMENSIONS[setup.aspectRatio];
   return setup.outputMode === "VECTOR"
     ? DESIGN_VECTOR_ARTBOARDS[setup.aspectRatio]
     : DESIGN_RASTER_DIMENSIONS[setup.resolution][setup.aspectRatio];
@@ -92,6 +109,16 @@ export function buildDesignProviderPrompt(setup: DesignGenerationSetup): string 
     "No product photography. No lifestyle or campaign photography. No UI. No watermark.",
     "Do not present the artwork printed on a physical product.",
     "Prioritize strong composition, visual hierarchy, print readability and a clean hero visual.",
+    setup.model === "GPT_IMAGE_2" && setup.reference
+      ? [
+          "GPT IMAGE 2 REFERENCE ROLE:",
+          "Use the reference exclusively as an abstract source of style, color, texture and mood.",
+          "Create a completely new composition, arrangement and visual hierarchy.",
+          "Do not copy visible words, symbols, logos, circles, X marks, microtext or concrete graphic elements from the reference.",
+          "The customer prompt and its exact requested text remain authoritative.",
+          "Do not invent any additional readable words.",
+        ].join("\n")
+      : null,
   ].filter(Boolean).join("\n\n");
 }
 
@@ -110,6 +137,18 @@ export function buildDesignProviderInput(input: {
         num_images: input.setup.count,
         rendering_speed: IDEOGRAM_RENDERING_SPEED[input.setup.quality],
         ...(input.referenceUrl ? { image_url: input.referenceUrl, strength: 0.65 } : {}),
+      },
+    };
+  }
+  if (input.setup.model === "GPT_IMAGE_2") {
+    return {
+      endpoint,
+      payload: {
+        ...common,
+        quality: input.setup.quality === "HIGH" ? "high" : "medium",
+        num_images: 1,
+        output_format: "png",
+        ...(input.referenceUrl ? { image_urls: [input.referenceUrl] } : {}),
       },
     };
   }

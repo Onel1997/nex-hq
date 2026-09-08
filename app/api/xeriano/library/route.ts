@@ -103,7 +103,7 @@ function object(value: unknown): JsonRecord {
 }
 
 function restoredSetup(creation: CreationRow | undefined) {
-  if (!creation || !["IDEOGRAM_4", "RECRAFT_4"].includes(creation.model_id ?? "")) return null;
+  if (!creation || !["IDEOGRAM_4", "RECRAFT_4", "GPT_IMAGE_2"].includes(creation.model_id ?? "")) return null;
   const settings = object(creation.settings);
   const parsed = designGenerationSetupSchema.safeParse({
     contractVersion: settings.contractVersion,
@@ -123,7 +123,7 @@ function restoredSetup(creation: CreationRow | undefined) {
 function designPresentation(row: LibraryRow, creation: CreationRow | undefined, sourceCreation: CreationRow | undefined) {
   if (row.asset_type !== "DESIGN") return null;
   const provenance = object(row.provenance);
-  const operation = provenance.operation === "BACKGROUND_REMOVE" || provenance.operation === "UPSCALE" || provenance.operation === "SVG_TO_PNG"
+  const operation = provenance.operation === "BACKGROUND_REMOVE" || provenance.operation === "UPSCALE" || provenance.operation === "SVG_TO_PNG" || provenance.operation === "PRINT_FILE_300_DPI"
     ? provenance.operation
     : null;
   const width = typeof provenance.width === "number" ? provenance.width : null;
@@ -138,6 +138,10 @@ function designPresentation(row: LibraryRow, creation: CreationRow | undefined, 
     canBackgroundRemove: capabilities?.canBackgroundRemove ?? false,
     canUpscale: capabilities?.canUpscale ?? false,
     canCreatePng: capabilities?.canCreatePng ?? false,
+    canCreatePrintFile: capabilities?.canCreatePrintFile ?? false,
+    printRasterUpscaled: operation === "PRINT_FILE_300_DPI"
+      ? provenance.raster_source_upscaled === true
+      : null,
     setup: restoredSetup(creation) ?? restoredSetup(sourceCreation),
   };
 }

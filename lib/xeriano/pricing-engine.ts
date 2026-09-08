@@ -313,7 +313,7 @@ export function resolveProviderCost(
       fxVersion: fx.version,
     };
   }
-  if (input.modelId === "ideogram-4" || input.modelId === "recraft-4") {
+  if (input.modelId === "ideogram-4" || input.modelId === "recraft-4" || input.modelId === "gpt-image-2") {
     const design = resolveDesignProviderCost({
       model: input.designModel,
       quality: input.quality,

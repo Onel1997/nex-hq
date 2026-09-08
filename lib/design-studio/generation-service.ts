@@ -89,7 +89,9 @@ async function persistProviderResults(input: {
           mimeType: downloaded.mimeType as "image/png" | "image/jpeg" | "image/webp" | "image/svg+xml",
           width: actualDimensions.width,
           height: actualDimensions.height,
-          resolution: downloaded.mimeType === "image/svg+xml" ? null : input.manifest.setup.resolution,
+          resolution: downloaded.mimeType === "image/svg+xml" || input.manifest.setup.model === "GPT_IMAGE_2"
+            ? null
+            : input.manifest.setup.resolution,
           favorite: false,
           libraryAssetId: null,
           creationId: null,

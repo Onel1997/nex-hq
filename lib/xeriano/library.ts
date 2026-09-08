@@ -27,12 +27,14 @@ export const xerianoLibraryAssetSchema = z.object({
   updatedAt: z.string(),
   creationId: z.string().uuid().nullable().optional(),
   design: z.object({
-    operation: z.enum(["BACKGROUND_REMOVE", "UPSCALE", "SVG_TO_PNG"]).nullable(),
+    operation: z.enum(["BACKGROUND_REMOVE", "UPSCALE", "SVG_TO_PNG", "PRINT_FILE_300_DPI"]).nullable(),
     derivedFromAssetId: z.string().uuid().nullable(),
     transparentPreview: z.boolean(),
     canBackgroundRemove: z.boolean(),
     canUpscale: z.boolean(),
     canCreatePng: z.boolean(),
+    canCreatePrintFile: z.boolean(),
+    printRasterUpscaled: z.boolean().nullable().optional(),
     setup: z.unknown().nullable(),
   }).nullable().optional(),
 });
@@ -43,16 +45,22 @@ export function deriveDesignAssetCapabilities(input: {
   mimeType: string;
   width: number | null;
   height: number | null;
-  operation: "BACKGROUND_REMOVE" | "UPSCALE" | "SVG_TO_PNG" | null;
+  operation: "BACKGROUND_REMOVE" | "UPSCALE" | "SVG_TO_PNG" | "PRINT_FILE_300_DPI" | null;
 }) {
   if (input.assetType !== "DESIGN") return null;
   const raster = ["image/png", "image/jpeg", "image/webp"].includes(input.mimeType);
   return {
-    transparentPreview: input.operation === "BACKGROUND_REMOVE" || input.operation === "SVG_TO_PNG",
-    canBackgroundRemove: raster && input.operation !== "BACKGROUND_REMOVE",
+    transparentPreview: input.operation === "BACKGROUND_REMOVE"
+      || input.operation === "SVG_TO_PNG"
+      || input.operation === "PRINT_FILE_300_DPI",
+    canBackgroundRemove: (raster || input.mimeType === "image/svg+xml")
+      && input.operation !== "BACKGROUND_REMOVE"
+      && input.operation !== "PRINT_FILE_300_DPI",
     canUpscale: raster && input.width !== null && input.height !== null
       && Math.max(input.width, input.height) <= 2_560,
     canCreatePng: input.mimeType === "image/svg+xml",
+    canCreatePrintFile: input.operation !== "PRINT_FILE_300_DPI"
+      && (raster || input.mimeType === "image/svg+xml"),
   };
 }
 

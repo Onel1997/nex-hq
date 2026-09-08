@@ -8,6 +8,15 @@ export const designUtilityRequestSchema = z.object({
 }).strict();
 export type DesignUtilityRequest = z.infer<typeof designUtilityRequestSchema>;
 
+export const designUtilityQueueHandleSchema = z.object({
+  requestId: z.string().min(1).max(512),
+  endpoint: z.string().min(1).max(300),
+  statusUrl: z.string().url().max(2048),
+  responseUrl: z.string().url().max(2048),
+  cancelUrl: z.string().url().max(2048).nullable(),
+}).strict();
+export type DesignUtilityQueueHandle = z.infer<typeof designUtilityQueueHandleSchema>;
+
 export const designUtilityManifestSchema = z.object({
   version: z.literal("xeriamo-design-utility-job-v1"),
   jobId: z.string().uuid(),
@@ -18,6 +27,7 @@ export const designUtilityManifestSchema = z.object({
   operation: z.enum(DESIGN_UTILITY_OPERATIONS),
   status: z.enum(["RUNNING", "SUCCEEDED", "UNKNOWN_OUTCOME", "FAILED"]),
   providerRequestId: z.string().min(1).nullable(),
+  providerQueueHandle: designUtilityQueueHandleSchema.nullable().default(null),
   providerModel: z.string().min(1),
   resultAssetId: z.string().uuid().nullable(),
   resultCreationId: z.string().uuid().nullable(),

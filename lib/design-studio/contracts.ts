@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const DESIGN_STUDIO_CONTRACT_VERSION = "xeriamo-design-studio-v1" as const;
-export const DESIGN_MODELS = ["IDEOGRAM_4", "RECRAFT_4"] as const;
+export const DESIGN_MODELS = ["IDEOGRAM_4", "RECRAFT_4", "GPT_IMAGE_2"] as const;
 export const DESIGN_OUTPUT_MODES = ["RASTER", "VECTOR"] as const;
 export const DESIGN_ASPECT_RATIOS = ["1:1", "4:5", "3:4", "2:3"] as const;
 export const DESIGN_QUALITIES = ["FAST", "STANDARD", "HIGH"] as const;
@@ -39,6 +39,15 @@ export const designGenerationSetupSchema = z.object({
   }
   if (value.model === "RECRAFT_4" && value.count !== 1) {
     context.addIssue({ code: "custom", path: ["count"], message: "Recraft unterstützt in V1 eine Ausgabe pro Auftrag." });
+  }
+  if (value.model === "GPT_IMAGE_2" && value.outputMode !== "RASTER") {
+    context.addIssue({ code: "custom", path: ["outputMode"], message: "GPT Image 2 unterstützt im Design Studio nur Bildausgabe." });
+  }
+  if (value.model === "GPT_IMAGE_2" && value.quality === "FAST") {
+    context.addIssue({ code: "custom", path: ["quality"], message: "GPT Image 2 verwendet Medium oder High." });
+  }
+  if (value.model === "GPT_IMAGE_2" && value.count !== 1) {
+    context.addIssue({ code: "custom", path: ["count"], message: "GPT Image 2 erstellt im Design Studio genau ein Ergebnis." });
   }
 });
 export type DesignGenerationSetup = z.infer<typeof designGenerationSetupSchema>;
@@ -85,4 +94,5 @@ export const designGenerateResponseSchema = z.object({
 export const DESIGN_MODEL_LABELS: Record<DesignGenerationSetup["model"], string> = {
   IDEOGRAM_4: "Ideogram 4",
   RECRAFT_4: "Recraft 4",
+  GPT_IMAGE_2: "GPT Image 2",
 };

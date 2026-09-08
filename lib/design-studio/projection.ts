@@ -10,6 +10,7 @@ import { XERIANO_ECONOMIC_POLICY } from "@/lib/xeriano/pricing-engine";
 import { DESIGN_UTILITY_PRICING_VERSION, type DesignUtilityOperation } from "@/lib/design-studio/utility-config";
 import { readRasterDimensions } from "@/lib/design-studio/raster-metadata";
 import { SVG_TO_PNG_OPERATION, SVG_TO_PNG_VERSION } from "@/lib/design-studio/svg-to-png";
+import { PRINT_FILE_OPERATION, PRINT_FILE_VERSION } from "@/lib/design-studio/print-file-contracts";
 
 const LIBRARY_BUCKET = "xeriano-library-assets";
 function ext(mime: string) { return mime === "image/svg+xml" ? "svg" : mime === "image/jpeg" ? "jpg" : mime === "image/webp" ? "webp" : "png"; }
@@ -50,9 +51,15 @@ export async function recordDesignProviderCostEvent(input: {
 export async function persistDesignUtilityResult(input: {
   context: XerianoAccountContext;
   jobId: string;
-  operation: DesignUtilityOperation | typeof SVG_TO_PNG_OPERATION;
+  operation: DesignUtilityOperation | typeof SVG_TO_PNG_OPERATION | typeof PRINT_FILE_OPERATION;
   sourceAssetId: string;
   bytes: Buffer;
+  printSource?: {
+    mimeType: string;
+    width: number | null;
+    height: number | null;
+    rasterUpscaled: boolean;
+  };
   authority?: XerianoGenerationAuthority;
   ownerPricingVersion?: string;
 }) {
@@ -63,8 +70,14 @@ export async function persistDesignUtilityResult(input: {
     ? { label: "Freigestelltes Design", tag: "Hintergrund entfernt", prompt: "Hintergrund entfernen", model: "design-background-remove" }
     : input.operation === "UPSCALE"
       ? { label: "Hochskaliertes Design", tag: "4K Upscale", prompt: "Auf 4K upscalen", model: "design-upscale" }
-      : { label: "PNG-Version", tag: "PNG-Version", prompt: "SVG als PNG rendern", model: "design-svg-to-png" };
-  const contractVersion = input.operation === SVG_TO_PNG_OPERATION ? SVG_TO_PNG_VERSION : "xeriamo-design-utility-v1";
+      : input.operation === PRINT_FILE_OPERATION
+        ? { label: "Druckdatei · 300 DPI", tag: "Druckdatei · 300 DPI", prompt: "Druckdatei erstellen", model: "design-print-file-300-dpi" }
+        : { label: "PNG-Version", tag: "PNG-Version", prompt: "SVG als PNG rendern", model: "design-svg-to-png" };
+  const contractVersion = input.operation === SVG_TO_PNG_OPERATION
+    ? SVG_TO_PNG_VERSION
+    : input.operation === PRINT_FILE_OPERATION
+      ? PRINT_FILE_VERSION
+      : "xeriamo-design-utility-v1";
   const existing = await admin.from("xeriano_library_assets").select("id")
     .eq("account_id", input.context.accountId).eq("source_studio", "DESIGN_STUDIO")
     .eq("source_job_id", input.jobId).eq("source_result_id", "derived").maybeSingle();
@@ -86,6 +99,17 @@ export async function persistDesignUtilityResult(input: {
         contractVersion, generated: true,
         derived_from_asset_id: input.sourceAssetId, operation: input.operation,
         width: dimensions.width, height: dimensions.height,
+        ...(input.operation === PRINT_FILE_OPERATION
+          ? {
+              resolution_dpi: 300,
+              color_space: "sRGB",
+              print_canvas: "4500x6000",
+              source_mime_type: input.printSource?.mimeType ?? null,
+              source_width: input.printSource?.width ?? null,
+              source_height: input.printSource?.height ?? null,
+              raster_source_upscaled: input.printSource?.rasterUpscaled ?? false,
+            }
+          : {}),
       },
     });
     if (inserted.error) throw inserted.error;
@@ -106,10 +130,15 @@ export async function persistDesignUtilityResult(input: {
       settings: {
         contractVersion, utilityOperation: input.operation,
         derivedFromAssetId: input.sourceAssetId, width: dimensions.width, height: dimensions.height,
+        ...(input.operation === PRINT_FILE_OPERATION ? { printSource: input.printSource ?? null } : {}),
       },
       credit_cost: input.authority?.quotedCredits ?? 0,
       credit_pricing_version: input.authority?.pricingVersion ?? input.ownerPricingVersion
-        ?? (input.operation === SVG_TO_PNG_OPERATION ? SVG_TO_PNG_VERSION : DESIGN_UTILITY_PRICING_VERSION),
+        ?? (input.operation === SVG_TO_PNG_OPERATION
+          ? SVG_TO_PNG_VERSION
+          : input.operation === PRINT_FILE_OPERATION
+            ? PRINT_FILE_VERSION
+            : DESIGN_UTILITY_PRICING_VERSION),
       favorite: false, status: "SUCCEEDED", created_at: new Date().toISOString(),
     });
     if (created.error) throw created.error;
@@ -160,7 +189,11 @@ export async function finalizeDesignCreations(input: {
         source_job_id: input.run.id, source_result_id: result.publicView.id,
         storage_bucket: LIBRARY_BUCKET, storage_path: storagePath, mime_type: result.publicView.mimeType,
         byte_length: stored.bytes.length, checksum_sha256: sha256(stored.bytes), favorite: false,
-        tags: [input.run.setup.model === "IDEOGRAM_4" ? "Ideogram 4" : "Recraft 4"],
+        tags: [input.run.setup.model === "IDEOGRAM_4"
+          ? "Ideogram 4"
+          : input.run.setup.model === "GPT_IMAGE_2"
+            ? "GPT Image 2"
+            : "Recraft 4"],
         provenance: {
           contractVersion: input.run.setup.contractVersion, generated: true,
           outputMode: input.run.setup.outputMode, resolution: result.publicView.resolution,

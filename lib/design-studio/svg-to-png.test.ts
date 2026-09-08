@@ -68,17 +68,19 @@ test("original SVG download remains byte-preserving while UI makes formats expli
   assert.match(designUi, /setNotice\("PNG-Version erstellt"\)/);
 });
 
-test("trusted capabilities offer conversion only for SVG and raster utilities only for derived PNG", () => {
+test("trusted capabilities offer local SVG conversion before raster background removal", () => {
   const original = deriveDesignAssetCapabilities({
     assetType: "DESIGN", mimeType: "image/svg+xml", width: null, height: null, operation: null,
   });
   assert.deepEqual(original, {
-    transparentPreview: false, canBackgroundRemove: false, canUpscale: false, canCreatePng: true,
+    transparentPreview: false, canBackgroundRemove: true, canUpscale: false, canCreatePng: true,
+    canCreatePrintFile: true,
   });
   const derived = deriveDesignAssetCapabilities({
     assetType: "DESIGN", mimeType: "image/png", width: 3072, height: 4096, operation: "SVG_TO_PNG",
   });
   assert.deepEqual(derived, {
     transparentPreview: true, canBackgroundRemove: true, canUpscale: false, canCreatePng: false,
+    canCreatePrintFile: true,
   });
 });

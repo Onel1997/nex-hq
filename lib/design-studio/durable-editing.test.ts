@@ -34,16 +34,20 @@ test("persistent result recovery skips failed jobs and deduplicates durable asse
 
 test("server-derived design capabilities distinguish 2K, 4K, removed backgrounds and SVG", () => {
   const twoK = deriveDesignAssetCapabilities({ assetType: "DESIGN", mimeType: "image/png", width: 2048, height: 2048, operation: null });
-  assert.deepEqual(twoK, { transparentPreview: false, canBackgroundRemove: true, canUpscale: true, canCreatePng: false });
+  assert.deepEqual(twoK, { transparentPreview: false, canBackgroundRemove: true, canUpscale: true, canCreatePng: false, canCreatePrintFile: true });
   const fourK = deriveDesignAssetCapabilities({ assetType: "DESIGN", mimeType: "image/png", width: 4096, height: 4096, operation: null });
   assert.equal(fourK?.canUpscale, false);
   const transparent = deriveDesignAssetCapabilities({ assetType: "DESIGN", mimeType: "image/png", width: 2048, height: 2048, operation: "BACKGROUND_REMOVE" });
   assert.equal(transparent?.transparentPreview, true);
   assert.equal(transparent?.canBackgroundRemove, false);
   const svg = deriveDesignAssetCapabilities({ assetType: "DESIGN", mimeType: "image/svg+xml", width: null, height: null, operation: null });
-  assert.equal(svg?.canBackgroundRemove, false);
+  assert.equal(svg?.canBackgroundRemove, true);
   assert.equal(svg?.canUpscale, false);
   assert.equal(svg?.canCreatePng, true);
+  assert.equal(svg?.canCreatePrintFile, true);
+  const printFile = deriveDesignAssetCapabilities({ assetType: "DESIGN", mimeType: "image/png", width: 4500, height: 6000, operation: "PRINT_FILE_300_DPI" });
+  assert.equal(printFile?.canCreatePrintFile, false);
+  assert.equal(printFile?.transparentPreview, true);
 });
 
 test("durable Library actions reopen the correct shell and never auto-generate", async () => {

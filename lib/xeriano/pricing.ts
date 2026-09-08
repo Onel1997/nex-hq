@@ -13,8 +13,8 @@ export type XerianoCreditQuoteInput =
       durationSeconds: number;
     }
   | {
-      modelId: "ideogram-4" | "recraft-4";
-      designModel: "IDEOGRAM_4" | "RECRAFT_4";
+      modelId: "ideogram-4" | "recraft-4" | "gpt-image-2";
+      designModel: "IDEOGRAM_4" | "RECRAFT_4" | "GPT_IMAGE_2";
       quality: "FAST" | "STANDARD" | "HIGH";
       outputMode: "RASTER" | "VECTOR";
       aspectRatio: "1:1" | "4:5" | "3:4" | "2:3";
@@ -118,7 +118,7 @@ export function quoteXerianoCredits(input: XerianoCreditQuoteInput): number {
     }
     return rule.creditsByQuality[input.quality] * (input.count ?? 1);
   }
-  if (input.modelId === "ideogram-4" || input.modelId === "recraft-4"
+  if (input.modelId === "ideogram-4" || input.modelId === "recraft-4" || input.modelId === "gpt-image-2"
     || input.modelId === "design-background-remove" || input.modelId === "design-upscale") {
     throw new Error("DESIGN_PRICE_REQUIRES_SAFETY_ENGINE");
   }

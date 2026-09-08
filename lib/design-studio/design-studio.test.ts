@@ -5,7 +5,7 @@ import { createCanvas } from "canvas";
 import { DESIGN_STUDIO_CONTRACT_VERSION, designGenerationSetupSchema, type DesignGenerationSetup } from "./contracts";
 import {
   buildDesignProviderInput, buildDesignProviderPrompt, DESIGN_ENDPOINTS,
-  DESIGN_RASTER_DIMENSIONS, DESIGN_VECTOR_ARTBOARDS, extractQuotedText, resolveDesignEndpoint,
+  DESIGN_RASTER_DIMENSIONS, DESIGN_VECTOR_ARTBOARDS, extractQuotedText, GPT_IMAGE_2_DIMENSIONS, resolveDesignEndpoint,
 } from "./model-config";
 import { normalizeFalDesignResults } from "./providers/fal-design";
 import { FalDesignProvider, type FalDesignTransport } from "./providers/fal-design";
@@ -23,13 +23,64 @@ function setup(patch: Partial<DesignGenerationSetup> = {}): DesignGenerationSetu
   });
 }
 
-test("Design model routing uses only the six approved fal endpoints", () => {
+test("Design model routing keeps existing endpoints and adds only verified GPT Image 2 endpoints", () => {
   assert.equal(resolveDesignEndpoint(setup()), DESIGN_ENDPOINTS.IDEOGRAM_TEXT);
   assert.equal(resolveDesignEndpoint(setup({ reference: { name: "r.png", mimeType: "image/png", byteLength: 8 } })), DESIGN_ENDPOINTS.IDEOGRAM_REFERENCE);
   assert.equal(resolveDesignEndpoint(setup({ model: "RECRAFT_4" })), DESIGN_ENDPOINTS.RECRAFT_RASTER);
   assert.equal(resolveDesignEndpoint(setup({ model: "RECRAFT_4", outputMode: "VECTOR" })), DESIGN_ENDPOINTS.RECRAFT_VECTOR);
   assert.equal(resolveDesignEndpoint(setup({ model: "RECRAFT_4", reference: { name: "r.png", mimeType: "image/png", byteLength: 8 } })), DESIGN_ENDPOINTS.RECRAFT_REFERENCE_RASTER);
   assert.equal(resolveDesignEndpoint(setup({ model: "RECRAFT_4", outputMode: "VECTOR", reference: { name: "r.png", mimeType: "image/png", byteLength: 8 } })), DESIGN_ENDPOINTS.RECRAFT_REFERENCE_VECTOR);
+  assert.equal(resolveDesignEndpoint(setup({ model: "GPT_IMAGE_2" })), "openai/gpt-image-2");
+  assert.equal(resolveDesignEndpoint(setup({ model: "GPT_IMAGE_2", reference: { name: "r.png", mimeType: "image/png", byteLength: 8 } })), "openai/gpt-image-2/edit");
+});
+
+test("GPT Image 2 payload uses medium/high, one PNG, exact ratios and no fixed seed", () => {
+  const plain = buildDesignProviderInput({
+    setup: setup({ model: "GPT_IMAGE_2", quality: "STANDARD", aspectRatio: "4:5" }),
+    providerPrompt: "unchanged prompt",
+    referenceUrl: null,
+  });
+  assert.equal(plain.endpoint, DESIGN_ENDPOINTS.GPT_IMAGE_2_TEXT);
+  assert.deepEqual(plain.payload, {
+    prompt: "unchanged prompt",
+    image_size: GPT_IMAGE_2_DIMENSIONS["4:5"],
+    quality: "medium",
+    num_images: 1,
+    output_format: "png",
+  });
+  assert.equal("seed" in plain.payload, false);
+  const reference = buildDesignProviderInput({
+    setup: setup({
+      model: "GPT_IMAGE_2",
+      quality: "HIGH",
+      aspectRatio: "2:3",
+      reference: { name: "r.png", mimeType: "image/png", byteLength: 8 },
+    }),
+    providerPrompt: "unchanged prompt",
+    referenceUrl: "https://temporary.example/reference.png",
+  });
+  assert.equal(reference.endpoint, DESIGN_ENDPOINTS.GPT_IMAGE_2_EDIT);
+  assert.deepEqual(reference.payload, {
+    prompt: "unchanged prompt",
+    image_size: GPT_IMAGE_2_DIMENSIONS["2:3"],
+    quality: "high",
+    num_images: 1,
+    output_format: "png",
+    image_urls: ["https://temporary.example/reference.png"],
+  });
+});
+
+test("GPT Image 2 reference policy preserves the full prompt and demands a new composition", () => {
+  const original = 'Create "EXACT TYPE" with distressed ink and a new asymmetric layout.';
+  const prompt = buildDesignProviderPrompt(setup({
+    prompt: original,
+    model: "GPT_IMAGE_2",
+    reference: { name: "r.png", mimeType: "image/png", byteLength: 8 },
+  }));
+  assert.match(prompt, new RegExp(original.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(prompt, /completely new composition, arrangement and visual hierarchy/i);
+  assert.match(prompt, /Do not copy visible words, symbols, logos, circles, X marks, microtext/i);
+  assert.match(prompt, /Do not invent any additional readable words/i);
 });
 
 test("Ideogram quality and provider-specific ratios are server mapped", () => {
@@ -80,6 +131,9 @@ test("option allowlist rejects Ideogram vector, invalid count and arbitrary mode
   assert.equal(designGenerationSetupSchema.safeParse({ ...setup(), count: 3 }).success, false);
   assert.equal(designGenerationSetupSchema.safeParse({ ...setup({ model: "RECRAFT_4" }), count: 2 }).success, false);
   assert.equal(designGenerationSetupSchema.safeParse({ ...setup(), model: "fal-ai/arbitrary" }).success, false);
+  assert.equal(designGenerationSetupSchema.safeParse({ ...setup({ model: "GPT_IMAGE_2" }), quality: "FAST" }).success, false);
+  assert.equal(designGenerationSetupSchema.safeParse({ ...setup({ model: "GPT_IMAGE_2" }), count: 2 }).success, false);
+  assert.equal(designGenerationSetupSchema.safeParse({ ...setup({ model: "GPT_IMAGE_2" }), outputMode: "VECTOR" }).success, false);
 });
 
 test("Recraft vector response remains an original SVG result", () => {
@@ -245,6 +299,24 @@ test("shared economics produces server-authoritative, dimension-sensitive safe q
     assert.ok(["SAFE_BELOW_TARGET", "TARGET_OR_BETTER"].includes(economics.safetyStatus ?? ""));
     assert.equal(quote.studio, "DESIGN_STUDIO");
     assert.equal(quote.operation, "IMAGE");
+  }
+});
+
+test("GPT Image 2 pricing is server-authoritative and quality/reference sensitive", () => {
+  const medium = quoteDesignCustomerGeneration(setup({ model: "GPT_IMAGE_2", quality: "STANDARD" }));
+  const high = quoteDesignCustomerGeneration(setup({ model: "GPT_IMAGE_2", quality: "HIGH" }));
+  const edit = quoteDesignCustomerGeneration(setup({
+    model: "GPT_IMAGE_2",
+    quality: "STANDARD",
+    reference: { name: "r.png", mimeType: "image/png", byteLength: 8 },
+  }));
+  assert.equal(medium.modelId, "gpt-image-2");
+  assert.ok(high.credits > medium.credits);
+  assert.ok(edit.credits >= medium.credits);
+  for (const quote of [medium, high, edit]) {
+    const economics = quote.pricingSnapshot.economics as { providerModel?: string; safetyStatus?: string };
+    assert.match(economics.providerModel ?? "", /gpt-image-2/);
+    assert.ok(["SAFE_BELOW_TARGET", "TARGET_OR_BETTER"].includes(economics.safetyStatus ?? ""));
   }
 });
 

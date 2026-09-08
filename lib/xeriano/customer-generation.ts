@@ -53,7 +53,7 @@ export type XerianoGenerationAuthorityState =
 export type XerianoCustomerCreditQuote = {
   credits: number;
   pricingVersion: string;
-  modelId: "nano-banana-pro" | "kling-v3-pro-motion-control" | UgcVideoEditModelId | "ideogram-4" | "recraft-4" | "design-background-remove" | "design-upscale";
+  modelId: "nano-banana-pro" | "kling-v3-pro-motion-control" | UgcVideoEditModelId | "ideogram-4" | "recraft-4" | "gpt-image-2" | "design-background-remove" | "design-upscale";
   operation: XerianoCustomerOperation;
   studio: XerianoCustomerStudio;
   pricingSnapshot: Record<string, unknown>;
@@ -299,7 +299,11 @@ export function quoteDesignCustomerGeneration(
   setup: DesignGenerationSetup,
 ): XerianoCustomerCreditQuote {
   const quoteInput = {
-    modelId: setup.model === "IDEOGRAM_4" ? "ideogram-4" as const : "recraft-4" as const,
+    modelId: setup.model === "IDEOGRAM_4"
+      ? "ideogram-4" as const
+      : setup.model === "GPT_IMAGE_2"
+        ? "gpt-image-2" as const
+        : "recraft-4" as const,
     designModel: setup.model,
     quality: setup.quality,
     outputMode: setup.outputMode,

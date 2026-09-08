@@ -5,7 +5,7 @@ import { createCanvas } from "canvas";
 import {
   buildDesignUtilityProviderInput, DESIGN_UTILITY_CONFIG,
 } from "./utility-config";
-import { FalDesignUtilityProvider, type FalUtilityTransport } from "./providers/fal-utility";
+import { extractFalUtilityQueueHandle, FalDesignUtilityProvider, type FalUtilityTransport } from "./providers/fal-utility";
 import { quoteDesignUtilityGeneration } from "../xeriano/customer-generation";
 import { ownerEstimatedCostLabel } from "./owner-cost";
 import { executeDesignUtility } from "./utility-service";
@@ -57,6 +57,45 @@ test("utility provider records acceptance and returns only normalized result URL
   });
 });
 
+test("utility acceptance persists authoritative queue URLs and recovery never submits", async () => {
+  const endpoint = "fal-ai/ideogram/remove-background";
+  const handle = extractFalUtilityQueueHandle({
+    request_id: "request-private",
+    status_url: "https://queue.fal.run/utility/status",
+    response_url: "https://queue.fal.run/utility/response",
+    cancel_url: "https://queue.fal.run/utility/cancel",
+  }, endpoint);
+  assert.ok(handle);
+  assert.throws(() => extractFalUtilityQueueHandle({
+    request_id: "request-private",
+    status_url: "https://example.test/status",
+    response_url: "https://queue.fal.run/utility/response",
+  }, endpoint), /UNTRUSTED/);
+  let submits = 0;
+  const transport: FalUtilityTransport = {
+    async upload() { return "https://temporary.example/source.png"; },
+    async submit() { submits += 1; return "unexpected"; },
+    async wait() {},
+    async status(_endpoint, _requestId, queueHandle) {
+      assert.equal(queueHandle?.statusUrl, handle.statusUrl);
+      return "COMPLETED";
+    },
+    async result(_endpoint, _requestId, queueHandle) {
+      assert.equal(queueHandle?.responseUrl, handle.responseUrl);
+      return { image: { url: "https://result.example/transparent.png" } };
+    },
+  };
+  const provider = new FalDesignUtilityProvider(undefined, transport);
+  const recovered = await provider.recover({
+    operation: "BACKGROUND_REMOVE",
+    providerRequestId: handle.requestId,
+    providerModel: endpoint,
+    providerQueueHandle: handle,
+  });
+  assert.equal(recovered?.url, "https://result.example/transparent.png");
+  assert.equal(submits, 0);
+});
+
 test("utility job claim prevents a second provider submission for the same identity", async () => {
   const canvas = createCanvas(32, 32); const png = canvas.toBuffer("image/png");
   let manifest: DesignUtilityManifest | null = null;
@@ -94,6 +133,52 @@ test("utility job claim prevents a second provider submission for the same ident
   assert.equal(replay.bytes, null);
   assert.equal(providerCalls, 1);
   assert.equal(Buffer.compare(input.source.bytes, png), 0);
+});
+
+test("background removal rejects an opaque provider PNG as terminal invalid output", async () => {
+  const sourceCanvas = createCanvas(16, 16);
+  const sourcePng = sourceCanvas.toBuffer("image/png");
+  const opaqueCanvas = createCanvas(16, 16);
+  const opaqueContext = opaqueCanvas.getContext("2d");
+  opaqueContext.fillStyle = "#ffffff";
+  opaqueContext.fillRect(0, 0, 16, 16);
+  const opaquePng = opaqueCanvas.toBuffer("image/png");
+  let manifest: DesignUtilityManifest | null = null;
+  const store = {
+    async claim() { return "CREATED" as const; },
+    async write(value: DesignUtilityManifest) { manifest = value; },
+    async read() { return manifest; },
+  };
+  const provider = {
+    isConfigured: () => true,
+    async generate(input: { onAccepted?: (requestId: string, endpoint: string) => Promise<void> | void }) {
+      await input.onAccepted?.("accepted-background", "fal-ai/ideogram/remove-background");
+      return { requestId: "accepted-background", endpoint: "fal-ai/ideogram/remove-background", url: "https://result.example/opaque.png" };
+    },
+  };
+  const context = {
+    userId: "00000000-0000-4000-8000-000000000010", email: null, role: "OWNER" as const,
+    accountId: "00000000-0000-4000-8000-000000000020", accountName: "Test", workspaceKey: "workspace",
+    brainWorkspaceId: null, source: "XERIANO_MEMBERSHIP" as const,
+  };
+  await assert.rejects(
+    executeDesignUtility({
+      context,
+      scope: { workspaceId: "workspace", actorId: context.userId },
+      jobId: "00000000-0000-4000-8000-000000000031",
+      sourceAssetId: "00000000-0000-4000-8000-000000000041",
+      operation: "BACKGROUND_REMOVE",
+      source: { bytes: sourcePng, mimeType: "image/png", dimensions: { width: 16, height: 16 } },
+    }, {
+      store: store as never,
+      provider: provider as never,
+      fetcher: async () => new Response(Uint8Array.from(opaquePng), { status: 200, headers: { "content-type": "image/png" } }),
+      now: () => "2026-09-08T20:00:00.000Z",
+    }),
+    (error: unknown) => error instanceof Error && "code" in error
+      && (error as { code?: unknown }).code === "BACKGROUND_RESULT_INVALID",
+  );
+  assert.equal((manifest as DesignUtilityManifest | null)?.status, "FAILED");
 });
 
 test("utility route preserves account isolation, reserve-before-provider and generic client output", async () => {
