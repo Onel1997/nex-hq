@@ -953,6 +953,17 @@ body:has(.creative-studio-shell) {
   gap: 12px;
 }
 
+.cs-inline-prompt-clear {
+  justify-self: end;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--cs-border);
+  border-radius: 10px;
+  color: #eef0f5;
+  background: rgba(255, 255, 255, 0.04);
+  font: inherit;
+}
+
 .cs-field {
   display: grid;
   gap: 7px;

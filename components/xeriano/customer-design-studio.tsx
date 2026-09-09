@@ -14,7 +14,7 @@ import {
   DESIGN_MODEL_LABELS, DESIGN_REFERENCE_MAX_BYTES, DESIGN_STUDIO_CONTRACT_VERSION,
   designGenerationSetupSchema, type DesignGenerationSetup, type DesignResult, type DesignRun,
 } from "@/lib/design-studio/contracts";
-import { isSuccessfulDesignRun, latestCompletedDesignRun, mergeDurableDesignResults } from "@/lib/design-studio/persistent-results";
+import { isSuccessfulDesignRun, latestDesignRun, mergeDurableDesignResults, mergeObservedDesignRun } from "@/lib/design-studio/persistent-results";
 import { handoffHref, type XerianoLibraryAsset } from "@/lib/xeriano/library";
 import { XerianoMediaSaveLink } from "@/components/xeriano/media-save-link";
 
@@ -105,6 +105,7 @@ export function CustomerDesignStudio({ audience = "CUSTOMER" }: { audience?: "CU
   const uploadInput = useRef<HTMLInputElement>(null);
   const referenceInput = useRef<HTMLInputElement>(null);
   const recoveryPolls = useRef(0);
+  const jobObservationInFlight = useRef(false);
   const utilityBusyRef = useRef<string | null>(null);
   const utilityRecoveryHandled = useRef(new Set<string>());
   const printRecoveryHandled = useRef(new Set<string>());
@@ -119,7 +120,11 @@ export function CustomerDesignStudio({ audience = "CUSTOMER" }: { audience?: "CU
   const loadHistory = useCallback(async () => {
     const next = await fetchDesignHistory();
     setHistoryRuns(next);
-    setRun((current) => current ?? latestCompletedDesignRun(next));
+    setRun((current) => {
+      const selected = current ?? latestDesignRun(next);
+      if (selected) window.localStorage.setItem(ACTIVE_JOB_KEY, selected.id);
+      return selected;
+    });
     return next;
   }, []);
   const loadAll = useCallback(async () => {
@@ -256,32 +261,60 @@ export function CustomerDesignStudio({ audience = "CUSTOMER" }: { audience?: "CU
       }
     })();
   }, [assets, loading, openAssetInCreate]);
+  const observeDesignJob = useCallback(async (jobId: string) => {
+    if (jobObservationInFlight.current) return;
+    jobObservationInFlight.current = true;
+    try {
+      const recovered = await fetchDesignJob(jobId);
+      window.localStorage.setItem(ACTIVE_JOB_KEY, recovered.id);
+      setRun((current) => mergeObservedDesignRun(current, recovered));
+      if (recovered.status !== "RUNNING" && recovered.status !== "UNKNOWN_OUTCOME") {
+        await Promise.all([loadAssets(), loadHistory()]);
+      }
+    } catch {
+      // Keep the account-scoped pointer through transient Safari/network loss.
+      // The authenticated job route remains the ownership authority.
+    } finally {
+      jobObservationInFlight.current = false;
+    }
+  }, [loadAssets, loadHistory]);
   useEffect(() => {
     const active = window.localStorage.getItem(ACTIVE_JOB_KEY);
-    if (!active) return;
-    void fetchDesignJob(active).then((recovered) => {
-      setRun(recovered);
-      if (recovered.status !== "RUNNING" && recovered.status !== "UNKNOWN_OUTCOME") {
-        window.localStorage.removeItem(ACTIVE_JOB_KEY);
-      }
-    }).catch(() => window.localStorage.removeItem(ACTIVE_JOB_KEY));
-  }, []);
+    if (active) void observeDesignJob(active);
+  }, [observeDesignJob]);
+  const activeRunId = run?.id;
+  const activeRunStatus = run?.status;
   useEffect(() => {
-    if (!run || (run.status !== "RUNNING" && run.status !== "UNKNOWN_OUTCOME")) return;
+    if (!activeRunId || (activeRunStatus !== "RUNNING" && activeRunStatus !== "UNKNOWN_OUTCOME")) return;
+    recoveryPolls.current = 0;
     const interval = window.setInterval(() => {
       recoveryPolls.current += 1;
       if (recoveryPolls.current > 100) { window.clearInterval(interval); return; }
-      void fetchDesignJob(run.id).then((next) => {
-        setRun(next);
-        if (next.status !== "RUNNING" && next.status !== "UNKNOWN_OUTCOME") {
-          window.localStorage.removeItem(ACTIVE_JOB_KEY);
-          window.clearInterval(interval);
-          void Promise.all([loadAssets(), loadHistory()]);
-        }
-      }).catch(() => undefined);
+      void observeDesignJob(activeRunId);
     }, 3_000);
     return () => window.clearInterval(interval);
-  }, [loadAssets, loadHistory, run]);
+  }, [activeRunId, activeRunStatus, observeDesignJob]);
+  useEffect(() => {
+    if (!activeRunId) return;
+    let lastResumeObservationAt = 0;
+    const observeOnResume = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastResumeObservationAt < 1_000) return;
+      lastResumeObservationAt = now;
+      recoveryPolls.current = 0;
+      void observeDesignJob(activeRunId);
+    };
+    document.addEventListener("visibilitychange", observeOnResume);
+    window.addEventListener("pageshow", observeOnResume);
+    return () => {
+      document.removeEventListener("visibilitychange", observeOnResume);
+      window.removeEventListener("pageshow", observeOnResume);
+    };
+  }, [activeRunId, observeDesignJob]);
+  useEffect(() => {
+    if (tab === "CREATE" && activeRunId) void observeDesignJob(activeRunId);
+  }, [activeRunId, observeDesignJob, tab]);
   useEffect(() => {
     if (!setup.prompt.trim()) { setQuote(null); return; }
     const timeout = window.setTimeout(() => {
@@ -327,9 +360,6 @@ export function CustomerDesignStudio({ audience = "CUSTOMER" }: { audience?: "CU
       const completedWithResults = isSuccessfulDesignRun(response.run);
       if (!["RUNNING", "UNKNOWN_OUTCOME"].includes(response.run.status) && !completedWithResults) {
         setNotice(response.run.message ?? "Design konnte nicht erstellt werden. Bitte versuche es erneut.");
-      }
-      if (response.run.status !== "RUNNING" && response.run.status !== "UNKNOWN_OUTCOME") {
-        window.localStorage.removeItem(ACTIVE_JOB_KEY);
       }
       await Promise.all([loadAssets(), loadHistory()]);
     } catch (error) { setNotice(error instanceof Error ? error.message : "Design konnte nicht erstellt werden. Bitte versuche es erneut."); }
@@ -605,7 +635,7 @@ export function CustomerDesignStudio({ audience = "CUSTOMER" }: { audience?: "CU
 
     {tab === "CREATE" ? <section className="xd-create">
       <div className="xd-step"><span>01</span><div><h2>Design beschreiben</h2><p>Deine Idee und sichtbare Texte bleiben die kreative Autorität.</p></div></div>
-      <textarea className="xd-prompt" rows={7} maxLength={6000} value={setup.prompt} onChange={(event) => setSetup({ ...setup, prompt: event.target.value })} placeholder={'Beschreibe dein Design – z. B. Vintage Streetwear Grafik mit dem Spruch "LOVE STAYED TEACHABLE", florales Hero-Motiv, kräftige Typografie, hochwertige Print-Grafik.'}/>
+      <div className="xd-prompt-field"><textarea className="xd-prompt" rows={7} maxLength={6000} value={setup.prompt} onChange={(event) => setSetup({ ...setup, prompt: event.target.value })} placeholder={'Beschreibe dein Design – z. B. Vintage Streetwear Grafik mit dem Spruch "LOVE STAYED TEACHABLE", florales Hero-Motiv, kräftige Typografie, hochwertige Print-Grafik.'}/>{setup.prompt ? <button type="button" aria-label="Prompt leeren" onClick={() => setSetup((current) => ({ ...current, prompt: "" }))}><Trash2/>Prompt leeren</button> : null}</div>
 
       <div className="xd-step"><span>02</span><div><h2>Referenz</h2><p>{setup.model === "GPT_IMAGE_2" ? "Optional – die Referenz gibt nur Stil, Farbe, Textur und Stimmung vor. GPT Image 2 erstellt eine neue Komposition." : "Optional – nutze ein Bild als Stil- oder Kompositionsreferenz."}</p></div></div>
       {reference && referencePreview ? <div className="xd-reference-card">
@@ -634,7 +664,7 @@ export function CustomerDesignStudio({ audience = "CUSTOMER" }: { audience?: "CU
       </div>
       <div className="xd-generate-bar"><div>{audience === "OWNER" ? <><strong>Owner · Unlimited</strong><small>Geschätzte Kosten · {quote?.ownerCostLabel ?? "werden berechnet …"}</small></> : <><strong>{quote?.credits == null ? "Preis wird berechnet …" : `${quote.credits} Credits`}</strong><small>Abbuchung erst bei bewusster Generierung</small></>}</div><button className="xeriano-primary-button" disabled={generating || !setup.prompt.trim() || (audience === "CUSTOMER" && quote?.credits == null) || (setup.model === "GPT_IMAGE_2" && audience === "OWNER" && !quote?.ownerCostLabel)} onClick={() => void generate()}>{generating ? <><Loader2 className="spin"/>Wird erstellt …</> : audience === "OWNER" ? `Generieren${quote?.ownerCostLabel ? ` · ${quote.ownerCostLabel}` : ""}` : `Generieren · ${quote?.credits ?? "–"} Credits`}</button></div>
 
-      {visibleResults.length || run ? <section className="xd-results" ref={resultsSection}><header><span className="xeriano-eyebrow">Ergebnisse</span><h2>Deine Designs</h2><p>Deine letzten abgeschlossenen Designs bleiben nach einem Refresh verfügbar.</p></header><div>{visibleResults.map((result) => {
+      <section className="xd-results" ref={resultsSection}><header><span className="xeriano-eyebrow">Ergebnisse</span><h2>Deine Designs</h2><p>Dein aktueller oder zuletzt gestarteter Auftrag bleibt hier nach Rückkehr und Refresh sichtbar.</p></header><div>{visibleResults.map((result) => {
         const asset = result.libraryAssetId ? assetById.get(result.libraryAssetId) : undefined;
         const canBackgroundRemove = asset?.design?.canBackgroundRemove ?? Boolean(result.libraryAssetId);
         const canUpscale = asset?.design?.canUpscale ?? (result.mimeType !== "image/svg+xml" && result.width !== null && result.height !== null && Math.max(result.width, result.height) <= 2_560);
@@ -647,7 +677,7 @@ export function CustomerDesignStudio({ audience = "CUSTOMER" }: { audience?: "CU
           <p className="xd-result-meta">{asset?.design?.operation === "PRINT_FILE_300_DPI" ? `4500 × 6000 px · 300-PPI-Druckformat · PNG · sRGB${asset.design.printRasterUpscaled ? " · Rasterquelle wurde hochskaliert" : ""}` : result.mimeType === "image/svg+xml" ? "SVG · frei skalierbar" : result.width && result.height ? `${result.width} × ${result.height} · ${result.resolution ?? "Raster"}` : `${result.resolution ?? "Raster"} · tatsächliche Maße werden geprüft`}</p>
           <footer className="xd-result-footer">{result.libraryAssetId ? <span className="xd-saved">In Bibliothek</span> : null}<div className="xd-result-primary-row"><XerianoMediaSaveLink href={result.downloadUrl} fileName={`xeriamo-design-${result.id}`} mimeType={result.mimeType} downloadLabel={result.mimeType === "image/svg+xml" ? "SVG herunterladen" : "Herunterladen"}/><details className="xd-result-actions"><summary><MoreHorizontal/>Aktionen</summary><div>{asset ? <button onClick={() => void openAssetInCreate(asset, "EDIT")}><Pencil/>Im Design Studio bearbeiten</button> : null}<button onClick={() => void variation(result)}><Sparkles/>Variation erstellen</button><button onClick={() => result.libraryAssetId && void patch(result.libraryAssetId, { favorite: !(asset?.favorite ?? result.favorite) })}><Heart/>Favorit</button>{result.mimeType === "image/svg+xml" && result.libraryAssetId ? <button disabled={Boolean(utilityBusy)} onClick={() => void createPngVersion(result)}><ImageIcon/>{utilityBusy === `${result.id}:SVG_TO_PNG` ? "PNG-Version wird erstellt …" : "PNG-Version erstellen"}</button> : null}{canBackgroundRemove && result.libraryAssetId ? <button disabled={Boolean(utilityBusy) || !utilityReady("BACKGROUND_REMOVE")} onClick={() => void removeBackground(result)}><Eraser/>{utilityBusy === `${result.id}:BACKGROUND_REMOVE` ? "Hintergrund wird entfernt …" : utilityLabel("BACKGROUND_REMOVE", "Hintergrund entfernen")}</button> : null}{result.mimeType !== "image/svg+xml" && canUpscale ? <button disabled={Boolean(utilityBusy) || !utilityReady("UPSCALE")} onClick={() => void runUtility(result, "UPSCALE")}><Maximize2/>{utilityBusy === `${result.id}:UPSCALE` ? "Wird auf 4K hochskaliert …" : utilityLabel("UPSCALE", "Auf 4K upscalen")}</button> : null}{canCreatePrintFile ? <button disabled={Boolean(utilityBusy)} onClick={() => setPrintDialog({ result, removeBackground: true })}><FileImage/>Druckdatei erstellen</button> : null}</div></details></div>{result.libraryAssetId ? <Link className="xd-result-creative-handoff" href={creativeHref(result.libraryAssetId)}><Plus/>Im Creative Studio verwenden</Link> : null}</footer>
         </article>;
-      })}</div>{!visibleResults.length ? <div className={run?.failureCode === "PROVIDER_CAPACITY" ? "xd-capacity-state" : undefined}><p>{run?.message}</p>{run?.failureCode === "PROVIDER_CAPACITY" ? <><small>Bitte versuche es später erneut oder nutze Ideogram 4.</small><div><button onClick={() => restoreRunSetup(run)}>Weiter bearbeiten</button><button onClick={() => restoreRunSetup(run, "IDEOGRAM_4")}>Ideogram 4 verwenden</button></div></> : null}</div> : null}</section> : null}
+      })}</div>{!visibleResults.length ? <div className={run?.failureCode === "PROVIDER_CAPACITY" ? "xd-capacity-state" : "xd-result-empty-state"}><p>{run?.message ?? "Hier erscheint dein aktueller Auftrag und anschließend das dauerhaft gespeicherte Ergebnis."}</p>{run?.failureCode === "PROVIDER_CAPACITY" ? <><small>Bitte versuche es später erneut oder nutze Ideogram 4.</small><div><button onClick={() => restoreRunSetup(run)}>Weiter bearbeiten</button><button onClick={() => restoreRunSetup(run, "IDEOGRAM_4")}>Ideogram 4 verwenden</button></div></> : null}</div> : null}</section>
     </section> : null}
 
     {tab === "LIBRARY" ? <section className="xd-library">

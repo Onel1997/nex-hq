@@ -267,7 +267,11 @@ export function UgcVideoStudioWorkspace(props: {
   const generationLockRef = useRef(false);
   const initialLibraryAssetLoadedRef = useRef(false);
   const statusPollInFlightRef = useRef(false);
+  const automaticLibraryProjectionRef = useRef(new Set<string>());
   const observeActiveRunNowRef = useRef<() => void>(() => undefined);
+  const [projectedLibraryResults, setProjectedLibraryResults] = useState(
+    () => new Set<string>(),
+  );
   referencesRef.current = references;
 
   useEffect(() => {
@@ -1599,8 +1603,12 @@ export function UgcVideoStudioWorkspace(props: {
     persist(upsertUgcVideoRun(persisted, next));
   };
 
-  const saveResultToLibrary = useCallback(async (resultId: string) => {
-    if (!activeRun) return;
+  const saveResultToLibrary = useCallback(async (
+    sourceRun: UgcVideoRun,
+    resultId: string,
+    notify = true,
+  ) => {
+    const projectionKey = `${sourceRun.id}:${resultId}`;
     try {
       const response = await fetch("/api/xeriano/library/import", {
         method: "POST",
@@ -1609,23 +1617,38 @@ export function UgcVideoStudioWorkspace(props: {
         body: JSON.stringify({
           version: "xeriano-result-library-import-v1",
           sourceStudio: "UGC_VIDEO_STUDIO",
-          sourceJobId: activeRun.id,
+          sourceJobId: sourceRun.id,
           sourceResultId: resultId,
-          title: `UGC Video · ${new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(new Date(activeRun.createdAt))}`,
+          title: `UGC Video · ${new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(new Date(sourceRun.createdAt))}`,
         }),
       });
       const payload = (await response.json().catch(() => null)) as { error?: string } | null;
       if (!response.ok) throw new Error(payload?.error ?? "library_import_failed");
-      setNotice({ kind: "SUCCESS", text: "Das Video wurde in deiner Bibliothek gespeichert." });
+      setProjectedLibraryResults((current) => new Set(current).add(projectionKey));
+      if (notify) setNotice({ kind: "SUCCESS", text: "Das Video wurde in deiner Bibliothek gespeichert." });
+      return true;
     } catch (error) {
-      setNotice({
+      if (notify) setNotice({
         kind: "ERROR",
         text: error instanceof Error && error.message !== "library_import_failed"
           ? error.message
           : "Das Video konnte nicht in der Bibliothek gespeichert werden.",
       });
+      return false;
     }
-  }, [activeRun]);
+  }, []);
+
+  useEffect(() => {
+    if (!productMode || activeRun?.status !== "SUCCEEDED") return;
+    for (const result of activeRun.results) {
+      const key = `${activeRun.id}:${result.id}`;
+      if (automaticLibraryProjectionRef.current.has(key)) continue;
+      automaticLibraryProjectionRef.current.add(key);
+      void saveResultToLibrary(activeRun, result.id, false).then((projected) => {
+        if (!projected) automaticLibraryProjectionRef.current.delete(key);
+      });
+    }
+  }, [activeRun, productMode, saveResultToLibrary]);
 
   return (
     <main className={`ugc-video-studio-shell${props.ownerMode ? " is-owner-product-mode" : ""}`}>
@@ -1681,7 +1704,7 @@ export function UgcVideoStudioWorkspace(props: {
               <section className="uv-card uv-prompt-card">
                 <div className="uv-section-heading"><div><span>02</span><div><h2>{mode === "VIDEO_EDIT" ? "Was soll geändert werden?" : mode === "VIDEO_RECAST" ? "Neue Szene beschreiben" : "Prompt"}</h2><p>{mode === "VIDEO_EDIT" ? "Optional – Xeriamo ersetzt die Hauptperson bereits automatisch." : mode === "VIDEO_RECAST" ? "Beschreibe die neue Produktion. Bewegung, Kamera und Timing bleiben vom Quellvideo erhalten." : mode === "BASE_VIDEO" ? "Beschreibe ein originales Fashion-Basisvideo." : "Szene, Kamera, Bewegung und Stimmung frei beschreiben."}</p></div></div><button type="button" className="uv-prompt-save" disabled={!prompt.trim()} onClick={() => openSave()}><Save size={14} /> Prompt speichern</button></div>
                 <textarea value={prompt} maxLength={12000} onChange={(event) => setPrompt(event.target.value)} placeholder={mode === "VIDEO_EDIT" ? "Optional: z. B. Bewahre den Oversized Fit und den Frontprint besonders stark." : mode === "VIDEO_RECAST" ? "z. B. Inszeniere die Performance in einer modernen U-Bahn-Station mit kühlem Licht und hochwertigem Fashion-Look." : mode === "BASE_VIDEO" ? "z. B. Eine erwachsene Person geht in einer modernen U-Bahn-Station eine Rolltreppe hinab, Ganzkörper, eine ruhige durchgehende Aufnahme …" : "Beschreibe dein UGC-Video, die Szene, Kamera, Bewegung und gewünschte Stimmung …"} />
-                <div className="uv-prompt-meta"><span>{mode === "BASE_VIDEO" && modelId === "pixverse-c1-base" ? `${new TextEncoder().encode(prompt).byteLength.toLocaleString("de-DE")} / 2.048 Bytes` : `${prompt.length.toLocaleString("de-DE")} / 12.000`}</span><button type="button" disabled={!prompt} onClick={() => setPrompt("")}>Leeren</button></div>
+                <div className="uv-prompt-meta"><span>{mode === "BASE_VIDEO" && modelId === "pixverse-c1-base" ? `${new TextEncoder().encode(prompt).byteLength.toLocaleString("de-DE")} / 2.048 Bytes` : `${prompt.length.toLocaleString("de-DE")} / 12.000`}</span>{prompt ? <button type="button" aria-label="Prompt leeren" onClick={() => setPrompt("")}>Leeren</button> : null}</div>
                 {mode === "MOTION_CONTROL" ? <><div className="uv-prompt-tags" aria-label="Prompt-Ideen">{QUICK_TAGS.map((tag) => <button type="button" key={tag} onClick={() => setPrompt((current) => `${current}${current.trim() ? ", " : ""}${tag}`)}>{tag}</button>)}</div>
                 <div className="uv-video-types"><span>Video-Typ</span><div>{UGC_VIDEO_TYPES.map((type) => <button type="button" key={type} className={videoType === type ? "is-active" : ""} onClick={() => setVideoType(type)}>{UGC_VIDEO_TYPE_LABELS[type]}</button>)}</div></div></> : null}
               </section>
@@ -1771,7 +1794,7 @@ export function UgcVideoStudioWorkspace(props: {
                     />
                     <button type="button" onClick={() => setLargeResult(result)}><Maximize2 size={15} /> Vergrößern</button>
                     <button type="button" onClick={() => addResultAsReference(result)}><PlusReferenceIcon /> Als Referenz</button>
-                    {productMode ? <button type="button" onClick={() => void saveResultToLibrary(result.id)}><Bookmark size={15} /> In Bibliothek speichern</button> : null}
+                    {productMode ? <button type="button" onClick={() => void saveResultToLibrary(visibleActiveRun, result.id)}><Bookmark size={15} /> {projectedLibraryResults.has(`${visibleActiveRun.id}:${result.id}`) ? "In Bibliothek" : "In Bibliothek speichern"}</button> : null}
                     <button type="button" onClick={() => toggleResultFavorite(result)} aria-label="Favorit"><Heart size={15} fill={result.favorite ? "currentColor" : "none"} /></button>
                     <button type="button" onClick={() => { void copyUgcPromptText(visibleActiveRun.setup.prompt).then((copied) => setNotice({ kind: copied ? "SUCCESS" : "ERROR", text: copied ? "Prompt wurde kopiert." : "Prompt konnte nicht kopiert werden." })); }}><Clipboard size={15} /> Prompt kopieren</button>
                     <button type="button" onClick={() => loadSetup(visibleActiveRun.setup)}><RotateCcw size={15} /> Neu erstellen</button>

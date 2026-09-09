@@ -887,6 +887,18 @@ export function AdvancedPanel(props: {
                 }
                 placeholder="Was soll nicht im Bild erscheinen?"
               />
+              {props.advanced.negativePrompt ? (
+                <button
+                  type="button"
+                  className="cs-inline-prompt-clear"
+                  aria-label="Prompt leeren"
+                  onClick={() =>
+                    props.onChange({ ...props.advanced, negativePrompt: "" })
+                  }
+                >
+                  Prompt leeren
+                </button>
+              ) : null}
             </label>
             <label className="cs-field">
               <span>

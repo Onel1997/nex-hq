@@ -978,7 +978,7 @@ export function UgcAdvancedPanel(props: {
         <div className="uv-advanced-body">
           <label className="uv-check"><input type="checkbox" checked={props.advanced.generateAudio} onChange={(event) => props.onChange({ ...props.advanced, generateAudio: event.target.checked })} /><span>Synchronisiertes Audio erzeugen</span></label>
           <label><span>Seed <em>optional</em></span><input inputMode="numeric" value={props.advanced.seed ?? ""} onChange={(event) => props.onChange({ ...props.advanced, seed: event.target.value ? Math.max(0, Number.parseInt(event.target.value, 10) || 0) : null })} placeholder="Automatisch" /></label>
-          <label><span>Negativer Prompt <em>optional</em></span><textarea rows={3} value={props.advanced.negativePrompt} onChange={(event) => props.onChange({ ...props.advanced, negativePrompt: event.target.value })} placeholder="Was soll nach Möglichkeit nicht erscheinen?" /></label>
+          <label><span>Negativer Prompt <em>optional</em></span><textarea rows={3} value={props.advanced.negativePrompt} onChange={(event) => props.onChange({ ...props.advanced, negativePrompt: event.target.value })} placeholder="Was soll nach Möglichkeit nicht erscheinen?" />{props.advanced.negativePrompt ? <button type="button" className="uv-inline-prompt-clear" aria-label="Prompt leeren" onClick={() => props.onChange({ ...props.advanced, negativePrompt: "" })}>Prompt leeren</button> : null}</label>
         </div>
       ) : null}
     </section>

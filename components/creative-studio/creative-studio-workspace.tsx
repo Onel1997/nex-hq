@@ -1383,14 +1383,14 @@ export function CreativeStudioWorkspace(props: {
                       <Plus size={13} /> {idea}
                     </button>
                   ))}
-                  <button
+                  {prompt ? <button
                     type="button"
                     className="cs-prompt-clear"
+                    aria-label="Prompt leeren"
                     onClick={() => setPrompt("")}
-                    disabled={!prompt}
                   >
                     <Trash2 size={14} /> Leeren
-                  </button>
+                  </button> : null}
                 </div>
                 <div className="cs-output-row" aria-label="Bildtyp">
                   <span>Bildtyp</span>
