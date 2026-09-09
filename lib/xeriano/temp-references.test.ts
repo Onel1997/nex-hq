@@ -116,5 +116,6 @@ test("Video Editor adds a separate bounded studio value without changing existin
   assert.match(videoEditorMigration, /kind = 'AUDIO'[\s\S]*15728640/);
   assert.match(server, /VIDEO_EDITOR_STUDIO:[\s\S]*"video\/mp4": 100 \* 1024 \* 1024/);
   assert.match(server, /VIDEO_EDITOR_STUDIO:[\s\S]*"audio\/mpeg": 15 \* 1024 \* 1024/);
-  assert.match(server, /studio === "VIDEO_EDITOR_STUDIO" && !hasXerianoOwnerAuthority\(context\)/);
+  assert.match(server, /studio === "VIDEO_EDITOR_STUDIO" \|\| studio === "ARTWORK_PREP_STUDIO"/);
+  assert.match(server, /&& !hasXerianoOwnerAuthority\(context\)/);
 });

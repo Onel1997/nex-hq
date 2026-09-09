@@ -25,6 +25,7 @@ export const designUtilityManifestSchema = z.object({
   requestFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   sourceAssetId: z.string().uuid(),
   operation: z.enum(DESIGN_UTILITY_OPERATIONS),
+  upscaleFactor: z.union([z.literal(2), z.literal(4)]).nullable().optional(),
   status: z.enum(["RUNNING", "SUCCEEDED", "UNKNOWN_OUTCOME", "FAILED"]),
   providerRequestId: z.string().min(1).nullable(),
   providerQueueHandle: designUtilityQueueHandleSchema.nullable().default(null),

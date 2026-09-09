@@ -11,6 +11,7 @@ import {
 } from "@/lib/xeriano/auth";
 import { authorizeXerianoGeneration } from "@/lib/xeriano/credit-guard";
 import { assessTrustedXeriamoApplicationOrigin } from "@/lib/xeriano/request-origin";
+import { isSafePrivateSvg } from "@/lib/xeriano/svg-raster-core";
 import {
   XERIAMO_PROVIDER_REFERENCE_URL_TTL_SECONDS,
   XERIAMO_TEMP_REFERENCE_BUCKET,
@@ -21,12 +22,17 @@ import {
   type XerianoTempReferenceStudio,
 } from "./contracts";
 
-function assertVideoEditorOwner(context: XerianoAccountContext, studio: XerianoTempReferenceStudio) {
-  if (studio === "VIDEO_EDITOR_STUDIO" && !hasXerianoOwnerAuthority(context)) {
+function assertOwnerPilotStudio(context: XerianoAccountContext, studio: XerianoTempReferenceStudio) {
+  if (
+    (studio === "VIDEO_EDITOR_STUDIO" || studio === "ARTWORK_PREP_STUDIO")
+    && !hasXerianoOwnerAuthority(context)
+  ) {
     throw new XerianoTempReferenceError(
       "TEMP_REFERENCE_FORBIDDEN",
       403,
-      "Das Video Editor Studio ist derzeit ein OWNER-Pilot.",
+      studio === "VIDEO_EDITOR_STUDIO"
+        ? "Das Video Editor Studio ist derzeit ein OWNER-Pilot."
+        : "Das Artwork Prep Studio ist derzeit ein OWNER-Pilot.",
     );
   }
 }
@@ -115,6 +121,14 @@ const MIME_LIMITS: Record<
       "audio/x-wav": 15 * 1024 * 1024,
     },
   },
+  ARTWORK_PREP_STUDIO: {
+    IMAGE: {
+      "image/png": 20 * 1024 * 1024,
+      "image/jpeg": 20 * 1024 * 1024,
+      "image/webp": 20 * 1024 * 1024,
+      "image/svg+xml": 5 * 1024 * 1024,
+    },
+  },
 };
 
 function extensionForMime(mimeType: string): string {
@@ -125,6 +139,7 @@ function extensionForMime(mimeType: string): string {
       "image/webp": "webp",
       "image/gif": "gif",
       "image/avif": "avif",
+      "image/svg+xml": "svg",
       "video/mp4": "mp4",
       "video/quicktime": "mov",
       "video/webm": "webm",
@@ -201,7 +216,7 @@ export async function createTempReferenceSlot(input: {
   request: unknown;
 }) {
   const parsed = xerianoTempReferenceSlotRequestSchema.parse(input.request);
-  assertVideoEditorOwner(input.context, parsed.studio);
+  assertOwnerPilotStudio(input.context, parsed.studio);
   const mimeType = parsed.mimeType.toLowerCase();
   assertDeclaredUpload({ ...parsed, mimeType });
   const id = randomUUID();
@@ -260,6 +275,7 @@ function signatureMatches(bytes: Buffer, mimeType: string): boolean {
     return bytes.subarray(0, 4).toString("ascii") === "RIFF" && bytes.subarray(8, 12).toString("ascii") === "WEBP";
   if (mimeType === "image/gif") return /^GIF8[79]a$/.test(bytes.subarray(0, 6).toString("ascii"));
   if (mimeType === "image/avif") return bytes.subarray(4, 12).toString("ascii").includes("ftypavif");
+  if (mimeType === "image/svg+xml") return isSafePrivateSvg(bytes);
   if (["video/mp4", "video/quicktime", "video/x-m4v"].includes(mimeType))
     return bytes.subarray(4, 8).toString("ascii") === "ftyp";
   if (mimeType === "video/webm") return bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
@@ -350,7 +366,7 @@ export async function completeTempReference(input: {
   referenceId: string;
 }) {
   const row = await ownedRow(input);
-  assertVideoEditorOwner(input.context, row.studio);
+  assertOwnerPilotStudio(input.context, row.studio);
   if (new Date(row.expires_at).getTime() <= Date.now()) {
     throw new XerianoTempReferenceError(
       "TEMP_REFERENCE_EXPIRED",
@@ -523,7 +539,7 @@ export async function deleteTempReference(input: {
   referenceId: string;
 }) {
   const row = await ownedRow(input);
-  assertVideoEditorOwner(input.context, row.studio);
+  assertOwnerPilotStudio(input.context, row.studio);
   if (row.upload_state === "BOUND") return { deleted: false as const };
   await createAdminClient().storage.from(row.storage_bucket).remove([row.storage_path]);
   const removed = await createAdminClient()

@@ -24,6 +24,7 @@ import {
   Settings,
   ShoppingBag,
   Scissors,
+  Layers3,
   UserRound,
   UsersRound,
   Wand2,
@@ -45,6 +46,7 @@ const OWNER_STUDIO_NAV: Array<{
     | "creative"
     | "ugcVideo"
     | "videoEditor"
+    | "artworkPrep"
     | "video"
     | "products"
     | "shopify";
@@ -95,6 +97,17 @@ const OWNER_STUDIO_NAV: Array<{
     isActive: (pathname) =>
       pathname === "/hq/video-editor-studio" ||
       pathname.startsWith("/hq/video-editor-studio/"),
+  },
+  {
+    id: "artwork-prep",
+    href: "/hq/artwork-prep-studio",
+    group: "primary",
+    labelKey: "artworkPrep",
+    icon: Layers3,
+    accent: "#e3b86c",
+    isActive: (pathname) =>
+      pathname === "/hq/artwork-prep-studio" ||
+      pathname.startsWith("/hq/artwork-prep-studio/"),
   },
   {
     id: "designer-internal",
@@ -178,6 +191,7 @@ export function getHqSidebarSections(locale: Locale): HqSidebarSection[] {
     creative: "Creative Studio",
     ugcVideo: "UGC Video Studio",
     videoEditor: "Video Editor Studio",
+    artworkPrep: "Artwork Prep Studio",
     video: agents.videoStudio,
     products: "Produktbibliothek",
     shopify: agents.studioNames.shopify,

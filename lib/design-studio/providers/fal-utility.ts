@@ -136,12 +136,17 @@ export class FalDesignUtilityProvider {
     operation: DesignUtilityOperation;
     sourceBytes: Buffer;
     sourceMimeType: string;
+    upscaleFactor?: 2 | 4;
     onAccepted?: (requestId: string, endpoint: string, queueHandle?: DesignUtilityQueueHandle) => Promise<void> | void;
   }) {
     if (!this.isConfigured()) throw new Error("DESIGN_UTILITY_PROVIDER_NOT_CONFIGURED");
     const transport = this.transport ?? defaultTransport(this.credentials!.trim());
     const imageUrl = await transport.upload(input.sourceBytes, input.sourceMimeType);
-    const prepared = buildDesignUtilityProviderInput({ operation: input.operation, imageUrl });
+    const prepared = buildDesignUtilityProviderInput({
+      operation: input.operation,
+      imageUrl,
+      ...(input.upscaleFactor ? { upscaleFactor: input.upscaleFactor } : {}),
+    });
     let requestId: string | null = null;
     try {
       const submitted = await transport.submit(prepared.endpoint, prepared.payload as Record<string, unknown>);
@@ -163,9 +168,14 @@ export class FalDesignUtilityProvider {
     providerRequestId: string;
     providerModel: string;
     providerQueueHandle: DesignUtilityQueueHandle | null;
+    upscaleFactor?: 2 | 4 | null;
   }) {
     if (!this.isConfigured()) return null;
-    const expected = buildDesignUtilityProviderInput({ operation: input.operation, imageUrl: "https://placeholder.invalid/source" }).endpoint;
+    const expected = buildDesignUtilityProviderInput({
+      operation: input.operation,
+      imageUrl: "https://placeholder.invalid/source",
+      ...(input.upscaleFactor ? { upscaleFactor: input.upscaleFactor } : {}),
+    }).endpoint;
     if (input.providerModel !== expected) throw new Error("DESIGN_UTILITY_PROVIDER_MISMATCH");
     const transport = this.transport ?? defaultTransport(this.credentials!.trim());
     if (!transport.status) return null;

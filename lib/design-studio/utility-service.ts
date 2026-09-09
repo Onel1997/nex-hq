@@ -83,6 +83,8 @@ export async function executeDesignUtility(input: {
   jobId: string;
   sourceAssetId: string;
   operation: DesignUtilityOperation;
+  upscaleFactor?: 2 | 4;
+  allowLargerUpscaleSource?: boolean;
   source: { bytes: Buffer; mimeType: string; dimensions: { width: number; height: number } };
   onAccepted?: (requestId: string, endpoint: string, updatedAt: string) => Promise<void> | void;
 }, dependencies: {
@@ -91,26 +93,29 @@ export async function executeDesignUtility(input: {
   fetcher?: typeof fetch;
   now?: () => string;
 } = {}): Promise<{ manifest: DesignUtilityManifest; bytes: Buffer | null }> {
-  if (input.operation === "UPSCALE" && Math.max(input.source.dimensions.width, input.source.dimensions.height) > 2_560) {
+  if (input.operation === "UPSCALE" && !input.allowLargerUpscaleSource && Math.max(input.source.dimensions.width, input.source.dimensions.height) > 2_560) {
     throw new DesignUtilityError("UPSCALE_NOT_REQUIRED", "Dieses Design liegt bereits in hoher Auflösung vor.", 400);
   }
   const now = dependencies.now ?? (() => new Date().toISOString());
   const store = dependencies.store ?? new SupabaseDesignUtilityStore();
   const fingerprint = createHash("sha256")
-    .update(input.jobId).update(input.context.accountId).update(input.sourceAssetId).update(input.operation)
+    .update(input.jobId).update(input.context.accountId).update(input.sourceAssetId).update(input.operation);
+  const requestFingerprint = fingerprint
+    .update(input.operation === "UPSCALE" && input.upscaleFactor ? String(input.upscaleFactor) : "")
     .digest("hex");
-  const claim = await store.claim({ scope: input.scope, jobId: input.jobId, fingerprint });
+  const claim = await store.claim({ scope: input.scope, jobId: input.jobId, fingerprint: requestFingerprint });
   if (claim === "EXISTS") {
     const existing = await store.read(input.scope, input.jobId);
     if (!existing) throw new DesignUtilityError("UTILITY_RUNNING", "Diese Aktion wird bereits verarbeitet.", 409);
-    if (existing.requestFingerprint !== fingerprint) throw new DesignUtilityError("IDEMPOTENCY_CONFLICT", "Diese Aktions-ID wurde bereits verwendet.", 409);
+    if (existing.requestFingerprint !== requestFingerprint) throw new DesignUtilityError("IDEMPOTENCY_CONFLICT", "Diese Aktions-ID wurde bereits verwendet.", 409);
     return { manifest: existing, bytes: null };
   }
   const config = resolveDesignUtilityConfig(input.operation);
   let manifest = designUtilityManifestSchema.parse({
     version: "xeriamo-design-utility-job-v1", jobId: input.jobId,
     workspaceId: input.scope.workspaceId, actorId: input.scope.actorId,
-    requestFingerprint: fingerprint, sourceAssetId: input.sourceAssetId, operation: input.operation,
+    requestFingerprint, sourceAssetId: input.sourceAssetId, operation: input.operation,
+    ...(input.operation === "UPSCALE" && input.upscaleFactor ? { upscaleFactor: input.upscaleFactor } : {}),
     status: "RUNNING", providerRequestId: null, providerModel: config.endpoint,
     providerQueueHandle: null,
     resultAssetId: null, resultCreationId: null, width: null, height: null,
@@ -126,6 +131,7 @@ export async function executeDesignUtility(input: {
   try {
     const response = await provider.generate({
       operation: input.operation, sourceBytes: input.source.bytes, sourceMimeType: input.source.mimeType,
+      ...(input.operation === "UPSCALE" && input.upscaleFactor ? { upscaleFactor: input.upscaleFactor } : {}),
       onAccepted: async (requestId, endpoint, queueHandle?: DesignUtilityQueueHandle) => {
         manifest = designUtilityManifestSchema.parse({
           ...manifest,
@@ -173,6 +179,7 @@ export async function recoverDesignUtility(input: {
     providerRequestId: manifest.providerRequestId,
     providerModel: manifest.providerModel,
     providerQueueHandle: manifest.providerQueueHandle,
+    upscaleFactor: manifest.upscaleFactor,
   });
   if (!response) return { manifest, bytes: null };
   try {

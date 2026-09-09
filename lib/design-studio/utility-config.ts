@@ -29,6 +29,7 @@ export function resolveDesignUtilityConfig(operation: DesignUtilityOperation) {
 export function buildDesignUtilityProviderInput(input: {
   operation: DesignUtilityOperation;
   imageUrl: string;
+  upscaleFactor?: 2 | 4;
 }) {
   const config = resolveDesignUtilityConfig(input.operation);
   if (input.operation === "BACKGROUND_REMOVE") {
@@ -38,8 +39,8 @@ export function buildDesignUtilityProviderInput(input: {
     endpoint: config.endpoint,
     payload: {
       image_url: input.imageUrl,
-      model: "RealESRGAN_x2plus",
-      scale: 2,
+      model: input.upscaleFactor === 4 ? "RealESRGAN_x4plus" : "RealESRGAN_x2plus",
+      scale: input.upscaleFactor ?? 2,
       face: false,
       output_format: "png",
       tile: 0,

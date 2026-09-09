@@ -16,7 +16,7 @@ export const xerianoLibraryAssetSchema = z.object({
   assetType: xerianoAssetTypeSchema,
   title: z.string().min(1).max(160),
   description: z.string().max(2000).nullable(),
-  sourceStudio: z.enum(["DESIGN_STUDIO", "CREATIVE_STUDIO", "UGC_VIDEO_STUDIO", "UPLOAD"]),
+  sourceStudio: z.enum(["DESIGN_STUDIO", "CREATIVE_STUDIO", "UGC_VIDEO_STUDIO", "UPLOAD", "ARTWORK_PREP_STUDIO"]),
   mimeType: z.string().min(1),
   byteLength: z.number().int().positive().max(50 * 1024 * 1024),
   width: z.number().int().positive().nullable().optional(),
@@ -27,7 +27,7 @@ export const xerianoLibraryAssetSchema = z.object({
   updatedAt: z.string(),
   creationId: z.string().uuid().nullable().optional(),
   design: z.object({
-    operation: z.enum(["BACKGROUND_REMOVE", "UPSCALE", "SVG_TO_PNG", "PRINT_FILE_300_DPI"]).nullable(),
+    operation: z.enum(["BACKGROUND_REMOVE", "BACKGROUND_COLOR", "UPSCALE", "SVG_TO_PNG", "PRINT_FILE_300_DPI", "ARTWORK_ORIGINAL"]).nullable(),
     derivedFromAssetId: z.string().uuid().nullable(),
     transparentPreview: z.boolean(),
     canBackgroundRemove: z.boolean(),
@@ -45,7 +45,7 @@ export function deriveDesignAssetCapabilities(input: {
   mimeType: string;
   width: number | null;
   height: number | null;
-  operation: "BACKGROUND_REMOVE" | "UPSCALE" | "SVG_TO_PNG" | "PRINT_FILE_300_DPI" | null;
+  operation: "BACKGROUND_REMOVE" | "BACKGROUND_COLOR" | "UPSCALE" | "SVG_TO_PNG" | "PRINT_FILE_300_DPI" | "ARTWORK_ORIGINAL" | null;
 }) {
   if (input.assetType !== "DESIGN") return null;
   const raster = ["image/png", "image/jpeg", "image/webp"].includes(input.mimeType);

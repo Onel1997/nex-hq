@@ -123,7 +123,7 @@ function restoredSetup(creation: CreationRow | undefined) {
 function designPresentation(row: LibraryRow, creation: CreationRow | undefined, sourceCreation: CreationRow | undefined) {
   if (row.asset_type !== "DESIGN") return null;
   const provenance = object(row.provenance);
-  const operation = provenance.operation === "BACKGROUND_REMOVE" || provenance.operation === "UPSCALE" || provenance.operation === "SVG_TO_PNG" || provenance.operation === "PRINT_FILE_300_DPI"
+  const operation = provenance.operation === "BACKGROUND_REMOVE" || provenance.operation === "BACKGROUND_COLOR" || provenance.operation === "UPSCALE" || provenance.operation === "SVG_TO_PNG" || provenance.operation === "PRINT_FILE_300_DPI" || provenance.operation === "ARTWORK_ORIGINAL"
     ? provenance.operation
     : null;
   const width = typeof provenance.width === "number" ? provenance.width : null;

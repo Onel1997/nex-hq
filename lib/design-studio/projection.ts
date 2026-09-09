@@ -25,6 +25,7 @@ export async function recordDesignProviderCostEvent(input: {
   occurredAt: string;
   operation?: "DESIGN_GENERATION" | DesignUtilityOperation;
   costVersion?: string;
+  studio?: "DESIGN_STUDIO" | "ARTWORK_PREP_STUDIO";
 }) {
   const operation = input.operation ?? "DESIGN_GENERATION";
   const written = await createAdminClient().from("xeriano_provider_cost_events").upsert({
@@ -41,9 +42,9 @@ export async function recordDesignProviderCostEvent(input: {
     provider_cost_version: input.costVersion ?? DESIGN_PROVIDER_COST_VERSION,
     fx_economic_version: XERIANO_ECONOMIC_POLICY.fx.USD_EUR.version,
     provider_request_id: input.providerRequestId,
-    idempotency_key: `design:${input.context.accountId}:${input.jobId}:${operation.toLowerCase()}`,
+    idempotency_key: `${input.studio === "ARTWORK_PREP_STUDIO" ? "artwork-prep" : "design"}:${input.context.accountId}:${input.jobId}:${operation.toLowerCase()}`,
     occurred_at: input.occurredAt,
-    metadata: { studio: "DESIGN_STUDIO", pricingPolicy: XERIANO_ECONOMIC_POLICY.version },
+    metadata: { studio: input.studio ?? "DESIGN_STUDIO", pricingPolicy: XERIANO_ECONOMIC_POLICY.version },
   }, { onConflict: "idempotency_key", ignoreDuplicates: true });
   if (written.error) throw written.error;
 }
