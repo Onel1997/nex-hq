@@ -6,6 +6,11 @@ import {
 import {
   type XerianoStripeProductCode,
 } from "./billing-product-codes";
+import {
+  resolveXerianoStripeRuntime,
+  XerianoStripeRuntimeError,
+  type XerianoStripeMode,
+} from "./stripe-runtime";
 
 export {
   XERIANO_STRIPE_PLAN_CODES,
@@ -62,12 +67,19 @@ export type XerianoStripePriceMapping = {
   grossPriceMinor: number;
   currency: "EUR";
   grantedCredits: number;
+  livemode: boolean;
 };
 
 export class XerianoStripeConfigurationError extends Error {
   constructor(public readonly code: string) {
     super(code);
   }
+}
+
+function configurationError(error: unknown): XerianoStripeConfigurationError {
+  return error instanceof XerianoStripeRuntimeError
+    ? new XerianoStripeConfigurationError(error.code)
+    : new XerianoStripeConfigurationError("STRIPE_RUNTIME_INVALID");
 }
 
 function projectRefFromUrl(raw: string | undefined): string | null {
@@ -110,32 +122,28 @@ function isValidStripeTestAppUrl(raw: string | undefined, projectRef: string | n
 export function assertXerianoStripeTestRuntime(
   env: Record<string, string | undefined> = process.env,
 ): void {
-  const secret = env.STRIPE_SECRET_KEY?.trim();
-  if (!secret?.startsWith("sk_test_")) {
-    throw new XerianoStripeConfigurationError(
-      secret?.startsWith("sk_live_") ? "STRIPE_LIVE_KEY_FORBIDDEN" : "STRIPE_TEST_KEY_REQUIRED",
-    );
+  if (env.STRIPE_SECRET_KEY?.trim().startsWith("sk_live_")) {
+    throw new XerianoStripeConfigurationError("STRIPE_LIVE_KEY_FORBIDDEN");
   }
-  const projectRef = projectRefFromUrl(env.NEXT_PUBLIC_SUPABASE_URL);
-  if (projectRef === XERIANO_STRIPE_BLOCKED_PRODUCTION_PROJECT_REF) {
+  if (projectRefFromUrl(env.NEXT_PUBLIC_SUPABASE_URL) === XERIANO_STRIPE_BLOCKED_PRODUCTION_PROJECT_REF) {
     throw new XerianoStripeConfigurationError("PRODUCTION_SUPABASE_FORBIDDEN");
   }
-  if (projectRef !== XERIANO_STRIPE_TEST_STAGING_PROJECT_REF && projectRef !== "LOCAL") {
-    throw new XerianoStripeConfigurationError("STAGING_SUPABASE_REQUIRED");
-  }
-  const appUrl = env.NEXT_PUBLIC_APP_URL?.trim();
-  if (!appUrl) throw new XerianoStripeConfigurationError("STRIPE_APP_URL_REQUIRED");
-  if (!isValidStripeTestAppUrl(appUrl, projectRef)) {
-    throw new XerianoStripeConfigurationError("STRIPE_APP_URL_INVALID");
+  try {
+    const runtime = resolveXerianoStripeRuntime(env);
+    if (runtime.mode !== "test") throw new XerianoStripeConfigurationError("STRIPE_TEST_RUNTIME_REQUIRED");
+  } catch (error) {
+    if (error instanceof XerianoStripeConfigurationError) throw error;
+    throw configurationError(error);
   }
 }
 
 export function assertXerianoBillingSettlementReady(
   env: Record<string, string | undefined> = process.env,
 ): void {
-  assertXerianoStripeTestRuntime(env);
-  if (!env.STRIPE_WEBHOOK_SECRET?.trim().startsWith("whsec_")) {
-    throw new XerianoStripeConfigurationError("STRIPE_WEBHOOK_SECRET_REQUIRED");
+  try {
+    resolveXerianoStripeRuntime(env);
+  } catch (error) {
+    throw configurationError(error);
   }
 }
 
@@ -180,6 +188,7 @@ export function resolveXerianoStripePriceMapping(
     stripePriceId,
     catalogCode: definition.catalogCode,
     ...catalog,
+    livemode: env.XERIAMO_STRIPE_MODE === "live",
   };
 }
 
@@ -201,7 +210,7 @@ export function getXerianoStripeAvailability(
   const diagnostic = getXerianoStripeReadinessDiagnostic(env);
   return Object.freeze({
     runtimeReady: diagnostic.runtimeReady,
-    portal: diagnostic.settlementReady,
+    portal: diagnostic.portalReady,
     products: Object.freeze(Object.fromEntries(
       XERIANO_STRIPE_PRODUCTS.map((product) => [
         product.code,
@@ -212,15 +221,20 @@ export function getXerianoStripeAvailability(
 }
 
 export type XerianoStripeReadinessDiagnostic = Readonly<{
+  mode: XerianoStripeMode | "INVALID";
+  livemode: boolean;
+  liveEnabled: boolean;
   secretKeyPresent: boolean;
   testSecretKey: boolean;
   webhookSecretPresent: boolean;
   appUrlPresent: boolean;
   appUrlValid: boolean;
   stagingProject: boolean;
+  liveProject: boolean;
   productionProjectBlocked: boolean;
   runtimeReady: boolean;
   settlementReady: boolean;
+  portalReady: boolean;
   products: Readonly<Record<XerianoStripeProductCode, boolean>>;
 }>;
 
@@ -236,15 +250,23 @@ export function getXerianoStripeReadinessDiagnostic(
   const appUrlPresent = Boolean(env.NEXT_PUBLIC_APP_URL?.trim());
   const appUrlValid = isValidStripeTestAppUrl(env.NEXT_PUBLIC_APP_URL?.trim(), projectRef);
   const stagingProject = projectRef === XERIANO_STRIPE_TEST_STAGING_PROJECT_REF || projectRef === "LOCAL";
-  const productionProjectBlocked = projectRef === XERIANO_STRIPE_BLOCKED_PRODUCTION_PROJECT_REF;
+  const liveProject = projectRef === XERIANO_STRIPE_BLOCKED_PRODUCTION_PROJECT_REF;
+  const productionProjectBlocked = liveProject && env.XERIAMO_STRIPE_MODE !== "live";
   let runtimeReady = false;
+  let mode: XerianoStripeMode | "INVALID" = "INVALID";
+  let livemode = false;
   try {
-    assertXerianoStripeTestRuntime(env);
+    const runtime = resolveXerianoStripeRuntime(env);
+    mode = runtime.mode;
+    livemode = runtime.livemode;
     runtimeReady = true;
   } catch {
     runtimeReady = false;
   }
   const settlementReady = runtimeReady && webhookSecretPresent;
+  const portalReady = settlementReady
+    && /^bpc_[A-Za-z0-9]+$/.test(env.STRIPE_PORTAL_CONFIGURATION_ID?.trim() ?? "")
+    && env.XERIAMO_STRIPE_PORTAL_CANCELLATION_ONLY === "true";
   const products = Object.fromEntries(
     XERIANO_STRIPE_PRODUCTS.map((product) => [
       product.code,
@@ -252,15 +274,20 @@ export function getXerianoStripeReadinessDiagnostic(
     ]),
   ) as Record<XerianoStripeProductCode, boolean>;
   return Object.freeze({
+    mode,
+    livemode,
+    liveEnabled: env.XERIAMO_LIVE_BILLING_ENABLED === "true",
     secretKeyPresent,
     testSecretKey,
     webhookSecretPresent,
     appUrlPresent,
     appUrlValid,
     stagingProject,
+    liveProject,
     productionProjectBlocked,
     runtimeReady,
     settlementReady,
+    portalReady,
     products: Object.freeze(products),
   });
 }

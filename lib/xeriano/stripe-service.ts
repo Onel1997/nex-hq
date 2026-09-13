@@ -7,7 +7,6 @@ import {
   type XerianoCheckoutRepository,
 } from "./billing-repository";
 import {
-  assertXerianoStripeTestRuntime,
   assertXerianoBillingSettlementReady,
   resolveXerianoStripePriceMapping,
   XERIANO_STRIPE_API_VERSION,
@@ -15,6 +14,7 @@ import {
   type XerianoStripePriceMapping,
   type XerianoStripeProductCode,
 } from "./stripe-config";
+import { resolveXerianoStripeRuntime, type XerianoStripeRuntime } from "./stripe-runtime";
 import {
   checkoutDiagnostic,
   isStripeResourceContextFailure,
@@ -64,22 +64,27 @@ export interface XerianoStripeGateway {
     idempotencyKey: string,
   ): Promise<Stripe.Checkout.Session>;
   createPortalSession(params: Stripe.BillingPortal.SessionCreateParams): Promise<Stripe.BillingPortal.Session>;
+  retrievePortalConfiguration?(id: string): Promise<Stripe.BillingPortal.Configuration>;
+  retrieveCheckoutSession?(id: string): Promise<Stripe.Checkout.Session>;
+  retrieveSubscription?(id: string): Promise<Stripe.Subscription>;
 }
 
-function createStripeGateway(env: Record<string, string | undefined>): XerianoStripeGateway {
-  assertXerianoStripeTestRuntime(env);
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY!.trim(), { apiVersion: XERIANO_STRIPE_API_VERSION });
+export function createXerianoStripeGateway(env: Record<string, string | undefined> = process.env): XerianoStripeGateway {
+  const runtime = resolveXerianoStripeRuntime(env);
+  const stripe = new Stripe(runtime.secretKey, { apiVersion: XERIANO_STRIPE_API_VERSION });
   return {
     retrievePrice: (id) => stripe.prices.retrieve(id),
     createCustomer: (params, idempotencyKey) => stripe.customers.create(params, { idempotencyKey }),
     createCheckoutSession: (params, idempotencyKey) => stripe.checkout.sessions.create(params, { idempotencyKey }),
     createPortalSession: (params) => stripe.billingPortal.sessions.create(params),
+    retrievePortalConfiguration: (id) => stripe.billingPortal.configurations.retrieve(id),
+    retrieveCheckoutSession: (id) => stripe.checkout.sessions.retrieve(id),
+    retrieveSubscription: (id) => stripe.subscriptions.retrieve(id),
   };
 }
 
 function appOrigin(env: Record<string, string | undefined>): string {
-  assertXerianoStripeTestRuntime(env);
-  return new URL(env.NEXT_PUBLIC_APP_URL!.trim()).origin;
+  return resolveXerianoStripeRuntime(env).appOrigin;
 }
 
 export function assertXerianoBillingOrigin(
@@ -115,7 +120,7 @@ export function assertStripePriceMatchesCatalog(
     stage: "price_verification",
     productCode: mapping.code,
   });
-  if (price.livemode) throw mismatch("STRIPE_PRICE_SANDBOX_MISMATCH");
+  if (price.livemode !== mapping.livemode) throw mismatch("STRIPE_PRICE_SANDBOX_MISMATCH");
   if (!price.active) throw mismatch("STRIPE_PRICE_INACTIVE");
   if (price.id !== mapping.stripePriceId) throw mismatch("STRIPE_PRICE_IDENTITY_MISMATCH");
   if (price.currency.toUpperCase() !== mapping.currency) throw mismatch("STRIPE_PRICE_CURRENCY_MISMATCH");
@@ -129,10 +134,11 @@ async function resolveOrCreateCustomer(input: {
   gateway: XerianoStripeGateway;
   repository: XerianoCheckoutRepository;
   productCode: XerianoStripeProductCode;
+  runtime: XerianoStripeRuntime;
 }) {
   let existing;
   try {
-    existing = await input.repository.getBillingCustomer(input.context.accountId);
+    existing = await input.repository.getBillingCustomer(input.context.accountId, input.runtime.livemode);
   } catch (error) {
     throw checkoutFailure({
       code: "STRIPE_CUSTOMER_UNAVAILABLE",
@@ -151,7 +157,7 @@ async function resolveOrCreateCustomer(input: {
         name: input.context.accountName,
         metadata: {
           xeriano_account_id: input.context.accountId,
-          xeriano_environment: "staging",
+          xeriano_environment: input.runtime.mode,
         },
       },
       `xeriano:stripe-customer:${input.context.accountId}`,
@@ -167,7 +173,7 @@ async function resolveOrCreateCustomer(input: {
       error,
     });
   }
-  if (customer.livemode || customer.deleted) {
+  if (customer.livemode !== input.runtime.livemode || customer.deleted) {
     throw checkoutFailure({
       code: "STRIPE_TEST_CUSTOMER_REQUIRED",
       diagnosticCode: "STRIPE_CUSTOMER_SANDBOX_MISMATCH",
@@ -176,7 +182,7 @@ async function resolveOrCreateCustomer(input: {
     });
   }
   try {
-    return await input.repository.bindStripeCustomer(input.context.accountId, customer.id);
+    return await input.repository.bindStripeCustomer(input.context.accountId, customer.id, input.runtime.livemode);
   } catch (error) {
     throw checkoutFailure({
       code: "STRIPE_CUSTOMER_UNAVAILABLE",
@@ -209,6 +215,7 @@ export async function createXerianoCheckout(input: {
       error,
     });
   }
+  const runtime = resolveXerianoStripeRuntime(env);
   const mapping = resolveXerianoStripePriceMapping(input.productCode, env);
   if (!mapping) throw checkoutFailure({
     code: "STRIPE_PRICE_NOT_CONFIGURED",
@@ -219,7 +226,7 @@ export async function createXerianoCheckout(input: {
   let gateway: XerianoStripeGateway;
   let repository: XerianoCheckoutRepository;
   try {
-    gateway = input.gateway ?? createStripeGateway(env);
+    gateway = input.gateway ?? createXerianoStripeGateway(env);
     repository = input.repository ?? createXerianoBillingRepository();
   } catch (error) {
     throw checkoutFailure({
@@ -261,6 +268,7 @@ export async function createXerianoCheckout(input: {
     gateway,
     repository,
     productCode: mapping.code,
+    runtime,
   });
   if (!customer.stripeCustomerId) throw checkoutFailure({
     code: "STRIPE_CUSTOMER_UNAVAILABLE",
@@ -292,13 +300,15 @@ export async function createXerianoCheckout(input: {
   const requestId = input.requestId && /^[0-9a-f-]{36}$/i.test(input.requestId)
     ? input.requestId
     : randomUUID();
+  let checkoutClaim: Awaited<ReturnType<XerianoCheckoutRepository["claimCheckout"]>>;
   try {
-    await repository.claimCheckout(
+    checkoutClaim = await repository.claimCheckout(
       input.context.accountId,
       customer.stripeCustomerId,
       requestId,
       mapping.kind,
       mapping.code,
+      runtime.livemode,
     );
   } catch (error) {
     throw checkoutFailure({
@@ -308,6 +318,31 @@ export async function createXerianoCheckout(input: {
       productCode: mapping.code,
       error,
     });
+  }
+  if (checkoutClaim?.checkoutSessionId) {
+    if (!gateway.retrieveCheckoutSession) throw checkoutFailure({
+      code: "CHECKOUT_RECOVERY_UNAVAILABLE",
+      diagnosticCode: "CHECKOUT_SESSION_PERSIST_FAILED",
+      stage: "session_persistence",
+      productCode: mapping.code,
+    });
+    const existingSession = await gateway.retrieveCheckoutSession(checkoutClaim.checkoutSessionId);
+    const existingCustomerId = typeof existingSession.customer === "string"
+      ? existingSession.customer
+      : existingSession.customer?.id;
+    if (existingSession.livemode !== runtime.livemode
+      || existingCustomerId !== customer.stripeCustomerId
+      || existingSession.mode !== (mapping.kind === "SUBSCRIPTION" ? "subscription" : "payment")
+      || existingSession.status !== "open"
+      || !existingSession.url) {
+      throw checkoutFailure({
+        code: "CHECKOUT_RECOVERY_CONFLICT",
+        diagnosticCode: "CHECKOUT_SESSION_PERSIST_FAILED",
+        stage: "session_persistence",
+        productCode: mapping.code,
+      });
+    }
+    return { url: existingSession.url };
   }
   const automaticTaxEnabled = env.STRIPE_AUTOMATIC_TAX_ENABLED === "true";
   const common: Stripe.Checkout.SessionCreateParams = {
@@ -325,6 +360,9 @@ export async function createXerianoCheckout(input: {
       xeriano_account_id: input.context.accountId,
       xeriano_product_code: mapping.code,
       xeriano_catalog_version: mapping.catalogVersion,
+      xeriano_actor_id: input.context.userId,
+      xeriano_request_id: requestId,
+      xeriano_livemode: String(runtime.livemode),
     },
     success_url: `${origin}/app/credits?billing=processing&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/app/credits?billing=canceled`,
@@ -335,6 +373,9 @@ export async function createXerianoCheckout(input: {
         xeriano_account_id: input.context.accountId,
         xeriano_product_code: mapping.code,
         xeriano_catalog_version: mapping.catalogVersion,
+        xeriano_actor_id: input.context.userId,
+        xeriano_request_id: requestId,
+        xeriano_livemode: String(runtime.livemode),
       },
     };
   } else {
@@ -343,6 +384,9 @@ export async function createXerianoCheckout(input: {
         xeriano_account_id: input.context.accountId,
         xeriano_product_code: mapping.code,
         xeriano_catalog_version: mapping.catalogVersion,
+        xeriano_actor_id: input.context.userId,
+        xeriano_request_id: requestId,
+        xeriano_livemode: String(runtime.livemode),
       },
     };
   }
@@ -363,7 +407,10 @@ export async function createXerianoCheckout(input: {
       error,
     });
   }
-  if (session.livemode || !session.url) throw checkoutFailure({
+  const validSessionId = runtime.livemode
+    ? /^cs_live_[A-Za-z0-9_]+$/.test(session.id)
+    : /^cs_test_[A-Za-z0-9_]+$/.test(session.id);
+  if (session.livemode !== runtime.livemode || !validSessionId || !session.url) throw checkoutFailure({
     code: "STRIPE_TEST_CHECKOUT_REQUIRED",
     diagnosticCode: "STRIPE_SESSION_SANDBOX_MISMATCH",
     stage: "session_creation",
@@ -376,6 +423,10 @@ export async function createXerianoCheckout(input: {
       stripeCustomerId: customer.stripeCustomerId,
       stripeCheckoutSessionId: session.id,
       mapping,
+      actorId: input.context.userId,
+      livemode: runtime.livemode,
+      expiresAt: typeof session.expires_at === "number" ? new Date(session.expires_at * 1000).toISOString() : null,
+      stripePaymentIntentId: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null,
     });
   } catch (error) {
     throw checkoutFailure({
@@ -397,11 +448,24 @@ export async function createXerianoPortal(input: {
 }): Promise<{ url: string }> {
   if (input.context.role !== "CUSTOMER") throw new XerianoBillingError("CUSTOMER_BILLING_REQUIRED", 403);
   const env = input.env ?? process.env;
-  assertXerianoStripeTestRuntime(env);
+  const runtime = resolveXerianoStripeRuntime(env);
+  if (!runtime.portalConfigurationId || !runtime.portalCancellationOnly) {
+    throw new XerianoBillingError("STRIPE_PORTAL_CONFIGURATION_REQUIRED", 503);
+  }
   const repository = input.repository ?? createXerianoBillingRepository();
-  const customer = await repository.getBillingCustomer(input.context.accountId);
+  const customer = await repository.getBillingCustomer(input.context.accountId, runtime.livemode);
   if (!customer?.stripeCustomerId) throw new XerianoBillingError("STRIPE_CUSTOMER_NOT_FOUND", 409);
-  const gateway = input.gateway ?? createStripeGateway(env);
+  const gateway = input.gateway ?? createXerianoStripeGateway(env);
+  if (!gateway.retrievePortalConfiguration) throw new XerianoBillingError("STRIPE_PORTAL_CONFIGURATION_REQUIRED", 503);
+  const portalConfiguration = await gateway.retrievePortalConfiguration(runtime.portalConfigurationId);
+  if (!portalConfiguration.active
+    || portalConfiguration.livemode !== runtime.livemode
+    || !portalConfiguration.features.subscription_cancel.enabled
+    || portalConfiguration.features.subscription_cancel.mode !== "at_period_end"
+    || portalConfiguration.features.subscription_cancel.proration_behavior !== "none"
+    || portalConfiguration.features.subscription_update.enabled) {
+    throw new XerianoBillingError("STRIPE_PORTAL_POLICY_MISMATCH", 503);
+  }
   // Portal plan changes can emit webhooks without passing through a new
   // Checkout. Persist every configured, verified plan Price first so a later
   // webhook can resolve it without trusting mutable environment state.
@@ -415,7 +479,8 @@ export async function createXerianoPortal(input: {
   const session = await gateway.createPortalSession({
     customer: customer.stripeCustomerId,
     return_url: `${appOrigin(env)}/app/credits`,
+    configuration: runtime.portalConfigurationId,
   });
-  if (session.livemode) throw new XerianoBillingError("STRIPE_TEST_PORTAL_REQUIRED");
+  if (session.livemode !== runtime.livemode) throw new XerianoBillingError("STRIPE_PORTAL_MODE_MISMATCH");
   return { url: session.url };
 }

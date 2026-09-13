@@ -8,16 +8,19 @@ import {
   XerianoWebhookProcessingError,
 } from "@/lib/xeriano/billing";
 import { createXerianoBillingSettlementRepository } from "@/lib/xeriano/billing-settlement-repository";
-import { assertXerianoStripeTestRuntime } from "@/lib/xeriano/stripe-config";
+import { persistVerifiedStripeEventAuthority } from "@/lib/xeriano/billing-event-authority";
+import { resolveXerianoStripeRuntime, type XerianoStripeRuntime } from "@/lib/xeriano/stripe-runtime";
+import { createXerianoStripeGateway } from "@/lib/xeriano/stripe-service";
 import { logXerianoWebhookDiagnostic } from "@/lib/xeriano/stripe-webhook-diagnostics";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   let event: ReturnType<typeof verifyXerianoStripeEvent> | null = null;
+  let billingRuntime: XerianoStripeRuntime | null = null;
   try {
     try {
-      assertXerianoStripeTestRuntime();
+      billingRuntime = resolveXerianoStripeRuntime();
     } catch {
       logXerianoWebhookDiagnostic({
         code: "WEBHOOK_RUNTIME_NOT_READY",
@@ -26,7 +29,7 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ received: false, code: "STRIPE_WEBHOOK_UNAVAILABLE" }, { status: 503 });
     }
-    const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+    const secret = billingRuntime.webhookSecret;
     const signature = request.headers.get("stripe-signature");
     if (!secret?.startsWith("whsec_")) {
       logXerianoWebhookDiagnostic({
@@ -82,13 +85,13 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ received: false, code: "INVALID_STRIPE_SIGNATURE" }, { status: 401 });
     }
-    if (event.livemode) {
+    if (event.livemode !== billingRuntime.livemode) {
       logXerianoWebhookDiagnostic({
         code: "WEBHOOK_LIVEMODE_REJECTED",
         stage: "event_validation",
         httpStatus: 400,
       });
-      return NextResponse.json({ received: false, code: "LIVE_STRIPE_EVENT_FORBIDDEN" }, { status: 400 });
+      return NextResponse.json({ received: false, code: "STRIPE_EVENT_MODE_MISMATCH" }, { status: 400 });
     }
     logXerianoWebhookDiagnostic({
       code: "WEBHOOK_EVENT_ACCEPTED",
@@ -98,8 +101,22 @@ export async function POST(request: Request) {
     if (!isSupportedXerianoStripeEvent(event.type)) {
       return NextResponse.json({ received: true, ignored: true });
     }
+    await persistVerifiedStripeEventAuthority({ event, rawPayload: payload });
     const repository = createXerianoBillingSettlementRepository();
-    const result = await processVerifiedXerianoStripeEvent({ event, repository });
+    const gateway = createXerianoStripeGateway();
+    const result = await processVerifiedXerianoStripeEvent({
+      event,
+      repository,
+      expectedLivemode: billingRuntime.livemode,
+      authorityResolver: {
+        retrieveSubscription: async (id) => {
+          if (!gateway.retrieveSubscription) throw new Error("STRIPE_SUBSCRIPTION_AUTHORITY_UNAVAILABLE");
+          const subscription = await gateway.retrieveSubscription(id);
+          if (subscription.livemode !== billingRuntime!.livemode) throw new Error("STRIPE_SUBSCRIPTION_MODE_MISMATCH");
+          return subscription;
+        },
+      },
+    });
     return NextResponse.json({ received: true, status: result.status });
   } catch (error) {
     if (event && isSupportedXerianoStripeEvent(event.type)) {
@@ -107,6 +124,8 @@ export async function POST(request: Request) {
         await createXerianoBillingSettlementRepository().recordOutcome({
           eventId: event.id,
           eventType: event.type,
+          eventCreated: event.created,
+          livemode: event.livemode,
           status: "FAILED",
           failureCode: error instanceof XerianoWebhookProcessingError ? error.code : "BILLING_PROCESSING_FAILED",
           metadata: { livemode: event.livemode, objectType: event.data.object.object },

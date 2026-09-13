@@ -22,6 +22,24 @@ export function XerianoBillingActionButton({
   const requestId = useRef<string | null>(null);
   const inFlight = useRef(false);
 
+  function checkoutRequestId(): string {
+    const storageKey = `xeriamo:billing:checkout-request:${productCode ?? "unknown"}`;
+    try {
+      const stored = window.sessionStorage.getItem(storageKey);
+      if (stored && /^[0-9a-f-]{36}$/i.test(stored)) return stored;
+      const created = createSecureBrowserUuid();
+      window.sessionStorage.setItem(storageKey, created);
+      return created;
+    } catch {
+      return createSecureBrowserUuid();
+    }
+  }
+
+  function clearCheckoutRequestId() {
+    if (action !== "CHECKOUT") return;
+    try { window.sessionStorage.removeItem(`xeriamo:billing:checkout-request:${productCode ?? "unknown"}`); } catch { /* storage is optional */ }
+  }
+
   async function start() {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -35,7 +53,7 @@ export function XerianoBillingActionButton({
         method: "POST",
         headers: action === "CHECKOUT" ? { "content-type": "application/json" } : undefined,
         body: action === "CHECKOUT"
-          ? JSON.stringify({ productCode, requestId: requestId.current ??= createSecureBrowserUuid() })
+          ? JSON.stringify({ productCode, requestId: requestId.current ??= checkoutRequestId() })
           : undefined,
       });
       const payload = await response.json() as { url?: unknown };
@@ -44,6 +62,7 @@ export function XerianoBillingActionButton({
           ? "Checkout konnte nicht gestartet werden. Bitte versuche es erneut."
           : "Die Abrechnung konnte nicht geöffnet werden. Bitte versuche es erneut.");
       }
+      clearCheckoutRequestId();
       window.location.assign(payload.url);
     } catch {
       inFlight.current = false;

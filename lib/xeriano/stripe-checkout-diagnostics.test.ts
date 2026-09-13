@@ -27,6 +27,9 @@ import {
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const env = {
+  XERIAMO_STRIPE_MODE: "test",
+  STRIPE_PORTAL_CONFIGURATION_ID: "bpc_testOnly",
+  XERIAMO_STRIPE_PORTAL_CANCELLATION_ONLY: "true",
   STRIPE_SECRET_KEY: "sk_test_not_a_real_key",
   STRIPE_WEBHOOK_SECRET: "whsec_not_a_real_secret",
   NEXT_PUBLIC_SUPABASE_URL: "https://wwfezmywxishfgwnijyd.supabase.co",
@@ -93,7 +96,7 @@ function gateway(overrides: Partial<XerianoStripeGateway> = {}): XerianoStripeGa
     },
     async createCheckoutSession() {
       return {
-        id: "cs_private",
+        id: "cs_test_private",
         object: "checkout.session",
         livemode: false,
         url: "https://checkout.stripe.test/session",

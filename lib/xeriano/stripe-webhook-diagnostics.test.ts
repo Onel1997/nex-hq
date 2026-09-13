@@ -18,6 +18,9 @@ import { logXerianoWebhookDiagnostic } from "./stripe-webhook-diagnostics";
 const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const secret = "whsec_test_diagnostic_only";
 const stagingEnv = {
+  XERIAMO_STRIPE_MODE: "test",
+  STRIPE_PORTAL_CONFIGURATION_ID: "bpc_testOnly",
+  XERIAMO_STRIPE_PORTAL_CANCELLATION_ONLY: "true",
   STRIPE_SECRET_KEY: "sk_test_diagnostic_only",
   STRIPE_WEBHOOK_SECRET: secret,
   NEXT_PUBLIC_SUPABASE_URL: "https://wwfezmywxishfgwnijyd.supabase.co",
@@ -111,7 +114,7 @@ test("missing webhook secret fails closed before signature verification", async 
   await withEnvironment({ ...stagingEnv, STRIPE_WEBHOOK_SECRET: undefined }, async () => {
     const response = await webhookPost(webhookRequest("{}", "t=1,v1=invalid"));
     assert.equal(response.status, 503);
-    assert.deepEqual(await response.json(), { received: false, code: "STRIPE_WEBHOOK_NOT_CONFIGURED" });
+    assert.deepEqual(await response.json(), { received: false, code: "STRIPE_WEBHOOK_UNAVAILABLE" });
   });
 });
 
@@ -126,7 +129,7 @@ test("a correctly signed live event is explicitly rejected in staging", async ()
   await withEnvironment(stagingEnv, async () => {
     const response = await webhookPost(webhookRequest(payload, signedHeader(payload)));
     assert.equal(response.status, 400);
-    assert.deepEqual(await response.json(), { received: false, code: "LIVE_STRIPE_EVENT_FORBIDDEN" });
+    assert.deepEqual(await response.json(), { received: false, code: "STRIPE_EVENT_MODE_MISMATCH" });
   });
 });
 

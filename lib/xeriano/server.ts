@@ -10,6 +10,7 @@ import {
   resolveXerianoBillingReturnState,
   type XerianoBillingReturnState,
 } from "./billing-return";
+import { resolveXerianoStripeRuntime } from "./stripe-runtime";
 
 export class XerianoAuthorizationError extends Error {
   constructor(public code: "AUTHENTICATION_REQUIRED" | "CUSTOMER_ACCOUNT_REQUIRED" | "XERIANO_FOUNDATION_UNAVAILABLE", public status: number) { super(code); }
@@ -117,7 +118,7 @@ export async function loadXerianoBillingPresentation(
   }
 }
 
-const TEST_CHECKOUT_SESSION_PATTERN = /^cs_test_[A-Za-z0-9_]+$/;
+const STRIPE_CHECKOUT_SESSION_PATTERN = /^cs_(test|live)_[A-Za-z0-9_]+$/;
 
 /**
  * Reads only server-authoritative, account-scoped billing state. The Checkout
@@ -127,7 +128,14 @@ export async function loadXerianoBillingReturnState(
   accountId: string,
   checkoutSessionId: string | null | undefined,
 ): Promise<XerianoBillingReturnState> {
-  if (!checkoutSessionId || checkoutSessionId.length > 255 || !TEST_CHECKOUT_SESSION_PATTERN.test(checkoutSessionId)) {
+  let livemode: boolean;
+  try {
+    livemode = resolveXerianoStripeRuntime().livemode;
+  } catch {
+    return resolveXerianoBillingReturnState(null);
+  }
+  const match = checkoutSessionId?.match(STRIPE_CHECKOUT_SESSION_PATTERN);
+  if (!checkoutSessionId || checkoutSessionId.length > 255 || !match || (match[1] === "live") !== livemode) {
     return resolveXerianoBillingReturnState(null);
   }
 
@@ -137,6 +145,7 @@ export async function loadXerianoBillingReturnState(
       .from("xeriano_stripe_checkouts")
       .select("stripe_price_mapping_id,mode,status,created_at")
       .eq("account_id", accountId)
+      .eq("livemode", livemode)
       .eq("stripe_checkout_session_id", checkoutSessionId)
       .maybeSingle();
 

@@ -35,6 +35,9 @@ import {
 const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 const env = {
+  XERIAMO_STRIPE_MODE: "test",
+  STRIPE_PORTAL_CONFIGURATION_ID: "bpc_testOnly",
+  XERIAMO_STRIPE_PORTAL_CANCELLATION_ONLY: "true",
   STRIPE_SECRET_KEY: "sk_test_not_a_real_key",
   STRIPE_WEBHOOK_SECRET: "whsec_not_a_real_secret",
   NEXT_PUBLIC_SUPABASE_URL: "https://wwfezmywxishfgwnijyd.supabase.co",
@@ -112,6 +115,16 @@ function gatewayFor(mapping: XerianoStripePriceMapping): XerianoStripeGateway & 
     async createPortalSession(params) {
       calls.push(`portal:${params.customer}`);
       return { id: "bps_test", object: "billing_portal.session", livemode: false, url: "https://billing.stripe.test/portal" } as Stripe.BillingPortal.Session;
+    },
+    async retrievePortalConfiguration(id) {
+      calls.push(`portal-config:${id}`);
+      return {
+        id, object: "billing_portal.configuration", active: true, livemode: false,
+        features: {
+          subscription_cancel: { enabled: true, mode: "at_period_end", proration_behavior: "none" },
+          subscription_update: { enabled: false },
+        },
+      } as Stripe.BillingPortal.Configuration;
     },
   };
 }

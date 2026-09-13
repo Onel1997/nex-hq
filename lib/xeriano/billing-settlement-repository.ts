@@ -11,7 +11,9 @@ function result(data: unknown, fallbackEffect: BillingEventResult["financialEffe
   const status = value.status === "IGNORED" ? "IGNORED" : "PROCESSED";
   const financialEffect = value.financialEffect === "SUBSCRIPTION_GRANT" || value.financialEffect === "TOP_UP_GRANT"
     ? value.financialEffect
-    : fallbackEffect;
+    : value.financialEffect === "CREDIT_REVERSAL" || value.financialEffect === "BILLING_HOLD"
+      ? value.financialEffect
+      : fallbackEffect;
   return { status, financialEffect };
 }
 
@@ -22,12 +24,12 @@ function rpcFailure(code: string): Error {
 export function createXerianoBillingSettlementRepository(): XerianoBillingSettlementRepository {
   const admin = createAdminClient();
   return {
-    async resolvePriceMapping(stripePriceId) {
+    async resolvePriceMapping(stripePriceId, livemode = false) {
       const { data, error } = await admin
         .from("xeriano_stripe_price_mappings")
         .select("product_code,product_kind,stripe_price_id,catalog_code,catalog_version,gross_price_minor,currency,granted_credits")
         .eq("stripe_price_id", stripePriceId)
-        .eq("livemode", false)
+        .eq("livemode", livemode)
         .maybeSingle();
       if (error) throw rpcFailure("PRICE_MAPPING_READ_FAILED");
       if (!data) return null;
@@ -40,6 +42,7 @@ export function createXerianoBillingSettlementRepository(): XerianoBillingSettle
         grossPriceMinor: Number(data.gross_price_minor),
         currency: "EUR",
         grantedCredits: Number(data.granted_credits),
+        livemode,
       };
     },
     async completeSubscriptionCheckout(input) {
@@ -50,6 +53,8 @@ export function createXerianoBillingSettlementRepository(): XerianoBillingSettle
         p_stripe_customer_id: input.stripeCustomerId,
         p_stripe_subscription_id: input.stripeSubscriptionId,
         p_event_metadata: input.metadata,
+        p_livemode: input.livemode,
+        p_event_created: input.eventCreated,
       });
       if (error) throw rpcFailure("CHECKOUT_SYNC_FAILED");
       return result(data, "NONE");
@@ -61,7 +66,12 @@ export function createXerianoBillingSettlementRepository(): XerianoBillingSettle
         p_checkout_session_id: input.checkoutSessionId,
         p_stripe_customer_id: input.stripeCustomerId,
         p_payment_status: input.paymentStatus,
+        p_payment_intent_id: input.paymentIntentId,
+        p_amount_total_minor: input.amountTotalMinor,
+        p_currency: input.currency,
         p_event_metadata: input.metadata,
+        p_livemode: input.livemode,
+        p_event_created: input.eventCreated,
       });
       if (error) throw rpcFailure("TOPUP_GRANT_FAILED");
       return result(data, "TOP_UP_GRANT");
@@ -83,6 +93,10 @@ export function createXerianoBillingSettlementRepository(): XerianoBillingSettle
         p_period_start: input.periodStart,
         p_period_end: input.periodEnd,
         p_event_metadata: input.metadata,
+        p_livemode: input.livemode,
+        p_event_created: input.eventCreated,
+        p_payment_intent_id: input.paymentIntentId,
+        p_charge_id: input.chargeId,
       });
       if (error) throw rpcFailure("SUBSCRIPTION_GRANT_FAILED");
       return result(data, "SUBSCRIPTION_GRANT");
@@ -101,6 +115,9 @@ export function createXerianoBillingSettlementRepository(): XerianoBillingSettle
         p_period_end: input.periodEnd,
         p_deleted: input.deleted,
         p_event_metadata: input.metadata,
+        p_livemode: input.livemode,
+        p_event_created: input.eventCreated,
+        p_object_marker: input.objectMarker,
       });
       if (error) throw rpcFailure("SUBSCRIPTION_SYNC_FAILED");
       return result(data, "NONE");
@@ -113,17 +130,71 @@ export function createXerianoBillingSettlementRepository(): XerianoBillingSettle
         p_stripe_customer_id: input.stripeCustomerId,
         p_stripe_subscription_id: input.stripeSubscriptionId,
         p_event_metadata: input.metadata,
+        p_livemode: input.livemode,
+        p_event_created: input.eventCreated,
       });
       if (error) throw rpcFailure("PAYMENT_FAILURE_SYNC_FAILED");
       return result(data, "NONE");
     },
+    async expireCheckout(input) {
+      const { data, error } = await admin.rpc("xeriano_expire_stripe_checkout_event_v2", {
+        p_event_id: input.eventId,
+        p_event_type: input.eventType,
+        p_event_created: input.eventCreated,
+        p_livemode: input.livemode,
+        p_checkout_session_id: input.checkoutSessionId,
+        p_stripe_customer_id: input.stripeCustomerId,
+        p_mode: input.checkoutMode,
+        p_event_metadata: input.metadata,
+      });
+      if (error) throw rpcFailure("CHECKOUT_EXPIRY_FAILED");
+      return result(data, "NONE");
+    },
+    async applyRefund(input) {
+      const { data, error } = await admin.rpc("xeriano_apply_refund_event_v2", {
+        p_event_id: input.eventId,
+        p_event_type: input.eventType,
+        p_event_created: input.eventCreated,
+        p_livemode: input.livemode,
+        p_adjustment_id: input.adjustmentId,
+        p_payment_intent_id: input.paymentIntentId,
+        p_charge_id: input.chargeId,
+        p_customer_id: input.customerId,
+        p_amount_minor: input.amountMinor,
+        p_currency: input.currency,
+        p_refund_status: input.status,
+        p_is_aggregate: input.aggregate,
+        p_event_metadata: input.metadata,
+      });
+      if (error) throw rpcFailure("REFUND_RECONCILIATION_FAILED");
+      return result(data, "CREDIT_REVERSAL");
+    },
+    async applyDispute(input) {
+      const { data, error } = await admin.rpc("xeriano_apply_dispute_event_v2", {
+        p_event_id: input.eventId,
+        p_event_type: input.eventType,
+        p_event_created: input.eventCreated,
+        p_livemode: input.livemode,
+        p_dispute_id: input.disputeId,
+        p_payment_intent_id: input.paymentIntentId,
+        p_charge_id: input.chargeId,
+        p_amount_minor: input.amountMinor,
+        p_currency: input.currency,
+        p_dispute_status: input.disputeStatus,
+        p_event_metadata: input.metadata,
+      });
+      if (error) throw rpcFailure("DISPUTE_RECONCILIATION_FAILED");
+      return result(data, "BILLING_HOLD");
+    },
     async recordOutcome(input) {
-      const { error } = await admin.rpc("xeriano_record_billing_event_outcome", {
+      const { error } = await admin.rpc("xeriano_record_billing_event_outcome_v2", {
         p_event_id: input.eventId,
         p_event_type: input.eventType,
         p_status: input.status,
         p_failure_code: input.failureCode,
         p_event_metadata: input.metadata,
+        p_event_created: input.eventCreated ?? 1,
+        p_livemode: input.livemode ?? false,
       });
       if (error) throw rpcFailure("EVENT_OUTCOME_FAILED");
     },

@@ -201,6 +201,8 @@ test("Stripe remains server-configured and no public secret or price ID is hard-
   assert.equal(isXerianoStripeConfigured({}), false);
   assert.equal(isXerianoStripeConfigured({ STRIPE_SECRET_KEY: "x", STRIPE_WEBHOOK_SECRET: "y" }), false);
   assert.equal(isXerianoStripeConfigured({
+    XERIAMO_STRIPE_MODE: "test",
+    XERIAMO_LIVE_BILLING_ENABLED: "false",
     STRIPE_SECRET_KEY: "sk_test_not_real",
     STRIPE_WEBHOOK_SECRET: "whsec_not_real",
     NEXT_PUBLIC_SUPABASE_URL: "https://wwfezmywxishfgwnijyd.supabase.co",
